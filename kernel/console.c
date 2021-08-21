@@ -9,13 +9,52 @@
  * See PrimeCell UART (PL011) Technical Reference Manual
  */
 
-#define UART0           0x10009000    // UART0 memory base address
-#define UARTDR          (0x000 >> 2)  // Data Register
-#define UARTFR          (0x018 >> 2)  // Flag Register
-#define   UARTFR_RXFE   (1 << 4)      // Receive FIFO empty
-#define   UARTFR_TXFF   (1 << 5)      // Transmit FIFO full
+#define UART0             0x10009000    // UART0 memory base address
 
-static volatile uint32_t *uart = (volatile uint32_t *) UART0;
+#define UARTDR            (0x000 >> 2)  // Data Register
+#define UARTECR           (0x004 >> 2)  // Error Clear Register
+#define UARTFR            (0x018 >> 2)  // Flag Register
+#define   UARTFR_RXFE     (1 << 4)      // Receive FIFO empty
+#define   UARTFR_TXFF     (1 << 5)      // Transmit FIFO full
+#define UARTIBRD          (0x024 >> 2)  // Integer Baud Rate Register
+#define UARTFBRD          (0x028 >> 2)  // Fractional Baud Rate Register
+#define UARTLCR           (0x02C >> 2)  // Line Control Register
+#define   UARTLCR_FEN     (1 << 4)      // Enable FIFOs
+#define   UARTLCR_WLEN8   (3 << 5)      // Word length = 8 bits
+#define UARTCR            (0x030 >> 2)  // Control Register
+#define   UARTCR_UARTEN   (1 << 0)      // UART Enable
+#define   UARTCR_TXE      (1 << 8)      // Transmit enable
+#define   UARTCR_RXE      (1 << 9)      // Receive enable
+
+#define UART_CLK          24000000      // Clock rate
+#define UART_BAUDRATE     19200         // Baud rate
+
+static volatile uint32_t *uart;
+
+static void
+uart_init(void)
+{
+  uint32_t divisor_x64;
+
+  uart = (volatile uint32_t *) UART0;
+
+  // Clear all errors
+  uart[UARTECR] = 0;
+
+  // Disable UART
+  uart[UARTCR] = 0;
+
+  // Set the bit rate
+  divisor_x64 = (UART_CLK * 4) / UART_BAUDRATE;
+  uart[UARTIBRD] = (divisor_x64 >> 6) & 0xFFFF;
+  uart[UARTFBRD] = divisor_x64 & 0x3F;
+
+  // Enable FIFO, 8 data bits, 1 stop bit, parity off
+  uart[UARTLCR] = UARTLCR_FEN | UARTLCR_WLEN8;
+
+  // Enable UART, transfer & receive
+  uart[UARTCR] = UARTCR_UARTEN | UARTCR_TXE | UARTCR_RXE;
+}
 
 static void
 uart_putc(char c)
@@ -36,6 +75,12 @@ uart_getc(void)
 /*
  * General device-independent console code.
  */
+
+void
+console_init(void)
+{
+  uart_init();
+}
 
 void
 console_putc(char c)

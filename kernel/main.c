@@ -3,10 +3,7 @@
 void
 main(void)
 {
-  cprintf("Hello world!\n");
+  console_init();
 
-  // while (1) {
-  //   console_putc(console_getc());
-  //   console_putc('\n');
-  // }
+  cprintf("Hello world!\n");
 }

@@ -4,6 +4,11 @@
 #include <stdarg.h>
 
 /**
+ * Initialize the console devices.
+ */
+void console_init(void);
+
+/**
  * Output a character to the console.
  * 
  * @param c The chaacter to be written.
