@@ -2,6 +2,9 @@
 #include <stdio.h>
 
 #include "console.h"
+#include "kbd.h"
+
+static void console_interrupt(int (*)(void));
 
 /*
  * UART I/O.
@@ -72,14 +75,116 @@ uart_getc(void)
   return uart[UARTDR] & 0xFF;
 }
 
+static void
+uart_interrupt(void)
+{
+  console_interrupt(uart_getc);
+}
+
+
+/*
+ * Keyboard I/O.
+ * 
+ * See ARM PrimeCell PS2 Keyboard/Mouse Interface (PL050) Technical Reference
+ * Manual.
+ */
+
+#define KMI0              0x10006000    // KMI0 (keyboard) base address
+
+#define KMICR             (0x00 >> 2)   // Control register
+#define KMISTAT           (0x04 >> 2)   // Status register
+#define   KMISTAT_RXFULL  (1 << 4)      // Receiver register full
+#define KMIDATA           (0x08 >> 2)   // Received data
+
+static volatile uint32_t *kmi;
+static int kmi_state;
+
+static int
+kmi_getc(void)
+{
+  int c;
+  uint8_t data;
+
+  if (!(kmi[KMISTAT] & KMISTAT_RXFULL))
+    return -1;
+
+  data = kmi[KMIDATA];
+
+  if (data == 0xE0) {
+    kmi_state |= E0ESC;
+    return 0;
+  }
+  
+  if (data & 0x80) {
+    // Key released
+    data = (kmi_state & E0ESC ? data : data & 0x7F);
+    kmi_state &= ~(shiftcode[data] | E0ESC);
+    return 0;
+  }
+
+  if (kmi_state & E0ESC) {
+    data |= 0x80;
+    kmi_state &= ~E0ESC;
+  }
+
+  kmi_state |= shiftcode[data];
+  kmi_state ^= togglecode[data];
+
+  c = charcode[kmi_state & (CTL | SHIFT)][data];
+  if (kmi_state & CAPSLOCK) {
+    if (c >= 'a' && c <= 'z') {
+      c += 'A' - 'a';
+    } else if (c >= 'A' && c <= 'Z') {
+      c += 'a' - 'A';
+    }
+  }
+
+  return c;
+}
+
+static void
+kmi_init(void)
+{
+  kmi = (volatile uint32_t *) KMI0;
+}
+
+static void
+kmi_interrupt(void)
+{
+  console_interrupt(kmi_getc);
+}
+
+
 /*
  * General device-independent console code.
  */
+
+#define CONSOLE_BUF_SIZE  256
+
+// Circular input buffer
+static struct {
+  char      buf[CONSOLE_BUF_SIZE];
+  uint32_t  rpos;
+  uint32_t  wpos;
+} console;
+
+static void
+console_interrupt(int (*getc)(void))
+{
+  int c;
+
+  while ((c = getc()) >= 0) {
+    if ((c > 0) && (console.wpos != (console.rpos + CONSOLE_BUF_SIZE))) {
+      console.buf[console.wpos++] = c;
+    }
+  }
+}
 
 void
 console_init(void)
 {
   uart_init();
+  kmi_init();
 }
 
 void
@@ -91,13 +196,14 @@ console_putc(char c)
 int
 console_getc(void)
 {
-  int c;
-  
-  // Poll for any pending characters.
-  while ((c = uart_getc()) < 0)
-    ;
+  while (1) {
+    uart_interrupt();
+    kmi_interrupt();
 
-  return c;
+    if (console.rpos != console.wpos) {
+      return console.buf[console.rpos++];
+    }
+  }
 }
 
 // Callback used by the vcprintf and cprintf functions.

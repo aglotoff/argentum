@@ -47,7 +47,7 @@ include kernel/kernel.mk
 
 QEMUOPTS := -M realview-pbx-a9 -m 256
 QEMUOPTS += -kernel $(KERNEL)
-QEMUOPTS += -nographic -serial mon:stdio
+QEMUOPTS += -serial mon:stdio
 
 qemu: $(KERNEL)
 	$(QEMU) $(QEMUOPTS)
