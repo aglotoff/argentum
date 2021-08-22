@@ -17,7 +17,7 @@ _start:
 
 .bss
 
-// # Kernel stack
+# Kernel stack
   .globl    kstack, kstack_top
   .p2align  12
 kstack:
