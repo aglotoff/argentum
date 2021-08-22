@@ -1,13 +1,15 @@
 #include <stdint.h>
 #include <stdio.h>
+#include <string.h>
 
 #include "console.h"
 #include "kbd.h"
+#include "lcd.h"
 
 static void console_interrupt(int (*)(void));
 
 /*
- * UART I/O.
+ * UART input/output code.
  *
  * See PrimeCell UART (PL011) Technical Reference Manual
  */
@@ -83,7 +85,7 @@ uart_interrupt(void)
 
 
 /*
- * Keyboard I/O.
+ * Keyboard input code.
  * 
  * See ARM PrimeCell PS2 Keyboard/Mouse Interface (PL050) Technical Reference
  * Manual.
@@ -155,6 +157,128 @@ kmi_interrupt(void)
 }
 
 
+/**
+ * LCD output code.
+ * 
+ * See PrimeCell Color LCD Controller (PL111) Technical Reference Manual
+ */
+
+#define LCD             0x10020000      // LCD base address
+
+#define LCD_TIMING0     (0x000 >> 2)    // Horizontal Axis Panel Control
+#define LCD_TIMING1     (0x004 >> 2)    // Vertical Axis Panel Control
+#define LCD_TIMING2     (0x008 >> 2)    // Clock and Signal Polarity Control
+#define LCD_UPBASE      (0x010 >> 2)    // Upper Panel Frame Base Address
+#define LCD_CONTROL     (0x018 >> 2)    // LCD Control
+  #define LCD_EN        (1 << 0)        // CLCDC Enable
+  #define LCD_BPP16     (4 << 1)        // 16 bits per pixel
+  #define LCD_PWR       (1 << 11)       // LCD Power Enable
+
+static volatile uint32_t *lcd;
+
+static uint16_t buf[DISPLAY_WIDTH * DISPLAY_HEIGHT];
+static uint16_t caret_x, caret_y;
+
+static void
+lcd_init(void)
+{
+  lcd = (volatile uint32_t *) LCD;
+
+  // Display resolution: VGA (640x480) on VGA
+  lcd[LCD_TIMING0] = 0x3F1F3F9C;
+  lcd[LCD_TIMING1] = 0x090B61DF;
+  lcd[LCD_TIMING2] = 0x067F1800;
+
+  // Set frame buffer base address
+  lcd[LCD_UPBASE] = (uint32_t) buf;
+
+  // Enable LCD, 16 bpp
+  lcd[LCD_CONTROL] = LCD_EN | LCD_BPP16 | LCD_PWR;
+}
+
+static void
+lcd_draw_char(char c, uint16_t caret_x, uint16_t caret_y)
+{
+  uint8_t *glyph;
+  uint16_t x, y, x0, y0;
+
+  if (c < FONT_CHAR_MIN || c > FONT_CHAR_MAX) {
+    // Display '?' for non-printable characters
+    c = '?';
+  }
+
+  glyph = font8x16[c - FONT_CHAR_MIN];
+
+  x0 = caret_x * FONT_CHAR_WIDTH;
+  y0 = caret_y * FONT_LINE_HEIGHT;
+
+  // Erase the previous character
+  for (x = 0; x < FONT_CHAR_WIDTH; x++) {
+    for (y = 0; y < FONT_LINE_HEIGHT; y++) {
+      buf[DISPLAY_WIDTH * (y + y0) + (x + x0)] = 0x0000;
+    }
+  }
+
+  // Draw the new character
+  for (x = 0; x < FONT_CHAR_WIDTH; x++) {
+    for (y = 0; y < FONT_CHAR_HEIGHT; y++) {
+      if (glyph[x + (y / FONT_CHAR_WIDTH) * FONT_CHAR_WIDTH] & (1 << (y%8))) {
+        buf[DISPLAY_WIDTH * (y + y0 + 2) + (x + x0)] = 0xFFFF;
+      }
+    }
+  }
+}
+
+static void
+lcd_putc(char c)
+{
+  // Erase the previous caret
+  lcd_draw_char(' ', caret_x, caret_y);
+
+  switch (c) {
+  case '\n':
+    caret_x = 0;
+    caret_y++;
+    break;
+  case '\b':
+    if (caret_x == 0 && caret_y > 0) {
+      caret_x = COLS - 1;
+      caret_y--;
+    } else {
+      caret_x--;
+    }
+    break;
+  case '\t':
+    lcd_putc(' ');
+    lcd_putc(' ');
+    lcd_putc(' ');
+    lcd_putc(' ');
+    break;
+  default:
+    lcd_draw_char(c, caret_x++, caret_y);
+    if (caret_x == COLS) {
+      caret_x = 0;
+      caret_y++;
+    }
+  }
+
+  if (caret_y >= ROWS) {
+    // Scroll down
+    memmove(buf,
+            &buf[FONT_LINE_HEIGHT * DISPLAY_WIDTH],
+            DISPLAY_WIDTH * (DISPLAY_HEIGHT-FONT_LINE_HEIGHT) * sizeof(buf[0]));
+    memset(&buf[DISPLAY_WIDTH * (DISPLAY_HEIGHT-FONT_LINE_HEIGHT)],
+          0,
+          FONT_LINE_HEIGHT * DISPLAY_WIDTH * sizeof(buf[0]));
+
+    caret_y--;
+  }
+
+  // Draw the new caret
+  lcd_draw_char('_', caret_x, caret_y);
+}
+
+
 /*
  * General device-independent console code.
  */
@@ -174,9 +298,13 @@ console_interrupt(int (*getc)(void))
   int c;
 
   while ((c = getc()) >= 0) {
-    if ((c > 0) && (console.wpos != (console.rpos + CONSOLE_BUF_SIZE))) {
-      console.buf[console.wpos++] = c;
+    if (c == 0) {
+      continue;
     }
+    if (console.wpos == console.rpos + CONSOLE_BUF_SIZE) {
+      console.rpos++;
+    }
+    console.buf[console.wpos++ % CONSOLE_BUF_SIZE] = c;
   }
 }
 
@@ -185,25 +313,25 @@ console_init(void)
 {
   uart_init();
   kmi_init();
+  lcd_init();
 }
 
 void
 console_putc(char c)
 {
   uart_putc(c);
+  lcd_putc(c);
 }
 
 int
 console_getc(void)
 {
-  while (1) {
+  do {
     uart_interrupt();
     kmi_interrupt();
+  } while (console.rpos == console.wpos);
 
-    if (console.rpos != console.wpos) {
-      return console.buf[console.rpos++];
-    }
-  }
+  return console.buf[console.rpos++ % CONSOLE_BUF_SIZE];
 }
 
 // Callback used by the vcprintf and cprintf functions.
