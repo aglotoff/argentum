@@ -1,6 +1,6 @@
-#ifndef _MEMLAYOUT_H_
-#define _MEMLAYOUT_H_
+#ifndef KERNEL_MEMLAYOUT_H
+#define KERNEL_MEMLAYOUT_H
        
 #define KSTACK_SIZE   4096  ///< Size of a per-process kernel stack
 
-#endif  // !_MEMLAYOUT_H_
+#endif  // !KERNEL_MEMLAYOUT_H

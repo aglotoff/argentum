@@ -1,5 +1,11 @@
-#ifndef _CONSOLE_H_
-#define _CONSOLE_H_
+#ifndef KERNEL_CONSOLE_H
+#define KERNEL_CONSOLE_H
+
+/**
+ * @file kernel/console.h
+ * 
+ * General device-independent console code.
+ */
 
 #include <stdarg.h>
 
@@ -14,6 +20,17 @@ void console_init(void);
  * @param c The chaacter to be written.
  */
 void console_putc(char c);
+
+/**
+ * Handle console interrupt.
+ * 
+ * This function should be called by driver interrupt routines to feed input
+ * characters into the console buffer.
+ * 
+ * @param getc The function to fetch the next input character. Should return -1
+ *             if there is no data avalable.
+ */
+void console_intr(int (*getc)(void));
 
 /**
  * Return the next input character from the console. Polls for any pending
@@ -38,4 +55,4 @@ void vcprintf(const char *format, va_list ap);
  */
 void cprintf(const char *format, ...);
 
-#endif  // !_CONSOLE_H_
+#endif  // !KERNEL_CONSOLE_H

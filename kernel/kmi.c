@@ -1,29 +1,33 @@
-#ifndef _KBD_H_
-#define _KBD_H
-
 #include <stdint.h>
 
+#include "console.h"
+#include "kmi.h"
+
+// Shift key states
 #define SHIFT             (1 << 0)
-#define CTL               (1 << 1)
+#define CTRL              (1 << 1)
 #define ALT               (1 << 2)
+
+// Toggle key states
 #define CAPSLOCK          (1 << 3)
 #define NUMLOCK           (1 << 4)
 #define SCROLLLOCK        (1 << 5)
-#define E0ESC             (1 << 6)
 
-// C('A') == Control-A
-#define C(x) ((x) - '@')
+// Beginning of an 0xE0 code sequence
+#define E0SEQ             (1 << 6)
 
+// Map scan codes to "shift" states
 static uint8_t
 shiftcode[256] = {
-  [0x1D]  CTL,
-  [0x2A]  SHIFT,
-  [0x36]  SHIFT,
-  [0x38]  ALT,
-  [0x9D]  CTL,
-  [0xB8]  ALT
+  [0x1D]  CTRL,     // Left ctrl
+  [0x2A]  SHIFT,    // Left shift
+  [0x36]  SHIFT,    // Right shift
+  [0x38]  ALT,      // Left alt
+  [0x9D]  CTRL,     // Right ctrl
+  [0xB8]  ALT       // Right shift
 };
 
+// Map scan codes to "toggle" states
 static uint8_t
 togglecode[256] = {
   [0x3A]  CAPSLOCK,
@@ -31,6 +35,7 @@ togglecode[256] = {
   [0x46]  SCROLLLOCK
 };
 
+// Map scan codes in the "normal" state to key codes
 static uint8_t
 normalmap[256] =
 {
@@ -49,6 +54,7 @@ normalmap[256] =
   [0xB5]  '/',
 };
 
+// Map scan codes in the "shift" state to key codes
 static uint8_t
 shiftmap[256] =
 {
@@ -67,8 +73,9 @@ shiftmap[256] =
   [0xB5]  '/',
 };
 
+// Map scan codes in the "ctrl" state to key codes
 static uint8_t
-ctlmap[256] =
+ctrlmap[256] =
 {
   '\0',   '\0',   '\0',   '\0',     '\0',   '\0',   '\0',   '\0',     // 0x00
   '\0',   '\0',   '\0',   '\0',     '\0',   '\0',   '\0',   '\0',
@@ -81,12 +88,75 @@ ctlmap[256] =
   [0xB5]  C('/'),
 };
 
+// Map scan codes to key codes
 static uint8_t *
-charcode[4] = {
+keycode[4] = {
   normalmap,
   shiftmap,
-  ctlmap,
-  ctlmap,
+  ctrlmap,
+  ctrlmap,
 };
 
-#endif  // !_KBD_H_
+static volatile uint32_t *kmi;
+
+static int key_state;
+
+static int
+kmi_getc(void)
+{
+  uint8_t data;
+  int c;
+
+  if (!(kmi[KMISTAT] & KMISTAT_RXFULL))
+    return -1;
+
+  data = kmi[KMIDATA];
+
+  if (data == 0xE0) {
+    // Beginning of a 0xE0 code sequence
+    key_state |= E0SEQ;
+    return 0;
+  }
+  
+  if (data & 0x80) {
+    // Key released
+    data = (key_state & E0SEQ ? data : data & 0x7F);
+    key_state &= ~(shiftcode[data] | E0SEQ);
+    return 0;
+  }
+
+  if (key_state & E0SEQ) {
+    // Map the code sequences beginning with 0xE0 to key codes above 127
+    data |= 0x80;
+    key_state &= ~E0SEQ;
+  }
+
+  key_state |= shiftcode[data];
+  key_state ^= togglecode[data];
+
+  c = keycode[key_state & (CTRL | SHIFT)][data];
+
+  if (key_state & CAPSLOCK) {
+    if (c >= 'a' && c <= 'z') {
+      c += 'A' - 'a';
+    } else if (c >= 'A' && c <= 'Z') {
+      c += 'a' - 'A';
+    }
+  }
+
+  return c;
+}
+
+void
+kmi_init(void)
+{
+  // TODO: map to a reserved region in the virtual address space.
+  kmi = (volatile uint32_t *) KMI0;
+}
+
+void
+kmi_intr(void)
+{
+  // Store the available data in the console buffer.
+  console_intr(kmi_getc);
+}

@@ -8,6 +8,9 @@ KERNEL_LDFLAGS := $(LDFLAGS) -T kernel/kernel.ld -nostdlib
 
 KERNEL_SRCFILES :=	\
 	kernel/head.S \
+	kernel/kmi.c \
+	kernel/lcd.c \
+	kernel/uart.c \
 	kernel/console.c \
 	kernel/main.c \
 	lib/stdio/xprintf.c \
@@ -18,6 +21,8 @@ KERNEL_SRCFILES :=	\
 KERNEL_OBJFILES := $(patsubst %.c, $(OBJ)/%.o, $(KERNEL_SRCFILES))
 KERNEL_OBJFILES := $(patsubst %.S, $(OBJ)/%.o, $(KERNEL_OBJFILES))
 KERNEL_OBJFILES := $(patsubst $(OBJ)/lib/%, $(OBJ)/kernel/%, $(KERNEL_OBJFILES))
+
+KERNEL_BINFILES := kernel/vga_font.psf
 
 $(OBJ)/kernel/%.o: kernel/%.c
 	@echo "+ CC  $<"
@@ -34,8 +39,14 @@ $(OBJ)/kernel/%.o: lib/%.c
 	@mkdir -p $(@D)
 	$(V)$(CC) $(KERNEL_CFLAGS) -c -o $@ $<
 
-$(OBJ)/kernel/kernel: $(KERNEL_OBJFILES) kernel/kernel.ld
+$(OBJ)/kernel/%.o: lib/%.c
+	@echo "+ CC  $<"
+	@mkdir -p $(@D)
+	$(V)$(CC) $(KERNEL_CFLAGS) -c -o $@ $<
+
+$(OBJ)/kernel/kernel: $(KERNEL_OBJFILES) $(KERNEL_BINFILES) kernel/kernel.ld
 	@echo "+ LD  $@"
-	$(V)$(LD) -o $@ $(KERNEL_LDFLAGS) $(KERNEL_OBJFILES) $(LIBGCC)
+	$(V)$(LD) -o $@ $(KERNEL_LDFLAGS) $(KERNEL_OBJFILES) $(LIBGCC) \
+		-b binary $(KERNEL_BINFILES)
 	$(V)$(OBJDUMP) -S $@ > $@.asm
 	$(V)$(NM) -n $@ > $@.sym
