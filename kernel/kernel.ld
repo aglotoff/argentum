@@ -4,23 +4,32 @@ ENTRY(_start)
 
 SECTIONS
 {
+  /* Link the boot code at virtual address 0 */
   . = 0;
 
-  .text : { 
+  .boot : {
+    *(.boot*)
+  }
+
+  /* Link the rest of the kernel at high virtual addresses */
+  . += 0x80000000;
+
+  .text : AT(ADDR(.text) - 0x80000000) { 
     *(.text*)
   }
 
-  .rodata : {
+  .rodata : AT(ADDR(.rodata) - 0x80000000)  {
     *(.rodata*)
   }
 
+  /* Adjust the address of the data section to the next page boundary */
   .= ALIGN(0x1000);
 
-  .data : {
+  .data : AT(ADDR(.data) - 0x80000000)  {
     *(.data*)
   }
 
-  .bss : {
+  .bss : AT(ADDR(.bss) - 0x80000000)  {
     *(.bss*)
     *(COMMON*)
   }

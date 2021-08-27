@@ -22,6 +22,7 @@ KERNEL_OBJFILES := $(patsubst %.c, $(OBJ)/%.o, $(KERNEL_SRCFILES))
 KERNEL_OBJFILES := $(patsubst %.S, $(OBJ)/%.o, $(KERNEL_OBJFILES))
 KERNEL_OBJFILES := $(patsubst $(OBJ)/lib/%, $(OBJ)/kernel/%, $(KERNEL_OBJFILES))
 
+# Embed the VGA font to print characters on LCD
 KERNEL_BINFILES := kernel/vga_font.psf
 
 $(OBJ)/kernel/%.o: kernel/%.c
@@ -31,11 +32,6 @@ $(OBJ)/kernel/%.o: kernel/%.c
 
 $(OBJ)/kernel/%.o: kernel/%.S
 	@echo "+ AS  $<"
-	@mkdir -p $(@D)
-	$(V)$(CC) $(KERNEL_CFLAGS) -c -o $@ $<
-
-$(OBJ)/kernel/%.o: lib/%.c
-	@echo "+ CC  $<"
 	@mkdir -p $(@D)
 	$(V)$(CC) $(KERNEL_CFLAGS) -c -o $@ $<
 

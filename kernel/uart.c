@@ -1,6 +1,7 @@
 #include <stdint.h>
 
 #include "console.h"
+#include "memlayout.h"
 #include "uart.h"
 
 static volatile uint32_t *uart;
@@ -11,7 +12,7 @@ uart_init(void)
   uint32_t divisor_x_64;
 
   // TODO: map to a reserved region in the virtual address space.
-  uart = (volatile uint32_t *) UART0;
+  uart = (volatile uint32_t *) (KERNEL_BASE + UART0);
 
   // Clear all errors.
   uart[UARTECR] = 0;
@@ -45,11 +46,14 @@ uart_putc(char c)
 static int
 uart_getc(void)
 {
+  int c;
+  
   // Check whether the receive FIFO is empty.
   if (uart[UARTFR] & UARTFR_RXFE)
     return -1;
 
-  return uart[UARTDR] & 0xFF;
+  c = uart[UARTDR] & 0xFF;
+  return c == '\r' ? '\n' : c;
 }
 
 void

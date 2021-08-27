@@ -2,6 +2,7 @@
 
 #include "console.h"
 #include "kmi.h"
+#include "memlayout.h"
 
 // Shift key states
 #define SHIFT             (1 << 0)
@@ -151,7 +152,7 @@ void
 kmi_init(void)
 {
   // TODO: map to a reserved region in the virtual address space.
-  kmi = (volatile uint32_t *) KMI0;
+  kmi = (volatile uint32_t *) (KERNEL_BASE + KMI0);
 }
 
 void

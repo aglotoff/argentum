@@ -2,6 +2,7 @@
 #include <string.h>
 
 #include "lcd.h"
+#include "memlayout.h"
 
 #define DISPLAY_WIDTH       640
 #define DISPLAY_HEIGHT      480
@@ -36,15 +37,15 @@ lcd_init(void)
   font = (uint8_t *) (psf_header + 1);
 
   // TODO: map to a reserved region in the virtual address space.
-  lcd = (volatile uint32_t *) LCD;
+  lcd = (volatile uint32_t *) (KERNEL_BASE + LCD);
 
   // Set display resolution: VGA (640x480) on VGA
   lcd[LCD_TIMING0] = 0x3F1F3F9C;
   lcd[LCD_TIMING1] = 0x090B61DF;
   lcd[LCD_TIMING2] = 0x067F1800;
 
-  // Set the frame buffer base address
-  lcd[LCD_UPBASE] = (uint32_t) buf;
+  // Set the frame buffer physical base address
+  lcd[LCD_UPBASE] = (uint32_t) buf - KERNEL_BASE;
 
   // Enable LCD, 16 bpp
   lcd[LCD_CONTROL] = LCD_EN | LCD_BPP16 | LCD_PWR;
@@ -91,7 +92,7 @@ lcd_putc(char c)
     if (buf_x == 0 && buf_y > 0) {
       buf_x = DISPLAY_WIDTH - GLYPH_WIDTH;
       buf_y -= GLYPH_HEIGHT;
-    } else {
+    } else if (buf_x > 0) {
       buf_x -= GLYPH_WIDTH;
     }
     break;
@@ -104,7 +105,7 @@ lcd_putc(char c)
     break;
 
   default:
-    lcd_draw_char(c, buf_x++, buf_y);
+    lcd_draw_char(c, buf_x, buf_y);
     
     buf_x += GLYPH_WIDTH;
     if (buf_x == DISPLAY_WIDTH) {
