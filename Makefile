@@ -28,10 +28,10 @@ NM      := $(TOOLPREFIX)nm
 OBJDUMP := $(TOOLPREFIX)objdump
 
 # Common compiler flags
-CFLAGS := -ffreestanding  -nostdlib -fno-builtin -nostdinc -I$(INC)
+CFLAGS := -ffreestanding -nostdlib -fno-builtin -nostdinc -I$(INC)
 CFLAGS += -Wall -Wextra -Werror
 CFLAGS += --std=gnu11
-CFLAGS += -O1 -mcpu=cortex-a9 -fno-omit-frame-pointer
+CFLAGS += -O1 -mcpu=cortex-a9 -mapcs-frame -fno-omit-frame-pointer
 CFLAGS += -gdwarf-2
 
 # Common linker flags

@@ -22,4 +22,9 @@ int mon_help(int, char **);
  */
 int mon_kerninfo(int, char **);
 
+/**
+ * Display the stack backtrace.
+ */
+int mon_backtrace(int, char **);
+
 #endif  // !KERNEL_MONITOR_H

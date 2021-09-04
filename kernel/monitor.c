@@ -74,6 +74,7 @@ struct Command {
 static struct Command commands[] = {
   { "help", "Print this list of commands", mon_help },
   { "kerninfo", "Print this list of commands", mon_kerninfo },
+  { "backtrace", "Display a list of function call frames", mon_backtrace },
 };
 
 #define NCOMMANDS  (sizeof commands / sizeof(struct Command))
@@ -162,6 +163,43 @@ mon_kerninfo(int argc, char **argv)
 
   cprintf("Kernel executable memory footprint: %dKB\n",
           (PADDR(_end) - (uintptr_t) _start + 1023) / 1024);
+
+  return 0;
+}
+
+static inline uint32_t
+read_fp(void)
+{
+  uint32_t val;
+
+  asm volatile ("mov %0, r11\n" : "=r" (val)); 
+  return val;
+}
+
+int
+mon_backtrace(int argc, char **argv)
+{
+  uint32_t *fp;
+  
+  (void) argc;
+  (void) argv;
+
+  cprintf("Stack backtrace:\n");
+
+  // Display the stack backtrace by chasing the saved frame pointer values
+  //
+  // The structure is as follows:
+  // fp points here:  | save code pointer |  fp[0]
+  //                  | return link value |  fp[-1]
+  //                  | return sp value   |  fp[-2]
+  //                  | return fp value   |  fp[-3]
+  //
+  // The code needs to be compiled with the -mapcs-frame and
+  // -fno-omit-frame-pointer flags
+
+  for (fp = (uint32_t *) read_fp(); fp != NULL; fp = (uint32_t *) fp[-3]) {
+    cprintf("  fp %08x  lr %08x\n", fp, fp[-1]);
+  }
 
   return 0;
 }

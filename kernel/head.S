@@ -25,9 +25,13 @@ _start:
   # Set the stack pointer
   ldr sp, =kstack_top
 
+  # Clear the frame pointer register (R11) so that stack backtraces will be
+  # terminated properly
+  mov r11, #0
+
   # Jump to C code
   ldr r0, =main
-  bx  r0
+  blx r0
 
   # Should never return here
 1:
