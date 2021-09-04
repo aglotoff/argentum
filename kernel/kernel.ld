@@ -16,6 +16,7 @@ SECTIONS
 
   .text : AT(ADDR(.text) - 0x80000000) { 
     *(.text*)
+    PROVIDE(_etext = .);
   }
 
   .rodata : AT(ADDR(.rodata) - 0x80000000)  {
@@ -27,10 +28,12 @@ SECTIONS
 
   .data : AT(ADDR(.data) - 0x80000000)  {
     *(.data*)
+    PROVIDE(_edata = .);
   }
 
   .bss : AT(ADDR(.bss) - 0x80000000)  {
     *(.bss*)
     *(COMMON*)
+    PROVIDE(_end = .);
   }
 }

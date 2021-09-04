@@ -12,10 +12,13 @@ KERNEL_SRCFILES :=	\
 	kernel/lcd.c \
 	kernel/uart.c \
 	kernel/console.c \
+	kernel/monitor.c \
 	kernel/main.c \
 	lib/stdio/xprintf.c \
 	lib/string/memmove.c \
 	lib/string/memset.c \
+	lib/string/strchr.c \
+	lib/string/strcmp.c \
 	lib/string/strlen.c
 
 KERNEL_OBJFILES := $(patsubst %.c, $(OBJ)/%.o, $(KERNEL_SRCFILES))

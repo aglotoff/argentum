@@ -34,4 +34,22 @@
 /** Domain n access permission bits */
 #define DACR_D(n, x)    ((x) << (n * 2))
 
+#ifndef __ASSEMBLER__
+
+#include <stdint.h>
+
+/**
+ * Read the value of the MPIDR register
+ */
+static inline uint32_t
+read_mpidr(void)
+{
+  uint32_t val;
+
+  asm volatile ("mrc p15, 0, %0, c0, c0, 5" : "=r" (val));
+  return val;
+}
+
+#endif  // !__ASSEMBLER__
+
 #endif  // !KERNEL_CP15_H

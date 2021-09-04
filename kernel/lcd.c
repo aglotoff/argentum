@@ -10,6 +10,24 @@
 #define GLYPH_WIDTH         8
 #define GLYPH_HEIGHT        16
 
+// 15-bit RGB ANSI colors
+#define BLACK               0x0000
+#define RED                 0x0019
+#define GREEN               0x0320
+#define YELLOW              0x0339
+#define BLUE                0x7400
+#define MAGENTA             0x6419
+#define CYAN                0x6720
+#define WHITE               0x739c
+#define GRAY                0x3def
+#define BRIGHT_RED          0x001f
+#define BRIGHT_GREEN        0x03e0
+#define BRIGHT_YELLOW       0x03ff
+#define BRIGHT_BLUE         0x7d6b
+#define BRIGHT_MAGENTA      0x7c1f
+#define BRIGHT_CYAN         0x7fe0
+#define BRIGHT_WHITE        0x7fff
+
 static volatile uint32_t *lcd;
 
 // Framebuffer
@@ -67,8 +85,8 @@ lcd_draw_char(char c, uint16_t x0, uint16_t y0)
   for (x = 0; x < GLYPH_WIDTH; x++) {
     for (y = 0; y < GLYPH_HEIGHT; y++) {
       buf[DISPLAY_WIDTH * (y0 + y) + (x0 + x)] = (glyph[y] & mask[x])
-        ? 0xFFFF    // white
-        : 0x0000;   // on black
+        ? WHITE
+        : BLACK;
     }
   }
 }

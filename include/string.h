@@ -14,7 +14,7 @@ extern "C" {
  * @param s2 Pointer to the source of data to be copied.
  * @param n Number of bytes to copy.
  * 
- * @returns s1
+ * @return s1
  */
 void *memmove(void *s1, const void *s2, size_t n);
 
@@ -25,9 +25,31 @@ void *memmove(void *s1, const void *s2, size_t n);
  * @param c Value to be copied (interpreted as unsigned char).
  * @param n Number of bytes to be set.
  * 
- * @returns s.
+ * @return s.
  */
 void *memset(void *s, int c, size_t n);
+
+/**
+ * String scanning operation.
+ *
+ * @param s C string.
+ * @param c Character to be located.
+ *
+ * @return A pointer to the first occurence of c in s, or NULL if c is not 
+ * found.
+ */
+char *strchr(const char *s, int c);
+
+/**
+ * Compare two strings.
+ *
+ * @param str1 C string to be compared.
+ * @param str2 C string to be compared.
+ *
+ * @return An integer less than, equal to, or greater than zero, if str1 is
+ * less than, equal, or greater than str2, respectively.
+ */
+int strcmp(const char *str1, const char *str2);
 
 /**
  * Get length of fixed size string.
