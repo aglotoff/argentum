@@ -63,10 +63,6 @@ _start:
   msr CPSR_c, #(PSR_I | PSR_F | PSR_M_UND)
   mov sp, r0
 
-  msr CPSR_c, #(PSR_I | PSR_F | PSR_M_SYS)
-  mov sp, #0x123
-  mov lr, #0x456
-
   // Set the kernel supervisor mode stack pointer
   msr CPSR_c, #(PSR_I | PSR_F | PSR_M_SVC)
   ldr sp, =kstack_top
