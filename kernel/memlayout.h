@@ -2,9 +2,15 @@
 #define KERNEL_MEMLAYOUT_H
 
 /** All physical memory is mapped at this address. */
-#define KERNEL_BASE   0x80000000
+#define KERNEL_BASE   	0x80000000
 
-#define KSTACK_SIZE   4096  ///< Size of a per-process kernel stack
+#define KSTACK_SIZE   	4096  ///< Size of a per-process kernel stack
+
+#define KXSTACK_SIZE		16		///< Size of a per-process exception stack
+#define KXSTACK_R0			0
+#define KXSTACK_SPSR		4
+#define KXSTACK_LR			8
+#define KXSTACK_TRAPNO	12
 
 #ifndef __ASSEMBLER__
 

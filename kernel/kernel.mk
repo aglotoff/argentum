@@ -7,11 +7,13 @@ KERNEL_CFLAGS := $(CFLAGS) -DKERNEL
 KERNEL_LDFLAGS := $(LDFLAGS) -T kernel/kernel.ld -nostdlib
 
 KERNEL_SRCFILES :=	\
-	kernel/head.S \
+	kernel/entry.S \
 	kernel/kmi.c \
 	kernel/lcd.c \
 	kernel/uart.c \
 	kernel/console.c \
+	kernel/trapentry.S \
+	kernel/trap.c \
 	kernel/kdebug.c \
 	kernel/monitor.c \
 	kernel/main.c \

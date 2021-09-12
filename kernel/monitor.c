@@ -4,12 +4,13 @@
 #include "kdebug.h"
 #include "memlayout.h"
 #include "monitor.h"
+#include "trap.h"
 
 static char *read_cmd(void);
-static int exec_cmd(char *s);
+static int exec_cmd(char *s, struct Trapframe *tf);
 
 void
-monitor(void)
+monitor(struct Trapframe *tf)
 {
   char *s;
 
@@ -18,7 +19,7 @@ monitor(void)
 
   for (;;) {
     if ((s = read_cmd()) != NULL) {
-      if (exec_cmd(s) < 0)
+      if (exec_cmd(s, tf) < 0)
         break;
     }
   }
@@ -69,7 +70,7 @@ read_cmd(void)
 struct Command {
   const char  *name;
   const char  *desc;
-  int        (*func)(int argc, char **argv);
+  int        (*func)(int, char **, struct Trapframe *);
 };
 
 static struct Command commands[] = {
@@ -86,7 +87,7 @@ static struct Command commands[] = {
  * Parse and execute the command.
  */
 static int
-exec_cmd(char *s)
+exec_cmd(char *s, struct Trapframe *tf)
 {
   static const char *const whitespace = " \t\r\n\f";
 
@@ -122,7 +123,7 @@ exec_cmd(char *s)
   // Search for a command with the given name
   for (cmd = commands; cmd < &commands[NCOMMANDS]; cmd++) {
     if (strcmp(argv[0], cmd->name) == 0)
-      return cmd->func(argc, argv);
+      return cmd->func(argc, argv, tf);
   }
 
   cprintf("Unknown command `%s'\n", argv[0]);
@@ -133,12 +134,13 @@ exec_cmd(char *s)
 /***** Implementations of kernel monitor commands. *****/
 
 int
-mon_help(int argc, char **argv)
+mon_help(int argc, char **argv, struct Trapframe *tf)
 {
   struct Command *cmd;
 
   (void) argc;
   (void) argv;
+  (void) tf;
 
   for (cmd = commands; cmd < &commands[NCOMMANDS]; cmd++) {
     cprintf("%s - %s\n", cmd->name, cmd->desc);
@@ -148,13 +150,14 @@ mon_help(int argc, char **argv)
 }
 
 int
-mon_kerninfo(int argc, char **argv)
+mon_kerninfo(int argc, char **argv, struct Trapframe *tf)
 {
   // The following symbols are defined in the kernel.ld linker script.
   extern uint8_t _start[], _etext[], _edata[], _end[];
 
   (void) argc;
   (void) argv;
+  (void) tf;
 
   cprintf("Special kernel symbols:\n");
   cprintf("  start  %p (virt)  %p (phys)\n", _start, _start);
@@ -178,7 +181,7 @@ read_fp(void)
 }
 
 int
-mon_backtrace(int argc, char **argv)
+mon_backtrace(int argc, char **argv, struct Trapframe *tf)
 {
   struct PcDebugInfo info;
   uint32_t *fp;
@@ -199,7 +202,8 @@ mon_backtrace(int argc, char **argv)
   // The code needs to be compiled with the -mapcs-frame and
   // -fno-omit-frame-pointer flags
 
-  for (fp = (uint32_t *) read_fp(); fp != NULL; fp = (uint32_t *) fp[-3]) {
+  fp = (uint32_t *) (tf ? tf->r11 : read_fp());
+  for ( ; fp != NULL; fp = (uint32_t *) fp[-3]) {
     debug_info_pc(fp[-1], &info);
 
     cprintf("  [%p] %s (%s at line %d)\n", fp[-1],

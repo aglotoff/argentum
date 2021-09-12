@@ -4,11 +4,11 @@ ENTRY(_start)
 
 SECTIONS
 {
-  /* Link the boot code at virtual address 0 */
-  . = 0x1000;
+  /* Link the entry code at virtual address 0 */
+  . = 0x0;
 
-  .boot : {
-    *(.boot*)
+  .entry : {
+    *(.entry*)
   }
 
   /* Link the rest of the kernel at high virtual addresses */

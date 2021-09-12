@@ -1,11 +1,11 @@
 #include <assert.h>
-#include <stdint.h>
+#include <stddef.h>
 
+#include "armv7.h"
 #include "console.h"
 #include "memlayout.h"
 #include "monitor.h"
 #include "mmu.h"
-#include "cp15.h"
 
 void
 main(void)
@@ -14,20 +14,23 @@ main(void)
   
   cprintf("Starting CPU %d\n", read_mpidr() & 0x3);
 
+  // Cause a data abort
+  *(volatile int *) 0xF0000000 = 12345;
+
   for (;;) {
-    monitor();
+    monitor(NULL);
   }
 }
+
+const char *panicstr;
 
 void
 __panic(const char *file, int line, const char *format, ...)
 {
-  static int panicked = 0;
-
   va_list ap;
 
-  if (!panicked) {
-    panicked = 1;
+  if (!panicstr) {
+    panicstr = format;
 
     cprintf("kernel panic at %s:%d: ", file, line);
 
@@ -40,7 +43,7 @@ __panic(const char *file, int line, const char *format, ...)
 
   // Never returns.
   for (;;)
-    monitor();
+    monitor(NULL);
 }
 
 void
@@ -60,7 +63,7 @@ __warn(const char *file, int line, const char *format, ...)
 // Initial translation table that maps just enough physical memory to get us
 // through the early boot process.
 __attribute__((__aligned__(TRTAB_SIZE))) tte_t
-boot_trtab[NTTENTRIES] = {
+entry_trtab[NTTENTRIES] = {
   // Identity mapping for the first 1MB of physical memory
   [TTX(0x00000000)] =
     (0x00000000 | TTE_TYPE_SECT | TTE_SECT_AP(AP_PRIV_RW)),
