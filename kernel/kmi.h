@@ -14,6 +14,7 @@
 
 // KMI registers, shifted right by 2 bits for use as uint32_t[] indicies
 #define KMICR             (0x00 >> 2)   ///< Control register
+#define   KMICR_RXINTREN  (1 << 4)      ///< Enable receiver interrupt
 #define KMISTAT           (0x04 >> 2)   ///< Status register
 #define   KMISTAT_RXFULL  (1 << 4)      ///< Receiver register full
 #define KMIDATA           (0x08 >> 2)   ///< Received data

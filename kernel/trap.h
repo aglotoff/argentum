@@ -2,14 +2,17 @@
 #define KERNEL_TRAP_H
 
 // Trap numbers
-#define T_RESET   0           ///< Reset
-#define T_UNDEF   1           ///< Undefined Instruction
-#define T_SWI     2           ///< Supervisor Call (SVC)
-#define T_PABT    3           ///< Prefetch Abort
-#define T_DABT    4           ///< Data Abort
-#define T_UNUSED  5           ///< Not Used
-#define T_IRQ     6           ///< IRQ (Interrupt)
-#define T_FIQ     7           ///< FIQ (Fast Interrupt)
+#define T_RESET     0         ///< Reset
+#define T_UNDEF     1         ///< Undefined Instruction
+#define T_SWI       2         ///< Supervisor Call (SVC)
+#define T_PABT      3         ///< Prefetch Abort
+#define T_DABT      4         ///< Data Abort
+#define T_UNUSED    5         ///< Not Used
+#define T_IRQ       6         ///< IRQ (Interrupt)
+#define T_FIQ       7         ///< FIQ (Fast Interrupt)
+
+#define IRQ_UART0   44
+#define IRQ_KMI0    52
 
 #ifndef __ASSEMBLER__
 

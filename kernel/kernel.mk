@@ -12,6 +12,7 @@ KERNEL_SRCFILES :=	\
 	kernel/lcd.c \
 	kernel/uart.c \
 	kernel/console.c \
+	kernel/gic.c \
 	kernel/trapentry.S \
 	kernel/trap.c \
 	kernel/kdebug.c \

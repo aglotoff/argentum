@@ -3,17 +3,36 @@
 
 #include "armv7.h"
 #include "console.h"
+#include "gic.h"
+#include "kmi.h"
 #include "trap.h"
+#include "uart.h"
 
 void
 trap(struct Trapframe *tf)
 {
   extern char *panicstr;
+  unsigned irq;
 
   // Halt the CPU if some other CPU has calld panic().
   if (panicstr) {
     for (;;)
       ;
+  }
+
+  if (tf->trapno == T_IRQ) {
+    irq = gic_intid();
+
+    switch (irq & 0xFFFFFF) {
+    case IRQ_UART0:
+      uart_intr();
+      gic_eoi(irq);
+      return;
+    case IRQ_KMI0:
+      kmi_intr();
+      gic_eoi(irq);
+      return;
+    }
   }
 
   print_trapframe(tf);

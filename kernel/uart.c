@@ -1,7 +1,9 @@
 #include <stdint.h>
 
 #include "console.h"
+#include "gic.h"
 #include "memlayout.h"
+#include "trap.h"
 #include "uart.h"
 
 static volatile uint32_t *uart;
@@ -31,6 +33,10 @@ uart_init(void)
 
   // Enable UART, transfer & receive.
   uart[UARTCR] = UARTCR_UARTEN | UARTCR_TXE | UARTCR_RXE;
+
+  // Enable interupts
+  uart[UARTIMSC] |= UARTIMSC_RXIM;
+  gic_enable(IRQ_UART0);
 }
 
 void

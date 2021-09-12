@@ -3,6 +3,7 @@
 
 #include "armv7.h"
 #include "console.h"
+#include "gic.h"
 #include "memlayout.h"
 #include "monitor.h"
 #include "mmu.h"
@@ -10,12 +11,13 @@
 void
 main(void)
 {
+  gic_init();
   console_init();
-  
+
   cprintf("Starting CPU %d\n", read_mpidr() & 0x3);
 
-  // Cause a data abort
-  *(volatile int *) 0xF0000000 = 12345;
+  // Enable interrupts
+  // write_cpsr(read_cpsr() & ~PSR_I);
 
   for (;;) {
     monitor(NULL);
@@ -72,7 +74,9 @@ entry_trtab[NTTENTRIES] = {
   [TTX(KERNEL_BASE+0x00000000)] =
     (0x00000000 | TTE_TYPE_SECT | TTE_SECT_AP(AP_PRIV_RW)),
 
-  // Higher half mapping for console I/O devices
+  // Higher half mapping for I/O devices
   [TTX(KERNEL_BASE+0x10000000)] =
     (0x10000000 | TTE_TYPE_SECT | TTE_SECT_AP(AP_PRIV_RW)),
+  [TTX(KERNEL_BASE+0x1F000000)] =
+    (0x1F000000 | TTE_TYPE_SECT | TTE_SECT_AP(AP_PRIV_RW)),
 };

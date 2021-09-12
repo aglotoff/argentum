@@ -1,8 +1,10 @@
 #include <stdint.h>
 
 #include "console.h"
+#include "gic.h"
 #include "kmi.h"
 #include "memlayout.h"
+#include "trap.h"
 
 // Shift key states
 #define SHIFT             (1 << 0)
@@ -153,6 +155,10 @@ kmi_init(void)
 {
   // TODO: map to a reserved region in the virtual address space.
   kmi = (volatile uint32_t *) (KERNEL_BASE + KMI0);
+
+  // Enable interrupts.
+  kmi[KMICR] = KMICR_RXINTREN;
+  gic_enable(IRQ_KMI0);
 }
 
 void

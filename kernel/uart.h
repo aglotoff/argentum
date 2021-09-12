@@ -26,6 +26,8 @@
 #define   UARTCR_UARTEN   (1 << 0)      ///< UART Enable
 #define   UARTCR_TXE      (1 << 8)      ///< Transmit enable
 #define   UARTCR_RXE      (1 << 9)      ///< Receive enable
+#define UARTIMSC          (0x038 >> 2)  ///< Interrupt Mask Set/Clear Register
+#define   UARTIMSC_RXIM   (1 << 4)      ///< Receive interrupt mask
 
 #define UART_CLK          24000000      ///< UART clock rate, in Hz
 

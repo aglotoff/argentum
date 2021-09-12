@@ -29,6 +29,33 @@
 #define PSR_Z         (1 << 30)     ///< Zero condition code flag
 #define PSR_N         (1 << 31)     ///< Negative condition code flag
 
+#ifndef __ASSEMBLER__
+
+#include <stdint.h>
+
+/**
+ * Read the value of the PSR register
+ */
+static inline uint32_t
+read_cpsr(void)
+{
+  uint32_t val;
+
+  asm volatile ("mrs %0, cpsr" : "=r" (val));
+  return val;
+}
+
+/**
+ * Set the value of the PSR register
+ */
+static inline void
+write_cpsr(uint32_t val)
+{
+  asm volatile ("msr cpsr, %0" : : "r" (val));
+}
+
+#endif  // !__ASSEMBLER__
+
 /*
  *
  * Part 2. CP15 Registers
