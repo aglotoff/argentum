@@ -1,6 +1,7 @@
 #include <string.h>
 
 #include "console.h"
+#include "kdebug.h"
 #include "memlayout.h"
 #include "monitor.h"
 
@@ -179,6 +180,7 @@ read_fp(void)
 int
 mon_backtrace(int argc, char **argv)
 {
+  struct PcDebugInfo info;
   uint32_t *fp;
   
   (void) argc;
@@ -186,7 +188,7 @@ mon_backtrace(int argc, char **argv)
 
   cprintf("Stack backtrace:\n");
 
-  // Display the stack backtrace by chasing the saved frame pointer values
+  // Display stack backtrace by chasing the saved frame pointer values
   //
   // The structure is as follows:
   // fp points here:  | save code pointer |  fp[0]
@@ -198,7 +200,10 @@ mon_backtrace(int argc, char **argv)
   // -fno-omit-frame-pointer flags
 
   for (fp = (uint32_t *) read_fp(); fp != NULL; fp = (uint32_t *) fp[-3]) {
-    cprintf("  fp %08x  lr %08x\n", fp, fp[-1]);
+    debug_info_pc(fp[-1], &info);
+
+    cprintf("  [%p] %s (%s at line %d)\n", fp[-1],
+            info.fn_name, info.file, info.line);
   }
 
   return 0;

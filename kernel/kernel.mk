@@ -12,6 +12,7 @@ KERNEL_SRCFILES :=	\
 	kernel/lcd.c \
 	kernel/uart.c \
 	kernel/console.c \
+	kernel/kdebug.c \
 	kernel/monitor.c \
 	kernel/main.c \
 	lib/stdio/xprintf.c \

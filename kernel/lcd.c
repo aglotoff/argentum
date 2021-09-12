@@ -69,7 +69,7 @@ lcd_init(void)
   lcd[LCD_CONTROL] = LCD_EN | LCD_BPP16 | LCD_PWR;
 }
 
-// Naive code to draw a character on the screen pixel-by-pixel. A more efecient
+// Naive code to draw a character on the screen pixel-by-pixel. A more efficient
 // solution would use boolean operations and a "mask lookup table" instead.
 // TODO: implement this solution for better performance!
 static void
