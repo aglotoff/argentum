@@ -24,8 +24,8 @@ trap(struct Trapframe *tf)
 static const char *
 trapname(unsigned trapno)
 {
-	static const char * const excnames[] = {
-		"Reset",
+  static const char * const excnames[] = {
+    "Reset",
     "Undefined Instruction",
     "Supervisor Call",
     "Prefetch Abort",
@@ -33,17 +33,17 @@ trapname(unsigned trapno)
     "Not used",
     "IRQ",
     "FIQ",
-	};
+  };
 
-	if (trapno <= T_FIQ)
-		return excnames[trapno];
-	return "(unknown trap)";
+  if (trapno <= T_FIQ)
+    return excnames[trapno];
+  return "(unknown trap)";
 }
 
 void
 print_trapframe(struct Trapframe *tf)
 {
-	cprintf("TRAP frame at %p from CPU %d\n", tf, read_mpidr() & 0x3);
+  cprintf("TRAP frame at %p from CPU %d\n", tf, read_mpidr() & 0x3);
 
   cprintf("  trap   = 0x%08x    (%s)\n", tf->trapno, trapname(tf->trapno));
 
@@ -56,7 +56,7 @@ print_trapframe(struct Trapframe *tf)
   }
 
   cprintf("  sp_usr = 0x%08x    lr_usr = 0x%08x\n", tf->sp_usr, tf->lr_usr);
-	cprintf("  r0     = 0x%08x    r1     = 0x%08x\n", tf->r0,     tf->r1);
+  cprintf("  r0     = 0x%08x    r1     = 0x%08x\n", tf->r0,     tf->r1);
   cprintf("  r2     = 0x%08x    r3     = 0x%08x\n", tf->r2,     tf->r3);
   cprintf("  r4     = 0x%08x    r5     = 0x%08x\n", tf->r4,     tf->r5);
   cprintf("  r6v    = 0x%08x    r7     = 0x%08x\n", tf->r6,     tf->r7);
