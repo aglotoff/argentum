@@ -1,5 +1,6 @@
 #include <assert.h>
 #include <stddef.h>
+#include <stdint.h>
 
 #include "armv7.h"
 #include "console.h"
@@ -7,6 +8,7 @@
 #include "memlayout.h"
 #include "monitor.h"
 #include "mmu.h"
+#include "sbcon.h"
 
 void
 main(void)
@@ -15,6 +17,9 @@ main(void)
   console_init();
 
   cprintf("Starting CPU %d\n", read_mpidr() & 0x3);
+
+  sb_init();
+  sb_rtc_time();
 
   // Enable interrupts
   // write_cpsr(read_cpsr() & ~PSR_I);

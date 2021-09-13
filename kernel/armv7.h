@@ -1,12 +1,17 @@
 #ifndef KERNEL_ARMV7_H
 #define KERNEL_ARMV7_H
 
-/*
- *
- * Part 1. Program Status Registers
+/**
+ * @file kernel/armv7.h
  * 
+ * This file contains definitions for system register flags, as well as routines
+ * to let C code use special ARMv7 instructions.
  */
 
+/** @name PSRBits
+ *  Program Status Registers bits
+ */
+///@{
 #define PSR_M_MASK    0x1F          ///< Mode field bitmask
 #define PSR_M_USR     0x10          ///<   User
 #define PSR_M_FIQ     0x11          ///<   FIQ
@@ -28,13 +33,16 @@
 #define PSR_C         (1 << 29)     ///< Carry condition code flag
 #define PSR_Z         (1 << 30)     ///< Zero condition code flag
 #define PSR_N         (1 << 31)     ///< Negative condition code flag
+///@}
 
 #ifndef __ASSEMBLER__
 
 #include <stdint.h>
 
 /**
- * Read the value of the PSR register
+ * Read the value of the CPSR register.
+ * 
+ * @return The value of the CPSR register.
  */
 static inline uint32_t
 read_cpsr(void)
@@ -46,7 +54,9 @@ read_cpsr(void)
 }
 
 /**
- * Set the value of the PSR register
+ * Set the value of the CPSR register
+ * 
+ * @param val The value to be written.
  */
 static inline void
 write_cpsr(uint32_t val)
@@ -56,13 +66,11 @@ write_cpsr(uint32_t val)
 
 #endif  // !__ASSEMBLER__
 
-/*
- *
- * Part 2. CP15 Registers
- * 
- */
 
-// System Control Register bits
+/** @name SCTLRBits
+ *  System Control Register bits
+ */
+///@{
 #define SCTLR_M         (1 << 0)      ///< MMU enable
 #define SCTLR_A         (1 << 1)      ///< Alignment
 #define SCTLR_C         (1 << 2)      ///< Cache enable
@@ -79,12 +87,17 @@ write_cpsr(uint32_t val)
 #define SCTLR_TRE       (1 << 28)     ///< TX Remap Enable
 #define SCTLR_AFE       (1 << 29)     ///< Acces Flag Enable
 #define SCTLR_TE        (1 << 30)     ///< Thumb Exception enable
+///@}
 
-// Domain access permission bits
+/** @name DABits
+ *  Domain access permission bits
+ */
+///@{
 #define DA_MASK         0x3           ///< Domain access permissions bitmask
 #define DA_NO           0x0           ///<   No access
 #define DA_CLIENT       0x1           ///<   Client
 #define DA_MANAGER      0x3           ///<   Manager
+///@}
 
 /** Domain n access permission bits */
 #define DACR_D(n, x)    ((x) << (n * 2))
@@ -94,7 +107,9 @@ write_cpsr(uint32_t val)
 #include <stdint.h>
 
 /**
- * Read the value of the MPIDR register
+ * Read the value of the MPIDR (Multiprocessor Affinity) register.
+ * 
+ * @return The value of the MPIDR register.
  */
 static inline uint32_t
 read_mpidr(void)
@@ -106,7 +121,9 @@ read_mpidr(void)
 }
 
 /**
- * Read the value of the DFSR register
+ * Read the value of the DFSR (Data Fault Status) register.
+ * 
+ * @return The value of the DFSR register.
  */
 static inline uint32_t
 read_dfsr(void)
@@ -118,7 +135,9 @@ read_dfsr(void)
 }
 
 /**
- * Read the value of the IFSR register
+ * Read the value of the IFSR (Instruction Fault Status) register.
+ * 
+ * @return The value of the IFSR register.
  */
 static inline uint32_t
 read_ifsr(void)
@@ -130,7 +149,9 @@ read_ifsr(void)
 }
 
 /**
- * Read the value of the DFAR register
+ * Read the value of the DFAR (Data Fault Address) register.
+ * 
+ * @return The value of the DFAR register.
  */
 static inline uint32_t
 read_dfar(void)
@@ -142,7 +163,9 @@ read_dfar(void)
 }
 
 /**
- * Read the value of the IFAR register
+ * Read the value of the IFAR (Instruction Fault Address) register.
+ * 
+ * @return The value of the IFAR register.
  */
 static inline uint32_t
 read_ifar(void)
@@ -152,7 +175,6 @@ read_ifar(void)
   asm volatile ("mrc p15, 0, %0, c6, c0, 1" : "=r" (val));
   return val;
 }
-
 
 #endif  // !__ASSEMBLER__
 
