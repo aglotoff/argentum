@@ -18,6 +18,7 @@
 
 #define PAGE_SMALL_SIZE     4096      ///< Bytes mapped by a small page
 #define PAGE_LARGE_SIZE     65536     ///< Bytes mapped by a large page
+#define PAGE_SECT_SIZE      1232896   ///< Bytes mapped by a section
 
 #define NTTENTRIES          4096      ///< Entries per translation table
 #define NPTENTRIES          256       ///< Entries per page table

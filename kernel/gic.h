@@ -3,9 +3,10 @@
 
 // See Arm Generic Interrupt Controller Architecture Specification
 
-#define GICC        0x1F000100      ///< Interrupt interface base address
-#define PTIMER      0x1F000600      ///< Private timer base address
-#define GICD        0x1F001000      ///< Distributor base address
+#define GIC         0x1F000000
+#define GICC        0x0100          ///< Interrupt interface base address
+#define PTIMER      0x0600          ///< Private timer base address
+#define GICD        0x1000          ///< Distributor base address
 
 // GIC distributor registers, shifted right by 2 bits for use as uint32_t[]
 // indicies

@@ -11,7 +11,7 @@
  *
  */
 
-  .globl vectors
+  .globl vectors, vectors_end
 vectors:
   b       .                   // Reset
   ldr     pc, [pc, #0x18]     // Undefined Instruction
@@ -31,6 +31,7 @@ vectors:
   .long   0
   .long   trap_irq
   .long   0
+vectors_end:
 
 /*
  *
@@ -40,9 +41,13 @@ vectors:
 
   .globl  _start
 _start:
+  @ mov r0, #1
+  @ mcr p15, 0, r0, c2, c0, 2
+
   // Load the physical address of the initial translation table
   ldr r0, =RELOC(entry_trtab)
   mcr p15, 0, r0, c2, c0, 0
+  mcr p15, 0, r0, c2, c0, 1
 
   // Assign domain access
   ldr r0, =DACR_D(0, DA_CLIENT)
@@ -50,7 +55,7 @@ _start:
 
   // Enable cache and MMU
   mrc p15, 0, r0, c1, c0, 0
-  ldr r1, =(SCTLR_M | SCTLR_C | SCTLR_I)
+  ldr r1, =(SCTLR_M | SCTLR_C | SCTLR_I | SCTLR_V)
   orr r0, r0, r1
   mcr p15, 0, r0, c1, c0, 0
 

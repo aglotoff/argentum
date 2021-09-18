@@ -8,17 +8,21 @@
 #include "memlayout.h"
 #include "monitor.h"
 #include "mmu.h"
+#include "page.h"
 #include "sbcon.h"
+#include "vm.h"
 
 void
 main(void)
 {
+  page_init_low();
+  vm_init_kernel();
+  page_init_high();
   gic_init();
   console_init();
+  sb_init();
 
   cprintf("Starting CPU %d\n", read_mpidr() & 0x3);
-
-  sb_init();
   sb_rtc_time();
 
   // Enable interrupts
@@ -75,9 +79,39 @@ entry_trtab[NTTENTRIES] = {
   [TTX(0x00000000)] =
     (0x00000000 | TTE_TYPE_SECT | TTE_SECT_AP(AP_PRIV_RW)),
 
-  // Higher-half mapping for the first 1MB of physical memory
+  // Higher-half mapping for the first 16MB of physical memory
   [TTX(KERNEL_BASE+0x00000000)] =
     (0x00000000 | TTE_TYPE_SECT | TTE_SECT_AP(AP_PRIV_RW)),
+  [TTX(KERNEL_BASE+0x00100000)] =
+    (0x00100000 | TTE_TYPE_SECT | TTE_SECT_AP(AP_PRIV_RW)),
+  [TTX(KERNEL_BASE+0x00200000)] =
+    (0x00200000 | TTE_TYPE_SECT | TTE_SECT_AP(AP_PRIV_RW)),
+  [TTX(KERNEL_BASE+0x00300000)] =
+    (0x00300000 | TTE_TYPE_SECT | TTE_SECT_AP(AP_PRIV_RW)),
+  [TTX(KERNEL_BASE+0x00400000)] =
+    (0x00400000 | TTE_TYPE_SECT | TTE_SECT_AP(AP_PRIV_RW)),
+  [TTX(KERNEL_BASE+0x00500000)] =
+    (0x00500000 | TTE_TYPE_SECT | TTE_SECT_AP(AP_PRIV_RW)),
+  [TTX(KERNEL_BASE+0x00600000)] =
+    (0x00600000 | TTE_TYPE_SECT | TTE_SECT_AP(AP_PRIV_RW)),
+  [TTX(KERNEL_BASE+0x00700000)] =
+    (0x00700000 | TTE_TYPE_SECT | TTE_SECT_AP(AP_PRIV_RW)),
+  [TTX(KERNEL_BASE+0x00800000)] =
+    (0x00800000 | TTE_TYPE_SECT | TTE_SECT_AP(AP_PRIV_RW)),
+  [TTX(KERNEL_BASE+0x00900000)] =
+    (0x00900000 | TTE_TYPE_SECT | TTE_SECT_AP(AP_PRIV_RW)),
+  [TTX(KERNEL_BASE+0x00A00000)] =
+    (0x00A00000 | TTE_TYPE_SECT | TTE_SECT_AP(AP_PRIV_RW)),
+  [TTX(KERNEL_BASE+0x00B00000)] =
+    (0x00B00000 | TTE_TYPE_SECT | TTE_SECT_AP(AP_PRIV_RW)),
+  [TTX(KERNEL_BASE+0x00C00000)] =
+    (0x00C00000 | TTE_TYPE_SECT | TTE_SECT_AP(AP_PRIV_RW)),
+  [TTX(KERNEL_BASE+0x00D00000)] =
+    (0x00D00000 | TTE_TYPE_SECT | TTE_SECT_AP(AP_PRIV_RW)),
+  [TTX(KERNEL_BASE+0x00E00000)] =
+    (0x00E00000 | TTE_TYPE_SECT | TTE_SECT_AP(AP_PRIV_RW)),
+  [TTX(KERNEL_BASE+0x00F00000)] =
+    (0x00F00000 | TTE_TYPE_SECT | TTE_SECT_AP(AP_PRIV_RW)),
 
   // Higher half mapping for I/O devices
   [TTX(KERNEL_BASE+0x10000000)] =

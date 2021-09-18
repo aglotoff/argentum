@@ -5,6 +5,7 @@
 #include "memlayout.h"
 #include "trap.h"
 #include "uart.h"
+#include "vm.h"
 
 static volatile uint32_t *uart;
 
@@ -13,8 +14,7 @@ uart_init(void)
 {
   uint32_t divisor_x_64;
 
-  // TODO: map to a reserved region in the virtual address space.
-  uart = (volatile uint32_t *) (KERNEL_BASE + UART0);
+  uart = (volatile uint32_t *) vm_map_mmio(UART0, 4096);
 
   // Clear all errors.
   uart[UARTECR] = 0;

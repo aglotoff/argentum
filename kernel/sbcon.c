@@ -3,6 +3,7 @@
 #include "console.h"
 #include "memlayout.h"
 #include "sbcon.h"
+#include "vm.h"
 
 static const char *daynames[] = {
   [1]  "Sun",   [2]  "Mon",   [3]  "Tue",   [4]  "Wed",
@@ -29,8 +30,7 @@ static volatile uint32_t *sb;
 void
 sb_init(void)
 {
-  // TODO: map to a reserved region in the virtual address space.
-  sb = (volatile uint32_t *) (KERNEL_BASE + SB_CON0);
+  sb = (volatile uint32_t *) vm_map_mmio(SB_CON0, 4096);
 
   sb[SB_CONTROLS] = SCL;
   sb[SB_CONTROLS] = SDA;

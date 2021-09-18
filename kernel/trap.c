@@ -6,6 +6,7 @@
 #include "gic.h"
 #include "kmi.h"
 #include "trap.h"
+#include "vm.h"
 #include "uart.h"
 
 void

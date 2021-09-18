@@ -15,6 +15,8 @@ KERNEL_SRCFILES :=	\
 	kernel/gic.c \
 	kernel/trapentry.S \
 	kernel/trap.c \
+	kernel/page.c \
+	kernel/vm.c \
 	kernel/sbcon.c \
 	kernel/kdebug.c \
 	kernel/monitor.c \

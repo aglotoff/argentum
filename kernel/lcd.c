@@ -3,6 +3,8 @@
 
 #include "lcd.h"
 #include "memlayout.h"
+#include "page.h"
+#include "vm.h"
 
 #define DISPLAY_WIDTH       640
 #define DISPLAY_HEIGHT      480
@@ -31,7 +33,7 @@
 static volatile uint32_t *lcd;
 
 // Framebuffer
-static uint16_t buf[DISPLAY_WIDTH * DISPLAY_HEIGHT];
+static uint16_t *buf;
 // Current character position in the framebuffer
 static uint16_t buf_x, buf_y;
 
@@ -43,6 +45,7 @@ static uint8_t *font;
 void
 lcd_init(void)
 {
+  struct PageInfo *p;
   struct PsfHeader *psf_header;
   
   psf_header = (struct PsfHeader *) _binary_kernel_vga_font_psf_start;
@@ -54,8 +57,14 @@ lcd_init(void)
 
   font = (uint8_t *) (psf_header + 1);
 
-  // TODO: map to a reserved region in the virtual address space.
-  lcd = (volatile uint32_t *) (KERNEL_BASE + LCD);
+  // Allocate the frame buffer
+  if ((p = page_alloc(10, PAGE_ALLOC_ZERO)) == NULL)
+    return;
+
+  buf = (uint16_t *) page2kva(p);
+  p->ref_count++;
+
+  lcd = (volatile uint32_t *) vm_map_mmio(LCD, 4096);
 
   // Set display resolution: VGA (640x480) on VGA
   lcd[LCD_TIMING0] = 0x3F1F3F9C;
@@ -63,7 +72,7 @@ lcd_init(void)
   lcd[LCD_TIMING2] = 0x067F1800;
 
   // Set the frame buffer physical base address
-  lcd[LCD_UPBASE] = (uint32_t) buf - KERNEL_BASE;
+  lcd[LCD_UPBASE] = PADDR(buf);
 
   // Enable LCD, 16 bpp
   lcd[LCD_CONTROL] = LCD_EN | LCD_BPP16 | LCD_PWR;

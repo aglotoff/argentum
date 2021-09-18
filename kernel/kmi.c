@@ -5,6 +5,7 @@
 #include "kmi.h"
 #include "memlayout.h"
 #include "trap.h"
+#include "vm.h"
 
 // Shift key states
 #define SHIFT             (1 << 0)
@@ -153,8 +154,7 @@ kmi_getc(void)
 void
 kmi_init(void)
 {
-  // TODO: map to a reserved region in the virtual address space.
-  kmi = (volatile uint32_t *) (KERNEL_BASE + KMI0);
+  kmi = (volatile uint32_t *) vm_map_mmio(KMI0, 4096);
 
   // Enable interrupts.
   kmi[KMICR] = KMICR_RXINTREN;

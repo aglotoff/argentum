@@ -3,15 +3,18 @@
 #include "console.h"
 #include "gic.h"
 #include "memlayout.h"
+#include "vm.h"
 
 static volatile uint32_t *gicc, *gicd;
 
 void
 gic_init(void)
 {
-  // TODO: map to reserved regions in the virtual address space.
-  gicc = (volatile uint32_t *) (KERNEL_BASE + GICC);
-  gicd = (volatile uint32_t *) (KERNEL_BASE + GICD);
+  uint32_t *gic;
+  
+  gic = (uint32_t *) vm_map_mmio(GIC, 4096 * 2);
+  gicc = &gic[GICC >> 2];
+  gicd = &gic[GICD >> 2];
 
   // Enable local PIC
   gicc[ICCICR] = ICCICR_EN;

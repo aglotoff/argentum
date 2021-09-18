@@ -10,7 +10,7 @@
 // See ARM PrimeCell PS2 Keyboard/Mouse Interface (PL050) Technical Reference
 // Manual.
 
-#define KMI0              0x10006000    ///< KMI0 (keyboard) base address
+#define KMI0              0x10006000    ///< KMI0 (keyboard) base address         
 
 // KMI registers, shifted right by 2 bits for use as uint32_t[] indicies
 #define KMICR             (0x00 >> 2)   ///< Control register

@@ -85,7 +85,7 @@ write_cpsr(uint32_t val)
 #define SCTLR_EE        (1 << 25)     ///< Exception Endianness
 #define SCTLR_NMFI      (1 << 27)     ///< Non-maskable Fast Interrupts enable
 #define SCTLR_TRE       (1 << 28)     ///< TX Remap Enable
-#define SCTLR_AFE       (1 << 29)     ///< Acces Flag Enable
+#define SCTLR_AFE       (1 << 29)     ///< Access Flag Enable
 #define SCTLR_TE        (1 << 30)     ///< Thumb Exception enable
 ///@}
 
@@ -118,6 +118,12 @@ read_mpidr(void)
 
   asm volatile ("mrc p15, 0, %0, c0, c0, 5" : "=r" (val));
   return val;
+}
+
+static inline void
+write_ttbr0(uint32_t val)
+{
+  asm volatile ("mcr p15, 0, %0, c2, c0, 0" : : "r" (val));
 }
 
 /**
@@ -174,6 +180,15 @@ read_ifar(void)
 
   asm volatile ("mrc p15, 0, %0, c6, c0, 1" : "=r" (val));
   return val;
+}
+
+/**
+ * Invalidate entire unified TLB
+ */
+static inline void
+tlbiall(void)
+{
+  asm volatile ("mcr p15, 0, %0, c8, c7, 0" : : "r"(0));
 }
 
 #endif  // !__ASSEMBLER__
