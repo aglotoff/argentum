@@ -120,10 +120,37 @@ read_mpidr(void)
   return val;
 }
 
+static inline uint32_t
+read_sctlr(void)
+{
+  uint32_t val;
+
+  asm volatile ("mrc p15, 0, %0, c1, c0, 0" : "=r" (val));
+  return val;
+}
+
+static inline void
+write_sctlr(uint32_t val)
+{
+  asm volatile ("mcr p15, 0, %0, c1, c0, 0" : : "r" (val));
+}
+
 static inline void
 write_ttbr0(uint32_t val)
 {
   asm volatile ("mcr p15, 0, %0, c2, c0, 0" : : "r" (val));
+}
+
+static inline void
+write_ttbr1(uint32_t val)
+{
+  asm volatile ("mcr p15, 0, %0, c2, c0, 1" : : "r" (val));
+}
+
+static inline void
+write_ttbcr(uint32_t val)
+{
+  asm volatile ("mcr p15, 0, %0, c2, c0, 2" : : "r" (val));
 }
 
 /**
@@ -189,6 +216,40 @@ static inline void
 tlbiall(void)
 {
   asm volatile ("mcr p15, 0, %0, c8, c7, 0" : : "r"(0));
+}
+
+static inline void
+slock(volatile uint32_t *addr)
+{
+  uint32_t t1 = 0, t2 = 0, t3 = 0;
+
+  asm volatile("1:\n"
+               "ldrex %1, [%0]\n"
+               "cmp %1, #0\n"
+               "wfene\n"
+               "bne 1b\n"
+               "mov %1, #1\n"
+               "strex %2, %1, [%0]\n"
+               "cmp %2, #0\n"
+               "bne 1b\n"
+               "dmb\n"
+               :"+r"(addr), "=r"(t1), "=r"(t2)
+                :"r"(t3)
+                :"cc", "memory");
+}
+
+static inline void
+sunlock(volatile uint32_t *addr)
+{
+  uint32_t t1 = 0;
+
+  asm volatile("mov %1, #0x0\n"
+               "dmb\n"
+               "str %1, [%0]\n"
+               "dsb\n"
+               "sev\n"
+               :"+r"(addr), "=r"(t1):
+                :"cc", "memory");
 }
 
 #endif  // !__ASSEMBLER__

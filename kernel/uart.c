@@ -36,7 +36,7 @@ uart_init(void)
 
   // Enable interupts
   uart[UARTIMSC] |= UARTIMSC_RXIM;
-  gic_enable(IRQ_UART0);
+  gic_enable(IRQ_UART0, 0);
 }
 
 void

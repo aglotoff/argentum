@@ -12,26 +12,45 @@
 #include "sbcon.h"
 #include "vm.h"
 
+static void mp_main(void);
+
+// The bootstrap processor starts running C code here.
 void
 main(void)
 {
-  page_init_low();
-  vm_init_kernel();
-  page_init_high();
-  gic_init();
-  console_init();
-  sb_init();
+  page_init_low();      // Physical page allocator (lower memory)
+  vm_init();            // Kernel virtual memory
+  page_init_high();     // Physical page allocator (higher memory)
+  gic_init();           // Interrupt controller
+  console_init();       // Console devices
+  sb_init();            // Serial bus
+  sb_rtc_time();        // Display current date and time
+  gic_start_others();   // Start other CPUs
+  mp_main();            // Finish the processor's setup
+}
 
+// Non-boot (AP) processors jump here from entry.S
+void
+mp_enter(void)
+{
+  vm_init_percpu();
+  mp_main();
+}
+
+// Common CPU setup code
+static void
+mp_main(void)
+{
   cprintf("Starting CPU %d\n", read_mpidr() & 0x3);
-  sb_rtc_time();
 
   // Enable interrupts
-  // write_cpsr(read_cpsr() & ~PSR_I);
+  write_cpsr(read_cpsr() & ~PSR_I);
 
-  for (;;) {
-    monitor(NULL);
-  }
+  // TODO: start running user processes
+  for (;;)
+    asm volatile("wfi");
 }
+
 
 const char *panicstr;
 
@@ -112,10 +131,4 @@ entry_trtab[NTTENTRIES] = {
     (0x00E00000 | TTE_TYPE_SECT | TTE_SECT_AP(AP_PRIV_RW)),
   [TTX(KERNEL_BASE+0x00F00000)] =
     (0x00F00000 | TTE_TYPE_SECT | TTE_SECT_AP(AP_PRIV_RW)),
-
-  // Higher half mapping for I/O devices
-  [TTX(KERNEL_BASE+0x10000000)] =
-    (0x10000000 | TTE_TYPE_SECT | TTE_SECT_AP(AP_PRIV_RW)),
-  [TTX(KERNEL_BASE+0x1F000000)] =
-    (0x1F000000 | TTE_TYPE_SECT | TTE_SECT_AP(AP_PRIV_RW)),
 };

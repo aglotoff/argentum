@@ -25,6 +25,7 @@ CC      := $(TOOLPREFIX)gcc
 GDB     := $(TOOLPREFIX)gdb
 LD      := $(TOOLPREFIX)ld
 NM      := $(TOOLPREFIX)nm
+OBJCOPY := $(TOOLPREFIX)objcopy
 OBJDUMP := $(TOOLPREFIX)objdump
 
 # Common compiler flags
@@ -45,7 +46,7 @@ all: $(KERNEL)
 
 include kernel/kernel.mk
 
-QEMUOPTS := -M realview-pbx-a9 -m 256 -smp 1
+QEMUOPTS := -M realview-pbx-a9 -m 256 -smp 2
 QEMUOPTS += -kernel $(KERNEL)
 QEMUOPTS += -serial mon:stdio
 

@@ -10,7 +10,9 @@ struct PageInfo;
 /**
  * Initialize the kernel part of a translation table.
  */
-void vm_init_kernel(void);
+void vm_init(void);
+
+void vm_init_percpu(void);
 
 void *vm_map_mmio(uint32_t pa, size_t n);
 

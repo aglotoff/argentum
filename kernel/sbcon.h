@@ -19,7 +19,7 @@
 #define SDA           (1 << 1)        ///< Data line
 
 /** @name SBRegs
- *  Serial bus registers, shifted right by 2 bits for use as uint32_t[]
+ *  Serial bus registers, shifted right by 2 bits for use as uint32_t[] indices
  */
 ///@{
 #define SB_CONTROL    (0x000 >> 2)    ///< Read serial control bits

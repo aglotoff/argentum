@@ -4,8 +4,8 @@ ENTRY(_start)
 
 SECTIONS
 {
-  /* Link the entry code at virtual address 0 */
-  . = 0x0;
+  /* Link the entry code at virtual address 0x10000 */
+  . = 0x10000;
 
   .entry : {
     *(.entry*)

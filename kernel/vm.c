@@ -10,11 +10,12 @@ tte_t *kern_trtab;
 
 static pte_t *vm_walk_trtab(tte_t *, uintptr_t, int);
 static void vm_map_region(tte_t *, uintptr_t, uint32_t, size_t, int, int);
-static void vm_invalidate_cache(void);
 
 void
-vm_init_kernel(void)
+vm_init(void)
 {
+  extern uint8_t _start[];
+
   struct PageInfo *p;
 
   // Create the master translation table
@@ -29,13 +30,24 @@ vm_init_kernel(void)
 
   // Map exception vectors at VECTORS_BASE
   // Permissions: kernel R, user NONE
-  vm_map_region(kern_trtab, VECTORS_BASE, 0, PAGE_SMALL_SIZE, AP_PRIV_RO, 0);
+  vm_map_region(kern_trtab, VECTORS_BASE, (uint32_t) _start,
+                PAGE_SMALL_SIZE, AP_PRIV_RO, 0);
 
+  vm_init_percpu();
+}
+
+void
+vm_init_percpu(void)
+{
   // Switch from the minimal entry translation table to the full translation
-  // table we just created.
+  // table.
   write_ttbr0(PADDR(kern_trtab));
+  write_ttbr1(PADDR(kern_trtab));
+
+  // Size of the TTBR0 translation table is 8KB.
+  write_ttbcr(1);
+
   tlbiall();
-  vm_invalidate_cache();
 }
 
 static pte_t *
@@ -177,11 +189,4 @@ vm_map_region(tte_t *trtab,
       n -= PAGE_SMALL_SIZE;
     }
   }
-}
-
-static void
-vm_invalidate_cache(void)
-{
-  asm volatile("mcr p15, 0, %0, c7, c5, 0" : : "r"(0));
-  asm volatile("mcr p15, 0, %0, c7, c6, 0" : : "r"(0));
 }

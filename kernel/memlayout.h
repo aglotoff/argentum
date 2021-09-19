@@ -20,8 +20,8 @@
 #define KXSTACK_LR      8
 #define KXSTACK_TRAPNO  12
 
-#define MMIO_LIMIT      KERNEL_BASE
-#define MMIO_BASE       (KERNEL_BASE - 16 * 1024 * 1024)
+#define MMIO_LIMIT      VECTORS_BASE
+#define MMIO_BASE       (MMIO_LIMIT - 16 * 1024 * 1024)
 
 #ifndef __ASSEMBLER__
 

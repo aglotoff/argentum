@@ -52,7 +52,8 @@ $(OBJ)/kernel/%.o: lib/%.c
 
 $(OBJ)/kernel/kernel: $(KERNEL_OBJFILES) $(KERNEL_BINFILES) kernel/kernel.ld
 	@echo "+ LD  $@"
-	$(V)$(LD) -o $@ $(KERNEL_LDFLAGS) $(KERNEL_OBJFILES) $(LIBGCC) \
+	$(V)$(LD) -o $@.elf $(KERNEL_LDFLAGS) $(KERNEL_OBJFILES) $(LIBGCC) \
 		-b binary $(KERNEL_BINFILES)
-	$(V)$(OBJDUMP) -S $@ > $@.asm
-	$(V)$(NM) -n $@ > $@.sym
+	$(V)$(OBJCOPY) -O binary $@.elf $@
+	$(V)$(OBJDUMP) -S $@.elf > $@.asm
+	$(V)$(NM) -n $@.elf > $@.sym

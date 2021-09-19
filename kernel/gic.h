@@ -13,7 +13,9 @@
 #define ICDDCR        (0x000 >> 2)  ///< Distributor Control Register
   #define ICDDCR_EN     (1 << 0)    ///<    Enable
 #define ICDISER0      (0x100 >> 2)  ///< Interrupt Set-Enable Registers
+#define ICDIPR0       (0x400 >> 2)  ///< Interrupt Priority Registers
 #define ICDIPTR0      (0x800 >> 2)  ///< Interrupt Processor Targets Registers
+#define ICDSGIR       (0xF00 >> 2)  ///< Software Generated Interrupt Register
 
 // GIC CPU interface registers, shifted right by 2 bits for use as uint32_t[]
 // indicies
@@ -23,6 +25,9 @@
 #define ICCIAR        (0x00C >> 2)  ///< Interrupt Acknowledge Register
 #define ICCEOIR       (0x010 >> 2)  ///< End of Interrupt Register
 
+#define SYS_BASE      0x10000000
+#define SYS_FLAGS     (0x030 >> 2)
+
 /**
  * Initialize the interrupt controller.
  */
@@ -31,7 +36,7 @@ void gic_init(void);
 /**
  * Enable the specified interrupt.
  */
-void gic_enable(unsigned irq);
+void gic_enable(unsigned irq, unsigned cpu);
 
 /**
  * Returns ID of the signaled interrupt.
@@ -42,5 +47,7 @@ unsigned gic_intid(void);
  * Deactivate the specified interrupt.
  */
 void gic_eoi(unsigned irq);
+
+void gic_start_others(void);
 
 #endif  // !KERNEL_GIC_H

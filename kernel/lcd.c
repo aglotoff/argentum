@@ -64,7 +64,7 @@ lcd_init(void)
   buf = (uint16_t *) page2kva(p);
   p->ref_count++;
 
-  lcd = (volatile uint32_t *) vm_map_mmio(LCD, 4096);
+  lcd = (volatile uint32_t *) vm_map_mmio(LCD_BASE, 4096);
 
   // Set display resolution: VGA (640x480) on VGA
   lcd[LCD_TIMING0] = 0x3F1F3F9C;

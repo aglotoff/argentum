@@ -27,13 +27,14 @@ trap(struct Trapframe *tf)
     switch (irq & 0xFFFFFF) {
     case IRQ_UART0:
       uart_intr();
-      gic_eoi(irq);
-      return;
+      break;
     case IRQ_KMI0:
-      kmi_intr();
-      gic_eoi(irq);
-      return;
+      kmi_kbd_intr();
+      break;
     }
+
+    gic_eoi(irq);
+    return;
   }
 
   print_trapframe(tf);

@@ -5,13 +5,14 @@
  * @file kernel/lcd.h
  *
  * LCD output code.
+ *
+ * For more info, see PrimeCell Color LCD Controller (PL111) Technical Reference
+ * Manual.
  */
 
 #include <stdint.h>
-
-// See PrimeCell Color LCD Controller (PL111) Technical Reference Manual
-
-#define LCD             0x10020000      ///< LCD base address
+ 
+#define LCD_BASE        0x10020000      ///< LCD base memory address
 
 // LCD registers, shifted right by 2 bits for use as uint32_t[] 
 #define LCD_TIMING0     (0x000 >> 2)    ///< Horizontal Axis Panel Control

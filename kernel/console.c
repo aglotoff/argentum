@@ -1,6 +1,7 @@
 #include <stdint.h>
 #include <stdio.h>
 
+#include "armv7.h"
 #include "console.h"
 #include "kmi.h"
 #include "lcd.h"
@@ -14,6 +15,8 @@ static struct {
   uint32_t  rpos;
   uint32_t  wpos;
 } console;
+
+static uint32_t lock = 0;
 
 void
 console_intr(int (*getc)(void))
@@ -30,6 +33,7 @@ console_intr(int (*getc)(void))
     }
 
     console.buf[console.wpos++ % CONSOLE_BUF_SIZE] = c;
+    console_putc(c);
   }
 }
 
@@ -37,7 +41,7 @@ void
 console_init(void)
 {
   uart_init();
-  kmi_init();
+  kmi_kbd_init();
   lcd_init();
 }
 
@@ -54,7 +58,7 @@ console_getc(void)
   do {
     // Poll for any pending characters from UART and the keyboard.
     uart_intr();
-    kmi_intr();
+    kmi_kbd_intr();
   } while (console.rpos == console.wpos);
 
   return console.buf[console.rpos++ % CONSOLE_BUF_SIZE];
@@ -71,7 +75,9 @@ cputc(void *arg, int c)
 void
 vcprintf(const char *format, va_list ap)
 {
+  slock(&lock);
   xprintf(cputc, NULL, format, ap);
+  sunlock(&lock);
 }
 
 void
