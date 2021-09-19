@@ -5,6 +5,7 @@
 #include "console.h"
 #include "gic.h"
 #include "kmi.h"
+#include "syscall.h"
 #include "trap.h"
 #include "vm.h"
 #include "uart.h"
@@ -19,6 +20,11 @@ trap(struct Trapframe *tf)
   if (panicstr) {
     for (;;)
       ;
+  }
+
+  if (tf->trapno == T_SWI) {
+    tf->r0 = syscall(tf);
+    return;
   }
 
   if (tf->trapno == T_IRQ) {

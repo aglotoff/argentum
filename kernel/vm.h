@@ -22,4 +22,8 @@ int vm_insert_page(tte_t *trtab, struct PageInfo *p, void *va, int perm);
 
 void vm_remove_page(tte_t *trtab, void *va);
 
+void vm_switch_kernel(void);
+
+void vm_switch_user(tte_t *trtab);
+
 #endif  // !KERNEL_VM_H

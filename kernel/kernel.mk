@@ -17,11 +17,15 @@ KERNEL_SRCFILES :=	\
 	kernel/trap.c \
 	kernel/page.c \
 	kernel/vm.c \
+	kernel/process.c \
+	kernel/context.S \
+	kernel/syscall.c \
 	kernel/sbcon.c \
 	kernel/kdebug.c \
 	kernel/monitor.c \
 	kernel/main.c \
 	lib/stdio/xprintf.c \
+	lib/string/memcmp.c \
 	lib/string/memmove.c \
 	lib/string/memset.c \
 	lib/string/strchr.c \
@@ -32,8 +36,12 @@ KERNEL_OBJFILES := $(patsubst %.c, $(OBJ)/%.o, $(KERNEL_SRCFILES))
 KERNEL_OBJFILES := $(patsubst %.S, $(OBJ)/%.o, $(KERNEL_OBJFILES))
 KERNEL_OBJFILES := $(patsubst $(OBJ)/lib/%, $(OBJ)/kernel/%, $(KERNEL_OBJFILES))
 
+# For now, embed user prorams directly into the kernel binary
+KERNEL_BINFILES := user/hello
+KERNEL_BINFILES := $(patsubst %, $(OBJ)/%, $(KERNEL_BINFILES))
+
 # Embed the VGA font to print characters on LCD
-KERNEL_BINFILES := kernel/vga_font.psf
+KERNEL_BINFILES += kernel/vga_font.psf
 
 $(OBJ)/kernel/%.o: kernel/%.c
 	@echo "+ CC  $<"

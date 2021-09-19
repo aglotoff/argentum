@@ -82,3 +82,25 @@ trapret:
   ldmia   sp!, {r0-r12,lr}        // restore context
   msr     spsr_c, lr              // restore spsr
   ldmia   sp!, {lr,pc}^           // return
+
+
+/*
+ *
+ * System call entry point.
+ *
+ */
+
+  .globl trap_svc
+trap_svc:
+  stmdb   sp!, {r0,lr}
+  mrs     lr, spsr
+  stmdb   sp!, {r0-r12,lr}        // Save r0-r12
+  sub     sp, #12                 // 
+  mov     r0, #T_SWI              // save trap number
+  stmia   sp, {r0,sp,lr}^         // save user mode sp and lr
+
+  // Call trap(tf), where tf=sp
+  mov     r0, sp
+  bl      trap
+
+  b       trapret

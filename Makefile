@@ -30,7 +30,7 @@ OBJDUMP := $(TOOLPREFIX)objdump
 
 # Common compiler flags
 CFLAGS := -ffreestanding -nostdlib -fno-builtin -nostdinc -I$(INC)
-CFLAGS += -Wall -Wextra -Werror -Wcast-align
+CFLAGS += -Wall -Wextra -Werror 
 CFLAGS += --std=gnu11
 CFLAGS += -O1 -mcpu=cortex-a9 -mapcs-frame -fno-omit-frame-pointer
 CFLAGS += -gdwarf-3
@@ -45,8 +45,10 @@ KERNEL := $(OBJ)/kernel/kernel
 all: $(KERNEL)
 
 include kernel/kernel.mk
+include lib/lib.mk
+include user/user.mk
 
-QEMUOPTS := -M realview-pbx-a9 -m 256 -smp 4
+QEMUOPTS := -M realview-pbx-a9 -m 256 -smp 1
 QEMUOPTS += -kernel $(KERNEL)
 QEMUOPTS += -serial mon:stdio
 

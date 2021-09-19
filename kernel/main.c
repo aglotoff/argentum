@@ -9,6 +9,7 @@
 #include "monitor.h"
 #include "mmu.h"
 #include "page.h"
+#include "process.h"
 #include "sbcon.h"
 #include "vm.h"
 
@@ -65,12 +66,17 @@ boot_aps(void)
 static void
 mp_main(void)
 {
-  ptimer_init();
+  extern uint8_t _binary_obj_user_hello_start[];
+
+  // ptimer_init();
 
   cprintf("Starting CPU %d\n", read_mpidr() & 0x3);
 
+  process_create(_binary_obj_user_hello_start);
+  process_run();
+
   // Enable interrupts
-  write_cpsr(read_cpsr() & ~PSR_I);
+  // write_cpsr(read_cpsr() & ~PSR_I);
 
   // TODO: start running user processes
   for (;;)

@@ -20,6 +20,9 @@
 #define KXSTACK_LR      8
 #define KXSTACK_TRAPNO  12
 
+#define USTACK_TOP      KERNEL_BASE
+#define USTACK_SIZE     (PAGE_SIZE * 4)
+
 #define MMIO_LIMIT      VECTORS_BASE
 #define MMIO_BASE       (MMIO_LIMIT - 16 * 1024 * 1024)
 

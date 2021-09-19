@@ -15,7 +15,7 @@
 _start:
   b       entry               // Reset
   ldr     pc, [pc, #0x18]     // Undefined Instruction
-  b       .                   // Supervisor Call (SVC)
+  ldr     pc, [pc, #0x18]     // Supervisor Call (SVC)
   ldr     pc, [pc, #0x18]     // Prefetch Abort
   ldr     pc, [pc, #0x18]     // Data Abort
   b       .                   // Not Used
@@ -25,7 +25,7 @@ _start:
   // Trap handler addresses
   .long   0
   .long   trap_undef
-  .long   0
+  .long   trap_svc
   .long   trap_pabt
   .long   trap_dabt
   .long   0

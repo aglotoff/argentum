@@ -37,6 +37,20 @@ vm_init(void)
 }
 
 void
+vm_switch_user(tte_t *trtab)
+{
+  write_ttbr0(PADDR(trtab));
+  tlbiall();
+}
+
+void
+vm_switch_kernel(void)
+{
+  write_ttbr0(PADDR(kern_trtab));
+  tlbiall();
+}
+
+void
 vm_init_percpu(void)
 {
   // Switch from the minimal entry translation table to the full translation
