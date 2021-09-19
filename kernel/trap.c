@@ -25,6 +25,10 @@ trap(struct Trapframe *tf)
     irq = gic_intid();
 
     switch (irq & 0xFFFFFF) {
+    case IRQ_PTIMER:
+      ptimer_eoi();
+      cprintf("Timer IRQ from CPU %d\n", read_mpidr() & 0x3);
+      break;
     case IRQ_UART0:
       uart_intr();
       break;

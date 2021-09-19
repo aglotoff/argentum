@@ -12,9 +12,14 @@
 #include "sbcon.h"
 #include "vm.h"
 
+static void boot_aps(void);
 static void mp_main(void);
 
-// The bootstrap processor starts running C code here.
+/**
+ * Main kernel function.
+ * 
+ * The bootstrap processor starts running C code here.
+ */
 void
 main(void)
 {
@@ -25,11 +30,15 @@ main(void)
   console_init();       // Console devices
   sb_init();            // Serial bus
   sb_rtc_time();        // Display current date and time
-  gic_start_others();   // Start other CPUs
+  boot_aps();           // Start other CPUs
   mp_main();            // Finish the processor's setup
 }
 
-// Non-boot (AP) processors jump here from entry.S
+/**
+ * Initialization code for non-boot (AP) processors. 
+ *
+ * AP processors jump here from entry.S.
+ */
 void
 mp_enter(void)
 {
@@ -37,10 +46,27 @@ mp_enter(void)
   mp_main();
 }
 
+#define SYS_BASE      0x10000000
+#define SYS_FLAGS     (0x030 >> 2)
+
+static void
+boot_aps(void)
+{
+  extern uint8_t _start[];
+  static volatile uint32_t *sys;
+
+  sys = (volatile uint32_t *) vm_map_mmio(SYS_BASE, 4096);
+  sys[SYS_FLAGS] = (uint32_t) _start;
+
+  gic_start_others();
+}
+
 // Common CPU setup code
 static void
 mp_main(void)
 {
+  ptimer_init();
+
   cprintf("Starting CPU %d\n", read_mpidr() & 0x3);
 
   // Enable interrupts

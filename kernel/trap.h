@@ -11,6 +11,7 @@
 #define T_IRQ       6         ///< IRQ (Interrupt)
 #define T_FIQ       7         ///< FIQ (Fast Interrupt)
 
+#define IRQ_PTIMER  29
 #define IRQ_UART0   44
 #define IRQ_KMI0    52
 
