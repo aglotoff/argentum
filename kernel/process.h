@@ -23,11 +23,24 @@ struct Process {
   struct Context    *context;   ///< Saved context
 };
 
-extern struct Process *curproc;
+#define NCPU  4
+
+/**
+ * Per-CPU state.
+ */
+struct Cpu {
+  struct Context *scheduler;    ///< Saved scheduler context
+  struct Process *process;      ///< The currently running process          
+};
+
+extern struct Cpu cpus[];
 
 void context_switch(struct Context **old, struct Context *new);
 
 void process_create(void *binary);
 void process_run(void);
+
+int cpuid(void);
+struct Cpu *mycpu(void);
 
 #endif  // KERNEL_PROCESS_H

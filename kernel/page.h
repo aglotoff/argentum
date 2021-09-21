@@ -13,8 +13,8 @@
 
 #include "memlayout.h"
 
-#define PAGE_SIZE         1024      ///< The number of bytes in a single page
-#define PAGE_SHIFT        10        ///< log2 of PAGE_SIZE
+#define PAGE_SIZE         4096      ///< The number of bytes in a single page
+#define PAGE_SHIFT        12        ///< log2 of PAGE_SIZE
 
 /**
  * Physical page frame info.
@@ -67,8 +67,6 @@ void page_init_low(void);
 
 void page_init_high(void);
 
-#define PAGE_ORDER_PGTAB  0
-#define PAGE_ORDER_TRTAB  4
 #define PAGE_ORDER_MAX    10
 
 #define PAGE_ALLOC_ZERO   (1 << 0)

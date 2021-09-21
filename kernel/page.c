@@ -7,14 +7,14 @@
 struct PageInfo *pages;
 unsigned npages;
 
-struct PageFreeList free_pages[PAGE_ORDER_MAX + 1];
+static struct PageFreeList free_pages[PAGE_ORDER_MAX + 1];
 
-static void *page_boot_alloc(size_t);
-static void page_mark_free(struct PageInfo *, unsigned);
-static void page_mark_used(struct PageInfo *, unsigned);
-static int page_is_free(struct PageInfo *, unsigned);
+static void            *page_boot_alloc(size_t);
+static void             page_mark_free(struct PageInfo *, unsigned);
+static void             page_mark_used(struct PageInfo *, unsigned);
+static int              page_is_free(struct PageInfo *, unsigned);
 static struct PageInfo *page_split(struct PageInfo *, unsigned, unsigned);
-static void page_init_region(uint32_t, uint32_t);
+static void             page_init_region(uint32_t, uint32_t);
 
 void
 page_init_low(void)

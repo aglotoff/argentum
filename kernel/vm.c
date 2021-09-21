@@ -19,7 +19,7 @@ vm_init(void)
   struct PageInfo *p;
 
   // Create the master translation table
-  if ((p = page_alloc(PAGE_ORDER_TRTAB, PAGE_ALLOC_ZERO)) == NULL)
+  if ((p = page_alloc(2, PAGE_ALLOC_ZERO)) == NULL)
     panic("out of memory");
 
   kern_trtab = (tte_t *) page2kva(p);
@@ -31,7 +31,7 @@ vm_init(void)
   // Map exception vectors at VECTORS_BASE
   // Permissions: kernel R, user NONE
   vm_map_region(kern_trtab, VECTORS_BASE, (uint32_t) _start,
-                PAGE_SMALL_SIZE, AP_PRIV_RO, 0);
+                PAGE_SIZE, AP_PRIV_RO, 0);
 
   vm_init_percpu();
 }
@@ -70,25 +70,26 @@ vm_walk_trtab(tte_t *trtab, uintptr_t va, int alloc)
   struct PageInfo *p;
   tte_t *tte;
   pte_t *pgtab;
+  unsigned i;
 
   tte = &trtab[TTX(va)];
   if ((*tte & TTE_TYPE_MASK) == TTE_TYPE_FAULT) {
     if (!alloc)
       return NULL;
 
-    if ((p = page_alloc(PAGE_ORDER_PGTAB, PAGE_ALLOC_ZERO)) == NULL)
+    if ((p = page_alloc(0, PAGE_ALLOC_ZERO)) == NULL)
       return NULL;
     
     p->ref_count++;
-    *tte = page2pa(p) | TTE_TYPE_PGTAB;
-    pgtab = page2kva(p);
+
+    for (i = 0; i < 4; i++)
+      trtab[(TTX(va) & ~3)+i] = (page2pa(p) + (PGTAB_SIZE*i)) | TTE_TYPE_PGTAB;
   } else if ((*tte & TTE_TYPE_MASK) != TTE_TYPE_PGTAB) {
     warn("tte type is not page table");
     return NULL;
-  } else {
-    pgtab = KADDR(TTE_PGTAB_ADDR(*tte));
   }
 
+  pgtab = KADDR(TTE_PGTAB_ADDR(*tte));
   return &pgtab[PTX(va)];
 }
 
@@ -167,9 +168,9 @@ vm_map_region(tte_t *trtab,
   pte_t *pte;
   tte_t *tte;
 
-  assert(va % PAGE_SMALL_SIZE == 0);
-  assert(pa % PAGE_SMALL_SIZE == 0);
-  assert(n % PAGE_SMALL_SIZE == 0);
+  assert(va % PAGE_SIZE == 0);
+  assert(pa % PAGE_SIZE == 0);
+  assert(n % PAGE_SIZE == 0);
 
   while (n != 0) {
     // Whenever possible, map entire 1MB sections to reduce the memory
@@ -198,9 +199,9 @@ vm_map_region(tte_t *trtab,
       if (!dev)
         *pte |= (PTE_C | PTE_B);
 
-      va += PAGE_SMALL_SIZE;
-      pa += PAGE_SMALL_SIZE;
-      n -= PAGE_SMALL_SIZE;
+      va += PAGE_SIZE;
+      pa += PAGE_SIZE;
+      n -= PAGE_SIZE;
     }
   }
 }

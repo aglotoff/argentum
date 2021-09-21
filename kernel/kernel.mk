@@ -19,6 +19,7 @@ KERNEL_SRCFILES :=	\
 	kernel/vm.c \
 	kernel/process.c \
 	kernel/context.S \
+	kernel/spinlock.c \
 	kernel/syscall.c \
 	kernel/sbcon.c \
 	kernel/kdebug.c \

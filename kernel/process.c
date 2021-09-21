@@ -7,11 +7,43 @@
 #include "mmu.h"
 #include "page.h"
 #include "process.h"
+#include "spinlock.h"
 #include "trap.h"
 #include "vm.h"
 
-struct Process *curproc;
+struct Cpu cpus[NCPU];
+
 struct Process initproc;
+
+int
+cpuid(void)
+{
+  return read_mpidr() & 3;
+}
+
+struct Cpu *
+mycpu(void)
+{
+  assert((read_cpsr() & PSR_I) && (read_cpsr() & PSR_F));
+  return &cpus[cpuid()];
+}
+
+struct Process *
+myprocess(void)
+{
+  struct Cpu *cpu;
+  struct Process *process;
+  int flags;
+  
+  flags = irq_save();
+
+  cpu = mycpu();
+  process = cpu->process;
+
+  irq_restore(flags);
+
+  return process;
+}
 
 void
 process_init(struct Process *p)
@@ -21,13 +53,13 @@ process_init(struct Process *p)
   struct PageInfo *page;
   uint8_t *sp;
 
-  if ((page = page_alloc(2, 0)) == NULL)
+  if ((page = page_alloc(0, 0)) == NULL)
     panic("out of memory");
 
   p->kstack = (uint8_t *) page2kva(page);
   page->ref_count++;
 
-  sp = p->kstack + PAGE_SMALL_SIZE;
+  sp = p->kstack + PAGE_SIZE;
 
   sp -= sizeof *p->tf;
   p->tf = (struct Trapframe *) sp;
@@ -45,7 +77,7 @@ process_setup_vm(struct Process *p)
 {
   struct PageInfo *page;
 
-  if ((page = page_alloc(PAGE_ORDER_TRTAB - 1, PAGE_ALLOC_ZERO)) == NULL)
+  if ((page = page_alloc(1, PAGE_ALLOC_ZERO)) == NULL)
     panic("out of memory");
 
   p->trtab = (tte_t *) page2kva(page);
@@ -58,11 +90,11 @@ region_alloc(struct Process *p, uintptr_t va, size_t n)
   struct PageInfo *page;
   uintptr_t a, start, end;
 
-  start = va & ~(PAGE_SMALL_SIZE - 1);
-  end   = (va + n + PAGE_SMALL_SIZE - 1) & ~(PAGE_SMALL_SIZE - 1);
+  start = va & ~(PAGE_SIZE - 1);
+  end   = (va + n + PAGE_SIZE - 1) & ~(PAGE_SIZE - 1);
 
-  for (a = start; a < end; a += PAGE_SMALL_SIZE) {
-    if ((page = page_alloc(2, 0)) == NULL)
+  for (a = start; a < end; a += PAGE_SIZE) {
+    if ((page = page_alloc(0, 0)) == NULL)
       panic("out of memory");
     if ((vm_insert_page(p->trtab, page, (void *) a, AP_BOTH_RW)) != 0)
       panic("out of memory");
@@ -107,13 +139,16 @@ process_create(void *binary)
   initproc.tf->pc = elf->entry;
 }
 
-static struct Context *context;
-
 void
 process_run(void)
 {
-  curproc = &initproc;
+  int flags;
 
+  flags = irq_save();
+
+  mycpu()->process = &initproc;
   vm_switch_user(initproc.trtab);
-  context_switch(&context, initproc.context);
+  context_switch(&mycpu()->scheduler, initproc.context);
+
+  irq_restore(flags);
 }
