@@ -1,5 +1,5 @@
-#ifndef INCLUDE_STDDEF_H
-#define INCLUDE_STDDEF_H
+#ifndef __INCLUDE_STDDEF_H__
+#define __INCLUDE_STDDEF_H__
 
 /**
  * Unsigned integer type of the result of the sizeof operator.
@@ -21,4 +21,4 @@ typedef unsigned long   size_t;
   #define NULL    nullptr
 #endif
 
-#endif  // !INCLUDE_STDDEF_H
+#endif  // !__INCLUDE_STDDEF_H__

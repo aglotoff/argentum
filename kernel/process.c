@@ -53,7 +53,7 @@ process_init(struct Process *p)
   struct PageInfo *page;
   uint8_t *sp;
 
-  if ((page = page_alloc(0, 0)) == NULL)
+  if ((page = page_alloc(0)) == NULL)
     panic("out of memory");
 
   p->kstack = (uint8_t *) page2kva(page);
@@ -77,7 +77,7 @@ process_setup_vm(struct Process *p)
 {
   struct PageInfo *page;
 
-  if ((page = page_alloc(1, PAGE_ALLOC_ZERO)) == NULL)
+  if ((page = page_alloc_block(1, PAGE_ALLOC_ZERO)) == NULL)
     panic("out of memory");
 
   p->trtab = (tte_t *) page2kva(page);
@@ -94,7 +94,7 @@ region_alloc(struct Process *p, uintptr_t va, size_t n)
   end   = (va + n + PAGE_SIZE - 1) & ~(PAGE_SIZE - 1);
 
   for (a = start; a < end; a += PAGE_SIZE) {
-    if ((page = page_alloc(0, 0)) == NULL)
+    if ((page = page_alloc(0)) == NULL)
       panic("out of memory");
     if ((vm_insert_page(p->trtab, page, (void *) a, AP_BOTH_RW)) != 0)
       panic("out of memory");

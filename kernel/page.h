@@ -4,77 +4,95 @@
 /**
  * @file kernel/page.h
  * 
- * Binary buddy allocator.
+ * Page allocator.
  */
 
 #include <assert.h>
 #include <list.h>
-#include <stdint.h>
 
 #include "memlayout.h"
 
-#define PAGE_SIZE         4096      ///< The number of bytes in a single page
-#define PAGE_SHIFT        12        ///< log2 of PAGE_SIZE
+/** The number of bytes mapped by a single physical page. */
+#define PAGE_SIZE         4096
+
+/** Log2 of PAGE_SIZE. */
+#define PAGE_SHIFT        12
 
 /**
- * Physical page frame info.
+ * Physical page block info.
  */
 struct PageInfo {
   struct ListLink link;             ///< Linked list head
-  int             ref_count;        ///< Reference count to the page
+  int             ref_count;        ///< Reference count to the page block
 };
 
-struct PageFreeList {
-  struct ListLink link;
-  uint32_t       *bitmap;
-};
-
-/** The kernel uses this array to keep track of physical pages. */
 extern struct PageInfo *pages;
-
-/** The number of physical pages in memory */
 extern unsigned npages;
 
-static inline uint32_t
-page2pa(struct PageInfo *pp)
+/**
+ * Given a page info structure, return the starting physical address.
+ * 
+ * @param p Address of the page info structure.
+ * @return The corresponding physical address.
+ */
+static inline physaddr_t
+page2pa(struct PageInfo *p)
 {
-  if ((pp < pages) || (pp >= &pages[npages]))
-    panic("page2pa called with invalid pp %p", pp);
-  return (pp - pages) << PAGE_SHIFT;
+  assert((p >= pages) && (p < &pages[npages]));
+  return (p - pages) << PAGE_SHIFT;
 }
 
-static inline struct PageInfo *
-pa2page(uint32_t pa)
+/**
+ * Given a page info structure, return the starting kernel virtual address.
+ * 
+ * @param p Address of the page info structure.
+ * @return The corresponding kernel virtual address.
+ */
+static inline void *
+page2kva(struct PageInfo *p)
 {
-  if ((pa >> PAGE_SHIFT) >= npages)
-    panic("pa2page called with invalid pa %p", pa);
+  return KADDR(page2pa(p));
+}
+
+/**
+ * Given a physical address, return the page info structure.
+ * 
+ * @param pa The physical address.
+ * @return The address of the corresponding page info structure.
+ */
+static inline struct PageInfo *
+pa2page(physaddr_t pa)
+{
+  assert((pa >> PAGE_SHIFT) < npages);
   return &pages[pa >> PAGE_SHIFT];
 }
 
-static inline void *
-page2kva(struct PageInfo *pp)
-{
-  return KADDR(page2pa(pp));
-}
-
+/**
+ * Given a page info structure, return the starting kernel virtual address.
+ * 
+ * @param p Address of the page info structure.
+ * @return The corresponding kernel virtual address.
+ */
 static inline struct PageInfo *
 kva2page(void *va)
 {
   return pa2page(PADDR(va));
 }
 
-void page_init_low(void);
-
-void page_init_high(void);
-
+/** The maximum page allocation order. */
 #define PAGE_ORDER_MAX    10
 
+/** Fill the allocated page block with zeros. */ 
 #define PAGE_ALLOC_ZERO   (1 << 0)
 
-struct PageInfo *page_alloc(unsigned order, int flags);
+void             page_init_low(void);
+void             page_init_high(void);
 
-void page_free(struct PageInfo *pp, unsigned order);
+struct PageInfo *page_alloc(int flags);
+struct PageInfo *page_alloc_block(unsigned order, int flags);
 
-void page_decref(struct PageInfo *pp, unsigned order);
+void             page_free(struct PageInfo *page);
+void             page_free_block(struct PageInfo *page, unsigned order);
+void             page_free_region(physaddr_t start, physaddr_t end);
 
 #endif  // !KERNEL_PAGE_H

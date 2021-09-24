@@ -19,7 +19,7 @@ vm_init(void)
   struct PageInfo *p;
 
   // Create the master translation table
-  if ((p = page_alloc(2, PAGE_ALLOC_ZERO)) == NULL)
+  if ((p = page_alloc_block(2, PAGE_ALLOC_ZERO)) == NULL)
     panic("out of memory");
 
   kern_trtab = (tte_t *) page2kva(p);
@@ -77,7 +77,7 @@ vm_walk_trtab(tte_t *trtab, uintptr_t va, int alloc)
     if (!alloc)
       return NULL;
 
-    if ((p = page_alloc(0, PAGE_ALLOC_ZERO)) == NULL)
+    if ((p = page_alloc(PAGE_ALLOC_ZERO)) == NULL)
       return NULL;
     
     p->ref_count++;
@@ -143,13 +143,15 @@ vm_insert_page(tte_t *trtab, struct PageInfo *p, void *va, int perm)
 void
 vm_remove_page(tte_t *trtab, void *va)
 {
-  struct PageInfo *p;
+  struct PageInfo *page;
   pte_t *pte;
 
-  if ((p = vm_lookup_page(trtab, va, &pte)) == NULL)
+  if ((page = vm_lookup_page(trtab, va, &pte)) == NULL)
     return;
 
-  page_decref(p, 0);
+  if (--page->ref_count == 0)
+    page_free(page);
+
   *pte = 0;
 }
 

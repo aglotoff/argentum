@@ -58,7 +58,7 @@ lcd_init(void)
   font = (uint8_t *) (psf_header + 1);
 
   // Allocate the frame buffer
-  if ((p = page_alloc(10, PAGE_ALLOC_ZERO)) == NULL)
+  if ((p = page_alloc_block(10, PAGE_ALLOC_ZERO)) == NULL)
     return;
 
   buf = (uint16_t *) page2kva(p);
