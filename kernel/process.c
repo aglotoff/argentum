@@ -4,6 +4,7 @@
 
 #include "armv7.h"
 #include "console.h"
+#include "kobject.h"
 #include "mmu.h"
 #include "page.h"
 #include "process.h"
@@ -13,7 +14,8 @@
 
 struct Cpu cpus[NCPU];
 
-struct Process initproc;
+static struct KObjectCache *process_cache;
+static struct Process *initproc;
 
 int
 cpuid(void)
@@ -46,30 +48,44 @@ myprocess(void)
 }
 
 void
-process_init(struct Process *p)
+process_init(void)
+{
+  process_cache = kobject_cache_create("process_cache", sizeof(struct Process),
+                                       NULL, NULL);
+  if (process_cache == NULL)
+    panic("cannot allocate process_cache");
+}
+
+struct Process *
+process_alloc(void)
 {
   extern void trapret(void);
 
   struct PageInfo *page;
+  struct Process *process;
   uint8_t *sp;
+
+  process = (struct Process *) kobject_alloc(process_cache);
 
   if ((page = page_alloc(0)) == NULL)
     panic("out of memory");
 
-  p->kstack = (uint8_t *) page2kva(page);
+  process->kstack = (uint8_t *) page2kva(page);
   page->ref_count++;
 
-  sp = p->kstack + PAGE_SIZE;
+  sp = process->kstack + PAGE_SIZE;
 
-  sp -= sizeof *p->tf;
-  p->tf = (struct Trapframe *) sp;
-  p->tf->sp_usr = USTACK_TOP;
-  p->tf->psr = PSR_M_USR | PSR_F;
+  sp -= sizeof *process->tf;
+  process->tf = (struct Trapframe *) sp;
+  process->tf->sp_usr = USTACK_TOP;
+  process->tf->psr = PSR_M_USR | PSR_F;
 
-  sp -= sizeof *p->context;
-  p->context = (struct Context *) sp;
-  memset(p->context, 0, sizeof *p->context);
-  p->context->lr = (uint32_t) trapret;
+  sp -= sizeof *process->context;
+  process->context = (struct Context *) sp;
+  memset(process->context, 0, sizeof *process->context);
+  process->context->lr = (uint32_t) trapret;
+
+  return process;
 }
 
 void
@@ -106,15 +122,16 @@ process_create(void *binary)
 {
   Elf32_Ehdr *elf;
   Elf32_Phdr *ph, *eph;
+  struct Process *process;
 
   elf = (Elf32_Ehdr *) binary;
   if (memcmp(elf->ident, "\x7f""ELF", 4) != 0)
     panic("Invalid ELF binary");
   
-  process_init(&initproc);
-  process_setup_vm(&initproc);
+  process = process_alloc();
+  process_setup_vm(process);
 
-  vm_switch_user(initproc.trtab);
+  vm_switch_user(process->trtab);
 
   ph = (Elf32_Phdr *) ((uint8_t *) elf + elf->phoff);
   eph = ph + elf->phnum;
@@ -125,18 +142,20 @@ process_create(void *binary)
     if (ph->filesz > ph->memsz)
       panic("load_icode: invalid segment header");
     
-    region_alloc(&initproc, ph->vaddr, ph->memsz);
+    region_alloc(process, ph->vaddr, ph->memsz);
 
     memmove((void *) ph->vaddr, binary + ph->offset, ph->filesz);
     if (ph->filesz < ph->memsz)
       memset((uint8_t *) ph->vaddr + ph->filesz, 0, ph->memsz - ph->filesz);
   }
 
-  region_alloc(&initproc, USTACK_TOP - USTACK_SIZE, USTACK_SIZE);
+  region_alloc(process, USTACK_TOP - USTACK_SIZE, USTACK_SIZE);
 
   vm_switch_kernel();
 
-  initproc.tf->pc = elf->entry;
+  process->tf->pc = elf->entry;
+
+  initproc = process;
 }
 
 void
@@ -146,9 +165,9 @@ process_run(void)
 
   flags = irq_save();
 
-  mycpu()->process = &initproc;
-  vm_switch_user(initproc.trtab);
-  context_switch(&mycpu()->scheduler, initproc.context);
+  mycpu()->process = initproc;
+  vm_switch_user(initproc->trtab);
+  context_switch(&mycpu()->scheduler, initproc->context);
 
   irq_restore(flags);
 }

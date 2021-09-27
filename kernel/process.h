@@ -37,6 +37,7 @@ extern struct Cpu cpus[];
 
 void context_switch(struct Context **old, struct Context *new);
 
+void process_init(void);
 void process_create(void *binary);
 void process_run(void);
 

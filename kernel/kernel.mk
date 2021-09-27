@@ -16,6 +16,7 @@ KERNEL_SRCFILES :=	\
 	kernel/trapentry.S \
 	kernel/trap.c \
 	kernel/page.c \
+	kernel/kobject.c \
 	kernel/vm.c \
 	kernel/process.c \
 	kernel/context.S \

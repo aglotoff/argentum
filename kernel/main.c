@@ -5,6 +5,7 @@
 #include "armv7.h"
 #include "console.h"
 #include "gic.h"
+#include "kobject.h"
 #include "memlayout.h"
 #include "monitor.h"
 #include "mmu.h"
@@ -29,6 +30,8 @@ main(void)
   page_init_high();     // Physical page allocator (higher memory)
   gic_init();           // Interrupt controller
   console_init();       // Console devices
+  kobject_init();       // Object allocator
+  process_init();       // Process table
   sb_init();            // Serial bus
   sb_rtc_time();        // Display current date and time
   boot_aps();           // Start other CPUs
