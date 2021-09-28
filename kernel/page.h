@@ -12,12 +12,6 @@
 
 #include "memlayout.h"
 
-/** The number of bytes mapped by a single physical page. */
-#define PAGE_SIZE         4096
-
-/** Log2 of PAGE_SIZE. */
-#define PAGE_SHIFT        12
-
 /**
  * Physical page block info.
  */

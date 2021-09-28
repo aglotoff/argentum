@@ -1,12 +1,26 @@
+// See ARM PrimeCell PS2 Keyboard/Mouse Interface (PL050) Technical Reference
+// Manual.
+
 #include <stdint.h>
 
 #include "console.h"
 #include "gic.h"
-#include "keymaps.h"
 #include "kmi.h"
 #include "memlayout.h"
 #include "trap.h"
 #include "vm.h"
+
+// PBX-A9 has two KMIs: KMI0 is used for the keyboard and KMI1 is used for the
+// mouse.
+#define KMI0_BASE         0x10006000        
+
+// KMI registers, shifted right by 2 bits for use as uint32_t[] indices
+#define KMICR             (0x000 / 4)   // Control register
+#define   KMICR_RXINTREN    (1U << 4)   // Enable receiver interrupt
+#define KMISTAT           (0x004 / 4)   // Status register
+#define   KMISTAT_RXFULL    (1U << 4)   // Receiver register full
+#define   KMISTAT_TXEMPTY   (1U << 6)   // Transmit register empty
+#define KMIDATA           (0x008 / 4)   // Received data
 
 static int kmi_read(volatile uint32_t *);
 static int kmi_write(volatile uint32_t *, uint8_t);
@@ -77,6 +91,68 @@ kmi_write(volatile uint32_t *kmi, uint8_t data)
 
 // Beginning of an 0xE0 code sequence
 #define E0SEQ             (1 << 6)
+
+// Map scan codes in the "normal" state to key codes
+static uint8_t
+normalmap[256] =
+{
+  '\0', 0x1B, '1',  '2',  '3',  '4',  '5',  '6',    // 0x00
+  '7',  '8',  '9',  '0',  '-',  '=',  '\b', '\t',
+  'q',  'w',  'e',  'r',  't',  'y',  'u',  'i',    // 0x10
+  'o',  'p',  '[',  ']',  '\n', '\0', 'a',  's',
+  'd',  'f',  'g',  'h',  'j',  'k',  'l',  ';',    // 0x20
+  '\'', '`',  '\0', '\\', 'z',  'x',  'c',  'v',
+  'b',  'n',  'm',  ',',  '.',  '/',  '\0', '*',    // 0x30
+  '\0', ' ',  '\0', '\0', '\0', '\0', '\0', '\0',
+  '\0', '\0', '\0', '\0', '\0', '\0', '\0', '7',    // 0x40
+  '8',  '9',  '-',  '4',  '5',  '6',  '+',  '1',
+  '2',  '3',  '0',  '.',  '\0', '\0', '\0', '\0',   // 0x50
+  [0x9C]  '\n',
+  [0xB5]  '/',
+};
+
+// Map scan codes in the "shift" state to key codes
+static uint8_t
+shiftmap[256] =
+{
+  '\0', 033,  '!',  '@',  '#',  '$',  '%',  '^',    // 0x00
+  '&',  '*',  '(',  ')',  '_',  '+',  '\b', '\t',
+  'Q',  'W',  'E',  'R',  'T',  'Y',  'U',  'I',    // 0x10
+  'O',  'P',  '{',  '}',  '\n', '\0',  'A', 'S',
+  'D',  'F',  'G',  'H',  'J',  'K',  'L',  ':',    // 0x20
+  '"',  '~',  '\0',  '|',  'Z',  'X',  'C', 'V',
+  'B',  'N',  'M',  '<',  '>',  '?',  '\0', '*',    // 0x30
+  '\0', ' ',  '\0', '\0', '\0', '\0', '\0', '\0',
+  '\0', '\0', '\0', '\0', '\0', '\0', '\0', '7',    // 0x40
+  '8',  '9',  '-',  '4',  '5',  '6',  '+',  '1',
+  '2',  '3',  '0',  '.',  '\0', '\0', '\0', '\0',   // 0x50
+  [0x9C]  '\n',
+  [0xB5]  '/',
+};
+
+// Map scan codes in the "ctrl" state to key codes
+static uint8_t
+ctrlmap[256] =
+{
+  '\0',   '\0',   '\0',   '\0',     '\0',   '\0',   '\0',   '\0',     // 0x00
+  '\0',   '\0',   '\0',   '\0',     '\0',   '\0',   '\0',   '\0',
+  C('Q'), C('W'), C('E'), C('R'),   C('T'), ('Y'),  C('U'), C('I'),   // 0x10
+  C('O'), C('P'), '\0',   '\0',     '\r',   '\0',   C('A'), C('S'),
+  C('D'), C('F'), C('G'), C('H'),   C('J'), C('K'), C('L'), '\0',     // 0x20
+  '\0',   '\0',   '\0',   C('\\'),  C('Z'), C('X'), C('C'), C('V'),
+  C('B'), C('N'), C('M'), '\0',    '\0',    C('/'), '\0',   '\0',     // 0x30
+  [0x9C]  '\r',
+  [0xB5]  C('/'),
+};
+
+// Map scan codes to key codes
+static uint8_t *
+keymaps[4] = {
+  normalmap,
+  shiftmap,
+  ctrlmap,
+  ctrlmap,
+};
 
 // Map scan codes to "shift" states
 static uint8_t
