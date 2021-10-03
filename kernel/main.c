@@ -7,7 +7,6 @@
 #include "gic.h"
 #include "kobject.h"
 #include "memlayout.h"
-#include "monitor.h"
 #include "mmu.h"
 #include "page.h"
 #include "process.h"
@@ -34,6 +33,11 @@ main(void)
   process_init();       // Process table
   sb_init();            // Serial bus
   sb_rtc_time();        // Display current date and time
+
+#if defined(PROCESS_NAME)
+  PROCESS_CREATE(PROCESS_NAME);
+#endif
+
   boot_aps();           // Start other CPUs
   mp_main();            // Finish the processor's setup
 }
@@ -69,60 +73,11 @@ boot_aps(void)
 static void
 mp_main(void)
 {
-  extern uint8_t _binary_obj_user_hello_start[];
-
-  // ptimer_init();
+  ptimer_init();
 
   cprintf("Starting CPU %d\n", read_mpidr() & 0x3);
 
-  process_create(_binary_obj_user_hello_start);
-  process_run();
-
-  // Enable interrupts
-  // write_cpsr(read_cpsr() & ~PSR_I);
-
-  // TODO: start running user processes
-  for (;;)
-    asm volatile("wfi");
-}
-
-
-const char *panicstr;
-
-void
-__panic(const char *file, int line, const char *format, ...)
-{
-  va_list ap;
-
-  if (!panicstr) {
-    panicstr = format;
-
-    cprintf("kernel panic at %s:%d: ", file, line);
-
-    va_start(ap, format);
-    vcprintf(format, ap);
-    va_end(ap);
-
-    cprintf("\n");
-  }
-
-  // Never returns.
-  for (;;)
-    monitor(NULL);
-}
-
-void
-__warn(const char *file, int line, const char *format, ...)
-{
-  va_list ap;
-
-  va_start(ap, format);
-  
-  cprintf("kernel warning at %s:%d: ", file, line);
-  vcprintf(format, ap);
-  cprintf("\n");
-
-  va_end(ap);
+  scheduler();
 }
 
 // Initial translation table that maps just enough physical memory to get us

@@ -1,6 +1,7 @@
 #include <syscall.h>
 
 #include "console.h"
+#include "process.h"
 #include "syscall.h"
 #include "trap.h"
 
@@ -14,12 +15,21 @@ fetch_int(uintptr_t addr, int *ip)
 int
 sys_cputs(struct Trapframe *tf)
 {
-  cprintf("%s", tf->r0);
+  cprintf("CPU%d PID %d: %s", cpuid(), myprocess()->pid, tf->r0);
+  return 0;
+}
+
+int
+sys_exit(struct Trapframe *tf)
+{
+  (void) tf;
+  process_destroy();
   return 0;
 }
 
 static int (*syscalls[])(struct Trapframe *tf) = {
   [SYS_cputs] = sys_cputs,
+  [SYS_exit]  = sys_exit,
 };
 
 #define NSYSCALLS ((int) ((sizeof syscalls) / (sizeof syscalls[0])))

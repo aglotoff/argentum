@@ -2,7 +2,7 @@
 # Makefile fragment for the kernel
 #
 
-KERNEL_CFLAGS := $(CFLAGS) -DKERNEL
+KERNEL_CFLAGS := $(CFLAGS) $(INIT_CFLAGS) -DKERNEL
 
 KERNEL_LDFLAGS := $(LDFLAGS) -T kernel/kernel.ld -nostdlib
 

@@ -5,6 +5,7 @@
 #include "console.h"
 #include "gic.h"
 #include "kmi.h"
+#include "process.h"
 #include "syscall.h"
 #include "trap.h"
 #include "vm.h"
@@ -15,6 +16,7 @@ trap(struct Trapframe *tf)
 {
   extern char *panicstr;
   unsigned irq;
+  int resched;
 
   // Halt the CPU if some other CPU has calld panic().
   if (panicstr) {
@@ -27,13 +29,16 @@ trap(struct Trapframe *tf)
     return;
   }
 
+  resched = 0;
+
   if (tf->trapno == T_IRQ) {
     irq = gic_intid();
 
     switch (irq & 0xFFFFFF) {
     case IRQ_PTIMER:
       ptimer_eoi();
-      cprintf("Timer IRQ from CPU %d\n", read_mpidr() & 0x3);
+      // cprintf("Timer IRQ from CPU %d\n", read_mpidr() & 0x3);
+      resched = 1;
       break;
     case IRQ_UART0:
       uart_intr();
@@ -44,6 +49,10 @@ trap(struct Trapframe *tf)
     }
 
     gic_eoi(irq);
+
+    if (resched)
+      process_yield();
+
     return;
   }
 

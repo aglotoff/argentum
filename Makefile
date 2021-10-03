@@ -48,11 +48,17 @@ include kernel/kernel.mk
 include lib/lib.mk
 include user/user.mk
 
-QEMUOPTS := -M realview-pbx-a9 -m 256 -smp 1
+QEMUOPTS := -M realview-pbx-a9 -m 256 -smp 2
 QEMUOPTS += -kernel $(KERNEL)
 QEMUOPTS += -serial mon:stdio
 
 qemu: $(KERNEL)
+	$(QEMU) $(QEMUOPTS)
+
+prep-%:
+	$(V)$(MAKE) "INIT_CFLAGS=-DPROCESS_NAME=$*" $(KERNEL)
+
+run-%: prep-%
 	$(QEMU) $(QEMUOPTS)
 
 clean:

@@ -3,4 +3,7 @@
   .globl _start
 _start:
   bl  main
-  b   .
+  
+1:
+  bl  exit
+  b   1b

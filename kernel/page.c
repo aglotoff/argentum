@@ -3,6 +3,7 @@
 #include "console.h"
 #include "kernel.h"
 #include "page.h"
+#include "spinlock.h"
 
 /** The kernel uses this array to keep track of physical pages. */
 struct PageInfo *pages;
@@ -30,6 +31,8 @@ static struct {
   uint32_t       *bitmap;
 } free_pages[PAGE_ORDER_MAX + 1];
 
+static struct Spinlock pages_lock;
+
 static void            *boot_alloc(size_t);
 static void             page_mark_free(struct PageInfo *, unsigned);
 static void             page_mark_used(struct PageInfo *, unsigned);
@@ -54,6 +57,8 @@ page_init_low(void)
 {
   unsigned i;
   size_t bitmap_len;
+
+  spin_init(&pages_lock, "pages_lock");
 
   // TODO: detect the actual amount of physical memory!
   npages = PHYS_TOP / PAGE_SIZE;
@@ -154,7 +159,7 @@ page_alloc_block(unsigned order, int flags)
   struct PageInfo *page;
   unsigned curr_order;
 
-  // TODO: acquire the lock
+  spin_lock(&pages_lock);
 
   for (curr_order = order; curr_order <= PAGE_ORDER_MAX; curr_order++) {
     if (list_empty(&free_pages[curr_order].link))
@@ -167,7 +172,7 @@ page_alloc_block(unsigned order, int flags)
 
     page = page_split(page, curr_order, order);
 
-    // TODO: release the lock
+    spin_unlock(&pages_lock);
 
     if (flags & PAGE_ALLOC_ZERO) {
       memset(page2kva(page), 0, PAGE_SIZE << order);
@@ -176,7 +181,7 @@ page_alloc_block(unsigned order, int flags)
     return page;
   }
 
-  // TODO: release the lock
+  spin_unlock(&pages_lock);
 
   return NULL;
 }
@@ -239,7 +244,7 @@ page_free_block(struct PageInfo *page, unsigned order)
   pgnum = page - pages;
   mask = (1U << order);
 
-  // TODO: acquire the lock
+  spin_lock(&pages_lock);
 
   for (curr_order = order; curr_order < PAGE_ORDER_MAX; curr_order++) {
     buddy = &pages[pgnum ^ mask];
@@ -255,7 +260,7 @@ page_free_block(struct PageInfo *page, unsigned order)
 
   page_mark_free(&pages[pgnum], curr_order);
   
-  // TODO: release the lock
+  spin_unlock(&pages_lock);
 }
 
 /**

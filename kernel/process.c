@@ -6,6 +6,7 @@
 #include "console.h"
 #include "kobject.h"
 #include "mmu.h"
+#include "monitor.h"
 #include "page.h"
 #include "process.h"
 #include "spinlock.h"
@@ -13,9 +14,17 @@
 #include "vm.h"
 
 struct Cpu cpus[NCPU];
+int nprocesses;
 
 static struct KObjectCache *process_cache;
-static struct Process *initproc;
+
+static struct {
+  struct ListLink runqueue;
+  struct Spinlock lock;
+} sched;
+
+static void process_run(void);
+static void process_pop_tf(struct Trapframe *);
 
 int
 cpuid(void)
@@ -35,14 +44,13 @@ myprocess(void)
 {
   struct Cpu *cpu;
   struct Process *process;
-  int flags;
   
-  flags = irq_save();
+  irq_save();
 
   cpu = mycpu();
   process = cpu->process;
 
-  irq_restore(flags);
+  irq_restore();
 
   return process;
 }
@@ -54,6 +62,10 @@ process_init(void)
                                        NULL, NULL);
   if (process_cache == NULL)
     panic("cannot allocate process_cache");
+
+  list_init(&sched.runqueue);
+
+  spin_init(&sched.lock, "sched");
 }
 
 struct Process *
@@ -67,23 +79,26 @@ process_alloc(void)
 
   process = (struct Process *) kobject_alloc(process_cache);
 
-  if ((page = page_alloc(0)) == NULL)
-    panic("out of memory");
+  // Allocate per-process kernel stack
+  if ((page = page_alloc(0)) == NULL) {
+    kobject_free(process_cache, process);
+    return NULL;
+  }
 
   process->kstack = (uint8_t *) page2kva(page);
   page->ref_count++;
 
   sp = process->kstack + PAGE_SIZE;
 
+  // Leave room for Trapframe.
   sp -= sizeof *process->tf;
   process->tf = (struct Trapframe *) sp;
-  process->tf->sp_usr = USTACK_TOP;
-  process->tf->psr = PSR_M_USR | PSR_F;
 
+  // Setup new context to start executing at process_run.
   sp -= sizeof *process->context;
   process->context = (struct Context *) sp;
   memset(process->context, 0, sizeof *process->context);
-  process->context->lr = (uint32_t) trapret;
+  process->context->lr = (uint32_t) process_run;
 
   return process;
 }
@@ -120,6 +135,8 @@ region_alloc(struct Process *p, uintptr_t va, size_t n)
 void
 process_create(void *binary)
 {
+  static int next_pid;
+  
   Elf32_Ehdr *elf;
   Elf32_Phdr *ph, *eph;
   struct Process *process;
@@ -128,7 +145,9 @@ process_create(void *binary)
   if (memcmp(elf->ident, "\x7f""ELF", 4) != 0)
     panic("Invalid ELF binary");
   
-  process = process_alloc();
+  if ((process = process_alloc()) == NULL)
+    panic("out of memory");
+
   process_setup_vm(process);
 
   vm_switch_user(process->trtab);
@@ -153,21 +172,103 @@ process_create(void *binary)
 
   vm_switch_kernel();
 
+  process->tf->sp_usr = USTACK_TOP;
+  process->tf->psr = PSR_M_USR | PSR_F;
   process->tf->pc = elf->entry;
 
-  initproc = process;
+  process->pid = ++next_pid;
+  nprocesses++;
+
+  spin_lock(&sched.lock);
+  list_add_back(&sched.runqueue, &process->link);
+  spin_unlock(&sched.lock);
 }
 
 void
+process_destroy(void)
+{
+  nprocesses--;
+
+  spin_lock(&sched.lock);
+  context_switch(&mycpu()->process->context, mycpu()->scheduler);
+}
+
+void
+scheduler(void)
+{
+  struct ListLink *link;
+  struct Process *process;
+  
+  spin_lock(&sched.lock);
+
+  for (;;) {
+    if (!list_empty(&sched.runqueue)) {
+      link = sched.runqueue.next;
+      list_remove(link);
+
+      process = LIST_CONTAINER(link, struct Process, link);
+      mycpu()->process = process;
+
+      vm_switch_user(process->trtab);
+      context_switch(&mycpu()->scheduler, process->context);
+    } else {
+      // If there are no environments in the system, drop into the kernel
+      // monitor.
+      if (nprocesses == 0) {
+        cprintf("No runnable processes in the system!\n");
+        for (;;)
+          monitor(NULL);
+      }
+
+      // Mark that no process is running on this CPU.
+      mycpu()->process = NULL;
+      vm_switch_kernel();
+
+      spin_unlock(&sched.lock);
+      spin_lock(&sched.lock);
+    }
+  }
+}
+
+void
+process_yield(void)
+{
+  spin_lock(&sched.lock);
+
+  list_add_back(&sched.runqueue, &mycpu()->process->link);
+
+  context_switch(&mycpu()->process->context, mycpu()->scheduler);
+
+  spin_unlock(&sched.lock);
+}
+
+// A process' very first scheduling by scheduler() will switch here.
+static void
 process_run(void)
 {
-  int flags;
+  // Still holding the scheduler lock.
+  spin_unlock(&sched.lock);
 
-  flags = irq_save();
+  // "Return" to the user space.
+  process_pop_tf(myprocess()->tf);
+}
 
-  mycpu()->process = initproc;
-  vm_switch_user(initproc->trtab);
-  context_switch(&mycpu()->scheduler, initproc->context);
+// Restores the register values in the Trapframe.
+// This function doesn't return.
+static void
+process_pop_tf(struct Trapframe *tf)
+{
+  __asm__ __volatile__(
+    "mov     sp, %0\n"
+    "add     sp, #12\n"                 // skip trapno
+    "ldmdb   sp, {sp,lr}^\n"            // restore user mode sp and lr
+    "ldmia   sp!, {r0-r12,lr}\n"        // restore context
+    "msr     spsr_c, lr\n"              // restore spsr
+    "ldmia   sp!, {lr,pc}^\n"           // return
+    :
+    : "r" (tf)
+    : "memory"
+  );
 
-  irq_restore(flags);
+  panic("should not return");
 }

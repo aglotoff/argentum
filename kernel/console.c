@@ -5,41 +5,55 @@
 #include "console.h"
 #include "kmi.h"
 #include "lcd.h"
+#include "monitor.h"
+#include "spinlock.h"
 #include "uart.h"
 
 #define CONSOLE_BUF_SIZE  256
 
 // Circular input buffer
 static struct {
-  char      buf[CONSOLE_BUF_SIZE];
-  uint32_t  rpos;
-  uint32_t  wpos;
-} console;
+  char            buf[CONSOLE_BUF_SIZE];
+  uint32_t        rpos;
+  uint32_t        wpos;
+} input;
 
-static uint32_t lock = 0;
+static struct {
+  struct Spinlock lock;
+  int             locking;
+} console;
 
 void
 console_intr(int (*getc)(void))
 {
   int c;
 
+  if (console.locking)
+    spin_lock(&console.lock);
+
   while ((c = getc()) >= 0) {
     if (c == 0) {
       continue;
     }
 
-    if (console.wpos == console.rpos + CONSOLE_BUF_SIZE) {
-      console.rpos++;
+    if (input.wpos == input.rpos + CONSOLE_BUF_SIZE) {
+      input.rpos++;
     }
 
-    console.buf[console.wpos++ % CONSOLE_BUF_SIZE] = c;
-    console_putc(c);
+    input.buf[input.wpos++ % CONSOLE_BUF_SIZE] = c;
+    // console_putc(c);
   }
+
+  if (console.locking)
+    spin_unlock(&console.lock);
 }
 
 void
 console_init(void)
-{
+{ 
+  spin_init(&console.lock, "console");
+  console.locking = 1;
+
   uart_init();
   kmi_kbd_init();
   lcd_init();
@@ -59,9 +73,9 @@ console_getc(void)
     // Poll for any pending characters from UART and the keyboard.
     uart_intr();
     kmi_kbd_intr();
-  } while (console.rpos == console.wpos);
+  } while (input.rpos == input.wpos);
 
-  return console.buf[console.rpos++ % CONSOLE_BUF_SIZE];
+  return input.buf[input.rpos++ % CONSOLE_BUF_SIZE];
 }
 
 // Callback used by the vcprintf and cprintf functions.
@@ -75,9 +89,13 @@ cputc(void *arg, int c)
 void
 vcprintf(const char *format, va_list ap)
 {
-  slock(&lock);
+  if (console.locking)
+    spin_lock(&console.lock);
+
   xprintf(cputc, NULL, format, ap);
-  sunlock(&lock);
+  
+  if (console.locking)
+    spin_unlock(&console.lock);
 }
 
 void
@@ -87,5 +105,44 @@ cprintf(const char *format, ...)
 
   va_start(ap, format);
   vcprintf(format, ap);
+  va_end(ap);
+}
+
+const char *panicstr;
+
+void
+__panic(const char *file, int line, const char *format, ...)
+{
+  va_list ap;
+
+  if (!panicstr) {
+    panicstr = format;
+    console.locking = 0;
+
+    cprintf("kernel panic at %s:%d: ", file, line);
+
+    va_start(ap, format);
+    vcprintf(format, ap);
+    va_end(ap);
+
+    cprintf("\n");
+  }
+
+  // Never returns.
+  for (;;)
+    monitor(NULL);
+}
+
+void
+__warn(const char *file, int line, const char *format, ...)
+{
+  va_list ap;
+
+  va_start(ap, format);
+  
+  cprintf("kernel warning at %s:%d: ", file, line);
+  vcprintf(format, ap);
+  cprintf("\n");
+
   va_end(ap);
 }

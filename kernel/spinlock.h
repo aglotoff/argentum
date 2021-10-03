@@ -1,5 +1,5 @@
-#ifndef KERNEL_SPINLOCK_H
-#define KERNEL_SPINLOCK_H
+#ifndef __KERNEL_SPINLOCK_H__
+#define __KERNEL_SPINLOCK_H__
 
 struct Cpu;
 
@@ -13,10 +13,11 @@ struct Spinlock {
 };
 
 void spin_init(struct Spinlock *lock, const char *name);
-int  spin_lock(struct Spinlock *lock);
-void spin_unlock(struct Spinlock *lock, int flags);
+void spin_lock(struct Spinlock *lock);
+void spin_unlock(struct Spinlock *lock);
+int  spin_holding(struct Spinlock *lock);
 
-int  irq_save(void);
-void irq_restore(int flags);
+void irq_save(void);
+void irq_restore(void);
 
-#endif  // !KERNEL_SPINLOCK_H
+#endif  // !__KERNEL_SPINLOCK_H__

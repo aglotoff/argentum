@@ -3,6 +3,8 @@
 
 #include <list.h>
 
+#include "spinlock.h"
+
 /**
  * Object cache descriptor.
  */
@@ -17,6 +19,7 @@ struct KObjectCache {
   void            (*ctor)(void *);    ///< The object constructor function
   void            (*dtor)(void *);    ///< The object destructor function
 
+  struct Spinlock   lock;
   const char       *name;             ///< Human-readable name for debugging
 };
 

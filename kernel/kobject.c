@@ -3,6 +3,7 @@
 #include "kernel.h"
 #include "kobject.h"
 #include "page.h"
+#include "spinlock.h"
 
 static struct KObjectCache cache_cache;
 
@@ -47,14 +48,14 @@ kobject_cache_init(struct KObjectCache *cache,
                    void               (*ctor)(void *),
                    void               (*dtor)(void *))
 {
-  // TODO: initialize spinlock
-
   list_init(&cache->slabs_used);
   list_init(&cache->slabs_partial);
   list_init(&cache->slabs_free);
 
   cache->obj_size = obj_size;
   cache->obj_num  = (PAGE_SIZE - sizeof(struct KObjectSlab)) / obj_size;
+
+  spin_init(&cache->lock, name);
 
   assert(cache->obj_num >= 2);
 
@@ -130,9 +131,13 @@ kobject_alloc(struct KObjectCache *cache)
   struct KObjectSlab *slab;
   void *ptr;
   
+  spin_lock(&cache->lock);
+
   if (list_empty(&cache->slabs_partial) && list_empty(&cache->slabs_free) &&
-      (kobject_cache_grow(cache) < 0))
+      (kobject_cache_grow(cache) < 0)) {
+    spin_unlock(&cache->lock);
     return NULL;
+  }
   
   if (!list_empty(&cache->slabs_partial))
     list = &cache->slabs_partial;
@@ -152,6 +157,8 @@ kobject_alloc(struct KObjectCache *cache)
   ptr = slab->free;
   slab->free = *(void **) ptr;
 
+  spin_unlock(&cache->lock);
+
   return ptr;
 }
 
@@ -166,6 +173,8 @@ kobject_free(struct KObjectCache *cache, void *obj)
 
   slab = ROUND_DOWN(obj, PAGE_SIZE);
 
+  spin_lock(&cache->lock);
+
   *(void **) obj = slab->free;
   slab->free = obj;
 
@@ -176,6 +185,8 @@ kobject_free(struct KObjectCache *cache, void *obj)
     list_remove(&slab->link);
     list_add_front(&cache->slabs_free, &slab->link);
   }
+
+  spin_unlock(&cache->lock);
 }
 
 // --------------------------------------------------------------

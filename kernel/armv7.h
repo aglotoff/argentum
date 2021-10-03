@@ -218,40 +218,6 @@ tlbiall(void)
   asm volatile ("mcr p15, 0, %0, c8, c7, 0" : : "r"(0));
 }
 
-static inline void
-slock(volatile uint32_t *addr)
-{
-  uint32_t t1 = 0, t2 = 0, t3 = 0;
-
-  asm volatile("1:\n"
-               "ldrex %1, [%0]\n"
-               "cmp %1, #0\n"
-               "wfene\n"
-               "bne 1b\n"
-               "mov %1, #1\n"
-               "strex %2, %1, [%0]\n"
-               "cmp %2, #0\n"
-               "bne 1b\n"
-               "dmb\n"
-               :"+r"(addr), "=r"(t1), "=r"(t2)
-                :"r"(t3)
-                :"cc", "memory");
-}
-
-static inline void
-sunlock(volatile uint32_t *addr)
-{
-  uint32_t t1 = 0;
-
-  asm volatile("mov %1, #0x0\n"
-               "dmb\n"
-               "str %1, [%0]\n"
-               "dsb\n"
-               "sev\n"
-               :"+r"(addr), "=r"(t1):
-                :"cc", "memory");
-}
-
 #endif  // !__ASSEMBLER__
 
 #endif  // !KERNEL_ARMV7_H

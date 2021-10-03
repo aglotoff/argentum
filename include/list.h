@@ -31,9 +31,6 @@ list_empty(struct ListLink *head)
 static inline void
 list_add_front(struct ListLink *head, struct ListLink *link)
 {
-  // cprintf("  list_add_front(%p, %p)\n", head, link);
-  // cprintf("    head->next = %p\n", head->next);
-
   link->next = head->next;
   head->next->prev = link;
   head->next = link;
@@ -52,16 +49,13 @@ list_add_back(struct ListLink *head, struct ListLink *link)
 static inline void
 list_remove(struct ListLink *link)
 {
-  // cprintf("  list_remove(%p)\n", link);
-
-  if (link->prev != NULL) {
+  if (link->prev != NULL)
     link->prev->next = link->next;
-    link->prev = NULL;
-  }
-  if (link->next != NULL) {
+
+  if (link->next != NULL)
     link->next->prev = link->prev;
-    link->next = NULL;
-  }
+
+  link->prev = link->next = NULL;
 }
 
 #define LIST_CONTAINER(link, type, member) \
