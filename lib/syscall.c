@@ -1,9 +1,10 @@
 #include <syscall.h>
+#include <user.h>
 
-void
-cputs(const char *s)
+int
+cwrite(const char *s, size_t n)
 {
-  syscall(SYS_cputs, (uint32_t) s, 0, 0);
+  return syscall(SYS_cwrite, (uint32_t) s, n, 0);
 }
 
 void

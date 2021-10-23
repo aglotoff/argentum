@@ -1,8 +1,10 @@
-void cputs(const char *);
+#include <stdio.h>
+#include <unistd.h>
 
 int
 main(void)
 {
-  cputs("Hello world!\n");
+  printf("Hello world!\n");
+  printf("I am process %d\n", getpid());
   return 0;
 }

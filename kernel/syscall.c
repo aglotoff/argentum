@@ -7,13 +7,13 @@
 #include "syscall.h"
 #include "trap.h"
 
-static int sys_fetch_int(uintptr_t, int *);
-static int sys_fetch_str(uintptr_t, char **);
-static int sys_get_num(void);
-static int sys_get_arg(int);
+static int  sys_fetch_int(uintptr_t, int *);
+static int  sys_fetch_str(uintptr_t, char **);
+static int  sys_get_num(void);
+static long sys_get_arg(int);
 
 static int (*syscalls[])(void) = {
-  [SYS_cputs]   = sys_cputs,
+  [SYS_cwrite]   = sys_cwrite,
   [SYS_exit]    = sys_exit,
   [SYS_getpid]  = sys_getpid,
   [SYS_getppid] = sys_getppid,
@@ -79,7 +79,7 @@ sys_get_num(void)
   return svc_code & 0xFFFFFF;
 }
 
-static int
+static long
 sys_get_arg(int n)
 {
   struct Process *curproc = myprocess();
@@ -92,7 +92,7 @@ sys_get_arg(int n)
   case 2:
     return curproc->tf->r2;
   default:
-    return -EINVAL;
+    return 0;
   }
 }
 
@@ -106,9 +106,9 @@ sys_get_arg(int n)
  * @retval -EINVAL if an invalid argument number is specified.
  */
 int
-sys_arg_int(int n, int *ip)
+sys_arg_int(int n, long *ip)
 {
-  int r;
+  long r;
 
   if ((r = sys_get_arg(n)) < 0)
     return r;
@@ -118,12 +118,13 @@ sys_arg_int(int n, int *ip)
 
 int
 sys_arg_ptr(int n, void **pp, size_t len)
-{
+{ 
   // TODO: implement this function!
-  (void) n;
-  (void) pp;
   (void) len;
-  return -EINVAL;
+
+  *pp = (void *) sys_get_arg(n);
+
+  return 0;
 }
 
 /**
@@ -152,16 +153,21 @@ sys_arg_str(int n, char **strp)
 // --------------------------------------------------------------
 
 int
-sys_cputs(void)
+sys_cwrite(void)
 {
   char *s;
+  size_t n;
   int r;
 
-  if ((r = sys_arg_str(0, &s)) < 0)
+  if ((r = sys_arg_int(1, (long *) &n)) < 0)
     return r;
 
-  cprintf("CPU%d PID %d: %s", cpuid(), myprocess()->pid, s);
-  return 0;
+  if ((r = sys_arg_ptr(0, (void **) &s, n)) < 0)
+    return r;
+
+  cprintf("%*s", n, s);
+
+  return n;
 }
 
 int

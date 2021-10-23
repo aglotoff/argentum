@@ -1,6 +1,8 @@
-#ifndef INCLUDE_USER_H
-#define INCLUDE_USER_H
+#ifndef __INCLUDE_USER_H__
+#define __INCLUDE_USER_H__
 
-void cputs(const char *s);
+#include <stddef.h>
 
-#endif  // !INCLUDE_USER_H
+int cwrite(const char *, size_t);
+
+#endif  // !__INCLUDE_USER_H__

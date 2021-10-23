@@ -17,6 +17,20 @@ static void               print_str(void (*)(void *, int),
                                     int,
                                     int);
 
+/**
+ * Generic function to print formatted data.
+ * 
+ * This is a simplified printf-like implementation that supports the following
+ * subset of features:
+ * - Conversion specifiers: d, u, o, x, p, c, s
+ * - Length modifiers: hh, h, l, ll
+ * - Width and precision fields
+ *
+ * @param xputc Pointer to the output function.
+ * @param xputc_arg The first argument for the output function.
+ * @param format The format string.
+ * @param ap A variable argument list.
+ */
 void 
 xprintf(void      (*xputc)(void *, int),
         void       *xputc_arg,

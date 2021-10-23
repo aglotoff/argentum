@@ -6,6 +6,8 @@ LIB_CFLAGS := $(CFLAGS)
 
 LIB_SRCFILES :=	\
   lib/errno/errno.c \
+	lib/stdio/printf.c \
+	lib/stdio/vprintf.c \
 	lib/stdio/xprintf.c \
 	lib/string/memcmp.c \
 	lib/string/memmove.c \

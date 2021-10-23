@@ -4,7 +4,7 @@
 #include <errno.h>
 #include <stdint.h>
 
-#define SYS_cputs       1
+#define SYS_cwrite      1
 #define SYS_exit        2
 #define SYS_getpid      3
 #define SYS_getppid     4
