@@ -1,8 +1,13 @@
-#ifndef KERNEL_SYSCALL_H
-#define KERNEL_SYSCALL_H
+#ifndef __KERNEL_SYSCALL_H__
+#define __KERNEL_SYSCALL_H__
 
-struct Trapframe *tf;
+int syscall(void);
 
-int syscall(struct Trapframe *tf);
+int sys_arg_int(int, int *);
+int sys_arg_ptr(int, void **, size_t);
+int sys_arg_str(int, char **);
 
-#endif  // !KERNEL_SYSCALL_H
+int sys_cputs(void);
+int sys_exit(void);
+
+#endif  // !__KERNEL_SYSCALL_H__

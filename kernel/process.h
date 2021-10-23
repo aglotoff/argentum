@@ -2,10 +2,14 @@
 #define __KERNEL_PROCESS_H__
 
 #include <list.h>
+#include <sys/types.h>
 
 #include "mmu.h"
 #include "trap.h"
 
+/**
+ * Saved registers for kernel context swithces.
+ */
 struct Context {
   uint32_t r4;
   uint32_t r5;
@@ -18,12 +22,16 @@ struct Context {
   uint32_t lr;
 };
 
+/**
+ * Process state.
+ */
 struct Process {
-  struct ListLink    link;
-  int                pid;
+  struct ListLink    link;      ///< Link into the containing list
+  pid_t              pid;
   tte_t             *trtab;     ///< Translation table
+  size_t             size;      ///< Size of process memory (in bytes)
   uint8_t           *kstack;    ///< Bottom of kernel stack for this process
-  struct Trapframe  *tf;        ///< Trap frame for current system call
+  struct Trapframe  *tf;        ///< Trap frame for current exception
   struct Context    *context;   ///< Saved context
 };
 
@@ -35,22 +43,22 @@ struct Process {
 struct Cpu {
   struct Context *scheduler;    ///< Saved scheduler context
   struct Process *process;      ///< The currently running process   
-  int             irq_lock;     ///<
-  int             irq_flags;    ///<       
+  int             irq_lock;     ///< Depth of IRQ lock nesting
+  int             irq_flags;    ///< Were interupts enabled before IRQ lock?
 };
 
 extern struct Cpu cpus[];
 
-void context_switch(struct Context **old, struct Context *new);
+void            context_switch(struct Context **old, struct Context *new);
 
-void process_init(void);
-void process_create(void *binary);
-void process_yield(void);
-void process_destroy(void);
-void scheduler(void);
+void            process_init(void);
+void            process_create(const void *binary);
+void            process_yield(void);
+void            process_destroy(void);
+void            scheduler(void);
 
-int cpuid(void);
-struct Cpu *mycpu(void);
+int             cpuid(void);
+struct Cpu     *mycpu(void);
 struct Process *myprocess(void);
 
 extern int nprocesses;

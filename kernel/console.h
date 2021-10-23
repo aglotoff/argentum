@@ -1,5 +1,5 @@
-#ifndef KERNEL_CONSOLE_H
-#define KERNEL_CONSOLE_H
+#ifndef __KERNEL_CONSOLE_H__
+#define __KERNEL_CONSOLE_H__
 
 /**
  * @file kernel/console.h
@@ -55,4 +55,4 @@ void vcprintf(const char *format, va_list ap);
  */
 void cprintf(const char *format, ...);
 
-#endif  // !KERNEL_CONSOLE_H
+#endif  // !__KERNEL_CONSOLE_H__

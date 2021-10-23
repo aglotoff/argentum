@@ -218,6 +218,15 @@ tlbiall(void)
   asm volatile ("mcr p15, 0, %0, c8, c7, 0" : : "r"(0));
 }
 
+static inline uint32_t
+read_fp(void)
+{
+  uint32_t val;
+
+  asm volatile ("mov %0, r11\n" : "=r" (val)); 
+  return val;
+}
+
 #endif  // !__ASSEMBLER__
 
 #endif  // !KERNEL_ARMV7_H

@@ -116,41 +116,14 @@ process_setup_vm(struct Process *p)
 }
 
 static void
-region_alloc(struct Process *p, uintptr_t va, size_t n)
+process_load_binary(struct Process *proc, const void *binary)
 {
-  struct PageInfo *page;
-  uintptr_t a, start, end;
-
-  start = va & ~(PAGE_SIZE - 1);
-  end   = (va + n + PAGE_SIZE - 1) & ~(PAGE_SIZE - 1);
-
-  for (a = start; a < end; a += PAGE_SIZE) {
-    if ((page = page_alloc(0)) == NULL)
-      panic("out of memory");
-    if ((vm_insert_page(p->trtab, page, (void *) a, AP_BOTH_RW)) != 0)
-      panic("out of memory");
-  }
-}
-
-void
-process_create(void *binary)
-{
-  static int next_pid;
-  
   Elf32_Ehdr *elf;
   Elf32_Phdr *ph, *eph;
-  struct Process *process;
-
+  
   elf = (Elf32_Ehdr *) binary;
   if (memcmp(elf->ident, "\x7f""ELF", 4) != 0)
     panic("Invalid ELF binary");
-  
-  if ((process = process_alloc()) == NULL)
-    panic("out of memory");
-
-  process_setup_vm(process);
-
-  vm_switch_user(process->trtab);
 
   ph = (Elf32_Phdr *) ((uint8_t *) elf + elf->phoff);
   eph = ph + elf->phnum;
@@ -158,29 +131,51 @@ process_create(void *binary)
   for ( ; ph < eph; ph++) {
     if (ph->type != PT_LOAD)
       continue;
-    if (ph->filesz > ph->memsz)
-      panic("load_icode: invalid segment header");
-    
-    region_alloc(process, ph->vaddr, ph->memsz);
 
-    memmove((void *) ph->vaddr, binary + ph->offset, ph->filesz);
-    if (ph->filesz < ph->memsz)
-      memset((uint8_t *) ph->vaddr + ph->filesz, 0, ph->memsz - ph->filesz);
+    if (ph->filesz > ph->memsz)
+      panic("invalid segment header");
+    
+    if (vm_alloc_region(proc->trtab, (void *) ph->vaddr, ph->memsz) < 0)
+      panic("vm_alloc_region");
+
+    if (vm_copy_out(proc->trtab, (void *) ph->vaddr, binary + ph->offset,
+                    ph->filesz) < 0)
+      panic("vm_copy_out");
+
+    proc->size = ph->vaddr + ph->memsz;
   }
 
-  region_alloc(process, USTACK_TOP - USTACK_SIZE, USTACK_SIZE);
+  // Allocate user stack.
+  if (vm_alloc_region(proc->trtab, (void *) (USTACK_TOP - USTACK_SIZE),
+                      USTACK_SIZE) < 0)
+    panic("vm_alloc_region");
 
-  vm_switch_kernel();
+  proc->tf->r0     = 0;                   // argc
+  proc->tf->r1     = 0;                   // argv
+  proc->tf->sp_usr = USTACK_TOP;          // stack pointer
+  proc->tf->psr    = PSR_M_USR | PSR_F;   // user mode, interrupts enabled
+  proc->tf->pc     = elf->entry;          // process entry point
+}
 
-  process->tf->sp_usr = USTACK_TOP;
-  process->tf->psr = PSR_M_USR | PSR_F;
-  process->tf->pc = elf->entry;
+void
+process_create(const void *binary)
+{
+  static pid_t next_pid;
+  
+  struct Process *proc;
 
-  process->pid = ++next_pid;
+  if ((proc = process_alloc()) == NULL)
+    panic("out of memory");
+
+  process_setup_vm(proc);
+
+  process_load_binary(proc, binary);
+
+  proc->pid = ++next_pid;
   nprocesses++;
 
   spin_lock(&sched.lock);
-  list_add_back(&sched.runqueue, &process->link);
+  list_add_back(&sched.runqueue, &proc->link);
   spin_unlock(&sched.lock);
 }
 

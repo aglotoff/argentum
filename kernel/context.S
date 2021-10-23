@@ -8,7 +8,7 @@
   .globl context_switch
 context_switch:
   stmdb sp!, {r4-r11,lr}    // Save old callee-saved registers
-  str   sp, [r0]            // Save old stack poninter
+  str   sp, [r0]            // Save old stack pointer
   mov   sp, r1              // Load new stack pointer
   ldmia sp!, {r4-r11,lr}    // Load new calee-saved registers
   bx    lr                  // Return

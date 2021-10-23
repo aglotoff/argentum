@@ -10,6 +10,7 @@ struct Spinlock {
   volatile int  locked;   ///< Whether the lock is held
   struct Cpu   *cpu;      ///< The CPU holding the lock
   const char   *name;     ///< For debugging purposes
+  uintptr_t     pcs[10];  
 };
 
 void spin_init(struct Spinlock *lock, const char *name);

@@ -1,5 +1,6 @@
 #include <string.h>
 
+#include "armv7.h"
 #include "console.h"
 #include "kdebug.h"
 #include "memlayout.h"
@@ -169,15 +170,6 @@ mon_kerninfo(int argc, char **argv, struct Trapframe *tf)
           (PADDR(_end) - (uintptr_t) _start + 1023) / 1024);
 
   return 0;
-}
-
-static inline uint32_t
-read_fp(void)
-{
-  uint32_t val;
-
-  asm volatile ("mov %0, r11\n" : "=r" (val)); 
-  return val;
 }
 
 int

@@ -1,7 +1,7 @@
-#ifndef INCLUDE_SYSCALL_H
-#define INCLUDE_SYSCALL_H
+#ifndef __INCLUDE_SYSCALL_H__
+#define __INCLUDE_SYSCALL_H__
 
 #define SYS_cputs   1
 #define SYS_exit    2
 
-#endif  // !INCLUDE_SYSCALL_H
+#endif  // !__INCLUDE_SYSCALL_H__

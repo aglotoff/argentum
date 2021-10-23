@@ -1,7 +1,10 @@
 #include <assert.h>
+#include <errno.h>
+#include <string.h>
 
 #include "armv7.h"
 #include "console.h"
+#include "kernel.h"
 #include "mmu.h"
 #include "page.h"
 #include "vm.h"
@@ -131,7 +134,7 @@ vm_insert_page(tte_t *trtab, struct PageInfo *p, void *va, int perm)
   pte_t *pte;
 
   if ((pte = vm_walk_trtab(trtab, (uintptr_t ) va, 1)) == NULL)
-    return -1;
+    return -ENOMEM;
 
   p->ref_count++;
   vm_remove_page(trtab, va);
@@ -153,6 +156,103 @@ vm_remove_page(tte_t *trtab, void *va)
     page_free(page);
 
   *pte = 0;
+}
+
+int
+vm_alloc_region(tte_t *trtab, void *va, size_t n)
+{
+  struct PageInfo *page;
+  uintptr_t a, start, end;
+
+  start = (uintptr_t) va & ~(PAGE_SIZE - 1);
+  end   = ((uintptr_t) va + n + PAGE_SIZE - 1) & ~(PAGE_SIZE - 1);
+
+  for (a = start; a < end; a += PAGE_SIZE) {
+    if ((page = page_alloc(PAGE_ALLOC_ZERO)) == NULL) {
+      vm_dealloc_region(trtab, (void *) start, a - start);
+      return -ENOMEM;
+    }
+
+    if ((vm_insert_page(trtab, page, (void *) a, AP_BOTH_RW)) != 0) {
+      vm_dealloc_region(trtab, (void *) start, a - start);
+      page_free(page);
+      return -ENOMEM;
+    }
+  }
+
+  return 0;
+}
+
+void
+vm_dealloc_region(tte_t *trtab, void *va, size_t n)
+{
+  uintptr_t a, start, end;
+
+  start = (uintptr_t) va & ~(PAGE_SIZE - 1);
+  end   = ((uintptr_t) va + n + PAGE_SIZE - 1) & ~(PAGE_SIZE - 1);
+
+  for (a = start; a < end; a += PAGE_SIZE)
+    vm_remove_page(trtab, (void *) a);
+}
+
+int
+vm_copy_out(tte_t *trtab, void *dst, const void *src, size_t n)
+{
+  struct PageInfo *page;
+  uint8_t *s, *d, *kva;
+  size_t ncopied, offset;
+
+  s = (uint8_t *) src;
+  d = (uint8_t *) dst;
+
+  while (n != 0) {
+    page = vm_lookup_page(trtab, d, NULL);
+    if (page == NULL)
+      return -EFAULT;
+
+    kva = (uint8_t *) page2kva(page);
+
+    offset = (uintptr_t) d % PAGE_SIZE;
+    ncopied = MIN(PAGE_SIZE - offset, n);
+
+    memmove(kva + offset, s, ncopied);
+
+    s += ncopied;
+    d += ncopied;
+    n -= ncopied;
+  }
+
+  return 0;
+}
+
+int
+vm_copy_in(tte_t *trtab, void *dst, const void *src, size_t n)
+{
+  struct PageInfo *page;
+  uint8_t *s, *d, *kva;
+  size_t ncopied, offset;
+
+  s = (uint8_t *) src;
+  d = (uint8_t *) dst;
+
+  while (n != 0) {
+    page = vm_lookup_page(trtab, s, NULL);
+    if (page == NULL)
+      return -EFAULT;
+
+    kva = (uint8_t *) page2kva(page);
+
+    offset  = (uintptr_t) d % PAGE_SIZE;
+    ncopied = MIN(PAGE_SIZE - offset, n);
+
+    memmove(d, kva + offset, ncopied);
+
+    s += ncopied;
+    d += ncopied;
+    n -= ncopied;
+  }
+
+  return 0;
 }
 
 // 

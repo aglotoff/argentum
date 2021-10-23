@@ -7,23 +7,20 @@
 
 struct PageInfo;
 
-/**
- * Initialize the kernel part of a translation table.
- */
-void vm_init(void);
+void             vm_init(void);
+void             vm_init_percpu(void);
 
-void vm_init_percpu(void);
+struct PageInfo *vm_lookup_page(tte_t *, void *, pte_t **);
+int              vm_insert_page(tte_t *, struct PageInfo *, void *, int);
+void             vm_remove_page(tte_t *, void *);
 
-void *vm_map_mmio(uint32_t pa, size_t n);
+void *           vm_map_mmio(uint32_t pa, size_t);
 
-struct PageInfo *vm_lookup_page(tte_t *trtab, void *va, pte_t **pte_store);
-
-int vm_insert_page(tte_t *trtab, struct PageInfo *p, void *va, int perm);
-
-void vm_remove_page(tte_t *trtab, void *va);
-
-void vm_switch_kernel(void);
-
-void vm_switch_user(tte_t *trtab);
+void             vm_switch_kernel(void);
+void             vm_switch_user(tte_t *);
+int              vm_alloc_region(tte_t *, void *, size_t);
+void             vm_dealloc_region(tte_t *, void *, size_t);
+int              vm_copy_out(tte_t *, void *, const void *, size_t);
+int              vm_copy_in(tte_t *, void *, const void *, size_t);
 
 #endif  // !KERNEL_VM_H

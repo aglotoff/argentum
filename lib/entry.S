@@ -1,9 +1,12 @@
-  .text
+/*
+ *
+ * Entry point for user-mode processes
+ *
+ */
 
-  .globl _start
+  .text
+  .globl  _start
 _start:
-  bl  main
-  
-1:
-  bl  exit
-  b   1b
+  bl      main      // Call the user main routine
+  bl      exit      // Exit gracefully, passing the returned value as status
+  b       .         // Should not return

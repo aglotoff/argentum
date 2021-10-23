@@ -5,6 +5,7 @@
 LIB_CFLAGS := $(CFLAGS)
 
 LIB_SRCFILES :=	\
+  lib/errno/errno.c \
 	lib/stdio/xprintf.c \
 	lib/string/memcmp.c \
 	lib/string/memmove.c \
@@ -12,7 +13,7 @@ LIB_SRCFILES :=	\
 	lib/string/strchr.c \
 	lib/string/strcmp.c \
 	lib/string/strlen.c \
-	lib/usys.S
+	lib/syscall.c
 
 LIB_OBJFILES := $(patsubst %.c, $(OBJ)/%.o, $(LIB_SRCFILES))
 LIB_OBJFILES := $(patsubst %.S, $(OBJ)/%.o, $(LIB_OBJFILES))

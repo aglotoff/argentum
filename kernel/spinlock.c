@@ -1,9 +1,15 @@
 #include <assert.h>
 #include <stddef.h>
+#include <string.h>
 
 #include "armv7.h"
+#include "console.h"
+#include "kdebug.h"
 #include "process.h"
 #include "spinlock.h"
+
+static void spin_get_caller_pcs(struct Spinlock *);
+static void spin_print_caller_pcs(struct Spinlock *);
 
 void
 spin_init(struct Spinlock *lock, const char *name)
@@ -26,8 +32,11 @@ spin_lock(struct Spinlock *lock)
   // Disable interrupts to avoid deadlock.
   irq_save();
 
-  if (spin_holding(lock))
-    panic("already holding %s", lock->name);
+  if (spin_holding(lock)) {
+    cprintf("CPU %d is already holding %s\n", cpuid(), lock->name);
+    spin_print_caller_pcs(lock);
+    panic("spin_lock");
+  }
 
   __asm__ __volatile__(
     "\t1:\n"
@@ -46,6 +55,7 @@ spin_lock(struct Spinlock *lock)
 
   // Record info about lock acquisition for debugging.
   lock->cpu = mycpu();
+  spin_get_caller_pcs(lock);
 }
 
 /**
@@ -58,7 +68,15 @@ spin_unlock(struct Spinlock *lock)
 {
   int t;
 
+  if (!spin_holding(lock)) {
+    cprintf("CPU %d cannot release %s: held by %d\n",
+            cpuid(), lock->name, lock->cpu);
+    spin_print_caller_pcs(lock);
+    panic("spin_unlock");
+  }
+
   lock->cpu = NULL;
+  lock->pcs[0] = 0;
 
   __asm__ __volatile__(
     "\tmov     %1, #0\n"
@@ -92,6 +110,42 @@ spin_holding(struct Spinlock *lock)
   return r;
 }
 
+// Record the current stack backtrace by following the frame pointer chain
+static void
+spin_get_caller_pcs(struct Spinlock *lock)
+{
+  uint32_t *fp;
+  int i;
+
+  fp = (uint32_t *) read_fp();
+  for (i = 0; i < 10; i++) {
+    if (fp == NULL)
+      break;
+    lock->pcs[i] = fp[-1];
+    fp = (uint32_t *) fp[-3];
+  }
+  for ( ; i < 10; i++)
+    lock->pcs[i] = 0;
+}
+
+static void
+spin_print_caller_pcs(struct Spinlock *lock)
+{
+  struct PcDebugInfo info;
+  uintptr_t pcs[10];
+  int i;
+
+  for (i = 0; i < 10; i++)
+    pcs[i] = lock->pcs[i];
+
+  for (i = 0; i < 10 && pcs[i]; i++) {
+    debug_info_pc(pcs[i], &info);
+
+    cprintf("  [%p] %s (%s at line %d)\n", pcs[i],
+            info.fn_name, info.file, info.line);
+  }
+}
+
 /**
  * Save the current CPU interrupt state and disable interrupts.
  */
@@ -109,8 +163,6 @@ irq_save(void)
 
 /**
  * Restore the previous interrupt state.
- * 
- * @param flags The value obtained from a previous call to irq_save().
  */
 void
 irq_restore(void)
