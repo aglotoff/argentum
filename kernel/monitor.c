@@ -3,6 +3,7 @@
 #include "armv7.h"
 #include "console.h"
 #include "kdebug.h"
+#include "kernel.h"
 #include "memlayout.h"
 #include "monitor.h"
 #include "trap.h"
@@ -80,8 +81,6 @@ static struct Command commands[] = {
   { "backtrace", "Display a list of function call frames", mon_backtrace },
 };
 
-#define NCOMMANDS  (sizeof commands / sizeof(struct Command))
-
 #define MAXARGS 16
 
 /*
@@ -122,7 +121,7 @@ exec_cmd(char *s, struct Trapframe *tf)
     return 0;
 
   // Search for a command with the given name
-  for (cmd = commands; cmd < &commands[NCOMMANDS]; cmd++) {
+  for (cmd = commands; cmd < &commands[ARRAY_SIZE(commands)]; cmd++) {
     if (strcmp(argv[0], cmd->name) == 0)
       return cmd->func(argc, argv, tf);
   }
@@ -143,7 +142,7 @@ mon_help(int argc, char **argv, struct Trapframe *tf)
   (void) argv;
   (void) tf;
 
-  for (cmd = commands; cmd < &commands[NCOMMANDS]; cmd++) {
+  for (cmd = commands; cmd < &commands[ARRAY_SIZE(commands)]; cmd++) {
     cprintf("%s - %s\n", cmd->name, cmd->desc);
   }
 

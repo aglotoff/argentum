@@ -48,4 +48,9 @@
   (typeof(x)) ROUND_DOWN((unsigned long) x + _n - 1, _n);   \
 })
 
+/**
+ * Determine the size of the static array `a`.
+ */
+#define ARRAY_SIZE(a)   (sizeof(a) / sizeof(a[0]))
+
 #endif  // !__KERNEL_CONST_H__

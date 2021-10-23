@@ -25,7 +25,7 @@ trap(struct Trapframe *tf)
   }
 
   if (tf->trapno == T_SWI) {
-    tf->r0 = syscall();
+    tf->r0 = sys_dispatch();
     return;
   }
 

@@ -1,6 +1,7 @@
 #include <errno.h>
 #include <syscall.h>
 
+#include "kernel.h"
 #include "console.h"
 #include "process.h"
 #include "syscall.h"
@@ -12,21 +13,21 @@ static int sys_get_num(void);
 static int sys_get_arg(int);
 
 static int (*syscalls[])(void) = {
-  [SYS_cputs] = sys_cputs,
-  [SYS_exit]  = sys_exit,
+  [SYS_cputs]   = sys_cputs,
+  [SYS_exit]    = sys_exit,
+  [SYS_getpid]  = sys_getpid,
+  [SYS_getppid] = sys_getppid,
 };
 
-#define NSYSCALLS ((int) ((sizeof syscalls) / (sizeof syscalls[0])))
-
 int
-syscall(void)
+sys_dispatch(void)
 {
   int num;
 
   if ((num = sys_get_num()) < 0)
     return num;
 
-  if (num < NSYSCALLS && syscalls[num])
+  if ((num < (int) ARRAY_SIZE(syscalls)) && syscalls[num])
     return syscalls[num]();
   
   cprintf("Unknown system call %d\n");
@@ -168,4 +169,16 @@ sys_exit(void)
 {
   process_destroy();
   return 0;
+}
+
+int
+sys_getpid(void)
+{
+  return myprocess()->pid;
+}
+
+int
+sys_getppid(void)
+{
+  return myprocess()->ppid;
 }

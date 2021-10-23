@@ -14,14 +14,17 @@
 #include "vm.h"
 
 struct Cpu cpus[NCPU];
-int nprocesses;
 
 static struct KObjectCache *process_cache;
 
+#define NBUCKET   256
+
 static struct {
+  int             nprocesses;
+  struct ListLink hash[NBUCKET];
   struct ListLink runqueue;
   struct Spinlock lock;
-} sched;
+} ptable;
 
 static void process_run(void);
 static void process_pop_tf(struct Trapframe *);
@@ -58,20 +61,25 @@ myprocess(void)
 void
 process_init(void)
 {
+  struct ListLink *link;
+
   process_cache = kobject_cache_create("process_cache", sizeof(struct Process),
                                        NULL, NULL);
   if (process_cache == NULL)
     panic("cannot allocate process_cache");
 
-  list_init(&sched.runqueue);
-
-  spin_init(&sched.lock, "sched");
+  for (link = ptable.hash; link < & ptable.hash[NBUCKET]; link++)
+    list_init(link);
+  list_init(&ptable.runqueue);
+  spin_init(&ptable.lock, "ptable");
 }
 
 struct Process *
 process_alloc(void)
 {
   extern void trapret(void);
+
+  static pid_t next_pid;
 
   struct PageInfo *page;
   struct Process *process;
@@ -99,6 +107,17 @@ process_alloc(void)
   process->context = (struct Context *) sp;
   memset(process->context, 0, sizeof *process->context);
   process->context->lr = (uint32_t) process_run;
+
+  process->ppid = 0;
+  list_init(&process->children);
+  process->sibling.next = NULL;
+  process->sibling.prev = NULL;
+
+  spin_lock(&ptable.lock);
+  process->pid = ++next_pid;
+  list_add_back(&ptable.hash[process->pid % NBUCKET], &process->pid_link);
+  ptable.nprocesses++;
+  spin_unlock(&ptable.lock);
 
   return process;
 }
@@ -160,8 +179,6 @@ process_load_binary(struct Process *proc, const void *binary)
 void
 process_create(const void *binary)
 {
-  static pid_t next_pid;
-  
   struct Process *proc;
 
   if ((proc = process_alloc()) == NULL)
@@ -171,20 +188,17 @@ process_create(const void *binary)
 
   process_load_binary(proc, binary);
 
-  proc->pid = ++next_pid;
-  nprocesses++;
-
-  spin_lock(&sched.lock);
-  list_add_back(&sched.runqueue, &proc->link);
-  spin_unlock(&sched.lock);
+  spin_lock(&ptable.lock);
+  list_add_back(&ptable.runqueue, &proc->link);
+  spin_unlock(&ptable.lock);
 }
 
 void
 process_destroy(void)
 {
-  nprocesses--;
+  ptable.nprocesses--;
 
-  spin_lock(&sched.lock);
+  spin_lock(&ptable.lock);
   context_switch(&mycpu()->process->context, mycpu()->scheduler);
 }
 
@@ -194,11 +208,11 @@ scheduler(void)
   struct ListLink *link;
   struct Process *process;
   
-  spin_lock(&sched.lock);
+  spin_lock(&ptable.lock);
 
   for (;;) {
-    if (!list_empty(&sched.runqueue)) {
-      link = sched.runqueue.next;
+    if (!list_empty(&ptable.runqueue)) {
+      link = ptable.runqueue.next;
       list_remove(link);
 
       process = LIST_CONTAINER(link, struct Process, link);
@@ -207,9 +221,8 @@ scheduler(void)
       vm_switch_user(process->trtab);
       context_switch(&mycpu()->scheduler, process->context);
     } else {
-      // If there are no environments in the system, drop into the kernel
-      // monitor.
-      if (nprocesses == 0) {
+      // If there are no more proceses to run, drop into the kernel monitor.
+      if (ptable.nprocesses == 0) {
         cprintf("No runnable processes in the system!\n");
         for (;;)
           monitor(NULL);
@@ -219,8 +232,8 @@ scheduler(void)
       mycpu()->process = NULL;
       vm_switch_kernel();
 
-      spin_unlock(&sched.lock);
-      spin_lock(&sched.lock);
+      spin_unlock(&ptable.lock);
+      spin_lock(&ptable.lock);
     }
   }
 }
@@ -228,21 +241,20 @@ scheduler(void)
 void
 process_yield(void)
 {
-  spin_lock(&sched.lock);
+  spin_lock(&ptable.lock);
 
-  list_add_back(&sched.runqueue, &mycpu()->process->link);
-
+  list_add_back(&ptable.runqueue, &mycpu()->process->link);
   context_switch(&mycpu()->process->context, mycpu()->scheduler);
 
-  spin_unlock(&sched.lock);
+  spin_unlock(&ptable.lock);
 }
 
 // A process' very first scheduling by scheduler() will switch here.
 static void
 process_run(void)
 {
-  // Still holding the scheduler lock.
-  spin_unlock(&sched.lock);
+  // Still holding the process table lock.
+  spin_unlock(&ptable.lock);
 
   // "Return" to the user space.
   process_pop_tf(myprocess()->tf);

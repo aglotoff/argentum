@@ -36,6 +36,11 @@ main(void)
 
 #if defined(PROCESS_NAME)
   PROCESS_CREATE(PROCESS_NAME);
+#else
+  PROCESS_CREATE(hello);
+  PROCESS_CREATE(hello);
+  PROCESS_CREATE(hello);
+  PROCESS_CREATE(hello);
 #endif
 
   boot_aps();           // Start other CPUs

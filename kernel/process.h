@@ -27,10 +27,17 @@ struct Context {
  */
 struct Process {
   struct ListLink    link;      ///< Link into the containing list
-  pid_t              pid;
+
+  pid_t              pid;       ///< Process identifier
+  struct ListLink    pid_link;  ///< Link into the PID hash table
+  pid_t              ppid;      ///< Parent process identifier
+  struct ListLink    children;  ///< List pf process children
+  struct ListLink    sibling;   ///< Link into the siblings list
+
   tte_t             *trtab;     ///< Translation table
   size_t             size;      ///< Size of process memory (in bytes)
-  uint8_t           *kstack;    ///< Bottom of kernel stack for this process
+
+  uint8_t           *kstack;    ///< Bottom of process kernel stack
   struct Trapframe  *tf;        ///< Trap frame for current exception
   struct Context    *context;   ///< Saved context
 };

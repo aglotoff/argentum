@@ -13,6 +13,8 @@ LIB_SRCFILES :=	\
 	lib/string/strchr.c \
 	lib/string/strcmp.c \
 	lib/string/strlen.c \
+	lib/unistd/getpid.c \
+	lib/unistd/getppid.c \
 	lib/syscall.c
 
 LIB_OBJFILES := $(patsubst %.c, $(OBJ)/%.o, $(LIB_SRCFILES))
