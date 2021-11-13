@@ -7,7 +7,9 @@
  * Two-wire serial bus interface (SBCon).
  */
 
-void sb_init(void);
-void sb_rtc_time(void);
+#include <time.h>
+
+void   sb_init(void);
+time_t sb_rtc_time(void);
 
 #endif  // !__KERNEL_SBCON_H__

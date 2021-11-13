@@ -7,7 +7,9 @@ LIB_CFLAGS := $(CFLAGS)
 LIB_SRCFILES :=	\
   lib/errno/errno.c \
 	lib/stdio/printf.c \
+	lib/stdio/snprintf.c \
 	lib/stdio/vprintf.c \
+	lib/stdio/vsnprintf.c \
 	lib/stdio/xprintf.c \
 	lib/string/memcmp.c \
 	lib/string/memmove.c \
@@ -15,6 +17,11 @@ LIB_SRCFILES :=	\
 	lib/string/strchr.c \
 	lib/string/strcmp.c \
 	lib/string/strlen.c \
+	lib/time/asctime.c \
+	lib/time/gmtime.c \
+	lib/time/mktime.c \
+	lib/time/strftime.c \
+	lib/time/time.c \
 	lib/unistd/getpid.c \
 	lib/unistd/getppid.c \
 	lib/syscall.c

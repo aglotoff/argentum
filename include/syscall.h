@@ -8,6 +8,7 @@
 #define SYS_exit        2
 #define SYS_getpid      3
 #define SYS_getppid     4
+#define SYS_time        5
 
 // Generic system call: pass system call number as an immediate operand of the
 // SVC instruction, and up to three parameters in R0, R1, R2.

@@ -32,7 +32,8 @@ KERNEL_SRCFILES :=	\
 	lib/string/memset.c \
 	lib/string/strchr.c \
 	lib/string/strcmp.c \
-	lib/string/strlen.c
+	lib/string/strlen.c \
+	lib/time/mktime.c
 
 KERNEL_OBJFILES := $(patsubst %.c, $(OBJ)/%.o, $(KERNEL_SRCFILES))
 KERNEL_OBJFILES := $(patsubst %.S, $(OBJ)/%.o, $(KERNEL_OBJFILES))

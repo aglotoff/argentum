@@ -11,5 +11,6 @@ int sys_cwrite(void);
 int sys_exit(void);
 int sys_getpid(void);
 int sys_getppid(void);
+int sys_time(void);
 
 #endif  // !__KERNEL_SYSCALL_H__

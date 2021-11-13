@@ -4,6 +4,7 @@
 #include "kernel.h"
 #include "console.h"
 #include "process.h"
+#include "sbcon.h"
 #include "syscall.h"
 #include "trap.h"
 
@@ -13,10 +14,11 @@ static int  sys_get_num(void);
 static long sys_get_arg(int);
 
 static int (*syscalls[])(void) = {
-  [SYS_cwrite]   = sys_cwrite,
+  [SYS_cwrite]  = sys_cwrite,
   [SYS_exit]    = sys_exit,
   [SYS_getpid]  = sys_getpid,
   [SYS_getppid] = sys_getppid,
+  [SYS_time]    = sys_time,
 };
 
 int
@@ -187,4 +189,10 @@ int
 sys_getppid(void)
 {
   return myprocess()->ppid;
+}
+
+int
+sys_time(void)
+{
+  return sb_rtc_time();
 }

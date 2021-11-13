@@ -32,14 +32,10 @@ main(void)
   kobject_init();       // Object allocator
   process_init();       // Process table
   sb_init();            // Serial bus
-  sb_rtc_time();        // Display current date and time
 
 #if defined(PROCESS_NAME)
   PROCESS_CREATE(PROCESS_NAME);
 #else
-  PROCESS_CREATE(hello);
-  PROCESS_CREATE(hello);
-  PROCESS_CREATE(hello);
   PROCESS_CREATE(hello);
 #endif
 

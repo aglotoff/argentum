@@ -4,6 +4,7 @@
 #include "console.h"
 #include "memlayout.h"
 #include "sbcon.h"
+#include "spinlock.h"
 #include "vm.h"
 
 // --------------------------------------------------------------
@@ -37,6 +38,8 @@ static uint8_t sb_tx_byte(uint8_t data);
 
 static volatile uint32_t *sb;
 
+static struct Spinlock rtc_lock;
+
 /**
  * Initialize the serial bus driver.
  */
@@ -47,6 +50,8 @@ sb_init(void)
 
   sb[SB_CONTROLS] = SCL;
   sb[SB_CONTROLS] = SDA;
+
+  spin_init(&rtc_lock, "rtc");
 }
 
 // Read from a slave device
@@ -184,77 +189,75 @@ sb_tx_byte(uint8_t data)
 #define RTC_YEAR      0x06
 #define RTC_CONTROL   0x07
 
-static const char *daynames[] = {
-  [1]  "Sun",   [2]  "Mon",   [3]  "Tue",   [4]  "Wed",
-  [5]  "Thu",   [6]  "Fri",   [7]  "Sat"
-};
-
-static const char *monthnames[] = {
-  [1]  "Jan",   [2]  "Feb",   [3]  "Mar",   [4]  "Apr",
-  [5]  "May",   [6]  "Jun",   [7]  "Jul",   [8]  "Aug",
-  [9]  "Sep",   [10] "Oct",   [11] "Nov",   [12] "Dec"
-};
-
-struct RtcDate {
-  int sec;
-  int min;
-  int hour;
-  int mday;
-  int mon;
-  int year;
-  int wday;
-};
-
-static void sb_rtc_fill_date(struct RtcDate *);
+static void sb_rtc_fill_date(struct tm *);
 
 /**
- * Display the current UTC time.
+ * Get the current UTC time.
  */
-void
+time_t
 sb_rtc_time(void)
 {
-  struct RtcDate t1, t2;
+  struct tm t1, t2;
+
+  spin_lock(&rtc_lock);
 
   // Make sure RTC doesn't modify date while we read it.
   do {
     sb_rtc_fill_date(&t1);
     sb_rtc_fill_date(&t2);
-  } while (memcmp(&t1, &t2, sizeof(struct RtcDate)) != 0);
+  } while (memcmp(&t1, &t2, sizeof(struct tm)) != 0);
 
-  cprintf("%s %s %d %02d:%02d:%02d %d\n",
-          daynames[t1.wday], monthnames[t1.mon], t1.mday,
-          t1.hour, t1.min, t1.sec,
-          t1.year);
+  spin_unlock(&rtc_lock);
+
+  return mktime(&t1);
 }
 
 static void
-sb_rtc_fill_date(struct RtcDate *date)
+sb_rtc_fill_date(struct tm *tm)
 {
-  int sec, min, hour, mday, mon, year, wday;
+  // Days to start of month
+  static const int daysto[][12] = {
+    { 0, 31, 59, 90, 120, 151, 181, 212, 243, 273, 304, 334 },  // non-leap
+    { 0, 31, 60, 91, 121, 152, 182, 213, 244, 274, 305, 335 },  // leap
+  };
+
+  int sec, min, hour, mday, mon, year, wday, is_leap;
 
   sec = sb_read(SB_RTC, RTC_SECONDS);
-  date->sec = sec = ((sec >> 4) & 0x7) * 10 + (sec & 0xF);
+  sec = ((sec >> 4) & 0x7) * 10 + (sec & 0xF);
 
   min = sb_read(SB_RTC, RTC_MINUTES);
-  date->min = ((min >> 4) & 0x7) * 10 + (min & 0xF);
+  min = ((min >> 4) & 0x7) * 10 + (min & 0xF);
 
   hour = sb_read(SB_RTC, RTC_HOURS);
   if (hour & 0x40) {
     hour = ((hour >> 4) & 0x1) * 10 + (hour & 0xF) + (hour & 0x20 ? 12 : 0);
-    date->hour = (hour % 12 == 0) ? hour - 12 : hour;
+    hour = (hour % 12 == 0) ? hour - 12 : hour;
   } else {
-    date->hour = ((hour >> 4) & 0x3) * 10 + (hour & 0xF);
+    hour = ((hour >> 4) & 0x3) * 10 + (hour & 0xF);
   }
 
   mday = sb_read(SB_RTC, RTC_DATE);
-  date->mday = ((mday >> 4) & 0x3) * 10 + (mday & 0xF);
+  mday = ((mday >> 4) & 0x3) * 10 + (mday & 0xF);
 
   mon = sb_read(SB_RTC, RTC_MONTH);
-  date->mon = ((mon >> 4) & 0x1) * 10 + (mon & 0xF);
+  mon = ((mon >> 4) & 0x1) * 10 + (mon & 0xF);
 
   year = sb_read(SB_RTC, RTC_YEAR);
-  date->year = 2000 + ((year >> 4) & 0xF) * 10 + (year & 0xF);
+  year = ((year >> 4) & 0xF) * 10 + (year & 0xF);
 
   wday = sb_read(SB_RTC, RTC_DAY);
-  date->wday = wday & 0x7;
+  wday = (wday & 0x7);
+
+  is_leap = ((year % 4 == 0) && (year % 100 != 0)) || (year % 400 == 0);
+
+  tm->tm_sec   = sec;
+  tm->tm_min   = min;
+  tm->tm_hour  = hour;
+  tm->tm_mday  = mday;
+  tm->tm_mon   = mon - 1;
+  tm->tm_year  = year + (2000 - 1900);
+  tm->tm_yday  = daysto[is_leap][mon - 1] + mday - 1;
+  tm->tm_wday  = wday - 1;
+  tm->tm_isdst = 0;
 }
