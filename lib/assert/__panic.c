@@ -9,11 +9,11 @@ __panic(const char *file, int line, const char *format, ...)
 
   va_start(ap, format);
 
-  printf("error at %s:%d: ", file, line);
+  printf("Error at %s:%d: ", file, line);
   vprintf(format, ap);
   printf("\n");
 
   va_end(ap);
   
-  exit(EXIT_FAILURE);
+  abort();
 }
