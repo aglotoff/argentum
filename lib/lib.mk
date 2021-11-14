@@ -23,12 +23,15 @@ LIB_SRCFILES :=	\
 	lib/ctype/tolower.c \
 	lib/ctype/toupper.c \
   lib/errno/errno.c \
+	lib/setjmp/longjmp.S \
+	lib/setjmp/setjmp.S \
 	lib/stdio/perror.c \
 	lib/stdio/printf.c \
 	lib/stdio/snprintf.c \
 	lib/stdio/vprintf.c \
 	lib/stdio/vsnprintf.c \
 	lib/stdio/xprintf.c \
+	lib/stdlib/abort.c \
 	lib/stdlib/exit.c \
 	lib/string/memcmp.c \
 	lib/string/memmove.c \

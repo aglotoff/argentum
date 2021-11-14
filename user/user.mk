@@ -1,4 +1,4 @@
-USER_CFLAGS  := $(CFLAGS)
+USER_CFLAGS  := $(CFLAGS) -Wno-return-local-addr
 USER_LDFLAGS := $(LDFLAGS) -T user/user.ld -nostdlib
 
 $(OBJ)/user/%.o: user/%.c
