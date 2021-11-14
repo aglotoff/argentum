@@ -23,6 +23,7 @@ LIB_SRCFILES :=	\
 	lib/ctype/tolower.c \
 	lib/ctype/toupper.c \
   lib/errno/errno.c \
+	lib/stdio/perror.c \
 	lib/stdio/printf.c \
 	lib/stdio/snprintf.c \
 	lib/stdio/vprintf.c \
@@ -34,6 +35,7 @@ LIB_SRCFILES :=	\
 	lib/string/memset.c \
 	lib/string/strchr.c \
 	lib/string/strcmp.c \
+	lib/string/strerror.c \
 	lib/string/strlen.c \
 	lib/time/asctime.c \
 	lib/time/gmtime.c \

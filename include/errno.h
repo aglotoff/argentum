@@ -2,11 +2,16 @@
 #define __INCLUDE_ERRNO_H__
 
 /**
- * Number of last error.
+ * @file include/errno.h
+ * 
+ * System error numbers.
+ */
+
+/**
+ * Number of the last error.
  */
 extern int errno;
 
-// System error numbers
 #define E2BIG         1     ///< Arg list too long
 #define EACCESS       2     ///< Permission denied
 #define EAGAIN        3     ///< Resource temporarily unavailable
