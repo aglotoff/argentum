@@ -5,12 +5,30 @@
 LIB_CFLAGS := $(CFLAGS)
 
 LIB_SRCFILES :=	\
+  lib/assert/__panic.c \
+  lib/ctype/__ctype.c \
+	lib/ctype/__tolower.c \
+	lib/ctype/__toupper.c \
+  lib/ctype/isalnum.c \
+	lib/ctype/isalpha.c \
+	lib/ctype/iscntrl.c \
+	lib/ctype/isdigit.c \
+	lib/ctype/isgraph.c \
+	lib/ctype/islower.c \
+	lib/ctype/isprint.c \
+	lib/ctype/ispunct.c \
+	lib/ctype/isspace.c \
+	lib/ctype/isupper.c \
+	lib/ctype/isxdigit.c \
+	lib/ctype/tolower.c \
+	lib/ctype/toupper.c \
   lib/errno/errno.c \
 	lib/stdio/printf.c \
 	lib/stdio/snprintf.c \
 	lib/stdio/vprintf.c \
 	lib/stdio/vsnprintf.c \
 	lib/stdio/xprintf.c \
+	lib/stdlib/exit.c \
 	lib/string/memcmp.c \
 	lib/string/memmove.c \
 	lib/string/memset.c \

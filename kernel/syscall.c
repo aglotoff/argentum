@@ -167,7 +167,7 @@ sys_cwrite(void)
   if ((r = sys_arg_ptr(0, (void **) &s, n)) < 0)
     return r;
 
-  cprintf("%*s", n, s);
+  cprintf("%.*s", n, s);
 
   return n;
 }

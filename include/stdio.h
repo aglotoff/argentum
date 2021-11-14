@@ -1,8 +1,10 @@
-#ifndef INCLUDE_STDIO_H
-#define INCLUDE_STDIO_H
+#ifndef __INCLUDE_STDIO_H__
+#define __INCLUDE_STDIO_H__
 
 #include <stdarg.h>
 #include <stddef.h>
+
+#define EOF -1
 
 #ifdef __cplusplus
 extern "C" {
@@ -18,4 +20,4 @@ int  vsnprintf(char *s, size_t n, const char *, va_list);
 };
 #endif
 
-#endif  // !INCLUDE_STDIO_H
+#endif  // !__INCLUDE_STDIO_H__
