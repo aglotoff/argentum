@@ -47,7 +47,8 @@ KERNEL_BINFILES := user/fault_read \
 									 user/hello \
 									 user/test_ctype \
 									 user/test_errno \
-									 user/test_setjmp
+									 user/test_setjmp \
+									 user/test_string
 KERNEL_BINFILES := $(patsubst %, $(OBJ)/%, $(KERNEL_BINFILES))
 
 # Embed the VGA font to print characters on LCD

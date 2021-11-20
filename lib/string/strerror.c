@@ -1,7 +1,7 @@
 #include <errno.h>
 #include <string.h>
 
-static char *errors[] = {
+static char *messages[] = {
   [0]            = "No error",
   [E2BIG]        = "Arg list too long",
   [EACCESS]      = "Permission denied",
@@ -42,11 +42,14 @@ static char *errors[] = {
   [EXDEV]        = "Improper link",
 };
 
-#define ERRMAX  ((int) ((sizeof errors) / (sizeof errors[0])))
+#define ERRMAX  ((int) ((sizeof messages) / (sizeof messages[0])))
 
 /**
  * Get error message string.
  * 
+ * Maps the error number in errnum to an error message and returns a pointer to
+ * it.
+ *
  * @param errnum The error number.
  *
  * @return A pointer to the generated message string.
@@ -54,10 +57,10 @@ static char *errors[] = {
 char *
 strerror(int errnum)
 {
-  if ((errnum < 0) || (errnum > ERRMAX) || (errors[errnum] == NULL)) {
+  if ((errnum < 0) || (errnum > ERRMAX) || (messages[errnum] == NULL)) {
     errno = EINVAL;
     return "Unknown error";
   }
 
-  return errors[errnum];
+  return messages[errnum];
 };

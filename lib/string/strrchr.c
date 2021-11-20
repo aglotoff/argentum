@@ -3,7 +3,7 @@
 /**
  * @brief String scanning operation.
  * 
- * Finds the first occurrence of c (converted to a char) in the C string s.
+ * Finds the last occurrence of c (converted to a char) in the C string s.
  * The terminating null-character is considered to be part of the string.
  *
  * @param s C string.
@@ -11,16 +11,20 @@
  *
  * @return A pointer to the character, or NULL if the character was not found.
  * 
- * @sa memchr, strcspn, strpbrk, strrchr, strspn, strstr, strtok
+ * @sa memchr, strchr, strcspn, strpbrk, strspn, strstr, strtok
  */
 char *
-strchr(const char *s, int c)
+strrchr(const char *s, int c)
 {
+  const char *last;
   char ch = (char) c;
 
-  for ( ; *s != ch; s++)
+  for (last = NULL; ; s++) {
+    if (*s == ch)
+      last = s;
     if (*s == '\0')
-      return NULL;
+      break;
+  }
 
-  return (char *) s;
+  return (char *) last;
 }
