@@ -67,13 +67,17 @@ vm_init_percpu(void)
   tlbiall();
 }
 
+//
+// Returns the pointer to the page table entry in the translation table trtab
+// that corresponds to the virtual address va. If alloc is not zero, allocate
+// any required page tables.
+//
 static pte_t *
 vm_walk_trtab(tte_t *trtab, uintptr_t va, int alloc)
 {
   struct PageInfo *p;
   tte_t *tte;
   pte_t *pgtab;
-  unsigned i;
 
   tte = &trtab[TTX(va)];
   if ((*tte & TTE_TYPE_MASK) == TTE_TYPE_FAULT) {
@@ -85,8 +89,11 @@ vm_walk_trtab(tte_t *trtab, uintptr_t va, int alloc)
     
     p->ref_count++;
 
-    for (i = 0; i < 4; i++)
-      trtab[(TTX(va) & ~3)+i] = (page2pa(p) + (PGTAB_SIZE*i)) | TTE_TYPE_PGTAB;
+    // We could fit four page tables into one physical page. But because we
+    // also need to associate some metadata with each entry, we store only two
+    // page tables in the bottom of the allocated physical page.
+    trtab[(TTX(va) & ~1) + 0] = page2pa(p) | TTE_TYPE_PGTAB;
+    trtab[(TTX(va) & ~1) + 1] = (page2pa(p) + PGTAB_SIZE) | TTE_TYPE_PGTAB;
   } else if ((*tte & TTE_TYPE_MASK) != TTE_TYPE_PGTAB) {
     warn("tte type is not page table");
     return NULL;
@@ -138,6 +145,7 @@ vm_insert_page(tte_t *trtab, struct PageInfo *p, void *va, int perm)
 
   p->ref_count++;
   vm_remove_page(trtab, va);
+
   *pte = page2pa(p) | PTE_AP(perm) | PTE_TYPE_SMALL;
 
   return 0;
@@ -186,13 +194,29 @@ vm_alloc_region(tte_t *trtab, void *va, size_t n)
 void
 vm_dealloc_region(tte_t *trtab, void *va, size_t n)
 {
-  uintptr_t a, start, end;
+  uintptr_t a, end;
+  struct PageInfo *page;
+  pte_t *pte;
 
-  start = (uintptr_t) va & ~(PAGE_SIZE - 1);
-  end   = ((uintptr_t) va + n + PAGE_SIZE - 1) & ~(PAGE_SIZE - 1);
+  a   = ROUND_DOWN((uintptr_t) va, PAGE_SIZE);
+  end = ROUND_UP((uintptr_t) va + n, PAGE_SIZE);
 
-  for (a = start; a < end; a += PAGE_SIZE)
-    vm_remove_page(trtab, (void *) a);
+  while (a < end) {
+    if ((pte = vm_walk_trtab(trtab, (uintptr_t) va, 0)) == NULL) {
+      a = ROUND_DOWN(a + PAGE_SIZE * NPTENTRIES, PAGE_SIZE * NPTENTRIES);
+    } else {
+      if ((*pte & PTE_TYPE_MASK) == PTE_TYPE_SMALL) {
+        page = pa2page(PTE_SMALL_ADDR(*pte));
+
+        if (--page->ref_count == 0)
+          page_free(page);
+    
+        *pte = 0;
+      }
+    
+      a += PAGE_SIZE;
+    }
+  }
 }
 
 int
@@ -306,4 +330,69 @@ vm_map_region(tte_t *trtab,
       n -= PAGE_SIZE;
     }
   }
+}
+
+void
+vm_free(tte_t *trtab)
+{
+  struct PageInfo *page;
+  unsigned i;
+
+  vm_dealloc_region(trtab, (void *) 0, KERNEL_BASE);
+
+  for (i = 0; i < TTX(KERNEL_BASE); i += 2) {
+    page = pa2page(PTE_SMALL_ADDR(trtab[i]));
+
+    if (--page->ref_count == 0)
+      page_free(page);
+  }
+
+  page = kva2page(trtab);
+  if (--page->ref_count == 0)
+      page_free(page);
+}
+
+tte_t *
+vm_clone(tte_t *trtab)
+{
+  struct PageInfo *tab_page, *src_page, *dst_page;
+  uint8_t *va;
+  tte_t *t;
+  pte_t *pte;
+
+  // Allocate the translation table.
+  if ((tab_page = page_alloc_block(1, PAGE_ALLOC_ZERO)) == NULL)
+    return NULL;
+
+  t = page2kva(tab_page);
+  tab_page->ref_count++;
+
+  va = (uint8_t *) 0;
+
+  while (va < (uint8_t *) KERNEL_BASE) {
+    if ((pte = vm_walk_trtab(trtab, (uintptr_t) va, 0)) == NULL) {
+      va = ROUND_DOWN(va + PAGE_SIZE * NPTENTRIES, PAGE_SIZE * NPTENTRIES);
+    } else {
+      if ((*pte & PTE_TYPE_MASK) == PTE_TYPE_SMALL) {
+        src_page = pa2page(PTE_SMALL_ADDR(*pte));
+
+        if ((dst_page = page_alloc(0)) == NULL) {
+          vm_free(t);
+          return NULL;
+        }
+
+        if (vm_insert_page(t, dst_page, va, AP_BOTH_RW) < 0) {
+          page_free(dst_page);
+          vm_free(t);
+          return NULL;
+        }
+
+        memmove(page2kva(dst_page), page2kva(src_page), PAGE_SIZE);
+      }
+
+      va += PAGE_SIZE;
+    }
+  }
+
+  return t;
 }

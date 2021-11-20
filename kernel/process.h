@@ -62,6 +62,8 @@ void            process_init(void);
 void            process_create(const void *binary);
 void            process_yield(void);
 void            process_destroy(void);
+void            process_free(struct Process *);
+pid_t           process_fork(void);
 void            scheduler(void);
 
 int             cpuid(void);

@@ -3,6 +3,7 @@
 
 #include <sys/types.h>
 
+pid_t fork(void);
 pid_t getpid(void);
 pid_t getppid(void);
 

@@ -19,6 +19,7 @@ static int (*syscalls[])(void) = {
   [SYS_getpid]  = sys_getpid,
   [SYS_getppid] = sys_getppid,
   [SYS_time]    = sys_time,
+  [SYS_fork]    = sys_fork,
 };
 
 int
@@ -31,8 +32,8 @@ sys_dispatch(void)
 
   if ((num < (int) ARRAY_SIZE(syscalls)) && syscalls[num])
     return syscalls[num]();
-  
-  cprintf("Unknown system call %d\n");
+
+  cprintf("[CPU %d: Unknown system call %d]\n", cpuid(), num);
   return -ENOSYS;
 }
 
@@ -195,4 +196,10 @@ int
 sys_time(void)
 {
   return sb_rtc_time();
+}
+
+int
+sys_fork(void)
+{
+  return process_fork();
 }

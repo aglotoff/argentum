@@ -45,7 +45,8 @@ LIB_SRCFILES += \
 
 LIB_SRCFILES += \
 	lib/stdlib/abort.c \
-	lib/stdlib/exit.c
+	lib/stdlib/exit.c \
+	lib/stdlib/getenv.c
 
 LIB_SRCFILES += \
 	lib/string/memchr.c \
@@ -77,6 +78,7 @@ LIB_SRCFILES += \
 	lib/time/time.c
 
 LIB_SRCFILES += \
+  lib/unistd/fork.c \
 	lib/unistd/getpid.c \
 	lib/unistd/getppid.c
 

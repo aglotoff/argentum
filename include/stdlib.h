@@ -16,8 +16,9 @@
 extern "C" {
 #endif
 
-void abort(void);
-void exit(int);
+void  abort(void);
+void  exit(int);
+char *getenv(const char *);
 
 #ifdef __cplusplus
 };

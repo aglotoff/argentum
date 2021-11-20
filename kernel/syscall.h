@@ -12,5 +12,6 @@ int sys_exit(void);
 int sys_getpid(void);
 int sys_getppid(void);
 int sys_time(void);
+int sys_fork(void);
 
 #endif  // !__KERNEL_SYSCALL_H__

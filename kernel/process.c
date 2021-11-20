@@ -1,5 +1,6 @@
 #include <assert.h>
 #include <elf.h>
+#include <errno.h>
 #include <string.h>
 
 #include "armv7.h"
@@ -119,6 +120,10 @@ process_alloc(void)
   ptable.nprocesses++;
   spin_unlock(&ptable.lock);
 
+  cprintf("[%08x] new process %08x\n",
+          myprocess() ? myprocess()->pid : 0,
+          process->pid);
+
   return process;
 }
 
@@ -194,12 +199,60 @@ process_create(const void *binary)
 }
 
 void
-process_destroy(void)
+process_free(struct Process *proc)
 {
-  ptable.nprocesses--;
+  struct PageInfo *page;
+
+  page = kva2page(proc->kstack);
+  if (--page->ref_count == 0)
+    page_free(page);
 
   spin_lock(&ptable.lock);
+  list_remove(&proc->pid_link);
+  spin_unlock(&ptable.lock);
+
+  kobject_free(process_cache, proc);
+}
+
+void
+process_destroy(void)
+{
+  cprintf("[%08x] exiting gracefully\n", myprocess()->pid);
+
+  vm_free(myprocess()->trtab);
+
+  spin_lock(&ptable.lock);
+  ptable.nprocesses--;
   context_switch(&mycpu()->process->context, mycpu()->scheduler);
+}
+
+pid_t
+process_fork(void)
+{
+  struct Process *proc, *myproc = myprocess();
+
+  if ((proc = process_alloc()) == NULL)
+    return -ENOMEM;
+
+  if ((proc->trtab = vm_clone(myproc->trtab)) == NULL) {
+    process_free(proc);
+    return -ENOMEM;
+  }
+
+
+
+  proc->size = myprocess()->size;
+  proc->ppid = myprocess()->pid;
+
+  *proc->tf = *myproc->tf;
+  proc->tf->r0 = 0;
+
+  spin_lock(&ptable.lock);
+  list_add_back(&myprocess()->children, &proc->sibling);
+  list_add_back(&ptable.runqueue, &proc->link);
+  spin_unlock(&ptable.lock);
+
+  return proc->pid;
 }
 
 void

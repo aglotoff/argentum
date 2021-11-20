@@ -28,6 +28,7 @@ KERNEL_SRCFILES :=	\
 	kernel/main.c \
 	lib/stdio/xprintf.c \
 	lib/string/memcmp.c \
+	lib/string/memcpy.c \
 	lib/string/memmove.c \
 	lib/string/memset.c \
 	lib/string/strchr.c \
@@ -47,6 +48,7 @@ KERNEL_BINFILES := user/fault_read \
 									 user/hello \
 									 user/test_ctype \
 									 user/test_errno \
+									 user/test_fork \
 									 user/test_setjmp \
 									 user/test_string
 KERNEL_BINFILES := $(patsubst %, $(OBJ)/%, $(KERNEL_BINFILES))
