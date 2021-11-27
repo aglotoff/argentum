@@ -79,11 +79,12 @@ console_getc(void)
 }
 
 // Callback used by the vcprintf and cprintf functions.
-static void
+static int
 cputc(void *arg, int c)
 {
   (void) arg;
   console_putc(c);
+  return 1;
 }
 
 void
@@ -92,7 +93,7 @@ vcprintf(const char *format, va_list ap)
   if (console.locking)
     spin_lock(&console.lock);
 
-  xprintf(cputc, NULL, format, ap);
+  __printf(cputc, NULL, format, ap);
   
   if (console.locking)
     spin_unlock(&console.lock);

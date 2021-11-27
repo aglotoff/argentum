@@ -6,10 +6,9 @@
 struct printfbuf {
   char data[MAXBUF];
   int  idx;
-  int  cnt;
 };
 
-static void
+static int
 putch(void *arg, int ch)
 {
   struct printfbuf *buf = (struct printfbuf *) arg;
@@ -19,21 +18,21 @@ putch(void *arg, int ch)
     cwrite(buf->data, buf->idx);
     buf->idx = 0;
   }
-  buf->cnt++;
+  return 1;
 }
 
 int
 vprintf(const char *format, va_list ap)
 {
   struct printfbuf buf;
+  int ret;
 
   buf.idx = 0;
-  buf.cnt = 0;
 
-  xprintf(putch, &buf, format, ap);
+  ret = __printf(putch, &buf, format, ap);
 
   if (cwrite(buf.data, buf.idx) < 0)
     return -1;
 
-  return buf.cnt;
+  return ret + buf.idx;
 }

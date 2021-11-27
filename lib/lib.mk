@@ -36,12 +36,12 @@ LIB_SRCFILES += \
 	lib/setjmp/setjmp.S
 
 LIB_SRCFILES += \
+  lib/stdio/__printf.c \
 	lib/stdio/perror.c \
 	lib/stdio/printf.c \
 	lib/stdio/snprintf.c \
 	lib/stdio/vprintf.c \
-	lib/stdio/vsnprintf.c \
-	lib/stdio/xprintf.c
+	lib/stdio/vsnprintf.c
 
 LIB_SRCFILES += \
 	lib/stdlib/abort.c \

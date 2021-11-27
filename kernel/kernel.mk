@@ -26,7 +26,7 @@ KERNEL_SRCFILES :=	\
 	kernel/kdebug.c \
 	kernel/monitor.c \
 	kernel/main.c \
-	lib/stdio/xprintf.c \
+	lib/stdio/__printf.c \
 	lib/string/memcmp.c \
 	lib/string/memcpy.c \
 	lib/string/memmove.c \

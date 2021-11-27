@@ -361,6 +361,6 @@ kobject_pool_info(void)
 
   LIST_FOREACH(&pool_list.head, link) {
     pool = LIST_CONTAINER(link, struct KObjectPool, link);
-    cprintf("%20s %6d\n", pool->name, pool->obj_size);
+    cprintf("%-20s %6d\n", pool->name, pool->obj_size);
   }
 }

@@ -10,7 +10,7 @@
 extern "C" {
 #endif
 
-void xprintf(void (*)(void *, int), void *, const char *, va_list);
+int  __printf(int (*)(void *, int), void *, const char *, va_list);
 int  printf(const char *, ...);
 int  snprintf(char *s, size_t n, const char *, ...);
 int  vprintf(const char *, va_list);
