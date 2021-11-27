@@ -24,8 +24,11 @@ debug_info_pc(uintptr_t pc, struct PcDebugInfo *info)
   return scan_aranges(pc, info);
 }
 
-
-/***** Lookup by Address *****/
+/*
+ * ----------------------------------------------------------------------------
+ * Lookup by address
+ * ----------------------------------------------------------------------------
+ */
 
 extern uint8_t __debug_aranges_begin__[], __debug_aranges_end__[];
 
@@ -57,8 +60,11 @@ scan_aranges(uintptr_t addr, struct PcDebugInfo *info)
   return -1;
 }
 
-
-/***** Comilation Unit *****/
+/*
+ * ----------------------------------------------------------------------------
+ * Compilation units
+ * ----------------------------------------------------------------------------
+ */
 
 union AttrValue {
   struct {
@@ -250,8 +256,11 @@ get_attr_value(uint32_t form, union AttrValue *value,
   return 0;
 }
 
-
-/***** String Table *****/
+/*
+ * ----------------------------------------------------------------------------
+ * String table
+ * ----------------------------------------------------------------------------
+ */
 
 extern uint8_t __debug_str_begin__[], __debug_str_end__[];
 
@@ -263,8 +272,11 @@ get_debug_str(uint8_t *ptr)
   return (char *) ptr;
 }
 
-
-/***** Line Number Information *****/
+/*
+ * ----------------------------------------------------------------------------
+ * Line number information
+ * ----------------------------------------------------------------------------
+ */
 
 extern uint8_t __debug_line_begin__[], __debug_line_end__[];
 
@@ -383,8 +395,11 @@ get_debug_line_info(uint8_t *ptr, uintptr_t pc, struct PcDebugInfo *info)
   return -1;
 }
 
-
-/***** Decode data *****/
+/*
+ * ----------------------------------------------------------------------------
+ * Decode data
+ * ----------------------------------------------------------------------------
+ */
 
 /*
  * Get a (probably misaligned) unsigned 2-byte value.

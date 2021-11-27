@@ -39,15 +39,19 @@ static void             page_mark_used(struct PageInfo *, unsigned);
 static int              page_is_free(struct PageInfo *, unsigned);
 static struct PageInfo *page_split(struct PageInfo *, unsigned, unsigned);
 
-// --------------------------------------------------------------
-// Initializing the page allocator
-//
-// Initialization happens in two phases:
-// 1. main() calls page_init_low() while still using the initial translation
-//    table to place just the pages mapped by entry_trtab on the free list.
-// 2. main() calls page_init_high() after installing the full kernel translation
-//    table to place the rest of the pages on the free list.
-// --------------------------------------------------------------
+/*
+ * ----------------------------------------------------------------------------
+ * Initializing the page allocator
+ * ----------------------------------------------------------------------------
+ * 
+ * Initialization happens in two phases:
+ * 
+ * 1. main() calls page_init_low() while still using the initial translation
+ *    table to place just the pages mapped by entry_trtab on the free list.
+ * 2. main() calls page_init_high() after installing the full kernel
+ *    translation table to place the rest of the pages on the free list.
+ *
+ */
 
 /**
  * Begin the page allocator initialization.
@@ -88,12 +92,16 @@ page_init_high(void)
   page_free_region(PHYS_ENTRY_TOP, PHYS_TOP);
 }
 
-// --------------------------------------------------------------
-// Boot-time memory allocator
-// --------------------------------------------------------------
+/*
+ * ----------------------------------------------------------------------------
+ * Boot-time memory allocator
+ * ----------------------------------------------------------------------------
+ * 
+ * Simple memory allocator used only during the initialization of free page
+ * block management structures.
+ *
+ */
 
-// Simple memory allocator used only during the initialization of free page
-// block management structures.
 static void *
 boot_alloc(size_t n)
 {
@@ -127,9 +135,11 @@ boot_alloc(size_t n)
   return ret;
 }
 
-// --------------------------------------------------------------
-// Allocating pages
-// --------------------------------------------------------------
+/*
+ * ----------------------------------------------------------------------------
+ * Allocating pages
+ * ----------------------------------------------------------------------------
+ */
 
 /**
  * Allocate a single page.
@@ -211,9 +221,11 @@ page_split(struct PageInfo *page, unsigned high, unsigned low)
   return page;
 }
 
-// --------------------------------------------------------------
-// Free pages
-// --------------------------------------------------------------
+/*
+ * ----------------------------------------------------------------------------
+ * Free pages
+ * ----------------------------------------------------------------------------
+ */
 
 /**
  * Free a single page.
@@ -296,9 +308,11 @@ page_free_region(physaddr_t start, physaddr_t end)
   }
 }
 
-// --------------------------------------------------------------
-// Free list manipulation
-// --------------------------------------------------------------
+/*
+ * ----------------------------------------------------------------------------
+ * Free list manipulation
+ * ----------------------------------------------------------------------------
+ */
 
 // Check whether the page block 'p' of the given 'order' is free.
 static int

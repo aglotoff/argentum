@@ -29,11 +29,14 @@ static volatile uint32_t *gicc, *gicd, *ptimer;
 #define ICCIAR        (0x00C / 4)   // Interrupt Acknowledge Register
 #define ICCEOIR       (0x010 / 4)   // End of Interrupt Register
 
-// --------------------------------------------------------------
-// Interrupt Controller
-//
-// See ARM Generic Interrupt Controller Architecture Specification
-// --------------------------------------------------------------
+/*
+ * ----------------------------------------------------------------------------
+ * Interrupt Controller
+ * ----------------------------------------------------------------------------
+ * 
+ * See ARM Generic Interrupt Controller Architecture Specification
+ *
+ */
 
 void
 gic_init(void)
@@ -82,11 +85,14 @@ gic_start_others(void)
   gicd[ICDSGIR] = (1U << 24) | (0xF << 16);
 }
 
-// --------------------------------------------------------------
-// Private timer
-//
-// See ARM(R) Cortex(R)-A9 MPCore Technical Reference Manual
-// --------------------------------------------------------------
+/*
+ * ----------------------------------------------------------------------------
+ * Private timer
+ * ----------------------------------------------------------------------------
+ * 
+ * See ARM(R) Cortex(R)-A9 MPCore Technical Reference Manual
+ *
+ */
 
 // Private timer registers, divided by 4 for use as uint32_t[] indices
 #define PTLOAD        (0x000 / 4)   // Private Timer Load Register

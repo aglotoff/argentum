@@ -7,15 +7,18 @@
 #include "spinlock.h"
 #include "vm.h"
 
-// --------------------------------------------------------------
-// Serial bus I/O code
-//
-// PBX-A9 has two serial bus inerfaces (SBCon0 and SBCon1). SBCon0 provides
-// access to the Maxim DS1338 RTC on the baseboard.
-//
-// For more info on serial bus programming, see this tutorial:
-// https://www.robot-electronics.co.uk/i2c-tutorial
-// --------------------------------------------------------------
+/*
+ * ----------------------------------------------------------------------------
+ * Serial bus I/O code
+ * ----------------------------------------------------------------------------
+ * 
+ * PBX-A9 has two serial bus inerfaces (SBCon0 and SBCon1). SBCon0 provides
+ * access to the Maxim DS1338 RTC on the baseboard.
+ *
+ * For more info on serial bus programming, see this tutorial:
+ * https://www.robot-electronics.co.uk/i2c-tutorial
+ *
+ */
 
 #define SB_CON0       0x10002000    // SBCon0 memory base address
 
@@ -170,11 +173,14 @@ sb_tx_byte(uint8_t data)
   return bit;
 }
 
-// --------------------------------------------------------------
-// Time-of-Year RTC chip.
-//
-// For more info, see the Maxim DS1338 RTC data sheet.
-// --------------------------------------------------------------
+/*
+ * ----------------------------------------------------------------------------
+ * Time-of-Year RTC chip.
+ * ----------------------------------------------------------------------------
+ * 
+ * For more info, see the Maxim DS1338 RTC data sheet.
+ *
+ */
 
 // RTC device address
 #define SB_RTC        0xD0            

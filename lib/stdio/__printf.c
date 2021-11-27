@@ -202,9 +202,11 @@ __printf(int       (*xputc)(void *, int),
   return pft.nchar;
 }
 
-// --------------------------------------------------------------
-// Helper functions to fetch variable arguments
-// --------------------------------------------------------------
+/*
+ * ----------------------------------------------------------------------------
+ * Helper functions to fetch var args
+ * ----------------------------------------------------------------------------
+ */
 
 // Take the next integer argument of a given length from the variable argument
 // list
@@ -248,9 +250,11 @@ get_double_arg(va_list *ap, int length)
   return va_arg(*ap, double);
 }
 
-// --------------------------------------------------------------
-// Helper functions to print the conversion results
-// --------------------------------------------------------------
+/*
+ * ----------------------------------------------------------------------------
+ * Helper functions to print the conversion results
+ * ----------------------------------------------------------------------------
+ */
 
 // Print a single character keeping track of the number of characters printed
 // so far
