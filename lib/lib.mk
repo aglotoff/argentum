@@ -32,6 +32,9 @@ LIB_SRCFILES += \
   lib/errno/errno.c
 
 LIB_SRCFILES += \
+	lib/float/__fvalues.c
+
+LIB_SRCFILES += \
 	lib/setjmp/longjmp.S \
 	lib/setjmp/setjmp.S
 

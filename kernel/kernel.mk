@@ -48,6 +48,7 @@ KERNEL_BINFILES := user/fault_read \
 									 user/hello \
 									 user/test_ctype \
 									 user/test_errno \
+									 user/test_float \
 									 user/test_fork \
 									 user/test_setjmp \
 									 user/test_string

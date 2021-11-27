@@ -302,7 +302,7 @@ print_int(struct pft *pft, long long num)
   }
 
   // Convert the sign character.
-  if ((sign && (num < 0)) || (pft->flags & FLAG_SIGN))
+  if (sign && (num < 0))
     prefix[nprefix++] = '-';
   else if (pft->flags & FLAG_SIGN)
     prefix[nprefix++] = '+';
@@ -404,12 +404,15 @@ print_double(struct pft *pft, long double num)
 	if (digits[0] >= symbols[base / 2]) {
 		digits[0] = '0';
 		overflow = 1;
-		for (ndigits = 1; ndigits <= precision; ndigits++)
+		for (i = 1; i <= ndigits; i++)
 			if (overflow) {
-				overflow = (digits[ndigits] == symbols[base - 1]);
-				digits[ndigits] = overflow ? '0' : digits[ndigits] + 1;
+				overflow = (digits[i] == symbols[base - 1]);
+				digits[i] = overflow ? '0' : digits[i] + 1;
 			}
 	}
+
+  if (ndigits <= precision)
+    nrzeros += precision - ndigits;
 
 	if ((precision > 0) || (pft->flags & FLAG_ALT))
 		digits[ndigits++] = '.';
