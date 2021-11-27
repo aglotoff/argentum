@@ -6,42 +6,52 @@
 #include "spinlock.h"
 
 /**
- * Object cache descriptor.
+ * Object pool descriptor.
  */
-struct KObjectCache {
+struct KObjectPool {
   struct ListLink   slabs_used;       ///< Slabs with all objects in use
   struct ListLink   slabs_partial;    ///< Slabs that have free objects
   struct ListLink   slabs_free;       ///< Slabs with all objects free
+  struct Spinlock   lock;             ///< Spinlock protecting the pool
 
+  int               flags;            ///< Flags
   size_t            obj_size;         ///< Size of each object
   unsigned          obj_num;          ///< The number of objects per slab
+  unsigned          page_order;       ///< log2 of the slab size in pages
 
-  void            (*ctor)(void *);    ///< The object constructor function
-  void            (*dtor)(void *);    ///< The object destructor function
+  size_t            color_offset;     ///< The number of different color lines
+  size_t            color_align;      ///< Object alignment in the slab
+  size_t            color_next;       ///< The next color offset to use
 
-  struct Spinlock   lock;
   const char       *name;             ///< Human-readable name for debugging
+  struct ListLink   link;             ///< Link into the pool list
+};
+
+enum {
+  KOBJECT_POOL_OFFSLAB = (1 << 0),    ///< Keep descriptors off-slab
+};
+
+struct KObjectNode {
+  struct KObjectNode *next;
 };
 
 /**
  * Object slab descriptor.
  */
 struct KObjectSlab {
-  struct ListLink   link;             ///< Link into the containing slab list
-  void             *free;             ///< Pointer to the list of free objects
-  unsigned          in_use;           ///< The number of objects in use
+  struct ListLink     link;           ///< Link into the containing slab list
+  void               *buf;            ///< Starting address of 
+  struct KObjectNode *free;           ///< Pointer to the list of free objects
+  unsigned            in_use;         ///< The number of objects in use
 };
 
-void                 kobject_init(void);
+struct KObjectPool *kobject_pool_create(const char *, size_t, size_t);
+int                 kobject_pool_destroy(struct KObjectPool *);
 
-struct KObjectCache *kobject_cache_create(const char  *name,
-                                          size_t       size,
-                                          void       (*ctor)(void *),
-                                          void       (*dtor)(void *));
-void                 kobject_cache_destroy(struct KObjectCache *cache);
-void                 kobject_cache_reap(void);
+void               *kobject_alloc(struct KObjectPool *);
+void                kobject_free(struct KObjectPool *, void *);
 
-void                *kobject_alloc(struct KObjectCache *cache);
-void                 kobject_free(struct KObjectCache *cache, void *obj);
+void                kobject_pool_init(void);
+void                kobject_pool_info(void);
 
 #endif  // !__KERNEL_KOBJECT_H__

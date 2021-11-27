@@ -2,7 +2,7 @@
 #define __KERNEL_MEMLAYOUT_H__
 
 /** The number of bytes mapped by a single physical page. */
-#define PAGE_SIZE         4096
+#define PAGE_SIZE         4096U
 
 /** Log2 of PAGE_SIZE. */
 #define PAGE_SHIFT        12

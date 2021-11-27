@@ -29,7 +29,7 @@ main(void)
   page_init_high();     // Physical page allocator (higher memory)
   gic_init();           // Interrupt controller
   console_init();       // Console devices
-  kobject_init();       // Object allocator
+  kobject_pool_init();  // Object allocator
   process_init();       // Process table
   sb_init();            // Serial bus
 

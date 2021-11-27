@@ -13,6 +13,8 @@ struct Spinlock {
   uintptr_t     pcs[10];  
 };
 
+#define SPIN_INITIALIZER(name)  { 0, NULL, (name), {} }
+
 void spin_init(struct Spinlock *lock, const char *name);
 void spin_lock(struct Spinlock *lock);
 void spin_unlock(struct Spinlock *lock);

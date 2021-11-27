@@ -1,123 +1,261 @@
 #include <assert.h>
+#include <errno.h>
 
+#include "console.h"
 #include "kernel.h"
 #include "kobject.h"
 #include "page.h"
 #include "spinlock.h"
 
-static struct KObjectCache cache_cache;
+// static int                 kobject_pool_grow(struct KObjectPool *);
+static unsigned            kobject_pool_estimate(size_t, unsigned, int,
+                                                 size_t *);
+static struct KObjectSlab *kobject_slab_alloc(struct KObjectPool *);
+static void                kobject_slab_destroy(struct KObjectPool *,
+                                                struct KObjectSlab *);
 
-static void kobject_cache_init(struct KObjectCache *,
-                               const char *,
-                               size_t,
-                               void (*)(void *),
-                               void (*)(void *));
-static int  kobject_cache_grow(struct KObjectCache *);
-static void kobject_cache_shrink(struct KObjectCache *);
+// Linked list of all object pools.
+static struct {
+  struct ListLink head;
+  struct Spinlock lock;
+} pool_list = {
+  LIST_INITIALIZER(pool_list.head),
+  SPIN_INITIALIZER("pool_list"),
+};
+
+// Pool for pool descriptors.
+static struct KObjectPool pool_pool = {
+  .slabs_used    = LIST_INITIALIZER(pool_pool.slabs_used),
+  .slabs_partial = LIST_INITIALIZER(pool_pool.slabs_partial),
+  .slabs_free    = LIST_INITIALIZER(pool_pool.slabs_free),
+  .lock          = SPIN_INITIALIZER("pool_pool"),
+  .obj_size      = sizeof(struct KObjectPool),
+  .color_align   = sizeof(uintptr_t),
+  .name          = "pool_pool",
+};
+
+// Pool for off-slab slab descriptors.
+static struct KObjectPool slab_pool = {
+  .slabs_used    = LIST_INITIALIZER(slab_pool.slabs_used),
+  .slabs_partial = LIST_INITIALIZER(slab_pool.slabs_partial),
+  .slabs_free    = LIST_INITIALIZER(slab_pool.slabs_free),
+  .lock          = SPIN_INITIALIZER("slab_pool"),
+  .obj_size      = sizeof(struct KObjectSlab),
+  .color_align   = sizeof(uintptr_t),
+  .name          = "slab_pool",
+};
 
 // --------------------------------------------------------------
-// Cache manipulation
+// Pool manipulation
 // --------------------------------------------------------------
 
-struct KObjectCache *
-kobject_cache_create(const char  *name,
-                     size_t       obj_size,
-                     void       (*ctor)(void *),
-                     void       (*dtor)(void *))
+/**
+ * @brief Create object pool.
+ * 
+ * Creates a pool for objects, each size obj_size, aligned on a align
+ * boundary.
+ * 
+ * @param name     Identifies the pool for statistics and debugging.
+ * @param obj_size The size of each object in bytes.
+ * @param align    The alignment of each object (or 0 if no special alignment)
+ *                 is required).
+ *
+ * @return Pointer to the pool descriptor or NULL if out of memory.
+ */
+struct KObjectPool *
+kobject_pool_create(const char *name, size_t obj_size, size_t align)
 {
-  struct KObjectCache *cache;
+  struct KObjectPool *pool;
+  size_t wastage;
+  unsigned page_order, obj_num;
+  int flags;
 
-  obj_size = ROUND_UP(obj_size, sizeof(uintptr_t));
-  if (obj_size > (PAGE_SIZE - sizeof(struct KObjectSlab))) {
-    warn("too large object size: %d", obj_size);
+  if ((pool = kobject_alloc(&pool_pool)) == NULL)
     return NULL;
+
+  // Force word size alignment
+  align    = align ? ROUND_UP(align, sizeof(uintptr_t)) : sizeof(uintptr_t);
+  obj_size = ROUND_UP(obj_size, align);
+
+  // For objects larger that 1/8 of a page, keep descriptors off slab.
+  flags = (obj_size >= (PAGE_SIZE / 8)) ? KOBJECT_POOL_OFFSLAB : 0;
+
+  // Estimate slab size
+  for (page_order = 0; ; page_order++) {
+    if (page_order > PAGE_ORDER_MAX) {
+      kobject_free(&pool_pool, pool);
+      return NULL;
+    }
+
+    // Try to limit internal fragmentation to 12.5% (1/8).
+    obj_num = kobject_pool_estimate(obj_size, flags, page_order, &wastage);
+    if ((wastage * 8) <= (PAGE_SIZE << page_order))
+      break;
   }
 
-  if ((cache = kobject_alloc(&cache_cache)) == NULL)
-    return NULL;
+  list_init(&pool->slabs_used);
+  list_init(&pool->slabs_partial);
+  list_init(&pool->slabs_free);
 
-  kobject_cache_init(cache, name, obj_size, ctor, dtor);
+  pool->flags        = flags;
+  pool->obj_size     = obj_size;
+  pool->obj_num      = obj_num;
+  pool->page_order   = page_order;
 
-  return cache;
+  pool->color_align  = align;
+  pool->color_offset = wastage;
+  pool->color_next   = 0;
+
+  spin_init(&pool->lock, name);
+  pool->name         = name;
+
+  spin_lock(&pool_list.lock);
+  list_add_back(&pool_list.head, &pool->link);
+  spin_unlock(&pool_list.lock);
+
+  return pool;
 }
 
-static void
-kobject_cache_init(struct KObjectCache *cache,
-                   const char          *name,
-                   size_t               obj_size,
-                   void               (*ctor)(void *),
-                   void               (*dtor)(void *))
+//
+// Calculate the number of objects that would fit into a slab of size
+// 2^page_order pages and how much space would be left over.
+//
+static unsigned
+kobject_pool_estimate(size_t obj_size,
+                      unsigned page_order,
+                      int flags,
+                      size_t *left_over)
 {
-  list_init(&cache->slabs_used);
-  list_init(&cache->slabs_partial);
-  list_init(&cache->slabs_free);
+  size_t wastage;
+  unsigned obj_num;
 
-  cache->obj_size = obj_size;
-  cache->obj_num  = (PAGE_SIZE - sizeof(struct KObjectSlab)) / obj_size;
+  wastage = (PAGE_SIZE << page_order);
+  if (!(flags & KOBJECT_POOL_OFFSLAB))
+    wastage -= sizeof(struct KObjectSlab);
 
-  spin_init(&cache->lock, name);
+  for (obj_num = 1; obj_size * obj_num <= wastage; obj_num++)
+    obj_num++;
+  obj_num--;
 
-  assert(cache->obj_num >= 2);
-
-  cache->ctor = ctor;
-  cache->dtor = dtor;
-  cache->name = name;
+  if (left_over) {
+    wastage -= obj_num * obj_size;
+    *left_over = wastage;
+  }
+    
+  return obj_num;
 }
 
-void
-kobject_cache_destroy(struct KObjectCache *cache)
+/**
+ * @brief Destory object cache.
+ * 
+ * Destroys the cache and reclaims all associated resources.
+ * 
+ * @param cache The cache descriptor to be destroyed.
+ */
+int
+kobject_pool_destroy(struct KObjectPool *pool)
 {
-  if (!list_empty(&cache->slabs_used) || !list_empty(&cache->slabs_partial))
-    panic("object cache has slabs in use");
-
-  kobject_cache_shrink(cache);
-  kobject_free(&cache_cache, cache);
-}
-
-static int
-kobject_cache_grow(struct KObjectCache *cache)
-{
-  struct PageInfo *page;
   struct KObjectSlab *slab;
-  uint8_t *ptr;
-
-  if ((page = page_alloc(PAGE_ALLOC_ZERO)) == NULL)
-    return -1;
-
-  page->ref_count++;
-
-  slab = (struct KObjectSlab *) page2kva(page);
   
-  for (ptr = (uint8_t *) (slab + 1);
-       ptr < (uint8_t *) slab + PAGE_SIZE;
-       ptr += cache->obj_size) {
-    *(void **) ptr = slab->free;
-    slab->free = ptr;
+  spin_lock(&pool->lock);
+
+  if (!list_empty(&pool->slabs_used) || !list_empty(&pool->slabs_partial)) {
+    spin_unlock(&pool->lock);
+    return -EBUSY;
   }
 
-  list_init(&slab->link);
-  list_add_front(&cache->slabs_free, &slab->link);
+  while(!list_empty(&pool->slabs_free)) {
+    slab = LIST_CONTAINER(pool->slabs_free.next, struct KObjectSlab, link);
+    list_remove(&slab->link);
+    kobject_slab_destroy(pool, slab);
+  }
+
+  spin_unlock(&pool->lock);
+
+  spin_lock(&pool_list.lock);
+  list_remove(&pool->link);
+  spin_unlock(&pool_list.lock);
+
+  kobject_free(&pool_pool, pool);
 
   return 0;
 }
 
-static void
-kobject_cache_shrink(struct KObjectCache *cache)
+// --------------------------------------------------------------
+// Slab management
+// --------------------------------------------------------------
+
+static struct KObjectSlab *
+kobject_slab_alloc(struct KObjectPool *pool)
 {
   struct KObjectSlab *slab;
   struct PageInfo *page;
+  struct KObjectNode *curr, **prevp;
+  unsigned num;
+  uint8_t *buf, *p;
 
-  while (!list_empty(&cache->slabs_free)) {
-    slab = LIST_CONTAINER(cache->slabs_free.next, struct KObjectSlab, link);
+  assert(spin_holding(&pool->lock));
 
-    assert(slab->in_use == 0);
+  // Allocate page block for the slab.
+  if ((page = page_alloc_block(pool->page_order, 0)) == NULL)
+    return NULL;
 
-    page = kva2page(slab);
-    page->ref_count--;
-    page_free(page);
+  buf = (uint8_t *) page2kva(page);
 
-    list_remove(&slab->link);
+  if (pool->flags & KOBJECT_POOL_OFFSLAB) {
+    // If slab descriptors are kept off pages, allocate one from the slab pool.
+    if ((slab = (struct KObjectSlab *) kobject_alloc(&slab_pool)) == NULL) {
+      page_free_block(page, pool->page_order);
+      return NULL;
+    }
+  } else {
+    // Otherwise, store the slab descriptor at the end of the page frame.
+    slab = (struct KObjectSlab *) (buf + (PAGE_SIZE << pool->page_order)) - 1;
   }
+
+  page->ref_count++;
+  page->slab = slab;
+
+  slab->in_use = 0;
+  slab->buf = buf;
+
+  // Initialize all objects.
+  p = buf + pool->color_next;
+  prevp = &slab->free;
+  for (num = 0; num < pool->obj_num; num++) {
+    curr = (struct KObjectNode *) p;
+    curr->next = NULL;
+
+    *prevp = curr;
+    prevp = &curr->next;
+
+    p += pool->obj_size;
+  }
+
+  // Calculate color offset for the next slab.
+  pool->color_next += pool->color_align;
+  if (pool->color_next > pool->color_offset)
+    pool->color_next = 0;
+
+  return slab;
+}
+
+static void
+kobject_slab_destroy(struct KObjectPool *pool, struct KObjectSlab *slab)
+{
+  struct PageInfo *page;
+  
+  assert(spin_holding(&pool->lock));
+  assert(slab->in_use == 0);
+
+  // Free the pages been used for the slab.
+  page = kva2page(slab->buf);
+  page->ref_count--;
+  page_free_block(page, pool->page_order);
+
+  // If slab descriptor was kept off page, return it to the slab pool.
+  if (pool->flags & KOBJECT_POOL_OFFSLAB)
+    kobject_free(&slab_pool, slab);
 }
 
 // --------------------------------------------------------------
@@ -125,41 +263,45 @@ kobject_cache_shrink(struct KObjectCache *cache)
 // --------------------------------------------------------------
 
 void *
-kobject_alloc(struct KObjectCache *cache)
+kobject_alloc(struct KObjectPool *pool)
 {
   struct ListLink *list;
   struct KObjectSlab *slab;
-  void *ptr;
+  struct KObjectNode *obj;
   
-  spin_lock(&cache->lock);
+  spin_lock(&pool->lock);
 
-  if (list_empty(&cache->slabs_partial) && list_empty(&cache->slabs_free) &&
-      (kobject_cache_grow(cache) < 0)) {
-    spin_unlock(&cache->lock);
-    return NULL;
+  if (!list_empty(&pool->slabs_partial)) {
+    list = &pool->slabs_partial;
+  } else {
+    list = &pool->slabs_free;
+
+    if (list_empty(list)) {
+      if ((slab = kobject_slab_alloc(pool)) == NULL) {
+        spin_unlock(&pool->lock);
+        return NULL;
+      }
+
+      list_add_back(list, &slab->link);
+    }
   }
-  
-  if (!list_empty(&cache->slabs_partial))
-    list = &cache->slabs_partial;
-  else
-    list = &cache->slabs_free;
 
   slab = LIST_CONTAINER(list->next, struct KObjectSlab, link);
 
-  assert(slab->in_use < cache->obj_num);
+  assert(slab->in_use < pool->obj_num);
   assert(slab->free != NULL);
 
-  if (++slab->in_use == cache->obj_num) {
+  if (++slab->in_use == pool->obj_num) {
     list_remove(&slab->link);
-    list_add_front(&cache->slabs_used, &slab->link);
+    list_add_back(&pool->slabs_used, &slab->link);
   }
-  
-  ptr = slab->free;
-  slab->free = *(void **) ptr;
 
-  spin_unlock(&cache->lock);
+  obj = slab->free;
+  slab->free = obj->next;
 
-  return ptr;
+  spin_unlock(&pool->lock);
+
+  return obj;
 }
 
 // --------------------------------------------------------------
@@ -167,26 +309,28 @@ kobject_alloc(struct KObjectCache *cache)
 // --------------------------------------------------------------
 
 void
-kobject_free(struct KObjectCache *cache, void *obj)
+kobject_free(struct KObjectPool *pool, void *obj)
 {
   struct KObjectSlab *slab;
+  struct KObjectNode *node;
 
-  slab = ROUND_DOWN(obj, PAGE_SIZE);
+  slab = ROUND_DOWN(obj, PAGE_SIZE << pool->page_order);
 
-  spin_lock(&cache->lock);
+  spin_lock(&pool->lock);
 
-  *(void **) obj = slab->free;
-  slab->free = obj;
+  node = (struct KObjectNode *) obj;
+  node->next = slab->free;
+  slab->free = node;
 
-  if (slab->in_use-- == cache->obj_num) {
+  if (slab->in_use-- == pool->obj_num) {
     list_remove(&slab->link);
-    list_add_front(&cache->slabs_partial, &slab->link);
+    list_add_front(&pool->slabs_partial, &slab->link);
   } else if (slab->in_use == 0) {
     list_remove(&slab->link);
-    list_add_front(&cache->slabs_free, &slab->link);
+    list_add_front(&pool->slabs_free, &slab->link);
   }
 
-  spin_unlock(&cache->lock);
+  spin_unlock(&pool->lock);
 }
 
 // --------------------------------------------------------------
@@ -194,8 +338,29 @@ kobject_free(struct KObjectCache *cache, void *obj)
 // --------------------------------------------------------------
 
 void
-kobject_init(void)
+kobject_pool_init(void)
 {
-  kobject_cache_init(&cache_cache, "cache_cache", sizeof(struct KObjectCache),
-                     NULL, NULL);
+  pool_pool.obj_num = kobject_pool_estimate(pool_pool.obj_size,
+                                            pool_pool.page_order, 
+                                            pool_pool.flags,
+                                            &pool_pool.color_offset);
+  list_add_back(&pool_list.head, &pool_pool.link);
+
+  slab_pool.obj_num = kobject_pool_estimate(slab_pool.obj_size,
+                                            slab_pool.page_order, 
+                                            slab_pool.flags,
+                                            &slab_pool.color_offset);
+  list_add_back(&pool_list.head, &slab_pool.link);
+}
+
+void
+kobject_pool_info(void)
+{
+  struct ListLink *link;
+  struct KObjectPool *pool;
+
+  LIST_FOREACH(&pool_list.head, link) {
+    pool = LIST_CONTAINER(link, struct KObjectPool, link);
+    cprintf("%20s %6d\n", pool->name, pool->obj_size);
+  }
 }

@@ -253,7 +253,7 @@ print_str(void      (*xputc)(void *, int),
     n = precision;
   }
 
-  while (width > n) {
+  for ( ; width > n; width--) {
     xputc(xputc_arg, ' ');
   }
 

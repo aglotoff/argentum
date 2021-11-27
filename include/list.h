@@ -14,7 +14,8 @@ struct ListLink {
   struct ListLink *prev;
 };
 
-#define LIST_DECLARE(name)    struct ListLink name = { &name, &name } 
+#define LIST_DECLARE(name)      struct ListLink name = { &name, &name }
+#define LIST_INITIALIZER(head)  { &(head), &(head) }
 
 static inline void
 list_init(struct ListLink *head)

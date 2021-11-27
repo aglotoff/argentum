@@ -12,12 +12,15 @@
 
 #include "memlayout.h"
 
+struct KObjectSlab;
+
 /**
  * Physical page block info.
  */
 struct PageInfo {
-  struct ListLink link;             ///< Linked list head
-  int             ref_count;        ///< Reference count to the page block
+  struct ListLink     link;         ///< Linked list head
+  int                 ref_count;    ///< Reference count to the page block
+  struct KObjectSlab *slab;         ///< Slab this page block belongs to
 };
 
 extern struct PageInfo *pages;

@@ -16,7 +16,7 @@
 
 struct Cpu cpus[NCPU];
 
-static struct KObjectCache *process_cache;
+static struct KObjectPool *process_pool;
 
 #define NBUCKET   256
 
@@ -64,10 +64,10 @@ process_init(void)
 {
   struct ListLink *link;
 
-  process_cache = kobject_cache_create("process_cache", sizeof(struct Process),
-                                       NULL, NULL);
-  if (process_cache == NULL)
-    panic("cannot allocate process_cache");
+  process_pool = kobject_pool_create("process_pool",
+                                       sizeof(struct Process), 0);
+  if (process_pool == NULL)
+    panic("cannot allocate process_pool");
 
   for (link = ptable.hash; link < & ptable.hash[NBUCKET]; link++)
     list_init(link);
@@ -86,11 +86,11 @@ process_alloc(void)
   struct Process *process;
   uint8_t *sp;
 
-  process = (struct Process *) kobject_alloc(process_cache);
+  process = (struct Process *) kobject_alloc(process_pool);
 
   // Allocate per-process kernel stack
   if ((page = page_alloc(0)) == NULL) {
-    kobject_free(process_cache, process);
+    kobject_free(process_pool, process);
     return NULL;
   }
 
@@ -211,7 +211,7 @@ process_free(struct Process *proc)
   list_remove(&proc->pid_link);
   spin_unlock(&ptable.lock);
 
-  kobject_free(process_cache, proc);
+  kobject_free(process_pool, proc);
 }
 
 void
@@ -238,8 +238,6 @@ process_fork(void)
     process_free(proc);
     return -ENOMEM;
   }
-
-
 
   proc->size = myprocess()->size;
   proc->ppid = myprocess()->pid;

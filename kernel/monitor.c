@@ -4,6 +4,7 @@
 #include "console.h"
 #include "kdebug.h"
 #include "kernel.h"
+#include "kobject.h"
 #include "memlayout.h"
 #include "monitor.h"
 #include "trap.h"
@@ -79,6 +80,7 @@ static struct Command commands[] = {
   { "help", "Print this list of commands", mon_help },
   { "kerninfo", "Print this list of commands", mon_kerninfo },
   { "backtrace", "Display a list of function call frames", mon_backtrace },
+  { "poolinfo", "Display the list of object pools", mon_poolinfo },
 };
 
 #define MAXARGS 16
@@ -200,6 +202,18 @@ mon_backtrace(int argc, char **argv, struct Trapframe *tf)
     cprintf("  [%p] %s (%s at line %d)\n", fp[-1],
             info.fn_name, info.file, info.line);
   }
+
+  return 0;
+}
+
+int
+mon_poolinfo(int argc, char **argv, struct Trapframe *tf)
+{
+  (void) argc;
+  (void) argv;
+  (void) tf;
+
+  kobject_pool_info();
 
   return 0;
 }
