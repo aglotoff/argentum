@@ -27,6 +27,10 @@
 #define GLYPH_WIDTH       8
 #define GLYPH_HEIGHT      16
 
+#define TEXT_COLS         (DISPLAY_WIDTH / GLYPH_WIDTH)
+#define TEXT_ROWS         (DISPLAY_HEIGHT / GLYPH_HEIGHT)
+#define TEXT_SIZE         (TEXT_COLS * TEXT_ROWS)
+
 // 15-bit RGB ANSI colors
 #define BLACK             0x0000
 #define RED               0x0019
@@ -45,12 +49,10 @@
 #define BRIGHT_CYAN       0x7fe0
 #define BRIGHT_WHITE      0x7fff
 
-static volatile uint32_t *lcd;
-
-// Framebuffer
-static uint16_t *buf;
-// Current character position in the framebuffer
-static uint16_t buf_x, buf_y;
+static void lcd_draw_char(char, uint32_t, uint16_t, uint16_t);
+static void lcd_flush(void);
+static void lcd_update_cursor(void);
+static void lcd_scroll_screen(void);
 
 // PC Screen Font format
 // See https://www.win.tue.nl/~aeb/linux/kbd/font-formats-1.html
@@ -67,7 +69,12 @@ extern uint8_t _binary_kernel_vga_font_psf_start[];
 // Address of the bitmap to draw characters on the screen
 static uint8_t *font;
 
-static void lcd_draw_char(char, uint16_t, uint16_t, uint16_t, uint16_t);
+static char text_buf[TEXT_SIZE];
+static uint16_t text_pos, text_cur;
+
+// Framebuffer
+static uint16_t *buf;
+static volatile uint32_t *lcd;
 
 /**
  * Initialize the LCD driver.
@@ -118,69 +125,103 @@ lcd_putc(char c)
   if (!lcd)
     return;
 
-  // Erase the previous caret
-  lcd_draw_char(' ', buf_x, buf_y, WHITE, BLACK);
-
   switch (c) {
   case '\n':
-    buf_x = 0;
-    buf_y += GLYPH_HEIGHT;
+    text_pos += TEXT_COLS;
+    // fall through
+  case '\r':
+    text_pos -= text_pos % TEXT_COLS;
     break;
 
   case '\b':
-    if (buf_x == 0 && buf_y > 0) {
-      buf_x = DISPLAY_WIDTH - GLYPH_WIDTH;
-      buf_y -= GLYPH_HEIGHT;
-    } else if (buf_x > 0) {
-      buf_x -= GLYPH_WIDTH;
+    if (text_pos > 0) {
+      text_buf[--text_pos] = ' ';
+      lcd_flush();
     }
     break;
 
   case '\t':
-    lcd_putc(' ');
-    lcd_putc(' ');
-    lcd_putc(' ');
-    lcd_putc(' ');
+    do {
+      text_buf[text_pos++] = ' ';
+    } while ((text_pos % 4) != 0);
+    lcd_flush();
     break;
 
   default:
-    lcd_draw_char(c, buf_x, buf_y, WHITE, BLACK);
-    
-    buf_x += GLYPH_WIDTH;
-    if (buf_x == DISPLAY_WIDTH) {
-      buf_x = 0;
-      buf_y += GLYPH_HEIGHT;
-    }
+    text_buf[text_pos++] = c;
+    lcd_flush();
+    break;
   }
 
-  if (buf_y >= DISPLAY_HEIGHT) {
-    // Scroll one line down
-    memmove(buf, &buf[GLYPH_HEIGHT * DISPLAY_WIDTH],
-            DISPLAY_WIDTH * (DISPLAY_HEIGHT - GLYPH_HEIGHT) * sizeof(buf[0]));
-    memset(&buf[DISPLAY_WIDTH * (DISPLAY_HEIGHT - GLYPH_HEIGHT)], 0,
-          GLYPH_HEIGHT * DISPLAY_WIDTH * sizeof(buf[0]));
+  if (text_pos >= TEXT_SIZE)
+    lcd_scroll_screen();
 
-    buf_y -= GLYPH_HEIGHT;
-  }
-
-  // Draw the new caret
-  lcd_draw_char('_', buf_x, buf_y, WHITE, BLACK);
+  lcd_update_cursor();
 }
 
 // Naive code to draw a character on the screen pixel-by-pixel. A more efficient
 // solution would use boolean operations and a "mask lookup table" instead.
 // TODO: implement this solution for better performance!
 static void
-lcd_draw_char(char c, uint16_t x0, uint16_t y0, uint16_t fg, uint16_t bg)
+lcd_draw_char(char c, uint32_t pos, uint16_t fg, uint16_t bg)
 {
   static uint8_t mask[] = { 128, 64, 32, 16, 8, 4, 2, 1 };
 
   uint8_t *glyph;
-  uint16_t x, y;
+  uint16_t x0, y0, x, y;
 
+  if (c == '\0')
+    c = ' ';
   glyph = &font[c * GLYPH_HEIGHT];
+
+  x0 = (pos % TEXT_COLS) * GLYPH_WIDTH;
+  y0 = (pos / TEXT_COLS) * GLYPH_HEIGHT;
 
   for (x = 0; x < GLYPH_WIDTH; x++)
     for (y = 0; y < GLYPH_HEIGHT; y++)
       buf[DISPLAY_WIDTH * (y0 + y) + (x0 + x)] = (glyph[y] & mask[x]) ? fg : bg;
+}
+
+static void
+lcd_flush(void)
+{
+  uint16_t i;
+
+  i = text_cur;
+
+  while (i > text_pos) {
+    i--;
+    lcd_draw_char(text_buf[i], i, WHITE, BLACK);
+  }
+
+  while (i < text_pos) {
+    lcd_draw_char(text_buf[i], i, WHITE, BLACK);
+    i++;
+  }
+}
+
+static void
+lcd_update_cursor(void)
+{
+  lcd_draw_char(text_buf[text_cur], text_cur, WHITE, BLACK);
+  lcd_draw_char(text_buf[text_pos], text_pos, BLACK, WHITE);
+
+  text_cur = text_pos;
+}
+
+static void
+lcd_scroll_screen(void)
+{
+  memcpy(text_buf, &text_buf[TEXT_COLS],
+          (TEXT_SIZE - TEXT_COLS) * sizeof(text_buf[0]));
+  memset(&text_buf[TEXT_SIZE - TEXT_COLS], 0,
+          TEXT_COLS * sizeof(text_buf[0]));
+  
+  memcpy(buf, &buf[GLYPH_HEIGHT * DISPLAY_WIDTH],
+          DISPLAY_WIDTH * (DISPLAY_HEIGHT - GLYPH_HEIGHT) * sizeof(buf[0]));
+  memset(&buf[DISPLAY_WIDTH * (DISPLAY_HEIGHT - GLYPH_HEIGHT)], 0,
+        GLYPH_HEIGHT * DISPLAY_WIDTH * sizeof(buf[0]));
+
+  text_pos -= TEXT_COLS;
+  text_cur -= TEXT_COLS;
 }

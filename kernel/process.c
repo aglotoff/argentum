@@ -109,7 +109,8 @@ process_alloc(void)
   memset(process->context, 0, sizeof *process->context);
   process->context->lr = (uint32_t) process_run;
 
-  process->ppid = 0;
+  process->state = PROCESS_EMBRIO;
+  process->parent = NULL;
   list_init(&process->children);
   process->sibling.next = NULL;
   process->sibling.prev = NULL;
@@ -194,6 +195,7 @@ process_create(const void *binary)
   process_load_binary(proc, binary);
 
   spin_lock(&ptable.lock);
+  proc->state = PROCESS_RUNNABLE;
   list_add_back(&ptable.runqueue, &proc->link);
   spin_unlock(&ptable.lock);
 }
@@ -217,11 +219,14 @@ process_free(struct Process *proc)
 void
 process_destroy(void)
 {
-  cprintf("[%08x] exiting gracefully\n", myprocess()->pid);
+  struct Process *proc = myprocess();
+  
+  cprintf("[%08x] exiting gracefully\n", proc->pid);
 
-  vm_free(myprocess()->trtab);
+  vm_free(proc->trtab);
 
   spin_lock(&ptable.lock);
+  proc->state = PROCESS_ZOMBIE;
   ptable.nprocesses--;
   context_switch(&mycpu()->process->context, mycpu()->scheduler);
 }
@@ -239,14 +244,15 @@ process_fork(void)
     return -ENOMEM;
   }
 
-  proc->size = myprocess()->size;
-  proc->ppid = myprocess()->pid;
+  proc->size  = myproc->size;
+  proc->parent = myproc;
 
   *proc->tf = *myproc->tf;
   proc->tf->r0 = 0;
 
   spin_lock(&ptable.lock);
-  list_add_back(&myprocess()->children, &proc->sibling);
+  proc->state = PROCESS_RUNNABLE;
+  list_add_back(&myproc->children, &proc->sibling);
   list_add_back(&ptable.runqueue, &proc->link);
   spin_unlock(&ptable.lock);
 
@@ -267,6 +273,9 @@ scheduler(void)
       list_remove(link);
 
       process = LIST_CONTAINER(link, struct Process, link);
+      assert(process->state == PROCESS_RUNNABLE);
+
+      process->state = PROCESS_RUNNING;
       mycpu()->process = process;
 
       vm_switch_user(process->trtab);
@@ -294,6 +303,7 @@ process_yield(void)
 {
   spin_lock(&ptable.lock);
 
+  mycpu()->process->state = PROCESS_RUNNABLE;
   list_add_back(&ptable.runqueue, &mycpu()->process->link);
   context_switch(&mycpu()->process->context, mycpu()->scheduler);
 

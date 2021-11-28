@@ -7,6 +7,14 @@
 #include "mmu.h"
 #include "trap.h"
 
+enum {
+  PROCESS_EMBRIO   = 1,
+  PROCESS_RUNNABLE = 2,
+  PROCESS_RUNNING  = 3,
+  PROCESS_SLEEPING = 4,
+  PROCESS_ZOMBIE   = 5,
+};
+
 /**
  * Saved registers for kernel context swithces.
  */
@@ -27,10 +35,12 @@ struct Context {
  */
 struct Process {
   struct ListLink    link;      ///< Link into the containing list
+  int                state;     ///< Process state
 
   pid_t              pid;       ///< Process identifier
   struct ListLink    pid_link;  ///< Link into the PID hash table
-  pid_t              ppid;      ///< Parent process identifier
+
+  struct Process    *parent;    ///< Link to the parent process
   struct ListLink    children;  ///< List pf process children
   struct ListLink    sibling;   ///< Link into the siblings list
 

@@ -193,7 +193,7 @@ sys_getpid(void)
 int
 sys_getppid(void)
 {
-  return myprocess()->ppid;
+  return myprocess()->parent ? myprocess()->parent->pid : myprocess()->pid;
 }
 
 int
