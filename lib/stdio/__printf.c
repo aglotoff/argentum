@@ -274,9 +274,9 @@ print_int(struct pft *pft, long long num)
   int nprefix, ndigits, nzeros, nblanks;
   char *symbols;
 
-  if ((pft->conversion == 'o') || (pft->conversion == 'O'))
+  if (strchr("oO", pft->conversion))
     base = 8;
-  else if ((pft->conversion == 'x') || (pft->conversion == 'X'))
+  else if (strchr("xXp", pft->conversion))
     base = 16;
   else
     base = 10;

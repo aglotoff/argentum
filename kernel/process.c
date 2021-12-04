@@ -121,7 +121,7 @@ process_alloc(void)
   ptable.nprocesses++;
   spin_unlock(&ptable.lock);
 
-  cprintf("[%08x] new process %08x\n",
+  cprintf("\x1b[1;32m[%08x]\x1b[0m spawn process %08x\n",
           myprocess() ? myprocess()->pid : 0,
           process->pid);
 
@@ -217,11 +217,16 @@ process_free(struct Process *proc)
 }
 
 void
-process_destroy(void)
+process_destroy(int status)
 {
   struct Process *proc = myprocess();
   
-  cprintf("[%08x] exiting gracefully\n", proc->pid);
+  if (status == 0)
+    cprintf("\x1b[1;32m[%08x]\x1b[0m exit with code %d\n",
+            proc->pid, status);
+  else
+    cprintf("\x1b[1;31m[%08x]\x1b[0m exit with code %d\n",
+            proc->pid, status);
 
   vm_free(proc->trtab);
 

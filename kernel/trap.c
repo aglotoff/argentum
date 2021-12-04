@@ -40,7 +40,7 @@ trap(struct Trapframe *tf)
   default:
     // Unexpected trap: either the user process or the kernel has a bug.
     if ((tf->psr & PSR_M_MASK) == PSR_M_USR) {
-      process_destroy();
+      process_destroy(-1);
     }
     print_trapframe(tf);
     panic("unhandled trap in kernel");
@@ -60,13 +60,13 @@ trap_handle_abort(struct Trapframe *tf)
   if ((tf->psr & PSR_M_MASK) != PSR_M_USR) {
     // Kernel-mode abort.
     print_trapframe(tf);
-    panic("kernel fault address %08p status %08p", address, status);
+    panic("kernel fault va %p status %#x", address, status);
   }
 
   // Abort happened in user mode.
   
-  cprintf("user fault address %08p status %08p\n", address, status);
-  process_destroy();
+  cprintf("user fault va %p status %#x\n", address, status);
+  process_destroy(-1);
 }
 
 static void
@@ -102,7 +102,7 @@ trap_handle_irq(void)
 static const char *
 trapname(unsigned trapno)
 {
-  static const char * const excnames[] = {
+  static const char *const excnames[] = {
     "Reset",
     "Undefined Instruction",
     "Supervisor Call",
@@ -121,15 +121,54 @@ trapname(unsigned trapno)
 void
 print_trapframe(struct Trapframe *tf)
 {
-  cprintf("TRAP frame at %p from CPU %d\n", tf, read_mpidr() & 0x3);
-  cprintf("  trap   = 0x%08x    (%s)\n", tf->trapno, trapname(tf->trapno));
-  cprintf("  sp_usr = 0x%08x    lr_usr = 0x%08x\n", tf->sp_usr, tf->lr_usr);
-  cprintf("  r0     = 0x%08x    r1     = 0x%08x\n", tf->r0,     tf->r1);
-  cprintf("  r2     = 0x%08x    r3     = 0x%08x\n", tf->r2,     tf->r3);
-  cprintf("  r4     = 0x%08x    r5     = 0x%08x\n", tf->r4,     tf->r5);
-  cprintf("  r6     = 0x%08x    r7     = 0x%08x\n", tf->r6,     tf->r7);
-  cprintf("  r8     = 0x%08x    r9     = 0x%08x\n", tf->r8,     tf->r9);
-  cprintf("  r10    = 0x%08x    r11    = 0x%08x\n", tf->r10,    tf->r11);
-  cprintf("  r12    = 0x%08x    psr    = 0x%08x\n", tf->r12,    tf->psr);
-  cprintf("  lr     = 0x%08x    pc     = 0x%08x\n", tf->lr,     tf->pc);
+  static const char *const modes[32] = {
+    [PSR_M_USR] = "USR",
+    [PSR_M_FIQ] = "FIQ",
+    [PSR_M_IRQ] = "IRQ",
+    [PSR_M_SVC] = "SVC",
+    [PSR_M_MON] = "MON",
+    [PSR_M_ABT] = "ABT",
+    [PSR_M_UND] = "UND",
+    [PSR_M_SYS] = "SYS",
+  };
+
+  cprintf("TRAP frame at \x1b[1;36m%p\x1b[0m from \x1b[1;36mCPU %d\x1b[0m\n",
+          tf, cpuid());
+  
+  cprintf("  \x1b[1;33mtrap\x1b[0m %p    \x1b[1;35m<%s>\x1b[0m\n",
+          tf->trapno, trapname(tf->trapno));
+
+  cprintf("  \x1b[1;33mpsr\x1b[0m  %p    \x1b[1;35m<%s%s%s%s>\x1b[0m\n",
+          tf->psr,
+          tf->psr & PSR_I ? "I," : "",
+          tf->psr & PSR_I ? "F," : "",
+          tf->psr & PSR_I ? "T," : "",
+          modes[tf->psr & PSR_M_MASK] ? modes[tf->psr & PSR_M_MASK] : "");
+
+  cprintf("  \x1b[1;33mr0\x1b[0m   %p  "
+          "  \x1b[1;33mr1\x1b[0m   %p\n", 
+          tf->r0,     tf->r1);
+  cprintf("  \x1b[1;33mr2\x1b[0m   %p  "
+          "  \x1b[1;33mr3\x1b[0m   %p\n", 
+          tf->r2,     tf->r3);
+  cprintf("  \x1b[1;33mr4\x1b[0m   %p  "
+          "  \x1b[1;33mr5\x1b[0m   %p\n", 
+          tf->r4,     tf->r5);
+  cprintf("  \x1b[1;33mr6\x1b[0m   %p  "
+          "  \x1b[1;33mr7\x1b[0m   %p\n", 
+          tf->r6,     tf->r7);
+  cprintf("  \x1b[1;33mr8\x1b[0m   %p  "
+          "  \x1b[1;33mr9\x1b[0m   %p\n", 
+          tf->r8,     tf->r9);
+  cprintf("  \x1b[1;33mr10\x1b[0m  %p  "
+          "  \x1b[1;33mr11\x1b[0m  %p\n", 
+          tf->r10,    tf->r11);
+  cprintf("  \x1b[1;33mr12\x1b[0m  %p  ",
+          tf->r12);
+  cprintf("  \x1b[1;33msp\x1b[0m   %p\n"
+          "  \x1b[1;33mlr\x1b[0m   %p  ", 
+          (tf->psr & PSR_M_MASK) != PSR_M_SVC ? (void *) tf->sp_usr : (tf + 1),
+          (tf->psr & PSR_M_MASK) != PSR_M_SVC ? tf->lr_usr : tf->lr);
+  cprintf("  \x1b[1;33mpc\x1b[0m   \x1b[1;35m%p\x1b[0m\n", 
+          tf->pc);
 }

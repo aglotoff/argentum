@@ -69,9 +69,9 @@ extern struct Cpu cpus[];
 void            context_switch(struct Context **old, struct Context *new);
 
 void            process_init(void);
-void            process_create(const void *binary);
+void            process_create(const void *);
 void            process_yield(void);
-void            process_destroy(void);
+void            process_destroy(int);
 void            process_free(struct Process *);
 pid_t           process_fork(void);
 void            scheduler(void);

@@ -72,12 +72,12 @@ entry:
   mov sp, r1
 
   // Set the kernel supervisor mode stack pointer for this CPU
-  // sp = kstack_top + (KSTACK_SIZE * cpuid)
+  // sp = kstack_top - (KSTACK_SIZE * cpuid)
   msr CPSR_c, #(PSR_I | PSR_F | PSR_M_SVC)
   ldr sp, =kstack_top
   mov r1, #KSTACK_SIZE
   mul r1, r0
-  add sp, r1
+  sub sp, r1
 
   // Clear the frame pointer register (R11) so that stack backtraces will be
   // terminated properly.
@@ -85,8 +85,12 @@ entry:
 
   // BSP calls main(), APs call mpenter().
   cmp r0, #0
-  ldreq r0, =main
-  ldrne r0, =mp_enter
+  bne .ap
+  ldr r0, =main
+  blx r0
+
+.ap:
+  ldr r0, =mp_enter
   blx r0
 
   // Should never return here

@@ -29,6 +29,9 @@ main(void)
   page_init_high();     // Physical page allocator (higher memory)
   gic_init();           // Interrupt controller
   console_init();       // Console devices
+
+  cprintf("Starting CPU %d\n", read_mpidr() & 0x3);
+
   kobject_pool_init();  // Object allocator
   process_init();       // Process table
   sb_init();            // Serial bus
@@ -52,6 +55,9 @@ void
 mp_enter(void)
 {
   vm_init_percpu();
+
+  cprintf("Starting CPU %d\n", read_mpidr() & 0x3);
+
   mp_main();
 }
 
@@ -75,8 +81,6 @@ static void
 mp_main(void)
 {
   ptimer_init();
-
-  cprintf("Starting CPU %d\n", read_mpidr() & 0x3);
 
   scheduler();
 }

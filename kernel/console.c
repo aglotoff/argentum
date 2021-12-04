@@ -126,13 +126,13 @@ __panic(const char *file, int line, const char *format, ...)
     panicstr = format;
     console.locking = 0;
 
-    cprintf("kernel panic at %s:%d: ", file, line);
+    cprintf("\x1b[1;31mkernel panic at %s:%d: ", file, line);
 
     va_start(ap, format);
     vcprintf(format, ap);
     va_end(ap);
 
-    cprintf("\n");
+    cprintf("\n\x1b[0m");
   }
 
   // Never returns.

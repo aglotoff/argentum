@@ -180,7 +180,13 @@ sys_cwrite(void)
 int
 sys_exit(void)
 {
-  process_destroy();
+  int status, r;
+  
+  if ((r = sys_arg_int(1, (long *) &status)) < 0)
+    return r;
+
+  process_destroy(status);
+
   return 0;
 }
 

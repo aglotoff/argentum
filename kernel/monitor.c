@@ -17,7 +17,7 @@ monitor(struct Trapframe *tf)
 {
   char *s;
 
-  cprintf("--- Entering the kernel monitor ---\n"
+  cprintf("Entering the kernel monitor\n"
           "Type `help' to see the list of commands.\n");
 
   for (;;) {
@@ -152,7 +152,7 @@ mon_help(int argc, char **argv, struct Trapframe *tf)
   (void) tf;
 
   for (cmd = commands; cmd < &commands[ARRAY_SIZE(commands)]; cmd++) {
-    cprintf("%s - %s\n", cmd->name, cmd->desc);
+    cprintf("  %-10s %s\n", cmd->name, cmd->desc);
   }
 
   return 0;
@@ -169,12 +169,16 @@ mon_kerninfo(int argc, char **argv, struct Trapframe *tf)
   (void) tf;
 
   cprintf("Special kernel symbols:\n");
-  cprintf("  start  %p (virt)  %p (phys)\n", _start, _start);
-  cprintf("  etext  %p (virt)  %p (phys)\n", _etext, PADDR(_etext));
-  cprintf("  edata  %p (virt)  %p (phys)\n", _edata, PADDR(_edata));
-  cprintf("  end    %p (virt)  %p (phys)\n", _end,   PADDR(_end));
+  cprintf("  \x1b[1;33mstart  \x1b[32m%p (virt)  \x1b[36m%p (phys)\x1b[0m\n",
+          _start, _start);
+  cprintf("  \x1b[1;33metext  \x1b[32m%p (virt)  \x1b[36m%p (phys)\x1b[0m\n",
+          _etext, PADDR(_etext));
+  cprintf("  \x1b[1;33medata  \x1b[32m%p (virt)  \x1b[36m%p (phys)\x1b[0m\n",
+          _edata, PADDR(_edata));
+  cprintf("  \x1b[1;33mend    \x1b[32m%p (virt)  \x1b[36m%p (phys)\x1b[0m\n",
+          _end,   PADDR(_end));
 
-  cprintf("Kernel executable memory footprint: %dKB\n",
+  cprintf("Kernel executable memory footprint: \x1B[1;35m%dKB\x1B[0m\n",
           (PADDR(_end) - (uintptr_t) _start + 1023) / 1024);
 
   return 0;
@@ -206,8 +210,9 @@ mon_backtrace(int argc, char **argv, struct Trapframe *tf)
   for ( ; fp != NULL; fp = (uint32_t *) fp[-3]) {
     debug_info_pc(fp[-1], &info);
 
-    cprintf("  [%p] %s (%s at line %d)\n", fp[-1],
-            info.fn_name, info.file, info.line);
+    cprintf("  [\x1B[1;35m%p\x1B[0m] \x1B[1;33m%s\x1B[0m "
+            "(\x1B[1;36m%s\x1B[0m at line \x1B[1;36m%d\x1B[0m)\n",
+            fp[-1], info.fn_name, info.file, info.line);
   }
 
   return 0;
