@@ -9,50 +9,37 @@
 
 #include <stdarg.h>
 
-/**
- * Initialize the console devices.
- */
+// ANSI color codes
+#define COLOR_MASK            7
+#define COLOR_BLACK           0
+#define COLOR_RED             1
+#define COLOR_GREEN           2
+#define COLOR_YELLOW          3
+#define COLOR_BLUE            4
+#define COLOR_MAGENTA         5
+#define COLOR_CYAN            6
+#define COLOR_WHITE           7
+#define COLOR_BRIGHT          (COLOR_MASK + 1)
+#define COLOR_GRAY            (COLOR_BRIGHT + COLOR_BLACK)
+#define COLOR_BRIGHT_RED      (COLOR_BRIGHT + COLOR_RED)
+#define COLOR_BRIGHT_GREEN    (COLOR_BRIGHT + COLOR_GREEN)
+#define COLOR_BRIGHT_YELLOW   (COLOR_BRIGHT + COLOR_YELLOW)
+#define COLOR_BRIGHT_BLUE     (COLOR_BRIGHT + COLOR_BLUE)
+#define COLOR_BRIGHT_MAGENTA  (COLOR_BRIGHT + COLOR_MAGENTA)
+#define COLOR_BRIGHT_CYAN     (COLOR_BRIGHT + COLOR_CYAN)
+#define COLOR_BRIGHT_WHITE    (COLOR_BRIGHT + COLOR_WHITE)
+
+// Text buffer dimensions, in characters
+#define BUF_WIDTH         80
+#define BUF_HEIGHT        30
+#define BUF_SIZE          (BUF_WIDTH * BUF_HEIGHT) 
+
 void console_init(void);
-
-/**
- * Output a character to the console.
- * 
- * @param c The chaacter to be written.
- */
-void console_putc(char c);
-
-/**
- * Handle console interrupt.
- * 
- * This function should be called by driver interrupt routines to feed input
- * characters into the console buffer.
- * 
- * @param getc The function to fetch the next input character. Should return -1
- *             if there is no data avalable.
- */
-void console_intr(int (*getc)(void));
-
-/**
- * Return the next input character from the console. Polls for any pending
- * input characters.
- * 
- * @returns The next input character.
- */
+void console_putc(char);
+void console_intr(int (*)(void));
 int  console_getc(void);
 
-/**
- * Printf-like formatted output to the console.
- * 
- * @param format The format string.
- * @param ap     A variable argument list.
- */
-void vcprintf(const char *format, va_list ap);
-
-/**
- * Printf-like formatted output to the console.
- * 
- * @param format The format string.
- */
-void cprintf(const char *format, ...);
+void vcprintf(const char *, va_list);
+void cprintf(const char *, ...);
 
 #endif  // !__KERNEL_CONSOLE_H__

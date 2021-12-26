@@ -132,43 +132,43 @@ print_trapframe(struct Trapframe *tf)
     [PSR_M_SYS] = "SYS",
   };
 
-  cprintf("TRAP frame at \x1b[1;36m%p\x1b[0m from \x1b[1;36mCPU %d\x1b[0m\n",
+  cprintf("TRAP frame at %p from CPU %d\n",
           tf, cpuid());
   
-  cprintf("  \x1b[1;33mtrap\x1b[0m %p    \x1b[1;35m<%s>\x1b[0m\n",
+  cprintf("  trap %p    [%s]\n",
           tf->trapno, trapname(tf->trapno));
 
-  cprintf("  \x1b[1;33mpsr\x1b[0m  %p    \x1b[1;35m<%s%s%s%s>\x1b[0m\n",
+  cprintf("  psr  %p    [%s%s%s%s]\n",
           tf->psr,
           tf->psr & PSR_I ? "I," : "",
           tf->psr & PSR_I ? "F," : "",
           tf->psr & PSR_I ? "T," : "",
           modes[tf->psr & PSR_M_MASK] ? modes[tf->psr & PSR_M_MASK] : "");
 
-  cprintf("  \x1b[1;33mr0\x1b[0m   %p  "
-          "  \x1b[1;33mr1\x1b[0m   %p\n", 
+  cprintf("  r0   %p  "
+          "  r1   %p\n", 
           tf->r0,     tf->r1);
-  cprintf("  \x1b[1;33mr2\x1b[0m   %p  "
-          "  \x1b[1;33mr3\x1b[0m   %p\n", 
+  cprintf("  r2   %p  "
+          "  r3   %p\n", 
           tf->r2,     tf->r3);
-  cprintf("  \x1b[1;33mr4\x1b[0m   %p  "
-          "  \x1b[1;33mr5\x1b[0m   %p\n", 
+  cprintf("  r4   %p  "
+          "  r5   %p\n", 
           tf->r4,     tf->r5);
-  cprintf("  \x1b[1;33mr6\x1b[0m   %p  "
-          "  \x1b[1;33mr7\x1b[0m   %p\n", 
+  cprintf("  r6   %p  "
+          "  r7   %p\n", 
           tf->r6,     tf->r7);
-  cprintf("  \x1b[1;33mr8\x1b[0m   %p  "
-          "  \x1b[1;33mr9\x1b[0m   %p\n", 
+  cprintf("  r8   %p  "
+          "  r9   %p\n", 
           tf->r8,     tf->r9);
-  cprintf("  \x1b[1;33mr10\x1b[0m  %p  "
-          "  \x1b[1;33mr11\x1b[0m  %p\n", 
+  cprintf("  r10  %p  "
+          "  r11  %p\n", 
           tf->r10,    tf->r11);
-  cprintf("  \x1b[1;33mr12\x1b[0m  %p  ",
+  cprintf("  r12  %p  ",
           tf->r12);
-  cprintf("  \x1b[1;33msp\x1b[0m   %p\n"
-          "  \x1b[1;33mlr\x1b[0m   %p  ", 
+  cprintf("  sp   %p\n"
+          "  lr   %p  ", 
           (tf->psr & PSR_M_MASK) != PSR_M_SVC ? (void *) tf->sp_usr : (tf + 1),
           (tf->psr & PSR_M_MASK) != PSR_M_SVC ? tf->lr_usr : tf->lr);
-  cprintf("  \x1b[1;33mpc\x1b[0m   \x1b[1;35m%p\x1b[0m\n", 
+  cprintf("  pc   %p\n", 
           tf->pc);
 }
