@@ -8,6 +8,8 @@
  * 
  * @return The lowercase letter corresponding to c, if such value exists; or c
  *         (unchanged) otherwise.
+ * 
+ * @sa toupper
  */
 int
 (tolower)(int c)

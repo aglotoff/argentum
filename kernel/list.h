@@ -1,5 +1,5 @@
-#ifndef INCLUDE_LIST_H
-#define INCLUDE_LIST_H
+#ifndef __INCLUDE_LIST_H__
+#define __INCLUDE_LIST_H__
 
 /**
  * @file include/list.h
@@ -65,4 +65,4 @@ list_remove(struct ListLink *link)
 #define LIST_FOREACH(head, lp) \
   for (lp = (head)->next; lp != (head); lp = lp->next)
 
-#endif  // !INCLUDE_LIST_H
+#endif  // !__INCLUDE_LIST_H__

@@ -4,20 +4,20 @@
 #include <errno.h>
 #include <stdint.h>
 
-#define SYS_cwrite      1
-#define SYS_exit        2
-#define SYS_getpid      3
-#define SYS_getppid     4
-#define SYS_time        5
-#define SYS_fork        6
+#define __SYS_CWRITE      1
+#define __SYS_EXIT        2
+#define __SYS_GETPID      3
+#define __SYS_GETPPID     4
+#define __SYS_TIME        5
+#define __SYS_FORK        6
 
 // Generic system call: pass system call number as an immediate operand of the
 // SVC instruction, and up to three parameters in R0, R1, R2.
 // Interrupt kernel with the SVC instruction.
 //
 // If a negative value is returned, set the errno variable and return -1.
-static inline int
-syscall(int8_t num, uint32_t a1, uint32_t a2, uint32_t a3)
+static inline int32_t
+__syscall(uint8_t num, uint32_t a1, uint32_t a2, uint32_t a3)
 {
   register int32_t r0 asm("r0") = a1;
   register int32_t r1 asm("r1") = a2;

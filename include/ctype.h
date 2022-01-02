@@ -30,6 +30,7 @@ int toupper(int);
 };
 #endif
 
+// Character classes
 enum {
   __CSPACE  = (1 << 1),     // Space character
   __CXSPACE = (1 << 2),     // Other whitespace characters
@@ -51,7 +52,7 @@ enum {
 
 extern short __ctype[];
 
-// Test whether the character c belongs to a class represented by the mask
+// Test whether the character c belongs to a class represented by given mask
 #define __ctest(c, mask)  ((c) < 0 ? 0 : __ctype[(unsigned char)(c)] & (mask))
 
 #define isalnum(c)  __ctest(c, __CALNUM)

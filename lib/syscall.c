@@ -4,5 +4,5 @@
 int
 cwrite(const char *s, size_t n)
 {
-  return syscall(SYS_cwrite, (uint32_t) s, n, 0);
+  return __syscall(__SYS_CWRITE, (uint32_t) s, n, 0);
 }

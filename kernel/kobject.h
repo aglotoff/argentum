@@ -1,7 +1,7 @@
 #ifndef __KERNEL_KOBJECT_H__
 #define __KERNEL_KOBJECT_H__
 
-#include <list.h>
+#include "list.h"
 
 #include "spinlock.h"
 

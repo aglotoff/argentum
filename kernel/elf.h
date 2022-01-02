@@ -1,5 +1,5 @@
-#ifndef __INCLUDE_ELF_H__
-#define __INCLUDE_ELF_H__
+#ifndef __KERNEL_ELF_H__
+#define __KERNEL_ELF_H__
 
 #include <stdint.h>
 
@@ -49,4 +49,4 @@ typedef struct {
 #define PT_LOPROC   0x70000000
 #define PT_HIPROC   0x7fffffff
 
-#endif  // !__INCLUDE_ELF_H__
+#endif  // !__KERNEL_ELF_H__

@@ -9,6 +9,9 @@
  *          to the value of the macro EOF.
  *
  * @return Non-zero if c is a white-space character; 0 otherwise.
+ * 
+ * @sa isalnum, isalpha, iscntrl, isdigit, isgraph, islower, isprint, ispunct,
+ *     isupper, isxdigit
  */
 int
 (isspace)(int c)

@@ -8,7 +8,7 @@
  */
 
 #include <assert.h>
-#include <list.h>
+#include "list.h"
 
 #include "memlayout.h"
 

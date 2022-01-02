@@ -7,7 +7,7 @@
  * Stack environment declarations
  */
 
-#define __NSETJMP   11  // Enough space to store R4-R11, IP, SP, and LR
+#include <yvals.h>
 
 /**
  * Array to hold information to restore calling environment.

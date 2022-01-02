@@ -353,7 +353,7 @@ vm_free(tte_t *trtab)
 }
 
 tte_t *
-vm_clone(tte_t *trtab)
+vm_copy(tte_t *trtab)
 {
   struct PageInfo *tab_page, *src_page, *dst_page;
   uint8_t *va;
@@ -372,26 +372,27 @@ vm_clone(tte_t *trtab)
   while (va < (uint8_t *) KERNEL_BASE) {
     if ((pte = vm_walk_trtab(trtab, (uintptr_t) va, 0)) == NULL) {
       va = ROUND_DOWN(va + PAGE_SIZE * NPTENTRIES, PAGE_SIZE * NPTENTRIES);
-    } else {
-      if ((*pte & PTE_TYPE_MASK) == PTE_TYPE_SMALL) {
-        src_page = pa2page(PTE_SMALL_ADDR(*pte));
+      continue;
+    }
 
-        if ((dst_page = page_alloc(0)) == NULL) {
-          vm_free(t);
-          return NULL;
-        }
+    if ((*pte & PTE_TYPE_MASK) == PTE_TYPE_SMALL) {
+      src_page = pa2page(PTE_SMALL_ADDR(*pte));
 
-        if (vm_insert_page(t, dst_page, va, AP_BOTH_RW) < 0) {
-          page_free(dst_page);
-          vm_free(t);
-          return NULL;
-        }
-
-        memmove(page2kva(dst_page), page2kva(src_page), PAGE_SIZE);
+      if ((dst_page = page_alloc(0)) == NULL) {
+        vm_free(t);
+        return NULL;
       }
 
-      va += PAGE_SIZE;
+      if (vm_insert_page(t, dst_page, va, AP_BOTH_RW) < 0) {
+        page_free(dst_page);
+        vm_free(t);
+        return NULL;
+      }
+
+      memcpy(page2kva(dst_page), page2kva(src_page), PAGE_SIZE);
     }
+
+    va += PAGE_SIZE;
   }
 
   return t;

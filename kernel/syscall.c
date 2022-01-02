@@ -8,21 +8,21 @@
 #include "syscall.h"
 #include "trap.h"
 
-static int  sys_fetch_int(uintptr_t, int *);
-static int  sys_fetch_str(uintptr_t, char **);
-static int  sys_get_num(void);
-static long sys_get_arg(int);
+static int     sys_fetch_int(uintptr_t, int *);
+static int     sys_fetch_str(uintptr_t, char **);
+static int     sys_get_num(void);
+static int32_t sys_get_arg(int);
 
-static int (*syscalls[])(void) = {
-  [SYS_cwrite]  = sys_cwrite,
-  [SYS_exit]    = sys_exit,
-  [SYS_getpid]  = sys_getpid,
-  [SYS_getppid] = sys_getppid,
-  [SYS_time]    = sys_time,
-  [SYS_fork]    = sys_fork,
+static int32_t (*syscalls[])(void) = {
+  [__SYS_CWRITE]  = sys_cwrite,
+  [__SYS_EXIT]    = sys_exit,
+  [__SYS_GETPID]  = sys_getpid,
+  [__SYS_GETPPID] = sys_getppid,
+  [__SYS_TIME]    = sys_time,
+  [__SYS_FORK]    = sys_fork,
 };
 
-int
+int32_t
 sys_dispatch(void)
 {
   int num;
@@ -84,7 +84,7 @@ sys_get_num(void)
   return svc_code & 0xFFFFFF;
 }
 
-static long
+static int32_t
 sys_get_arg(int n)
 {
   struct Process *curproc = myprocess();
@@ -111,9 +111,9 @@ sys_get_arg(int n)
  * @retval -EINVAL if an invalid argument number is specified.
  */
 int
-sys_arg_int(int n, long *ip)
+sys_arg_int(int n, int32_t *ip)
 {
-  long r;
+  int32_t r;
 
   if ((r = sys_get_arg(n)) < 0)
     return r;
@@ -121,7 +121,7 @@ sys_arg_int(int n, long *ip)
   return 0;
 }
 
-int
+int32_t
 sys_arg_ptr(int n, void **pp, size_t len)
 { 
   // TODO: implement this function!
@@ -143,7 +143,7 @@ sys_arg_ptr(int n, void **pp, size_t len)
  * @retval -EINVAL if an invalid argument number is specified.
  * @retval -EFAULT if the arguments doesn't point to a valid string.
  */
-int
+int32_t
 sys_arg_str(int n, char **strp)
 {
   int r;
@@ -159,14 +159,14 @@ sys_arg_str(int n, char **strp)
  * ----------------------------------------------------------------------------
  */
 
-int
+int32_t
 sys_cwrite(void)
 {
   char *s;
-  size_t n;
+  int32_t n;
   int r;
 
-  if ((r = sys_arg_int(1, (long *) &n)) < 0)
+  if ((r = sys_arg_int(1, &n)) < 0)
     return r;
 
   if ((r = sys_arg_ptr(0, (void **) &s, n)) < 0)
@@ -177,12 +177,12 @@ sys_cwrite(void)
   return n;
 }
 
-int
+int32_t
 sys_exit(void)
 {
   int status, r;
   
-  if ((r = sys_arg_int(1, (long *) &status)) < 0)
+  if ((r = sys_arg_int(0, &status)) < 0)
     return r;
 
   process_destroy(status);
@@ -190,26 +190,26 @@ sys_exit(void)
   return 0;
 }
 
-int
+int32_t
 sys_getpid(void)
 {
   return myprocess()->pid;
 }
 
-int
+int32_t
 sys_getppid(void)
 {
   return myprocess()->parent ? myprocess()->parent->pid : myprocess()->pid;
 }
 
-int
+int32_t
 sys_time(void)
 {
   return sb_rtc_time();
 }
 
-int
+int32_t
 sys_fork(void)
 {
-  return process_fork();
+  return process_copy();
 }

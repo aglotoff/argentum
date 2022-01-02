@@ -7,5 +7,5 @@
 pid_t
 fork(void)
 {
-  return syscall(SYS_fork, 0, 0, 0);
+  return __syscall(__SYS_FORK, 0, 0, 0);
 }

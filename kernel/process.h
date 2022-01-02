@@ -1,7 +1,7 @@
 #ifndef __KERNEL_PROCESS_H__
 #define __KERNEL_PROCESS_H__
 
-#include <list.h>
+#include "list.h"
 #include <sys/types.h>
 
 #include "mmu.h"
@@ -69,11 +69,11 @@ extern struct Cpu cpus[];
 void            context_switch(struct Context **old, struct Context *new);
 
 void            process_init(void);
-void            process_create(const void *);
+int             process_create(const void *);
 void            process_yield(void);
 void            process_destroy(int);
 void            process_free(struct Process *);
-pid_t           process_fork(void);
+pid_t           process_copy(void);
 void            scheduler(void);
 
 int             cpuid(void);
@@ -84,10 +84,12 @@ extern int nprocesses;
 
 #define PROCESS_PASTE3(x, y, z)   x ## y ## z
 
-#define PROCESS_CREATE(name)                                            \
-  do {                                                                  \
-    extern uint8_t PROCESS_PASTE3(_binary_obj_user_, name, _start)[];   \
-    process_create(PROCESS_PASTE3(_binary_obj_user_, name, _start));    \
+#define PROCESS_CREATE(name)                                                  \
+  do {                                                                        \
+    extern uint8_t PROCESS_PASTE3(_binary_obj_user_, name, _start)[];         \
+                                                                              \
+    if (process_create(PROCESS_PASTE3(_binary_obj_user_, name, _start)) < 0)  \
+      panic("cannot create process '%s'", #name);                             \
   } while (0)
 
 #endif  // __KERNEL_PROCESS_H__

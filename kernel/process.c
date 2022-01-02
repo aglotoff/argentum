@@ -1,10 +1,11 @@
 #include <assert.h>
-#include <elf.h>
 #include <errno.h>
 #include <string.h>
 
 #include "armv7.h"
 #include "console.h"
+#include "elf.h"
+#include "hash.h"
 #include "kobject.h"
 #include "mmu.h"
 #include "monitor.h"
@@ -20,9 +21,10 @@ static struct KObjectPool *process_pool;
 
 #define NBUCKET   256
 
+HASH_DECLARE(pid_hash, NBUCKET);
+
 static struct {
   int             nprocesses;
-  struct ListLink hash[NBUCKET];
   struct ListLink runqueue;
   struct Spinlock lock;
 } ptable;
@@ -62,15 +64,12 @@ myprocess(void)
 void
 process_init(void)
 {
-  struct ListLink *link;
-
-  process_pool = kobject_pool_create("process_pool",
-                                       sizeof(struct Process), 0);
+  process_pool = kobject_pool_create("process_pool", sizeof(struct Process), 0);
   if (process_pool == NULL)
     panic("cannot allocate process_pool");
 
-  for (link = ptable.hash; link < & ptable.hash[NBUCKET]; link++)
-    list_init(link);
+  HASH_INIT(pid_hash);
+
   list_init(&ptable.runqueue);
   spin_init(&ptable.lock, "ptable");
 }
@@ -116,9 +115,14 @@ process_alloc(void)
   process->sibling.prev = NULL;
 
   spin_lock(&ptable.lock);
-  process->pid = ++next_pid;
-  list_add_back(&ptable.hash[process->pid % NBUCKET], &process->pid_link);
+
+  if ((process->pid = ++next_pid) < 0)
+    panic("pid overflow");
+
+  HASH_PUT(pid_hash, &process->pid_link, process->pid);
+
   ptable.nprocesses++;
+
   spin_unlock(&ptable.lock);
 
   cprintf("[%08x] spawn process %08x\n",
@@ -128,27 +132,30 @@ process_alloc(void)
   return process;
 }
 
-void
+int
 process_setup_vm(struct Process *p)
 {
-  struct PageInfo *page;
+  struct PageInfo *trtab_page;
 
-  if ((page = page_alloc_block(1, PAGE_ALLOC_ZERO)) == NULL)
-    panic("out of memory");
+  if ((trtab_page = page_alloc_block(1, PAGE_ALLOC_ZERO)) == NULL)
+    return -ENOMEM;
 
-  p->trtab = (tte_t *) page2kva(page);
-  page->ref_count++;
+  p->trtab = (tte_t *) page2kva(trtab_page);
+  trtab_page->ref_count++;
+
+  return 0;
 }
 
-static void
+static int
 process_load_binary(struct Process *proc, const void *binary)
 {
   Elf32_Ehdr *elf;
   Elf32_Phdr *ph, *eph;
+  int r;
   
   elf = (Elf32_Ehdr *) binary;
   if (memcmp(elf->ident, "\x7f""ELF", 4) != 0)
-    panic("Invalid ELF binary");
+    return -EINVAL;
 
   ph = (Elf32_Phdr *) ((uint8_t *) elf + elf->phoff);
   eph = ph + elf->phnum;
@@ -158,59 +165,77 @@ process_load_binary(struct Process *proc, const void *binary)
       continue;
 
     if (ph->filesz > ph->memsz)
-      panic("invalid segment header");
+      return -EINVAL;
     
-    if (vm_alloc_region(proc->trtab, (void *) ph->vaddr, ph->memsz) < 0)
-      panic("vm_alloc_region");
+    if ((r = vm_alloc_region(proc->trtab, (void *) ph->vaddr, ph->memsz) < 0))
+      return r;
 
-    if (vm_copy_out(proc->trtab, (void *) ph->vaddr, binary + ph->offset,
-                    ph->filesz) < 0)
-      panic("vm_copy_out");
+    if ((r = vm_copy_out(proc->trtab, (void *) ph->vaddr, binary + ph->offset,
+                         ph->filesz)) < 0)
+      return r;
 
     proc->size = ph->vaddr + ph->memsz;
   }
 
   // Allocate user stack.
-  if (vm_alloc_region(proc->trtab, (void *) (USTACK_TOP - USTACK_SIZE),
-                      USTACK_SIZE) < 0)
-    panic("vm_alloc_region");
+  if ((r = vm_alloc_region(proc->trtab, (void *) (USTACK_TOP - USTACK_SIZE),
+                           USTACK_SIZE)) < 0)
+    return r;
 
   proc->tf->r0     = 0;                   // argc
   proc->tf->r1     = 0;                   // argv
   proc->tf->sp_usr = USTACK_TOP;          // stack pointer
   proc->tf->psr    = PSR_M_USR | PSR_F;   // user mode, interrupts enabled
   proc->tf->pc     = elf->entry;          // process entry point
+
+  return 0;
 }
 
-void
+int
 process_create(const void *binary)
 {
   struct Process *proc;
+  int r;
 
-  if ((proc = process_alloc()) == NULL)
-    panic("out of memory");
+  if ((proc = process_alloc()) == NULL) {
+    r = -ENOMEM;
+    goto fail1;
+  }
 
-  process_setup_vm(proc);
+  if ((r = process_setup_vm(proc) < 0))
+    goto fail2;
 
-  process_load_binary(proc, binary);
+  if ((r = process_load_binary(proc, binary)) < 0)
+    goto fail3;
 
   spin_lock(&ptable.lock);
+
   proc->state = PROCESS_RUNNABLE;
   list_add_back(&ptable.runqueue, &proc->link);
+
   spin_unlock(&ptable.lock);
+
+  return 0;
+
+fail3:
+  vm_free(proc->trtab);
+fail2:
+  process_free(proc);
+fail1:
+  return r;
 }
 
 void
 process_free(struct Process *proc)
 {
-  struct PageInfo *page;
+  struct PageInfo *kstack_page;
 
-  page = kva2page(proc->kstack);
-  if (--page->ref_count == 0)
-    page_free(page);
+  kstack_page = kva2page(proc->kstack);
+  kstack_page->ref_count--;
+  page_free(kstack_page);
 
   spin_lock(&ptable.lock);
-  list_remove(&proc->pid_link);
+  HASH_REMOVE(&proc->pid_link);
   spin_unlock(&ptable.lock);
 
   kobject_free(process_pool, proc);
@@ -219,56 +244,58 @@ process_free(struct Process *proc)
 void
 process_destroy(int status)
 {
-  struct Process *proc = myprocess();
+  struct Process *current = myprocess();
   
   if (status == 0)
-    cprintf("[%08x] exit with code %d\n",
-            proc->pid, status);
+    cprintf("[%08x] exit with code %d\n", current->pid, status);
   else
-    cprintf("[%08x] exit with code %d\n",
-            proc->pid, status);
+    cprintf("[%08x] exit with code %d\n", current->pid, status);
 
-  vm_free(proc->trtab);
+  vm_free(current->trtab);
 
   spin_lock(&ptable.lock);
-  proc->state = PROCESS_ZOMBIE;
+
+  current->state = PROCESS_ZOMBIE;
   ptable.nprocesses--;
-  context_switch(&mycpu()->process->context, mycpu()->scheduler);
+
+  context_switch(&current->context, mycpu()->scheduler);
 }
 
 pid_t
-process_fork(void)
+process_copy(void)
 {
-  struct Process *proc, *myproc = myprocess();
+  struct Process *child, *parent = myprocess();
 
-  if ((proc = process_alloc()) == NULL)
+  if ((child = process_alloc()) == NULL)
     return -ENOMEM;
 
-  if ((proc->trtab = vm_clone(myproc->trtab)) == NULL) {
-    process_free(proc);
+  if ((child->trtab = vm_copy(parent->trtab)) == NULL) {
+    process_free(child);
     return -ENOMEM;
   }
 
-  proc->size  = myproc->size;
-  proc->parent = myproc;
-
-  *proc->tf = *myproc->tf;
-  proc->tf->r0 = 0;
+  child->size   = parent->size;
+  child->parent = parent;
+  *child->tf    = *parent->tf;
+  child->tf->r0 = 0;
 
   spin_lock(&ptable.lock);
-  proc->state = PROCESS_RUNNABLE;
-  list_add_back(&myproc->children, &proc->sibling);
-  list_add_back(&ptable.runqueue, &proc->link);
+
+  list_add_back(&parent->children, &child->sibling);
+
+  child->state = PROCESS_RUNNABLE;
+  list_add_back(&ptable.runqueue, &child->link);
+
   spin_unlock(&ptable.lock);
 
-  return proc->pid;
+  return child->pid;
 }
 
 void
 scheduler(void)
 {
   struct ListLink *link;
-  struct Process *process;
+  struct Process *next;
   
   spin_lock(&ptable.lock);
 
@@ -277,14 +304,14 @@ scheduler(void)
       link = ptable.runqueue.next;
       list_remove(link);
 
-      process = LIST_CONTAINER(link, struct Process, link);
-      assert(process->state == PROCESS_RUNNABLE);
+      next = LIST_CONTAINER(link, struct Process, link);
+      assert(next->state == PROCESS_RUNNABLE);
 
-      process->state = PROCESS_RUNNING;
-      mycpu()->process = process;
+      next->state = PROCESS_RUNNING;
+      mycpu()->process = next;
 
-      vm_switch_user(process->trtab);
-      context_switch(&mycpu()->scheduler, process->context);
+      vm_switch_user(next->trtab);
+      context_switch(&mycpu()->scheduler, next->context);
     } else {
       // If there are no more proceses to run, drop into the kernel monitor.
       if (ptable.nprocesses == 0) {
@@ -306,11 +333,16 @@ scheduler(void)
 void
 process_yield(void)
 {
+  struct Process *current;
+  
   spin_lock(&ptable.lock);
 
-  mycpu()->process->state = PROCESS_RUNNABLE;
-  list_add_back(&ptable.runqueue, &mycpu()->process->link);
-  context_switch(&mycpu()->process->context, mycpu()->scheduler);
+  current = mycpu()->process;
+
+  current->state = PROCESS_RUNNABLE;
+  list_add_back(&ptable.runqueue, &current->link);
+
+  context_switch(&current->context, mycpu()->scheduler);
 
   spin_unlock(&ptable.lock);
 }

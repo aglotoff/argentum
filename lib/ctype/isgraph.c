@@ -9,6 +9,9 @@
  *          to the value of the macro EOF.
  *
  * @return Non-zero if c is an visible character; 0 otherwise.
+ * 
+ * @sa isalnum, isalpha, iscntrl, isdigit, islower, isprint, ispunct, isspace,
+ *     isupper, isxdigit
  */
 int
 (isgraph)(int c)

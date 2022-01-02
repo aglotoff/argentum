@@ -11,5 +11,5 @@
 void
 exit(int status)
 {
-  syscall(SYS_exit, status, 0, 0);
+  __syscall(__SYS_EXIT, status, 0, 0);
 }

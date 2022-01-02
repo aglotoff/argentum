@@ -10,6 +10,9 @@
  *          to the value of the macro EOF.
  *
  * @return Non-zero if c is an alphanumeric character; 0 otherwise.
+ * 
+ * @sa isalpha, iscntrl, isdigit, isgraph, islower, isprint, ispunct, isspace,
+ *     isupper, isxdigit
  */
 int
 (isalnum)(int c)

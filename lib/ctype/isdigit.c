@@ -9,6 +9,9 @@
  *          to the value of the macro EOF.
  *
  * @return Non-zero if c is a decimal digit; 0 otherwise.
+ * 
+ * @sa isalnum, isalpha, iscntrl, isgraph, islower, isprint, ispunct, isspace,
+ *     isupper, isxdigit
  */
 int
 (isdigit)(int c)

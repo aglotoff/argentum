@@ -9,6 +9,9 @@
  *          to the value of the macro EOF.
  *
  * @return Non-zero if c is an uppercase letter; 0 otherwise.
+ * 
+ * @sa isalnum, isalpha, iscntrl, isdigit, isgraph, islower, isprint, ispunct,
+ *     isspace, isxdigit
  */
 int
 (isupper)(int c)

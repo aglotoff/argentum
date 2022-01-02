@@ -15,7 +15,7 @@ time(time_t *tloc)
 {
   time_t ret;
 
-  ret = syscall(SYS_time, 0, 0, 0);
+  ret = __syscall(__SYS_TIME, 0, 0, 0);
 
   if (tloc != NULL)
     *tloc = ret;

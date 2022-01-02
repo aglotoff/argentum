@@ -2,9 +2,27 @@
 #define __INCLUDE_STDDEF_H__
 
 /**
+ * @file include/stdint.h
+ * 
+ * Standard type definitions
+ */
+
+#include <yvals.h>
+
+/**
+ * Signed integer type of the result of subtracting two pointers.
+ */
+typedef __ptrdiff_t ptrdiff_t;
+
+/**
  * Unsigned integer type of the result of the sizeof operator.
  */
-typedef unsigned long   size_t;
+typedef __size_t    size_t;
+
+/**
+ * Integer type to represent wide-character codes.
+ */
+typedef __wchar_t   wchar_t;
 
 /**
  * Integer constant expression of type size_t, the value of which is the offset
