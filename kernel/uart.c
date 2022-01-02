@@ -74,6 +74,9 @@ uart_init(void)
 void
 uart_putc(char c)
 {
+  if (c == '\n')
+    uart_putc('\r');
+  
   // Wait until FIFO is ready to transmit.
   while (uart[UARTFR] & UARTFR_TXFF)
     ;

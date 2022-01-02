@@ -48,9 +48,12 @@ include kernel/kernel.mk
 include lib/lib.mk
 include user/user.mk
 
-QEMUOPTS := -M realview-pbx-a9 -m 256 -smp 1
+ifndef CPUS
+	CPUS := 2
+endif
+
+QEMUOPTS := -M realview-pbx-a9 -m 256 -smp $(CPUS)
 QEMUOPTS += -kernel $(KERNEL)
-QEMUOPTS += -serial mon:stdio
 
 qemu: $(KERNEL)
 	$(QEMU) $(QEMUOPTS)

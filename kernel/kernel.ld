@@ -52,7 +52,7 @@ SECTIONS
   }
 
   /* Adjust the address of the data section to the next page boundary */
-  .= ALIGN(0x1000);
+  . = ALIGN(0x1000);
 
   .data : AT(ADDR(.data) - 0x80000000)  {
     *(.data*)
