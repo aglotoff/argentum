@@ -9,6 +9,9 @@
 #define HASH_FOREACH(hash, lp) \
   for (lp = hash; lp < &hash[ARRAY_SIZE(hash)]; lp++)
 
+#define HASH_FOREACH_ENTRY(hash, lp, key) \
+  LIST_FOREACH(&hash[key % ARRAY_SIZE(hash)], lp)
+
 #define HASH_INIT(hash)     \
   do {                      \
     struct ListLink *_lp;   \

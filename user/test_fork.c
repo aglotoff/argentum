@@ -1,5 +1,6 @@
 #include <stdio.h>
 #include <stdlib.h>
+#include <sys/wait.h>
 #include <unistd.h>
 
 #define DEPTH 3
@@ -14,7 +15,7 @@ forkchild(int depth)
 
 	if (fork() == 0) {
 		forktree(depth + 1);
-		exit(0);
+		exit(depth);
 	}
 }
 
@@ -25,6 +26,9 @@ forktree(int depth)
 
 	forkchild(depth);
 	forkchild(depth);
+
+	waitpid(-1, NULL, 0);
+	waitpid(-1, NULL, 0);
 }
 
 int

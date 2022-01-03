@@ -319,10 +319,12 @@ kobject_alloc(struct KObjectPool *pool)
 void
 kobject_free(struct KObjectPool *pool, void *obj)
 {
+  struct PageInfo *slab_page;
   struct KObjectSlab *slab;
   struct KObjectNode *node;
 
-  slab = ROUND_DOWN(obj, PAGE_SIZE << pool->page_order);
+  slab_page = kva2page(ROUND_DOWN(obj, PAGE_SIZE << pool->page_order));
+  slab = slab_page->slab;
 
   spin_lock(&pool->lock);
 
@@ -330,7 +332,7 @@ kobject_free(struct KObjectPool *pool, void *obj)
   node->next = slab->free;
   slab->free = node;
 
-  if (slab->in_use-- == pool->obj_num) {
+  if (--slab->in_use > 0) {
     list_remove(&slab->link);
     list_add_front(&pool->slabs_partial, &slab->link);
   } else if (slab->in_use == 0) {

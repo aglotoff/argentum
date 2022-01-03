@@ -397,3 +397,28 @@ vm_copy(tte_t *trtab)
 
   return t;
 }
+
+int
+vm_check(tte_t *trtab, void *va, size_t n, unsigned perm)
+{
+  struct PageInfo *page;
+  uintptr_t a, end;
+  pte_t *pte;
+
+  a   = ROUND_DOWN((uintptr_t) va, PAGE_SIZE);
+  end = ROUND_UP((uintptr_t) va + n, PAGE_SIZE);
+
+  if ((a >= KERNEL_BASE) || (end > KERNEL_BASE))
+    return -EFAULT;
+
+  while (a != end) {
+    page = vm_lookup_page(trtab, (void *) a, &pte);
+
+    if ((page == NULL) || ((*pte & PTE_AP(perm)) != PTE_AP(perm)))
+      return -EFAULT;
+
+    a += PAGE_SIZE;
+  }
+
+  return 0;
+}

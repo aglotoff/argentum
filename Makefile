@@ -54,6 +54,7 @@ endif
 
 QEMUOPTS := -M realview-pbx-a9 -m 256 -smp $(CPUS)
 QEMUOPTS += -kernel $(KERNEL)
+QEMUOPTS += -serial mon:stdio
 
 qemu: $(KERNEL)
 	$(QEMU) $(QEMUOPTS)

@@ -1,6 +1,7 @@
 #include <assert.h>
 #include <errno.h>
 #include <string.h>
+#include <sys/wait.h>
 
 #include "armv7.h"
 #include "console.h"
@@ -31,6 +32,9 @@ static struct {
 
 static void process_run(void);
 static void process_pop_tf(struct Trapframe *);
+static void process_sleep(void);
+static void process_wakeup(struct Process *);
+static void scheduler_yield(void);
 
 int
 cpuid(void)
@@ -241,6 +245,21 @@ process_free(struct Process *proc)
   kobject_free(process_pool, proc);
 }
 
+struct Process *
+pid_lookup(pid_t pid)
+{
+  struct ListLink *l;
+  struct Process *proc;
+
+  HASH_FOREACH_ENTRY(pid_hash, l, pid) {
+    proc = LIST_CONTAINER(l, struct Process, pid_link);
+    if (proc->pid == pid)
+      return proc;
+  }
+
+  return NULL;
+}
+
 void
 process_destroy(int status)
 {
@@ -253,12 +272,17 @@ process_destroy(int status)
 
   vm_free(current->trtab);
 
+  current->exit_code = status;
+
   spin_lock(&ptable.lock);
 
   current->state = PROCESS_ZOMBIE;
   ptable.nprocesses--;
 
-  context_switch(&current->context, mycpu()->scheduler);
+  if (current->parent && (current->parent->state == PROCESS_SLEEPING))
+    process_wakeup(current->parent);
+
+  scheduler_yield();
 }
 
 pid_t
@@ -289,6 +313,12 @@ process_copy(void)
   spin_unlock(&ptable.lock);
 
   return child->pid;
+}
+
+static void
+scheduler_yield(void)
+{
+  context_switch(&myprocess()->context, mycpu()->scheduler);
 }
 
 void
@@ -342,9 +372,88 @@ process_yield(void)
   current->state = PROCESS_RUNNABLE;
   list_add_back(&ptable.runqueue, &current->link);
 
-  context_switch(&current->context, mycpu()->scheduler);
+  scheduler_yield();
 
   spin_unlock(&ptable.lock);
+}
+
+static void
+process_sleep(void)
+{
+  assert(spin_holding(&ptable.lock));
+
+  myprocess()->state = PROCESS_SLEEPING;
+  scheduler_yield();
+}
+
+static void
+process_wakeup(struct Process *proc)
+{
+  assert(spin_holding(&ptable.lock));
+
+  proc->state = PROCESS_RUNNABLE;
+  list_add_back(&ptable.runqueue, &proc->link);
+}
+
+pid_t
+process_wait(pid_t pid, int *stat_loc, int options)
+{
+  struct Process *p, *current = myprocess();
+  struct ListLink *l;
+  int r, found;
+
+  if (options & ~(WNOHANG | WUNTRACED))
+    return -EINVAL;
+
+  spin_lock(&ptable.lock);
+
+  for (;;) {
+    found = 0;
+
+    LIST_FOREACH(&current->children, l) {
+      p = LIST_CONTAINER(l, struct Process, sibling);
+
+      // Check whether the current child satisifies the criteria.
+      if ((pid > 0) && (p->pid != pid)) {
+        continue;
+      } else if (pid == 0) {
+        // TODO: compare the child group ID to the parent group ID
+        break;
+      } else if (pid < -1) {
+        // TODO: compare the child group ID to (-pid)
+        break;
+      }
+
+      found = p->pid;
+
+      if (p->state == PROCESS_ZOMBIE) {
+        list_remove(&p->sibling);
+
+        spin_unlock(&ptable.lock);
+
+        if (stat_loc)
+          *stat_loc = p->exit_code;
+
+        process_free(p);
+
+        return found;
+      }
+    }
+
+    if (!found) {
+      r = -ECHILD;
+      break;
+    } else if (options & WNOHANG) {
+      r = 0;
+      break;
+    }
+
+    process_sleep();
+  }
+
+  spin_unlock(&ptable.lock);
+
+  return r;
 }
 
 // A process' very first scheduling by scheduler() will switch here.

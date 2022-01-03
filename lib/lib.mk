@@ -74,6 +74,10 @@ LIB_SRCFILES += \
 	lib/string/strtok.c
 
 LIB_SRCFILES += \
+  lib/sys/wait/wait.c \
+	lib/sys/wait/waitpid.c
+
+LIB_SRCFILES += \
 	lib/time/asctime.c \
 	lib/time/gmtime.c \
 	lib/time/mktime.c \

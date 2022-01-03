@@ -7,6 +7,7 @@
 #include "sbcon.h"
 #include "syscall.h"
 #include "trap.h"
+#include "vm.h"
 
 static int     sys_fetch_int(uintptr_t, int *);
 static int     sys_fetch_str(uintptr_t, char **);
@@ -20,6 +21,7 @@ static int32_t (*syscalls[])(void) = {
   [__SYS_GETPPID] = sys_getppid,
   [__SYS_TIME]    = sys_time,
   [__SYS_FORK]    = sys_fork,
+  [__SYS_WAIT]    = sys_wait,
 };
 
 int32_t
@@ -47,11 +49,14 @@ sys_dispatch(void)
 static int
 sys_fetch_int(uintptr_t addr, int *ip)
 {
-  struct Process *curproc = myprocess();
+  struct Process *curr = myprocess();
+  int r;
 
-  if (addr >= curproc->size || (addr + sizeof(int)) > curproc->size)
-    return -EFAULT;
+  if ((r = vm_check(curr->trtab, (void *) addr, sizeof(int), AP_USER_RO)) < 0)
+    return r;
+
   *ip = *(int *) addr;
+
   return 0;
 }
 
@@ -113,21 +118,21 @@ sys_get_arg(int n)
 int
 sys_arg_int(int n, int32_t *ip)
 {
-  int32_t r;
-
-  if ((r = sys_get_arg(n)) < 0)
-    return r;
-  *ip = r;
+  *ip = sys_get_arg(n);
   return 0;
 }
 
 int32_t
-sys_arg_ptr(int n, void **pp, size_t len)
+sys_arg_ptr(int n, void **pp, size_t len, int perm)
 { 
-  // TODO: implement this function!
-  (void) len;
+  struct Process *curproc = myprocess();
+  void *ptr = (void *) sys_get_arg(n);
+  int r;
 
-  *pp = (void *) sys_get_arg(n);
+  if ((r = vm_check(curproc->trtab, ptr, len, perm)) < 0)
+    return r;
+
+  *pp = ptr;
 
   return 0;
 }
@@ -169,7 +174,7 @@ sys_cwrite(void)
   if ((r = sys_arg_int(1, &n)) < 0)
     return r;
 
-  if ((r = sys_arg_ptr(0, (void **) &s, n)) < 0)
+  if ((r = sys_arg_ptr(0, (void **) &s, n, AP_USER_RO)) < 0)
     return r;
 
   cprintf("%.*s", n, s);
@@ -212,4 +217,20 @@ int32_t
 sys_fork(void)
 {
   return process_copy();
+}
+
+int32_t
+sys_wait(void)
+{
+  pid_t pid;
+  int *stat_loc;
+  int r;
+  
+  if ((r = sys_arg_int(0, &pid)) < 0)
+    return r;
+
+  if ((r = sys_arg_ptr(1, (void **) &stat_loc, sizeof(int), AP_BOTH_RW)) < 0)
+    return r;
+
+  return process_wait(pid, stat_loc, 0);
 }

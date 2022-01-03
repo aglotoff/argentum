@@ -34,22 +34,24 @@ struct Context {
  * Process state.
  */
 struct Process {
-  struct ListLink    link;      ///< Link into the containing list
-  int                state;     ///< Process state
+  struct ListLink   link;       ///< Link into the containing list
+  int               state;      ///< Process state
 
-  pid_t              pid;       ///< Process identifier
-  struct ListLink    pid_link;  ///< Link into the PID hash table
+  pid_t             pid;        ///< Process identifier
+  struct ListLink   pid_link;   ///< Link into the PID hash table
 
-  struct Process    *parent;    ///< Link to the parent process
-  struct ListLink    children;  ///< List pf process children
-  struct ListLink    sibling;   ///< Link into the siblings list
+  struct Process   *parent;     ///< Link to the parent process
+  struct ListLink   children;   ///< List pf process children
+  struct ListLink   sibling;    ///< Link into the siblings list
 
-  tte_t             *trtab;     ///< Translation table
-  size_t             size;      ///< Size of process memory (in bytes)
+  tte_t            *trtab;      ///< Translation table
+  size_t            size;       ///< Size of process memory (in bytes)
 
-  uint8_t           *kstack;    ///< Bottom of process kernel stack
-  struct Trapframe  *tf;        ///< Trap frame for current exception
-  struct Context    *context;   ///< Saved context
+  uint8_t          *kstack;     ///< Bottom of process kernel stack
+  struct Trapframe *tf;         ///< Trap frame for current exception
+  struct Context   *context;    ///< Saved context
+
+  int               exit_code;
 };
 
 #define NCPU  4
@@ -66,7 +68,9 @@ struct Cpu {
 
 extern struct Cpu cpus[];
 
-void            context_switch(struct Context **old, struct Context *new);
+int             cpuid(void);
+struct Cpu     *mycpu(void);
+struct Process *myprocess(void);
 
 void            process_init(void);
 int             process_create(const void *);
@@ -74,11 +78,10 @@ void            process_yield(void);
 void            process_destroy(int);
 void            process_free(struct Process *);
 pid_t           process_copy(void);
-void            scheduler(void);
+pid_t           process_wait(pid_t, int *, int);
 
-int             cpuid(void);
-struct Cpu     *mycpu(void);
-struct Process *myprocess(void);
+void            scheduler(void);
+void            context_switch(struct Context **old, struct Context *new);
 
 extern int nprocesses;
 
