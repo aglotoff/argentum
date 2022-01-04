@@ -12,17 +12,17 @@
 /**
  * Signed integer type of the result of subtracting two pointers.
  */
-typedef __ptrdiff_t ptrdiff_t;
+typedef long            ptrdiff_t;
 
 /**
  * Unsigned integer type of the result of the sizeof operator.
  */
-typedef __size_t    size_t;
+typedef unsigned long   size_t;
 
 /**
  * Integer type to represent wide-character codes.
  */
-typedef __wchar_t   wchar_t;
+typedef unsigned short  wchar_t;
 
 /**
  * Integer constant expression of type size_t, the value of which is the offset
