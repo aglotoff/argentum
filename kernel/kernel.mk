@@ -18,6 +18,7 @@ KERNEL_SRCFILES :=	\
 	kernel/page.c \
 	kernel/kobject.c \
 	kernel/vm.c \
+	kernel/cpu.c \
 	kernel/process.c \
 	kernel/context.S \
 	kernel/spinlock.c \

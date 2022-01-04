@@ -5,6 +5,7 @@
 
 #include "armv7.h"
 #include "console.h"
+#include "cpu.h"
 #include "elf.h"
 #include "hash.h"
 #include "kobject.h"
@@ -15,8 +16,6 @@
 #include "spinlock.h"
 #include "trap.h"
 #include "vm.h"
-
-struct Cpu cpus[NCPU];
 
 static struct KObjectPool *process_pool;
 
@@ -36,30 +35,13 @@ static void process_sleep(void);
 static void process_wakeup(struct Process *);
 static void scheduler_yield(void);
 
-int
-cpuid(void)
-{
-  return read_mpidr() & 3;
-}
-
-struct Cpu *
-mycpu(void)
-{
-  assert((read_cpsr() & PSR_I) && (read_cpsr() & PSR_F));
-  return &cpus[cpuid()];
-}
-
 struct Process *
-myprocess(void)
+my_process(void)
 {
-  struct Cpu *cpu;
   struct Process *process;
-  
+
   irq_save();
-
-  cpu = mycpu();
-  process = cpu->process;
-
+  process = my_cpu()->process;
   irq_restore();
 
   return process;
@@ -81,8 +63,6 @@ process_init(void)
 struct Process *
 process_alloc(void)
 {
-  extern void trapret(void);
-
   static pid_t next_pid;
 
   struct PageInfo *page;
@@ -130,7 +110,7 @@ process_alloc(void)
   spin_unlock(&ptable.lock);
 
   cprintf("[%08x] spawn process %08x\n",
-          myprocess() ? myprocess()->pid : 0,
+          my_process() ? my_process()->pid : 0,
           process->pid);
 
   return process;
@@ -263,7 +243,7 @@ pid_lookup(pid_t pid)
 void
 process_destroy(int status)
 {
-  struct Process *current = myprocess();
+  struct Process *current = my_process();
   
   if (status == 0)
     cprintf("[%08x] exit with code %d\n", current->pid, status);
@@ -288,7 +268,7 @@ process_destroy(int status)
 pid_t
 process_copy(void)
 {
-  struct Process *child, *parent = myprocess();
+  struct Process *child, *parent = my_process();
 
   if ((child = process_alloc()) == NULL)
     return -ENOMEM;
@@ -318,7 +298,7 @@ process_copy(void)
 static void
 scheduler_yield(void)
 {
-  context_switch(&myprocess()->context, mycpu()->scheduler);
+  context_switch(&my_process()->context, my_cpu()->scheduler);
 }
 
 void
@@ -338,10 +318,10 @@ scheduler(void)
       assert(next->state == PROCESS_RUNNABLE);
 
       next->state = PROCESS_RUNNING;
-      mycpu()->process = next;
+      my_cpu()->process = next;
 
       vm_switch_user(next->trtab);
-      context_switch(&mycpu()->scheduler, next->context);
+      context_switch(&my_cpu()->scheduler, next->context);
     } else {
       // If there are no more proceses to run, drop into the kernel monitor.
       if (ptable.nprocesses == 0) {
@@ -351,7 +331,7 @@ scheduler(void)
       }
 
       // Mark that no process is running on this CPU.
-      mycpu()->process = NULL;
+      my_cpu()->process = NULL;
       vm_switch_kernel();
 
       spin_unlock(&ptable.lock);
@@ -367,7 +347,7 @@ process_yield(void)
   
   spin_lock(&ptable.lock);
 
-  current = mycpu()->process;
+  current = my_cpu()->process;
 
   current->state = PROCESS_RUNNABLE;
   list_add_back(&ptable.runqueue, &current->link);
@@ -382,7 +362,7 @@ process_sleep(void)
 {
   assert(spin_holding(&ptable.lock));
 
-  myprocess()->state = PROCESS_SLEEPING;
+  my_process()->state = PROCESS_SLEEPING;
   scheduler_yield();
 }
 
@@ -398,7 +378,7 @@ process_wakeup(struct Process *proc)
 pid_t
 process_wait(pid_t pid, int *stat_loc, int options)
 {
-  struct Process *p, *current = myprocess();
+  struct Process *p, *current = my_process();
   struct ListLink *l;
   int r, found;
 
@@ -464,7 +444,7 @@ process_run(void)
   spin_unlock(&ptable.lock);
 
   // "Return" to the user space.
-  process_pop_tf(myprocess()->tf);
+  process_pop_tf(my_process()->tf);
 }
 
 // Restores the register values in the Trapframe.
@@ -472,7 +452,7 @@ process_run(void)
 static void
 process_pop_tf(struct Trapframe *tf)
 {
-  __asm__ __volatile__(
+  asm volatile(
     "mov     sp, %0\n"
     "add     sp, #12\n"                 // skip trapno
     "ldmdb   sp, {sp,lr}^\n"            // restore user mode sp and lr

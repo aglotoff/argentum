@@ -3,6 +3,7 @@
 
 #include "kernel.h"
 #include "console.h"
+#include "cpu.h"
 #include "process.h"
 #include "sbcon.h"
 #include "syscall.h"
@@ -35,7 +36,7 @@ sys_dispatch(void)
   if ((num < (int) ARRAY_SIZE(syscalls)) && syscalls[num])
     return syscalls[num]();
 
-  cprintf("[CPU %d: Unknown system call %d]\n", cpuid(), num);
+  cprintf("[CPU %d: Unknown system call %d]\n", cpu_id(), num);
   return -ENOSYS;
 }
 
@@ -49,7 +50,7 @@ sys_dispatch(void)
 static int
 sys_fetch_int(uintptr_t addr, int *ip)
 {
-  struct Process *curr = myprocess();
+  struct Process *curr = my_process();
   int r;
 
   if ((r = vm_check(curr->trtab, (void *) addr, sizeof(int), AP_USER_RO)) < 0)
@@ -65,7 +66,7 @@ static int
 sys_fetch_str(uintptr_t addr, char **strp)
 {
   char *s, *end;
-  struct Process *curproc = myprocess();
+  struct Process *curproc = my_process();
 
   if (addr >= curproc->size)
     return -EFAULT;
@@ -84,7 +85,7 @@ sys_get_num(void)
 {
   int svc_code, r;
 
-  if ((r = sys_fetch_int(myprocess()->tf->pc - 4, &svc_code)) < 0)
+  if ((r = sys_fetch_int(my_process()->tf->pc - 4, &svc_code)) < 0)
     return r;
   return svc_code & 0xFFFFFF;
 }
@@ -92,7 +93,7 @@ sys_get_num(void)
 static int32_t
 sys_get_arg(int n)
 {
-  struct Process *curproc = myprocess();
+  struct Process *curproc = my_process();
 
   switch (n) {
   case 0:
@@ -125,7 +126,7 @@ sys_arg_int(int n, int32_t *ip)
 int32_t
 sys_arg_ptr(int n, void **pp, size_t len, int perm)
 { 
-  struct Process *curproc = myprocess();
+  struct Process *curproc = my_process();
   void *ptr = (void *) sys_get_arg(n);
   int r;
 
@@ -198,13 +199,13 @@ sys_exit(void)
 int32_t
 sys_getpid(void)
 {
-  return myprocess()->pid;
+  return my_process()->pid;
 }
 
 int32_t
 sys_getppid(void)
 {
-  return myprocess()->parent ? myprocess()->parent->pid : myprocess()->pid;
+  return my_process()->parent ? my_process()->parent->pid : my_process()->pid;
 }
 
 int32_t

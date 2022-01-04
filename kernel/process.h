@@ -54,23 +54,7 @@ struct Process {
   int               exit_code;
 };
 
-#define NCPU  4
-
-/**
- * Per-CPU state.
- */
-struct Cpu {
-  struct Context *scheduler;    ///< Saved scheduler context
-  struct Process *process;      ///< The currently running process   
-  int             irq_lock;     ///< Depth of IRQ lock nesting
-  int             irq_flags;    ///< Were interupts enabled before IRQ lock?
-};
-
-extern struct Cpu cpus[];
-
-int             cpuid(void);
-struct Cpu     *mycpu(void);
-struct Process *myprocess(void);
+struct Process *my_process(void);
 
 void            process_init(void);
 int             process_create(const void *);

@@ -3,6 +3,7 @@
 
 #include "armv7.h"
 #include "console.h"
+#include "cpu.h"
 #include "gic.h"
 #include "kmi.h"
 #include "process.h"
@@ -89,7 +90,7 @@ trap_handle_irq(void)
     kmi_kbd_intr();
     break;
   default:
-    cprintf("Unexpected IRQ %d from CPU %d\n", irq & 0xFFFFFF, cpuid());
+    cprintf("Unexpected IRQ %d from CPU %d\n", irq & 0xFFFFFF, cpu_id());
     break;
   }
 
@@ -133,7 +134,7 @@ print_trapframe(struct Trapframe *tf)
   };
 
   cprintf("TRAP frame at %p from CPU %d\n",
-          tf, cpuid());
+          tf, cpu_id());
   
   cprintf("  trap %p    [%s]\n",
           tf->trapno, trapname(tf->trapno));

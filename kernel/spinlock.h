@@ -15,12 +15,9 @@ struct Spinlock {
 
 #define SPIN_INITIALIZER(name)  { 0, NULL, (name), {} }
 
-void spin_init(struct Spinlock *lock, const char *name);
-void spin_lock(struct Spinlock *lock);
-void spin_unlock(struct Spinlock *lock);
-int  spin_holding(struct Spinlock *lock);
-
-void irq_save(void);
-void irq_restore(void);
+void spin_init(struct Spinlock *, const char *);
+void spin_lock(struct Spinlock *);
+void spin_unlock(struct Spinlock *);
+int  spin_holding(struct Spinlock *);
 
 #endif  // !__KERNEL_SPINLOCK_H__

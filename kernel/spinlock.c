@@ -4,6 +4,7 @@
 
 #include "armv7.h"
 #include "console.h"
+#include "cpu.h"
 #include "kdebug.h"
 #include "process.h"
 #include "spinlock.h"
@@ -33,12 +34,12 @@ spin_lock(struct Spinlock *lock)
   irq_save();
 
   if (spin_holding(lock)) {
-    cprintf("CPU %d is already holding %s\n", cpuid(), lock->name);
+    cprintf("CPU %d is already holding %s\n", cpu_id(), lock->name);
     spin_print_caller_pcs(lock);
     panic("spin_lock");
   }
 
-  __asm__ __volatile__(
+  asm volatile(
     "\t1:\n"
     "\tldrex   %1, [%0]\n"      // Read the lock field
     "\tcmp     %1, #0\n"        // Compare with 0
@@ -54,7 +55,7 @@ spin_lock(struct Spinlock *lock)
     : "memory", "cc");
 
   // Record info about lock acquisition for debugging.
-  lock->cpu = mycpu();
+  lock->cpu = my_cpu();
   spin_get_caller_pcs(lock);
 }
 
@@ -70,7 +71,7 @@ spin_unlock(struct Spinlock *lock)
 
   if (!spin_holding(lock)) {
     cprintf("CPU %d cannot release %s: held by %d\n",
-            cpuid(), lock->name, lock->cpu);
+            cpu_id(), lock->name, lock->cpu);
     spin_print_caller_pcs(lock);
     panic("spin_unlock");
   }
@@ -78,7 +79,7 @@ spin_unlock(struct Spinlock *lock)
   lock->cpu = NULL;
   lock->pcs[0] = 0;
 
-  __asm__ __volatile__(
+  asm volatile(
     "\tmov     %1, #0\n"
     "\tdmb\n"                   // Memory barier BEFORE releasing the resource
     "\tstr     %1, [%0]\n"      // Write 0 into the lock field
@@ -93,10 +94,10 @@ spin_unlock(struct Spinlock *lock)
 }
 
 /**
- * Check whether this CPU is holding the lock.
+ * Check whether the current CPU is holding the lock.
  *
  * @param lock The spinlock.
- * @return 1 if this CPU is holding the lock, 0 otherwise.
+ * @return 1 if the current CPU is holding the lock, 0 otherwise.
  */
 int
 spin_holding(struct Spinlock *lock)
@@ -104,7 +105,7 @@ spin_holding(struct Spinlock *lock)
   int r;
 
   irq_save();
-  r = lock->locked && (lock->cpu == mycpu());
+  r = lock->locked && (lock->cpu == my_cpu());
   irq_restore();
 
   return r;
@@ -144,38 +145,4 @@ spin_print_caller_pcs(struct Spinlock *lock)
     cprintf("  [%p] %s (%s at line %d)\n", pcs[i],
             info.fn_name, info.file, info.line);
   }
-}
-
-/**
- * Save the current CPU interrupt state and disable interrupts.
- */
-void
-irq_save(void)
-{
-  uint32_t psr;
-
-  psr = read_cpsr();
-  write_cpsr(psr | PSR_I | PSR_F);
-
-  if (mycpu()->irq_lock++ == 0)
-    mycpu()->irq_flags = ~psr & (PSR_I | PSR_F);
-}
-
-/**
- * Restore the previous interrupt state.
- */
-void
-irq_restore(void)
-{
-  uint32_t psr;
-
-  psr = read_cpsr();
-  if (!(psr & PSR_I) || !(psr & PSR_F))
-    panic("interruptible");
-
-  if (--mycpu()->irq_lock < 0)
-    panic("interruptible");
-
-  if (mycpu()->irq_lock == 0)
-    write_cpsr(psr & ~mycpu()->irq_flags);
 }
