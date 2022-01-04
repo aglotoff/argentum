@@ -92,12 +92,12 @@ LIB_SRCFILES += \
 LIB_OBJFILES := $(patsubst %.c, $(OBJ)/%.o, $(LIB_SRCFILES))
 LIB_OBJFILES := $(patsubst %.S, $(OBJ)/%.o, $(LIB_OBJFILES))
 
-$(OBJ)/lib/%.o: lib/%.c
+$(OBJ)/lib/%.o: lib/%.c $(OBJ)/.vars.LIB_CFLAGS
 	@echo "+ CC  $<"
 	@mkdir -p $(@D)
 	$(V)$(CC) $(LIB_CFLAGS) -c -o $@ $<
 
-$(OBJ)/lib/%.o: lib/%.S
+$(OBJ)/lib/%.o: lib/%.S $(OBJ)/.vars.LIB_CFLAGS
 	@echo "+ AS  $<"
 	@mkdir -p $(@D)
 	$(V)$(CC) $(LIB_CFLAGS) -c -o $@ $<

@@ -8,7 +8,6 @@ endif
 
 OBJ := obj
 TOP := .
-INC := $(TOP)/include
 
 # Cross-compiler toolchain
 #
@@ -29,7 +28,7 @@ OBJCOPY := $(TOOLPREFIX)objcopy
 OBJDUMP := $(TOOLPREFIX)objdump
 
 # Common compiler flags
-CFLAGS := -ffreestanding -nostdlib -fno-builtin -nostdinc -I$(INC)
+CFLAGS := -ffreestanding -nostdlib -fno-builtin -nostdinc -I$(TOP)/include
 CFLAGS += -Wall -Wextra -Werror 
 CFLAGS += --std=gnu11
 CFLAGS += -O1 -mcpu=cortex-a9 -mapcs-frame -fno-omit-frame-pointer
@@ -41,6 +40,15 @@ LDFLAGS := -z max-page-size=0x1000
 LIBGCC := $(shell $(CC) $(CFLAGS) -print-libgcc-file-name)
 
 KERNEL := $(OBJ)/kernel/kernel
+
+# Update $(OBJ)/.vars.X if the variable X has changed since the last run.
+# This allows us to rebuild targets that depend on the value of X by adding
+# $(OBJ)/.vars.X to the dependency list.
+$(OBJ)/.vars.%: .FORCE
+	@mkdir -p $(@D)
+	$(V)echo "$($*)" | cmp -s $@ || echo "$($*)" > $@
+.PRECIOUS: $(OBJ)/.vars.%
+.PHONY: .FORCE
 
 all: $(KERNEL)
 
@@ -60,7 +68,7 @@ qemu: $(KERNEL)
 	$(QEMU) $(QEMUOPTS)
 
 prep-%:
-	$(V)$(MAKE) "INIT_CFLAGS=-DPROCESS_NAME=$*" $(KERNEL)
+	$(V)$(MAKE) "PROCESS_NAME=$*" $(KERNEL)
 
 run-%: prep-%
 	$(QEMU) $(QEMUOPTS)
@@ -68,4 +76,4 @@ run-%: prep-%
 clean:
 	rm -rf $(OBJ)
 
-.PHONY: all qemu clean
+.PHONY: all qemu clean prep-% run-%
