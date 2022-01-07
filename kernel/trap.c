@@ -6,6 +6,7 @@
 #include "cpu.h"
 #include "gic.h"
 #include "kmi.h"
+#include "mci.h"
 #include "process.h"
 #include "syscall.h"
 #include "trap.h"
@@ -79,6 +80,9 @@ trap_handle_irq(void)
   resched = 0;
 
   switch (irq & 0xFFFFFF) {
+  case 0:
+    // TODO:
+    break;
   case IRQ_PTIMER:
     ptimer_eoi();
     resched = 1;
@@ -89,6 +93,9 @@ trap_handle_irq(void)
   case IRQ_KMI0:
     kmi_kbd_intr();
     break;
+  case IRQ_MCIA:
+    mci_intr();
+    break;
   default:
     cprintf("Unexpected IRQ %d from CPU %d\n", irq & 0xFFFFFF, cpu_id());
     break;
@@ -96,7 +103,7 @@ trap_handle_irq(void)
 
   gic_eoi(irq);
 
-  if (resched)
+  if (resched && (my_process() != NULL))
     process_yield();
 }
 

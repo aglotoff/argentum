@@ -56,15 +56,22 @@ include kernel/kernel.mk
 include lib/lib.mk
 include user/user.mk
 
+$(OBJ)/fs.img: $(USER_APPS)
+	@echo "+ GEN $@"
+	$(V)mkdir -p $@.d
+	$(V)cp -R $^ $@.d
+	$(V)mke2fs -b 1K -d $@.d -t ext2 $@ 32M
+	$(V)rm -rf $@.d
+
 ifndef CPUS
-	CPUS := 2
+  CPUS := 2
 endif
 
 QEMUOPTS := -M realview-pbx-a9 -m 256 -smp $(CPUS)
-QEMUOPTS += -kernel $(KERNEL)
+QEMUOPTS += -kernel $(KERNEL) -sd $(OBJ)/fs.img
 QEMUOPTS += -serial mon:stdio
 
-qemu: $(KERNEL)
+qemu: $(KERNEL) $(OBJ)/fs.img
 	$(QEMU) $(QEMUOPTS)
 
 prep-%:
@@ -76,4 +83,5 @@ run-%: prep-%
 clean:
 	rm -rf $(OBJ)
 
+.PRECIOUS: $(OBJ)/user/%.o
 .PHONY: all qemu clean prep-% run-%

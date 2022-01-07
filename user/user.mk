@@ -1,6 +1,22 @@
 USER_CFLAGS  := $(CFLAGS) -Wno-return-local-addr
 USER_LDFLAGS := $(LDFLAGS) -T user/user.ld -nostdlib
 
+USER_SRCFILES := \
+	user/faultread.c \
+	user/faultreadkernel.c \
+	user/faultwrite.c \
+	user/faultwritekernel.c \
+	user/hello.c \
+	user/testctype.c \
+	user/testerrno.c \
+	user/testfloat.c \
+	user/testfork.c \
+	user/testlimits.c \
+	user/testsetjmp.c \
+	user/teststring.c
+
+USER_APPS := $(patsubst %.c, $(OBJ)/%, $(USER_SRCFILES))
+
 $(OBJ)/user/%.o: user/%.c $(OBJ)/.vars.USER_CFLAGS
 	@echo "+ CC  $<"
 	@mkdir -p $(@D)

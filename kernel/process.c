@@ -7,6 +7,7 @@
 #include "console.h"
 #include "cpu.h"
 #include "elf.h"
+#include "fs.h"
 #include "hash.h"
 #include "kobject.h"
 #include "mmu.h"
@@ -31,8 +32,8 @@ static struct {
 
 static void process_run(void);
 static void process_pop_tf(struct Trapframe *);
-static void process_sleep(void);
-static void process_wakeup(struct Process *);
+static void process_suspend(void);
+static void process_resume(struct Process *);
 static void scheduler_yield(void);
 
 struct Process *
@@ -260,7 +261,7 @@ process_destroy(int status)
   ptable.nprocesses--;
 
   if (current->parent && (current->parent->state == PROCESS_SLEEPING))
-    process_wakeup(current->parent);
+    process_resume(current->parent);
 
   scheduler_yield();
 }
@@ -298,7 +299,11 @@ process_copy(void)
 static void
 scheduler_yield(void)
 {
+  int irq_flags;
+
+  irq_flags = my_cpu()->irq_flags;
   context_switch(&my_process()->context, my_cpu()->scheduler);
+  my_cpu()->irq_flags = irq_flags;
 }
 
 void
@@ -306,11 +311,13 @@ scheduler(void)
 {
   struct ListLink *link;
   struct Process *next;
-  
-  spin_lock(&ptable.lock);
 
   for (;;) {
-    if (!list_empty(&ptable.runqueue)) {
+    irq_enable();
+
+    spin_lock(&ptable.lock);
+
+    while (!list_empty(&ptable.runqueue)) {
       link = ptable.runqueue.next;
       list_remove(link);
 
@@ -322,21 +329,20 @@ scheduler(void)
 
       vm_switch_user(next->trtab);
       context_switch(&my_cpu()->scheduler, next->context);
-    } else {
-      // If there are no more proceses to run, drop into the kernel monitor.
-      if (ptable.nprocesses == 0) {
-        cprintf("No runnable processes in the system!\n");
-        for (;;)
-          monitor(NULL);
-      }
-
-      // Mark that no process is running on this CPU.
-      my_cpu()->process = NULL;
-      vm_switch_kernel();
-
-      spin_unlock(&ptable.lock);
-      spin_lock(&ptable.lock);
     }
+
+    // If there are no more proceses to run, drop into the kernel monitor.
+    if (ptable.nprocesses == 0) {
+      cprintf("No runnable processes in the system!\n");
+      for (;;)
+        monitor(NULL);
+    }
+
+    // Mark that no process is running on this CPU.
+    my_cpu()->process = NULL;
+    vm_switch_kernel();
+
+    spin_unlock(&ptable.lock);
   }
 }
 
@@ -358,7 +364,7 @@ process_yield(void)
 }
 
 static void
-process_sleep(void)
+process_suspend(void)
 {
   assert(spin_holding(&ptable.lock));
 
@@ -367,7 +373,7 @@ process_sleep(void)
 }
 
 static void
-process_wakeup(struct Process *proc)
+process_resume(struct Process *proc)
 {
   assert(spin_holding(&ptable.lock));
 
@@ -428,7 +434,7 @@ process_wait(pid_t pid, int *stat_loc, int options)
       break;
     }
 
-    process_sleep();
+    process_suspend();
   }
 
   spin_unlock(&ptable.lock);
@@ -440,8 +446,15 @@ process_wait(pid_t pid, int *stat_loc, int options)
 static void
 process_run(void)
 {
+  static int first;
+
   // Still holding the process table lock.
   spin_unlock(&ptable.lock);
+
+  if (!first) {
+    first = 1;
+    fs_init();
+  }
 
   // "Return" to the user space.
   process_pop_tf(my_process()->tf);
@@ -465,4 +478,40 @@ process_pop_tf(struct Trapframe *tf)
   );
 
   panic("should not return");
+}
+
+void
+process_sleep(struct WaitQueue *q, struct Spinlock *lock)
+{
+  struct Process *current = my_process();
+  
+  if (lock != &ptable.lock) {
+    spin_lock(&ptable.lock);
+    spin_unlock(lock);
+  }
+
+  list_add_back(&q->head, &current->link);
+  process_suspend();
+
+  if (lock != &ptable.lock) {
+    spin_unlock(&ptable.lock);
+    spin_lock(lock);
+  }
+}
+
+void
+process_wakeup(struct WaitQueue *q)
+{
+  struct ListLink *l;
+  struct Process *p;
+
+  spin_lock(&ptable.lock);
+  while (!list_empty(&q->head)) {
+    l = q->head.next;
+    list_remove(l);
+
+    p = LIST_CONTAINER(l, struct Process, link);
+    process_resume(p);
+  }
+  spin_unlock(&ptable.lock);
 }

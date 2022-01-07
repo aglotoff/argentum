@@ -7,6 +7,8 @@
 #include "mmu.h"
 #include "trap.h"
 
+struct Spinlock;
+
 enum {
   PROCESS_EMBRIO   = 1,
   PROCESS_RUNNABLE = 2,
@@ -54,6 +56,10 @@ struct Process {
   int               exit_code;
 };
 
+struct WaitQueue {
+  struct ListLink head;
+};
+
 struct Process *my_process(void);
 
 void            process_init(void);
@@ -63,6 +69,9 @@ void            process_destroy(int);
 void            process_free(struct Process *);
 pid_t           process_copy(void);
 pid_t           process_wait(pid_t, int *, int);
+
+void            process_sleep(struct WaitQueue *, struct Spinlock *);
+void            process_wakeup(struct WaitQueue *);
 
 void            scheduler(void);
 void            context_switch(struct Context **old, struct Context *new);

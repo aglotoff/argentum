@@ -27,6 +27,8 @@ KERNEL_SRCFILES :=	\
 	kernel/spinlock.c \
 	kernel/syscall.c \
 	kernel/sbcon.c \
+	kernel/mci.c \
+	kernel/fs.c \
 	kernel/kdebug.c \
 	kernel/monitor.c \
 	kernel/main.c \

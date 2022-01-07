@@ -24,6 +24,8 @@ extern struct Cpu cpus[];
 unsigned    cpu_id(void);
 struct Cpu *my_cpu(void);
 
+void        irq_disable(void);
+void        irq_enable(void);
 void        irq_save(void);
 void        irq_restore(void);
 

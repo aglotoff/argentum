@@ -58,6 +58,18 @@ my_cpu(void)
  *
  */
 
+void
+irq_disable(void)
+{
+  write_cpsr(read_cpsr() | PSR_I | PSR_F);
+}
+
+void
+irq_enable(void)
+{
+  write_cpsr(read_cpsr() & ~(PSR_I | PSR_F));
+}
+
 /**
  * Save the current CPU interrupt state and disable interrupts.
  *

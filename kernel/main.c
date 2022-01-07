@@ -6,6 +6,7 @@
 #include "console.h"
 #include "gic.h"
 #include "kobject.h"
+#include "mci.h"
 #include "memlayout.h"
 #include "mmu.h"
 #include "page.h"
@@ -28,13 +29,14 @@ main(void)
   vm_init();            // Kernel virtual memory
   page_init_high();     // Physical page allocator (higher memory)
   gic_init();           // Interrupt controller
-  console_init();       // Console devices
+  console_init();       // Console driver
 
   cprintf("Starting CPU %d\n", read_mpidr() & 0x3);
 
   kobject_pool_init();  // Object allocator
   process_init();       // Process table
-  sb_init();            // Serial bus
+  sb_init();            // Serial bus driver
+  mci_init();           // MultiMedia Card Interface driver
 
 #if defined(PROCESS_NAME)
   PROCESS_CREATE(PROCESS_NAME);
