@@ -6,8 +6,8 @@
 #include "cpu.h"
 #include "gic.h"
 #include "kmi.h"
-#include "mci.h"
 #include "process.h"
+#include "sd.h"
 #include "syscall.h"
 #include "trap.h"
 #include "vm.h"
@@ -94,7 +94,7 @@ trap_handle_irq(void)
     kmi_kbd_intr();
     break;
   case IRQ_MCIA:
-    mci_intr();
+    sd_intr();
     break;
   default:
     cprintf("Unexpected IRQ %d from CPU %d\n", irq & 0xFFFFFF, cpu_id());

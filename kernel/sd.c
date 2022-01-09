@@ -1,15 +1,100 @@
 #include <assert.h>
+#include <errno.h>
 #include <stdint.h>
 
 #include "buf.h"
 #include "console.h"
 #include "gic.h"
-#include "mci.h"
 #include "process.h"
+#include "sd.h"
+#include "sleeplock.h"
 #include "spinlock.h"
 #include "trap.h"
 #include "vm.h"
 
+static int  mci_init(void);
+static int  mci_send_command(uint32_t, uint32_t, int, uint32_t *);
+static void mci_request(struct Buf *);
+static int  mci_read_data(void *, size_t);
+static int  mci_write_data(const void *, size_t);
+
+static struct ListLink sd_queue;
+static struct Spinlock sd_lock;
+
+int
+sd_init(void)
+{
+  mci_init();
+
+  list_init(&sd_queue);
+  spin_init(&sd_lock, "sd");
+
+  return 0;
+}
+
+void
+sd_intr(void)
+{
+  struct ListLink *l;
+  struct Buf *buf;
+
+  spin_lock(&sd_lock);
+
+  l = sd_queue.next;
+  buf = LIST_CONTAINER(l, struct Buf, queue_link);
+
+  if (buf->flags & BUF_DIRTY)
+    mci_write_data(buf->data, BLOCK_SIZE);
+  else
+    mci_read_data(buf->data, BLOCK_SIZE);
+
+  if (l->next != &sd_queue)
+    mci_request(LIST_CONTAINER(l->next, struct Buf, queue_link));
+
+  list_remove(l);
+  buf->flags = BUF_VALID;
+
+  spin_unlock(&sd_lock);
+
+  process_wakeup(&buf->wait_queue);
+}
+
+void
+sd_request(struct Buf *buf)
+{
+  if (!sleep_holding(&buf->lock))
+    panic("buf not locked");
+
+  if ((buf->flags & (BUF_DIRTY | BUF_VALID)) == BUF_VALID) {
+    warn("nothing to do");
+    return;
+  }
+
+  spin_lock(&sd_lock);
+
+  list_add_back(&sd_queue, &buf->queue_link);
+
+  if (sd_queue.next == &buf->queue_link)
+    mci_request(buf);
+
+  while ((buf->flags & (BUF_DIRTY | BUF_VALID)) != BUF_VALID)
+    process_sleep(&buf->wait_queue, &sd_lock);
+
+  spin_unlock(&sd_lock);
+}
+
+
+/*
+ * ----------------------------------------------------------------------------
+ * 
+ * ----------------------------------------------------------------------------
+ * 
+ * See "SD Specifications. Part 1. Physical Layer Simplified Specification.
+ * Version 8.00" and "ARM PrimeCell Multimedia Card Interface (PL180) Technical
+ * Reference Manual"
+ */
+
+// MCI base address
 #define MCI_BASE        0x10005000
 
 // MCI registers, shifted right by 2 bits for use as uint32_t[] indices
@@ -78,11 +163,13 @@
 #define MCI_PCELLID2    (0xFF8 / 4)   // PrimeCell identification, bits 23:16
 #define MCI_PCELLID3    (0xFFC / 4)   // PrimeCell identification, bits 31:24
 
+// SD Memory Card bus commands.
+// See Section 4.7.4 of Physical Layer Simplified Specification
 #define SD_GO_IDLE_STATE          0
-#define SD_SEND_IF_COND           1
 #define SD_ALL_SEND_CID           2
 #define SD_SEND_RELATIVE_ADDR     3
 #define SD_SELECT_CARD            7
+#define SD_SEND_IF_COND           8
 #define SD_SET_BLOCKLEN           16
 #define SD_READ_SINGLE_BLOCK      17
 #define SD_READ_MULTIPLE_BLOCK    18
@@ -92,6 +179,8 @@
 #define SD_SD_SEND_OP_COND        41
 #define SD_APP_CMD                55
 
+// SD Memory Card response types.
+// See Section 4.9 of Physical Layer Simplified Specification
 #define SD_RESPONSE_R1            1
 #define SD_RESPONSE_R1B           2
 #define SD_RESPONSE_R2            3
@@ -99,10 +188,69 @@
 #define SD_RESPONSE_R6            7
 #define SD_RESPONSE_R7            8
 
+// OCR Register fields.
+// See Section 5.1 of Physical Layer Simplified Specification
+#define SD_VDD_MASK               0xff8000    // VDD Voltage Window bitmask
+#define SD_OCR_CCS                (1 << 30)   // Card Capacity Status
+#define SD_OCR_BUSY               (1 << 31)   // Card power up status bit
+
 static volatile uint32_t *mci;
 
 static int
-mci_send_command(uint32_t cmd, uint32_t arg, uint32_t type, uint32_t *resp)
+mci_init(void)
+{
+  uint32_t resp[4];
+  int attempts;
+  
+  mci = (volatile uint32_t *) vm_map_mmio(MCI_BASE, 4096);
+
+  // Power on, 3.6 volts, rod control
+  mci[MCI_POWER] = MCI_PWR_ON | (0xF << 2) | MCI_PWR_ROD;
+
+  // Reset all cards to Idle State
+  mci_send_command(SD_GO_IDLE_STATE, 0, 0, NULL);
+
+  // Check whether the card supports the supplied voltage (2.7-3.6V)
+  mci_send_command(SD_SEND_IF_COND, 0x1AA, SD_RESPONSE_R7, resp);
+  if ((resp[0] & 0xFF) != 0xAA)
+    return -ENODEV;
+
+  // Attempt to initialize card by repeatedly issuing ACMD41 until the busy
+  // bit in the OCR is set to 1.
+  attempts = 0;
+  resp[0] = 0;
+  do {
+    if (++attempts > 100)
+      return -ENODEV;
+
+    mci_send_command(SD_APP_CMD, 0, SD_RESPONSE_R1, NULL) ;
+    mci_send_command(SD_SD_SEND_OP_COND, SD_OCR_CCS | SD_VDD_MASK,
+                    SD_RESPONSE_R3, resp);
+
+    // TODO: 10ms delay
+  } while (!(resp[0] & SD_OCR_BUSY));
+
+  // Get the unique card identifiaction number
+  mci_send_command(SD_ALL_SEND_CID, 0, SD_RESPONSE_R2, NULL);
+
+  // Ask the card to publish a new relative card address (RCA)
+  mci_send_command(SD_SEND_RELATIVE_ADDR, 0, SD_RESPONSE_R6, resp);
+
+  // Select the card and put it into the Transfer state
+  mci_send_command(SD_SELECT_CARD, resp[0], SD_RESPONSE_R1B, NULL);
+
+  // Set the block length (512 bytes) for I/O operations.
+  mci_send_command(SD_SET_BLOCKLEN, 512, SD_RESPONSE_R1, NULL);
+
+  // Enable interrupts.
+  mci[MCI_MASK0] = MCI_TX_FIFO_EMPTY | MCI_RX_DATA_AVLBL;
+  gic_enable(IRQ_MCIA, 0);
+
+  return 0;
+}
+
+static int
+mci_send_command(uint32_t cmd, uint32_t arg, int resp_type, uint32_t *resp)
 {
   uint32_t cmd_flags, status, check_bits;
 
@@ -112,9 +260,9 @@ mci_send_command(uint32_t cmd, uint32_t arg, uint32_t type, uint32_t *resp)
   mci[MCI_ARGUMENT] = arg;
 
   cmd_flags = 0;
-  if (type) {
+  if (resp_type) {
     cmd_flags |= MCI_CMD_RESPONSE;
-    if (type == SD_RESPONSE_R2)
+    if (resp_type == SD_RESPONSE_R2)
       cmd_flags |= MCI_CMD_LONG_RESP;
   }
 
@@ -128,12 +276,13 @@ mci_send_command(uint32_t cmd, uint32_t arg, uint32_t type, uint32_t *resp)
     ;
 
   if ((cmd_flags & MCI_CMD_RESPONSE) && (resp != NULL)) {
-    resp[0] = mci[MCI_RESPONSE0];
-
     if (cmd_flags & MCI_CMD_LONG_RESP) {
-      resp[1] = mci[MCI_RESPONSE1];
-      resp[2] = mci[MCI_RESPONSE2];
-      resp[3] = mci[MCI_RESPONSE3];
+      resp[3] = mci[MCI_RESPONSE0];
+      resp[2] = mci[MCI_RESPONSE1];
+      resp[1] = mci[MCI_RESPONSE2];
+      resp[0] = mci[MCI_RESPONSE3];
+    } else {
+      resp[0] = mci[MCI_RESPONSE0];
     }
   }
 
@@ -142,121 +291,85 @@ mci_send_command(uint32_t cmd, uint32_t arg, uint32_t type, uint32_t *resp)
   return status & (MCI_CMD_TIME_OUT | MCI_CMD_CRC_FAIL);
 }
 
-static struct ListLink mci_queue;
-static struct Spinlock mci_lock;
-
-void
-mci_init(void)
-{
-  uint32_t resp[4];
-
-  mci = (volatile uint32_t *) vm_map_mmio(MCI_BASE, 4096);
-
-  // Power on, 3.6 volts, rod control
-  mci[MCI_POWER] = MCI_PWR_ON | (0xF << 2) | MCI_PWR_ROD;
-
-  mci_send_command(SD_GO_IDLE_STATE, 0, 0, NULL);
-
-  mci_send_command(SD_SEND_IF_COND, 0x1AA, SD_RESPONSE_R7, resp);
-
-  do {
-    mci_send_command(SD_APP_CMD, 0, SD_RESPONSE_R1, resp);
-    mci_send_command(SD_SD_SEND_OP_COND, 0x40ff8000, SD_RESPONSE_R3, resp);
-  } while (!(resp[0] & 0x80000000));
-
-  mci_send_command(SD_ALL_SEND_CID, 0, SD_RESPONSE_R2, resp);
-
-  mci_send_command(SD_SEND_RELATIVE_ADDR, 0, SD_RESPONSE_R6, resp);
-
-  mci_send_command(SD_SELECT_CARD, resp[0], SD_RESPONSE_R1B, NULL);
-
-  mci_send_command(SD_SET_BLOCKLEN, 512, SD_RESPONSE_R1, NULL);
-
-  mci[MCI_MASK0] = MCI_TX_FIFO_EMPTY | MCI_RX_DATA_AVLBL;
-
-  gic_enable(IRQ_MCIA, 0);
-
-  list_init(&mci_queue);
-  spin_init(&mci_lock, "mci");
-}
-
 static void
-mci_process_buf(struct Buf *buf)
+mci_request(struct Buf *buf)
 {
+  unsigned cnt = BLOCK_SIZE / 512;
+  
   mci[MCI_DATATIMER]  = 0xFFFF;
   mci[MCI_DATALENGTH] = BLOCK_SIZE;
   
-  mci_send_command(SD_SET_BLOCK_COUNT, BLOCK_SIZE / 512, SD_RESPONSE_R1, NULL);
+  if (cnt > 1)
+    mci_send_command(SD_SET_BLOCK_COUNT, cnt, SD_RESPONSE_R1, NULL);
 
   if (buf->flags & BUF_DIRTY) {
+    // Data transfer enable, from controller to card, block size = 2^9
+    mci[MCI_DATACTRL] = (9 << 4) | MCI_DATACTRL_EN;
+
+    mci_send_command(cnt > 1 ? SD_WRITE_MULTIPLE_BLOCK : SD_WRITE_BLOCK,
+                    buf->block_no * BLOCK_SIZE, SD_RESPONSE_R1, NULL);
+  } else {
     // Data transfer enable, from card to controller, block size = 2^9
     mci[MCI_DATACTRL] = (9 << 4) | MCI_DATACTRL_DIR | MCI_DATACTRL_EN;
 
-    mci_send_command(SD_WRITE_MULTIPLE_BLOCK, buf->block_no * BLOCK_SIZE,
-                     SD_RESPONSE_R1, NULL);
-  } else {
-    // Data transfer enable, from card to controller, block size = 2^10
-    mci[MCI_DATACTRL] = (10 << 4) | MCI_DATACTRL_DIR | MCI_DATACTRL_EN;
-
-    mci_send_command(SD_READ_MULTIPLE_BLOCK, buf->block_no * BLOCK_SIZE,
-                     SD_RESPONSE_R1, NULL);
+    mci_send_command(cnt > 1 ? SD_READ_MULTIPLE_BLOCK : SD_READ_SINGLE_BLOCK,
+                    buf->block_no * BLOCK_SIZE, SD_RESPONSE_R1, NULL);
   }
 }
 
-void
-mci_intr(void)
+static int
+mci_read_data(void *buf, size_t n)
 {
-  struct ListLink *l;
-  struct Buf *buf;
-  uint32_t status, count, *p;
+  uint32_t status, check_bits, *p;
+  
+  assert((n % sizeof(uint32_t)) == 0);
 
-  spin_lock(&mci_lock);
-
-  l = mci_queue.next;
-  buf = LIST_CONTAINER(l, struct Buf, queue_link);
+  p = (uint32_t *) buf;
+  check_bits = MCI_DATA_CRC_FAIL | MCI_DATA_TIME_OUT | MCI_RX_OVERRUN;
 
   status = mci[MCI_STATUS];
-  if (status & MCI_RX_DATA_AVLBL) {
-    p = (uint32_t *) buf->data;
-    for (count = BLOCK_SIZE; count != 0; count -= sizeof(uint32_t)) {
+  while (!(status & check_bits) && (n != 0)) {
+    if (status & MCI_RX_DATA_AVLBL) {
       *p++ = mci[MCI_FIFO];
-      mci[MCI_STATUS];
+      n -= sizeof(uint32_t);
     }
+
+    status = mci[MCI_STATUS];
   }
+
+  while (!(status & check_bits) && !(status & MCI_DATA_BLOCK_END))
+    status = mci[MCI_STATUS];
 
   mci[MCI_CLEAR] = 0xFFFFFFFF;
 
-  if (l->next != &mci_queue)
-    mci_process_buf(LIST_CONTAINER(l->next, struct Buf, queue_link));
-
-  list_remove(l);
-  buf->flags = BUF_VALID;
-
-  spin_unlock(&mci_lock);
-
-  process_wakeup(&buf->wait_queue);
+  return status & check_bits;
 }
 
-void
-mci_request(struct Buf *buf)
+static int
+mci_write_data(const void *buf, size_t n)
 {
-  // if (!spin_holding(&buf->lock))
-  //   panic("buf not locked");
+  uint32_t status, check_bits;
+  const uint32_t *p;
+  
+  assert((n % sizeof(uint32_t)) == 0);
 
-  if ((buf->flags & (BUF_DIRTY | BUF_VALID)) == BUF_VALID) {
-    warn("nothing to do");
-    return;
+  p = (const uint32_t *) buf;
+  check_bits = MCI_DATA_CRC_FAIL | MCI_DATA_TIME_OUT;
+
+  status = mci[MCI_STATUS];
+  while (!(status & check_bits) && (n != 0)) {
+    if (status & MCI_TX_FIFO_HALF) {
+      mci[MCI_FIFO] = *p++;
+      n -= sizeof(uint32_t);
+    }
+
+    status = mci[MCI_STATUS];
   }
 
-  spin_lock(&mci_lock);
+  while (!(status & check_bits) && !(status & MCI_DATA_BLOCK_END))
+    status = mci[MCI_STATUS];
 
-  list_add_back(&mci_queue, &buf->queue_link);
+  mci[MCI_CLEAR] = 0xFFFFFFFF;
 
-  if (mci_queue.next == &buf->queue_link)
-    mci_process_buf(buf);
-
-  while ((buf->flags & (BUF_DIRTY | BUF_VALID)) != BUF_VALID)
-    process_sleep(&buf->wait_queue, &mci_lock);
-
-  spin_unlock(&mci_lock);
+  return status & check_bits;
 }

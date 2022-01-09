@@ -3,15 +3,16 @@
 #include <stdint.h>
 
 #include "armv7.h"
+#include "buf.h"
 #include "console.h"
 #include "gic.h"
 #include "kobject.h"
-#include "mci.h"
 #include "memlayout.h"
 #include "mmu.h"
 #include "page.h"
 #include "process.h"
 #include "sbcon.h"
+#include "sd.h"
 #include "vm.h"
 
 static void boot_aps(void);
@@ -36,7 +37,8 @@ main(void)
   kobject_pool_init();  // Object allocator
   process_init();       // Process table
   sb_init();            // Serial bus driver
-  mci_init();           // MultiMedia Card Interface driver
+  sd_init();            // MultiMedia Card Interface driver
+  buf_init();           // Buffer cache
 
 #if defined(PROCESS_NAME)
   PROCESS_CREATE(PROCESS_NAME);

@@ -8,6 +8,17 @@
     "editor.tabSize": 2,
     "files.associations": {
         "typeinfo": "cpp",
-        "mutex": "c"
+        "mutex": "c",
+        "array": "c",
+        "chrono": "c",
+        "compare": "c",
+        "functional": "c",
+        "istream": "c",
+        "ostream": "c",
+        "ratio": "c",
+        "tuple": "c",
+        "type_traits": "c",
+        "utility": "c",
+        "variant": "c"
     }
 }
