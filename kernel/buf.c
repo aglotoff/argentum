@@ -1,31 +1,52 @@
 #include <assert.h>
 
 #include "buf.h"
+#include "kobject.h"
 #include "list.h"
 #include "sd.h"
 #include "sleeplock.h"
 #include "spinlock.h"
 
+static struct KObjectPool *buf_pool;
+
 static struct {
-  struct Buf buf[BUF_CACHE_SIZE];
-  struct Spinlock lock;
+  unsigned        size;
   struct ListLink head;
+  struct Spinlock lock;
 } buf_cache;
 
 void
 buf_init(void)
-{
-  struct Buf *b;
-  
+{ 
   spin_init(&buf_cache.lock, "buf_cache");
   list_init(&buf_cache.head);
 
-  for (b = buf_cache.buf; b < &buf_cache.buf[BUF_CACHE_SIZE]; b++) {
-    sleep_init(&b->lock, "buf");
-    list_init(&b->wait_queue.head);
+  buf_pool = kobject_pool_create("buf_pool", sizeof(struct Buf), 0);
+  if (buf_pool == NULL)
+    panic("cannot allocate buf_pool");
+}
 
-    list_add_back(&buf_cache.head, &b->cache_link);
-  }
+static struct Buf *
+buf_alloc(void)
+{
+  struct Buf *buf;
+
+  assert(spin_holding(&buf_cache.lock));
+  assert(buf_cache.size < BUF_CACHE_SIZE);
+
+  if ((buf = (struct Buf *) kobject_alloc(buf_pool)) == NULL)
+    return NULL;
+
+  buf->flags = 0;
+  buf->ref_count = 0;
+  buf->block_no = 0;
+  sleep_init(&buf->lock, "buf");
+  list_init(&buf->wait_queue.head);
+
+  list_add_front(&buf_cache.head, &buf->cache_link);
+  buf_cache.size++;
+
+  return buf;
 }
 
 static struct Buf *
@@ -53,22 +74,27 @@ buf_get(unsigned block_no)
       last_usable = b;
   }
 
-  if (last_usable != NULL) {
-    last_usable = last_usable;
-    last_usable->flags = 0;
-    last_usable->ref_count = 1;
-    last_usable->block_no = block_no;
-
-    spin_unlock(&buf_cache.lock);
-
-    sleep_lock(&last_usable->lock);
-
-    return last_usable;
+  if (buf_cache.size < BUF_CACHE_SIZE) {
+    if ((b = buf_alloc()) == NULL) {
+      spin_unlock(&buf_cache.lock);
+      return NULL;
+    }
+  } else {
+    if ((b = last_usable) == NULL) {
+      spin_unlock(&buf_cache.lock);
+      return NULL;
+    }
   }
+
+  b->flags = 0;
+  b->ref_count = 1;
+  b->block_no = block_no;
 
   spin_unlock(&buf_cache.lock);
 
-  return NULL;
+  sleep_lock(&b->lock);
+
+  return b;
 }
 
 struct Buf *

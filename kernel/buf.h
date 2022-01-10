@@ -11,14 +11,14 @@
 #define BLOCK_SIZE      1024
 
 struct Buf {
-  int flags;
-  int ref_count;
-  unsigned block_no;
-  struct ListLink cache_link;
-  struct ListLink queue_link;
+  int              flags;
+  int              ref_count;
+  unsigned         block_no;
+  struct ListLink  cache_link;
+  struct ListLink  queue_link;
   struct Sleeplock lock;
   struct WaitQueue wait_queue;
-  uint8_t data[BLOCK_SIZE];
+  uint8_t          data[BLOCK_SIZE];
 };
 
 #define BUF_VALID   (1 << 0)  ///< Buffer has been read from disk

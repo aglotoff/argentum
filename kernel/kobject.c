@@ -135,7 +135,7 @@ kobject_pool_estimate(size_t obj_size,
   if (!(flags & KOBJECT_POOL_OFFSLAB))
     wastage -= sizeof(struct KObjectSlab);
 
-  for (obj_num = 1; obj_size * obj_num <= wastage; obj_num++)
+  for (obj_num = 0; obj_size * obj_num <= wastage; obj_num++)
     obj_num++;
   obj_num--;
 

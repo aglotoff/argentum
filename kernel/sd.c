@@ -14,9 +14,9 @@
 
 static int  mci_init(void);
 static int  mci_send_command(uint32_t, uint32_t, int, uint32_t *);
-static void mci_request(struct Buf *);
 static int  mci_read_data(void *, size_t);
 static int  mci_write_data(const void *, size_t);
+static void mci_start_transfer(struct Buf *);
 
 static struct ListLink sd_queue;
 static struct Spinlock sd_lock;
@@ -49,7 +49,7 @@ sd_intr(void)
     mci_read_data(buf->data, BLOCK_SIZE);
 
   if (l->next != &sd_queue)
-    mci_request(LIST_CONTAINER(l->next, struct Buf, queue_link));
+    mci_start_transfer(LIST_CONTAINER(l->next, struct Buf, queue_link));
 
   list_remove(l);
   buf->flags = BUF_VALID;
@@ -75,7 +75,7 @@ sd_request(struct Buf *buf)
   list_add_back(&sd_queue, &buf->queue_link);
 
   if (sd_queue.next == &buf->queue_link)
-    mci_request(buf);
+    mci_start_transfer(buf);
 
   while ((buf->flags & (BUF_DIRTY | BUF_VALID)) != BUF_VALID)
     process_sleep(&buf->wait_queue, &sd_lock);
@@ -170,6 +170,7 @@ sd_request(struct Buf *buf)
 #define SD_SEND_RELATIVE_ADDR     3
 #define SD_SELECT_CARD            7
 #define SD_SEND_IF_COND           8
+#define SD_STOP_TRANSMISSION      12
 #define SD_SET_BLOCKLEN           16
 #define SD_READ_SINGLE_BLOCK      17
 #define SD_READ_MULTIPLE_BLOCK    18
@@ -194,6 +195,9 @@ sd_request(struct Buf *buf)
 #define SD_OCR_CCS                (1 << 30)   // Card Capacity Status
 #define SD_OCR_BUSY               (1 << 31)   // Card power up status bit
 
+// Length of a single block in bytes
+#define SD_BLOCK_LENGTH           512
+
 static volatile uint32_t *mci;
 
 static int
@@ -213,6 +217,7 @@ mci_init(void)
   // Check whether the card supports the supplied voltage (2.7-3.6V)
   mci_send_command(SD_SEND_IF_COND, 0x1AA, SD_RESPONSE_R7, resp);
   if ((resp[0] & 0xFF) != 0xAA)
+    // Non-compatible voltage range or check pattern is not correct.
     return -ENODEV;
 
   // Attempt to initialize card by repeatedly issuing ACMD41 until the busy
@@ -221,6 +226,7 @@ mci_init(void)
   resp[0] = 0;
   do {
     if (++attempts > 100)
+      // Unusable card.
       return -ENODEV;
 
     mci_send_command(SD_APP_CMD, 0, SD_RESPONSE_R1, NULL) ;
@@ -240,7 +246,7 @@ mci_init(void)
   mci_send_command(SD_SELECT_CARD, resp[0], SD_RESPONSE_R1B, NULL);
 
   // Set the block length (512 bytes) for I/O operations.
-  mci_send_command(SD_SET_BLOCKLEN, 512, SD_RESPONSE_R1, NULL);
+  mci_send_command(SD_SET_BLOCKLEN, SD_BLOCK_LENGTH, SD_RESPONSE_R1, NULL);
 
   // Enable interrupts.
   mci[MCI_MASK0] = MCI_TX_FIFO_EMPTY | MCI_RX_DATA_AVLBL;
@@ -249,34 +255,48 @@ mci_init(void)
   return 0;
 }
 
+/**
+ * Send a command to the card.
+ *
+ * @param cmd       The command index.
+ * @param arg       The command argument.
+ * @param resp_type The type of the response.
+ * @param resp      Pointer to the memory location where to store the response
+ *                  content, or NULL.
+ * 
+ * @return 0 on success, or a non-zero value containing the error flags.
+ */
 static int
 mci_send_command(uint32_t cmd, uint32_t arg, int resp_type, uint32_t *resp)
 {
-  uint32_t cmd_flags, status, check_bits;
+  uint32_t cmd_type, status, check_flags;
 
-  if (mci[MCI_COMMAND] & MCI_CMD_ENABLE)
-    mci[MCI_COMMAND] = 0;
-  
+  // The argument must be loaded before writing to the command register.
   mci[MCI_ARGUMENT] = arg;
 
-  cmd_flags = 0;
+  // Set the command type bits based on the expected response type.
+  cmd_type = 0;
   if (resp_type) {
-    cmd_flags |= MCI_CMD_RESPONSE;
+    cmd_type |= MCI_CMD_RESPONSE;
     if (resp_type == SD_RESPONSE_R2)
-      cmd_flags |= MCI_CMD_LONG_RESP;
+      cmd_type |= MCI_CMD_LONG_RESP;
   }
 
-  mci[MCI_COMMAND] = MCI_CMD_ENABLE | cmd_flags | (cmd & 0x3F) ;
+  // Send the command.
+  mci[MCI_COMMAND] = MCI_CMD_ENABLE | cmd_type | (cmd & 0x3F) ;
 
-  check_bits = cmd_flags & MCI_CMD_RESPONSE
+  // Status bits to check based on the response type.
+  check_flags = cmd_type & MCI_CMD_RESPONSE
     ? MCI_CMD_RESP_END | MCI_CMD_TIME_OUT | MCI_CMD_CRC_FAIL
     : MCI_CMD_SENT | MCI_CMD_TIME_OUT;
 
-  while (!((status = mci[MCI_STATUS]) & check_bits))
+  // Wait until the command is sent.
+  while (!(status = mci[MCI_STATUS] & check_flags))
     ;
 
-  if ((cmd_flags & MCI_CMD_RESPONSE) && (resp != NULL)) {
-    if (cmd_flags & MCI_CMD_LONG_RESP) {
+  // Get the command response, if present.
+  if ((status & MCI_CMD_RESP_END) && (resp != NULL)) {
+    if (cmd_type & MCI_CMD_LONG_RESP) {
       resp[3] = mci[MCI_RESPONSE0];
       resp[2] = mci[MCI_RESPONSE1];
       resp[1] = mci[MCI_RESPONSE2];
@@ -286,90 +306,137 @@ mci_send_command(uint32_t cmd, uint32_t arg, int resp_type, uint32_t *resp)
     }
   }
 
-  mci[MCI_CLEAR] = check_bits;
+  // Clear the status flags.
+  mci[MCI_CLEAR] = check_flags;
 
   return status & (MCI_CMD_TIME_OUT | MCI_CMD_CRC_FAIL);
 }
 
+/**
+ * Start data transfer.
+ *
+ * @param buf The buffer to be read from or written to the card.
+ */
 static void
-mci_request(struct Buf *buf)
+mci_start_transfer(struct Buf *buf)
 {
-  unsigned cnt = BLOCK_SIZE / 512;
+  uint32_t cmd, data_ctrl;
+  unsigned block_count;
+
+  assert(BLOCK_SIZE % SD_BLOCK_LENGTH == 0);
+
+  block_count = BLOCK_SIZE / SD_BLOCK_LENGTH;
+
+  // Data transfer enable, block size = 512 (2**9), DMA disabled
+  data_ctrl = (9 << 4) | MCI_DATACTRL_EN;
+
+  if (buf->flags & BUF_DIRTY) {
+    // Direction: from controller to card.
+    cmd = (block_count > 1) ? SD_WRITE_MULTIPLE_BLOCK : SD_WRITE_BLOCK;
+  } else {
+    // Direction: from card to controller.
+    data_ctrl |= MCI_DATACTRL_DIR;
+    cmd = (block_count > 1) ? SD_READ_MULTIPLE_BLOCK : SD_READ_SINGLE_BLOCK;
+  }
   
   mci[MCI_DATATIMER]  = 0xFFFF;
   mci[MCI_DATALENGTH] = BLOCK_SIZE;
-  
-  if (cnt > 1)
-    mci_send_command(SD_SET_BLOCK_COUNT, cnt, SD_RESPONSE_R1, NULL);
+  mci[MCI_DATACTRL]   = data_ctrl;
 
-  if (buf->flags & BUF_DIRTY) {
-    // Data transfer enable, from controller to card, block size = 2^9
-    mci[MCI_DATACTRL] = (9 << 4) | MCI_DATACTRL_EN;
-
-    mci_send_command(cnt > 1 ? SD_WRITE_MULTIPLE_BLOCK : SD_WRITE_BLOCK,
-                    buf->block_no * BLOCK_SIZE, SD_RESPONSE_R1, NULL);
-  } else {
-    // Data transfer enable, from card to controller, block size = 2^9
-    mci[MCI_DATACTRL] = (9 << 4) | MCI_DATACTRL_DIR | MCI_DATACTRL_EN;
-
-    mci_send_command(cnt > 1 ? SD_READ_MULTIPLE_BLOCK : SD_READ_SINGLE_BLOCK,
-                    buf->block_no * BLOCK_SIZE, SD_RESPONSE_R1, NULL);
-  }
+  mci_send_command(cmd, buf->block_no * BLOCK_SIZE, SD_RESPONSE_R1, NULL);
 }
 
+/**
+ * Read data from the card.
+ * 
+ * @param buf Pointer to the memory location where to store the data.
+ * @param n   The number of bytes to read (must be a multiple of block size).
+ * 
+ * @return 0 on success, or a non-zero value containing the error flags.
+ */
 static int
 mci_read_data(void *buf, size_t n)
 {
-  uint32_t status, check_bits, *p;
-  
-  assert((n % sizeof(uint32_t)) == 0);
+  uint32_t status, err_flags, *dst;
+  unsigned block_count;
 
-  p = (uint32_t *) buf;
-  check_bits = MCI_DATA_CRC_FAIL | MCI_DATA_TIME_OUT | MCI_RX_OVERRUN;
+  assert((n % SD_BLOCK_LENGTH) == 0);
 
-  status = mci[MCI_STATUS];
-  while (!(status & check_bits) && (n != 0)) {
-    if (status & MCI_RX_DATA_AVLBL) {
-      *p++ = mci[MCI_FIFO];
-      n -= sizeof(uint32_t);
-    }
+  block_count = n / SD_BLOCK_LENGTH;
 
+  // Status bits that indicate a data read error.
+  err_flags = MCI_DATA_CRC_FAIL | MCI_DATA_TIME_OUT | MCI_RX_OVERRUN;
+
+  // Read data into the buffer.
+  dst = (uint32_t *) buf;
+  while (n > 0) {
     status = mci[MCI_STATUS];
+    if ((status & (err_flags | MCI_RX_DATA_AVLBL)) != MCI_RX_DATA_AVLBL)
+      break;
+
+    *dst++ = mci[MCI_FIFO];
+    n -= sizeof(uint32_t);
   }
 
-  while (!(status & check_bits) && !(status & MCI_DATA_BLOCK_END))
+  // Make sure the data block is successfully received.
+  do {
     status = mci[MCI_STATUS];
+  } while (!(status & (err_flags | MCI_DATA_BLOCK_END)));
 
-  mci[MCI_CLEAR] = 0xFFFFFFFF;
+  // Clear error flags.
+  mci[MCI_CLEAR] = err_flags;
 
-  return status & check_bits;
+  // Multiple block transfers must be stopped manually by issuing CMD12.
+  if (block_count > 1)
+    mci_send_command(SD_STOP_TRANSMISSION, 0, SD_RESPONSE_R1B, NULL);
+
+  return status & err_flags;
 }
 
+/**
+ * Write data to the card.
+ * 
+ * @param buf Pointer to the memory location containing the data.
+ * @param n   The number of bytes to write (must be a multiple of block size).
+ * 
+ * @return 0 on success, or a non-zero value containing the error flags.
+ */
 static int
 mci_write_data(const void *buf, size_t n)
 {
-  uint32_t status, check_bits;
-  const uint32_t *p;
-  
-  assert((n % sizeof(uint32_t)) == 0);
+  uint32_t status, err_flags;
+  const uint32_t *src;
+  unsigned block_count;
 
-  p = (const uint32_t *) buf;
-  check_bits = MCI_DATA_CRC_FAIL | MCI_DATA_TIME_OUT;
+  assert((n % SD_BLOCK_LENGTH) == 0);
 
-  status = mci[MCI_STATUS];
-  while (!(status & check_bits) && (n != 0)) {
-    if (status & MCI_TX_FIFO_HALF) {
-      mci[MCI_FIFO] = *p++;
-      n -= sizeof(uint32_t);
-    }
+  block_count = n / SD_BLOCK_LENGTH;
 
+  // Status bits that indicate a data write error.
+  err_flags = MCI_DATA_CRC_FAIL | MCI_DATA_TIME_OUT;
+
+  // Write data to the card.
+  src = (const uint32_t *) buf;
+  while (n > 0) {
     status = mci[MCI_STATUS];
+    if ((status & (err_flags | MCI_TX_FIFO_HALF)) != MCI_TX_FIFO_HALF)
+      break;
+
+    mci[MCI_FIFO] = *src++;
+    n -= sizeof(uint32_t);
   }
 
-  while (!(status & check_bits) && !(status & MCI_DATA_BLOCK_END))
+  // Make sure the data block is successfully received.
+  do {
     status = mci[MCI_STATUS];
+  } while (!(status & (err_flags | MCI_DATA_BLOCK_END)));
 
-  mci[MCI_CLEAR] = 0xFFFFFFFF;
+  // Clear error flags.
+  mci[MCI_CLEAR] = err_flags;
 
-  return status & check_bits;
+  // Multiple block transfers must be stopped manually by issuing CMD12.
+  if (block_count > 1)
+    mci_send_command(SD_STOP_TRANSMISSION, 0, SD_RESPONSE_R1B, NULL);
+
+  return status & err_flags;
 }
