@@ -6,8 +6,7 @@
 #include "elf.h"
 #include "ext2.h"
 #include "list.h"
-#include "process.h"
-#include "sleeplock.h"
+#include "sync.h"
 
 #define INODE_CACHE_SIZE  32
 
@@ -16,8 +15,8 @@ struct Inode {
   int              valid;
   int              ref_count;
   struct ListLink  cache_link;
-  struct Sleeplock lock;
-  struct WaitQueue wait_queue;
+  struct Mutex     mutex;
+  struct ListLink  wait_queue;
   
   struct Ext2Inode data;
 };

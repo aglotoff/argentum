@@ -4,7 +4,7 @@
 #include "console.h"
 #include "memlayout.h"
 #include "rtc.h"
-#include "spinlock.h"
+#include "sync.h"
 #include "vm.h"
 
 /*
@@ -36,7 +36,7 @@ static uint8_t sb_read(uint8_t, uint8_t);
 void           sb_write(uint8_t, uint8_t, uint8_t);
 
 // Spinlock protecting the clock.
-static struct Spinlock rtc_lock;
+static struct SpinLock rtc_lock;
 
 /**
  * Initialize the RTC driver.

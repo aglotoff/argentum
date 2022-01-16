@@ -11,7 +11,7 @@
 
 static struct {
   struct Inode    buf[INODE_CACHE_SIZE];
-  struct Spinlock lock;
+  struct SpinLock lock;
   struct ListLink head;
 } inode_cache;
 
@@ -81,7 +81,7 @@ fs_inode_lock(struct Inode *ip)
   unsigned block_group, table_block, table_idx;
   unsigned inode_table_idx, inode_block_idx, inode_block;
 
-  sleep_lock(&ip->lock);
+  mutex_lock(&ip->mutex);
 
   if (ip->valid)
     return;
@@ -133,10 +133,10 @@ fs_inode_put(struct Inode *ip)
 void
 fs_inode_unlock(struct Inode *ip)
 {
-  if (!sleep_holding(&ip->lock))
+  if (!mutex_holding(&ip->mutex))
     panic("not holding buf");
 
-  sleep_unlock(&ip->lock);
+  mutex_unlock(&ip->mutex);
 }
 
 static unsigned
@@ -175,8 +175,8 @@ fs_inode_read(struct Inode *ip, void *buf, size_t nbyte, off_t off)
   uint8_t *dst;
 
   // TODO: read device
-  if (!sleep_holding(&ip->lock))
-    panic("not holding ip->lock");
+  if (!mutex_holding(&ip->mutex))
+    panic("not holding ip->mutex");
 
   if ((off < 0) || ((size_t) off > ip->data.size) || ((off + nbyte) < (size_t) off))
     return -1;
@@ -210,8 +210,8 @@ fs_init(void)
   list_init(&inode_cache.head);
 
   for (ip = inode_cache.buf; ip < &inode_cache.buf[INODE_CACHE_SIZE]; ip++) {
-    sleep_init(&ip->lock, "inode");
-    list_init(&ip->wait_queue.head);
+    mutex_init(&ip->mutex, "inode");
+    list_init(&ip->wait_queue);
 
     list_add_back(&inode_cache.head, &ip->cache_link);
   }

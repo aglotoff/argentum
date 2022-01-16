@@ -28,7 +28,7 @@ vm_init(void)
 
   kern_trtab = (tte_t *) page2kva(p);
 
-  // Map all of physical memory at KERNEL_BASE
+  // Map all physical memory at KERNEL_BASE
   // Permissions: kernel RW, user NONE
   vm_map_region(kern_trtab, KERNEL_BASE, 0, PHYS_TOP, AP_PRIV_RW, 0);
 

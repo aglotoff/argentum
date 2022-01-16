@@ -6,11 +6,11 @@
 #include "kbd.h"
 #include "lcd.h"
 #include "monitor.h"
-#include "spinlock.h"
+#include "sync.h"
 #include "uart.h"
 
 static struct {
-  struct Spinlock lock;
+  struct SpinLock lock;
   int             locking;
 } console;
 

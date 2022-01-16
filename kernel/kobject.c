@@ -5,7 +5,7 @@
 #include "kernel.h"
 #include "kobject.h"
 #include "page.h"
-#include "spinlock.h"
+#include "sync.h"
 
 // static int                 kobject_pool_grow(struct KObjectPool *);
 static unsigned            kobject_pool_estimate(size_t, unsigned, int,
@@ -17,7 +17,7 @@ static void                kobject_slab_destroy(struct KObjectPool *,
 // Linked list of all object pools.
 static struct {
   struct ListLink head;
-  struct Spinlock lock;
+  struct SpinLock lock;
 } pool_list = {
   LIST_INITIALIZER(pool_list.head),
   SPIN_INITIALIZER("pool_list"),

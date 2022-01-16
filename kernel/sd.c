@@ -8,8 +8,7 @@
 #include "memlayout.h"
 #include "process.h"
 #include "sd.h"
-#include "sleeplock.h"
-#include "spinlock.h"
+#include "sync.h"
 #include "trap.h"
 
 static int  mci_init(void);
@@ -19,7 +18,7 @@ static int  mci_write_data(const void *, size_t);
 static void mci_start_transfer(struct Buf *);
 
 static struct ListLink sd_queue;
-static struct Spinlock sd_lock;
+static struct SpinLock sd_lock;
 
 int
 sd_init(void)
@@ -62,7 +61,7 @@ sd_intr(void)
 void
 sd_request(struct Buf *buf)
 {
-  if (!sleep_holding(&buf->lock))
+  if (!mutex_holding(&buf->mutex))
     panic("buf not locked");
 
   if ((buf->flags & (BUF_DIRTY | BUF_VALID)) == BUF_VALID) {

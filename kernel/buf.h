@@ -5,7 +5,7 @@
 
 #include "list.h"
 #include "process.h"
-#include "sleeplock.h"
+#include "sync.h"
 
 #define BUF_CACHE_SIZE  32
 #define BLOCK_SIZE      1024
@@ -16,8 +16,8 @@ struct Buf {
   unsigned         block_no;
   struct ListLink  cache_link;
   struct ListLink  queue_link;
-  struct Sleeplock lock;
-  struct WaitQueue wait_queue;
+  struct Mutex     mutex;
+  struct ListLink  wait_queue;
   uint8_t          data[BLOCK_SIZE];
 };
 

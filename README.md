@@ -71,6 +71,8 @@ To run the kernel, install **qemu-system-arm** and execute `make qemu`.
 
 ### Hardware Programming
 
+* ARM RealView Platform Baseboard Explore for Cortex-A9
+  * [RealView Platform Baseboard Explore for Cortex-A9 User Guide](https://developer.arm.com/documentation/dui0440/b/)
 * Generic Interrupt Controller - `kernel/gic.c`
   * [Cortex-A9 MPCore Technical Reference Manual](https://developer.arm.com/documentation/ddi0407/g/DDI0407G_cortex_a9_mpcore_r3p0_trm.pdf)
 * Keyboard - `kernel/kbd.c`

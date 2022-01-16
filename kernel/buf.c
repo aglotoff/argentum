@@ -4,15 +4,14 @@
 #include "kobject.h"
 #include "list.h"
 #include "sd.h"
-#include "sleeplock.h"
-#include "spinlock.h"
+#include "sync.h"
 
 static struct KObjectPool *buf_pool;
 
 static struct {
   unsigned        size;
   struct ListLink head;
-  struct Spinlock lock;
+  struct SpinLock lock;
 } buf_cache;
 
 void
@@ -40,8 +39,8 @@ buf_alloc(void)
   buf->flags = 0;
   buf->ref_count = 0;
   buf->block_no = 0;
-  sleep_init(&buf->lock, "buf");
-  list_init(&buf->wait_queue.head);
+  mutex_init(&buf->mutex, "buf");
+  list_init(&buf->wait_queue);
 
   list_add_front(&buf_cache.head, &buf->cache_link);
   buf_cache.size++;
@@ -65,7 +64,7 @@ buf_get(unsigned block_no)
 
       spin_unlock(&buf_cache.lock);
 
-      sleep_lock(&b->lock);
+      mutex_lock(&b->mutex);
 
       return b;
     }
@@ -92,7 +91,7 @@ buf_get(unsigned block_no)
 
   spin_unlock(&buf_cache.lock);
 
-  sleep_lock(&b->lock);
+  mutex_lock(&b->mutex);
 
   return b;
 }
@@ -120,10 +119,10 @@ buf_write(struct Buf *buf)
 void 
 buf_release(struct Buf *buf)
 {
-  if (!sleep_holding(&buf->lock))
+  if (!mutex_holding(&buf->mutex))
     panic("not holding buf");
   
-  sleep_unlock(&buf->lock);
+  mutex_unlock(&buf->mutex);
 
   spin_lock(&buf_cache.lock);
 

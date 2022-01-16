@@ -3,7 +3,7 @@
 #include "console.h"
 #include "kernel.h"
 #include "page.h"
-#include "spinlock.h"
+#include "sync.h"
 
 /** The kernel uses this array to keep track of physical pages. */
 struct PageInfo *pages;
@@ -32,7 +32,7 @@ static struct {
 } free_pages[PAGE_ORDER_MAX + 1];
 
 static int pages_inited = 0;
-static struct Spinlock pages_lock;
+static struct SpinLock pages_lock;
 
 static void             page_mark_free(struct PageInfo *, unsigned);
 static void             page_mark_used(struct PageInfo *, unsigned);

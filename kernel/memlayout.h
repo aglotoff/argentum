@@ -8,7 +8,7 @@
 #define PAGE_SHIFT      12
 
 /** Assume that we have at least 256M of physical memory */
-#define PHYS_TOP        (256 * 1024 * 1024)
+#define PHYS_TOP        0x10000000
 
 /** During the boot time, we can access only up to 16MB of physical memory */
 #define PHYS_ENTRY_TOP  (16 * 1024 * 1024)

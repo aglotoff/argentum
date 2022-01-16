@@ -14,7 +14,7 @@
 #include "monitor.h"
 #include "page.h"
 #include "process.h"
-#include "spinlock.h"
+#include "sync.h"
 #include "trap.h"
 #include "vm.h"
 
@@ -27,7 +27,7 @@ HASH_DECLARE(pid_hash, NBUCKET);
 static struct {
   int             nprocesses;
   struct ListLink runqueue;
-  struct Spinlock lock;
+  struct SpinLock lock;
 } ptable;
 
 static void process_run(void);
@@ -481,7 +481,7 @@ process_pop_tf(struct Trapframe *tf)
 }
 
 void
-process_sleep(struct WaitQueue *q, struct Spinlock *lock)
+process_sleep(struct ListLink *q, struct SpinLock *lock)
 {
   struct Process *current = my_process();
   
@@ -490,7 +490,7 @@ process_sleep(struct WaitQueue *q, struct Spinlock *lock)
     spin_unlock(lock);
   }
 
-  list_add_back(&q->head, &current->link);
+  list_add_back(q, &current->link);
   process_suspend();
 
   if (lock != &ptable.lock) {
@@ -500,14 +500,14 @@ process_sleep(struct WaitQueue *q, struct Spinlock *lock)
 }
 
 void
-process_wakeup(struct WaitQueue *q)
+process_wakeup(struct ListLink *q)
 {
   struct ListLink *l;
   struct Process *p;
 
   spin_lock(&ptable.lock);
-  while (!list_empty(&q->head)) {
-    l = q->head.next;
+  while (!list_empty(q)) {
+    l = q->next;
     list_remove(l);
 
     p = LIST_CONTAINER(l, struct Process, link);

@@ -3,7 +3,7 @@
 
 #include "list.h"
 
-#include "spinlock.h"
+#include "sync.h"
 
 /**
  * Object pool descriptor.
@@ -12,7 +12,7 @@ struct KObjectPool {
   struct ListLink   slabs_used;       ///< Slabs with all objects in use
   struct ListLink   slabs_partial;    ///< Slabs that have free objects
   struct ListLink   slabs_free;       ///< Slabs with all objects free
-  struct Spinlock   lock;             ///< Spinlock protecting the pool
+  struct SpinLock   lock;             ///< Spinlock protecting the pool
 
   int               flags;            ///< Flags
   size_t            obj_size;         ///< Size of each object
