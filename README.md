@@ -12,7 +12,7 @@ Download the following packages:
 
 Unpack and build the packages:
 
-```
+```bash
 tar xf binutils-2.37.tar.bz2
 cd binutils-2.37
 mkdir build
@@ -56,6 +56,11 @@ To build the OS code, execute `make`.
 To run the kernel, install **qemu-system-arm** and execute `make qemu`.
 
 ## Resources
+
+### General OS Development Information
+
+  * [OSDev Wiki](https://wiki.osdev.org/Expanded_Main_Page)
+  * [xv6, a simple Unix-like teaching OS](https://pdos.csail.mit.edu/6.828/2018/xv6.html) by MIT
 
 ### ARM architecture
 
