@@ -9,11 +9,11 @@
 #include "page.h"
 #include "vm.h"
 
-// Master kernel translation table.
-static tte_t *kern_trtab;
-
 static pte_t *vm_walk_trtab(tte_t *, uintptr_t, int);
 static void   vm_map_region(tte_t *, uintptr_t, uint32_t, size_t, int, int);
+
+// Master kernel translation table.
+static tte_t *kern_trtab;
 
 void
 vm_init(void)

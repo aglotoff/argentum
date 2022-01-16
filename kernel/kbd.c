@@ -5,7 +5,7 @@
 
 #include "console.h"
 #include "gic.h"
-#include "kmi.h"
+#include "kbd.h"
 #include "memlayout.h"
 #include "trap.h"
 #include "vm.h"
@@ -24,7 +24,7 @@
 
 static int kmi_read(volatile uint32_t *);
 static int kmi_write(volatile uint32_t *, uint8_t);
-static int kmi_kbd_getc(void);
+static int kbd_getc(void);
 
 static volatile uint32_t *kmi0;
 
@@ -32,7 +32,7 @@ static volatile uint32_t *kmi0;
  * Initialize the keyboard driver.
  */
 void
-kmi_kbd_init(void)
+kbd_init(void)
 {
   kmi0 = (volatile uint32_t *) KADDR(KMI0_BASE);
 
@@ -51,9 +51,9 @@ kmi_kbd_init(void)
  * Get data and store it into the console buffer.
  */
 void
-kmi_kbd_intr(void)
+kbd_intr(void)
 {
-  console_intr(kmi_kbd_getc);
+  console_intr(kbd_getc);
 }
 
 static int
@@ -174,7 +174,7 @@ togglecode[256] = {
 };
 
 static int
-kmi_kbd_getc(void)
+kbd_getc(void)
 {
   static int key_state;
   int data, c;

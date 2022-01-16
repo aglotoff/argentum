@@ -11,7 +11,7 @@ endif
 
 KERNEL_SRCFILES :=	\
 	kernel/entry.S \
-	kernel/kmi.c \
+	kernel/kbd.c \
 	kernel/lcd.c \
 	kernel/uart.c \
 	kernel/console.c \
@@ -27,7 +27,7 @@ KERNEL_SRCFILES :=	\
 	kernel/spinlock.c \
 	kernel/sleeplock.c \
 	kernel/syscall.c \
-	kernel/sbcon.c \
+	kernel/rtc.c \
 	kernel/sd.c \
 	kernel/buf.c \
 	kernel/fs.c \

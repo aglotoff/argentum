@@ -22,6 +22,7 @@
         "variant": "c",
         "thread": "c",
         "bitset": "c",
-        "algorithm": "c"
+        "algorithm": "c",
+        "rtc.h": "c"
     }
 }

@@ -3,7 +3,7 @@
 
 #include "armv7.h"
 #include "console.h"
-#include "kmi.h"
+#include "kbd.h"
 #include "lcd.h"
 #include "monitor.h"
 #include "spinlock.h"
@@ -24,7 +24,7 @@ console_init(void)
   console.locking = 1;
 
   uart_init();
-  kmi_kbd_init();
+  kbd_init();
   lcd_init();
 }
 
@@ -86,7 +86,7 @@ console_getc(void)
   do {
     // Poll for any pending characters from UART and the keyboard.
     uart_intr();
-    kmi_kbd_intr();
+    kbd_intr();
   } while (input.rpos == input.wpos);
 
   return input.buf[input.rpos++ % CONSOLE_BUF_SIZE];

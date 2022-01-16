@@ -11,7 +11,7 @@
 #include "mmu.h"
 #include "page.h"
 #include "process.h"
-#include "sbcon.h"
+#include "rtc.h"
 #include "sd.h"
 #include "vm.h"
 
@@ -35,8 +35,8 @@ main(void)
   gic_init();           // Interrupt controller
   kobject_pool_init();  // Object allocator
   process_init();       // Process table
-  sb_init();            // Serial bus driver
-  sd_init();            // MultiMedia Card Interface driver
+  rtc_init();           // Real-time clock
+  sd_init();            // MultiMedia Card Interface
   buf_init();           // Buffer cache
 
 #if defined(PROCESS_NAME)

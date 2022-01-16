@@ -5,7 +5,7 @@
 #include "console.h"
 #include "cpu.h"
 #include "process.h"
-#include "sbcon.h"
+#include "rtc.h"
 #include "syscall.h"
 #include "trap.h"
 #include "vm.h"
@@ -211,7 +211,7 @@ sys_getppid(void)
 int32_t
 sys_time(void)
 {
-  return sb_rtc_time();
+  return rtc_time();
 }
 
 int32_t

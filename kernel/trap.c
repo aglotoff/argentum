@@ -5,7 +5,7 @@
 #include "console.h"
 #include "cpu.h"
 #include "gic.h"
-#include "kmi.h"
+#include "kbd.h"
 #include "process.h"
 #include "sd.h"
 #include "syscall.h"
@@ -14,14 +14,14 @@
 #include "uart.h"
 
 static void trap_handle_abort(struct Trapframe *);
-static void trap_handle_irq(void);
+static void trap_irq_dispatch(void);
 
 void
 trap(struct Trapframe *tf)
 {
   extern char *panicstr;
 
-  // Halt the CPU if some other CPU has called panic().
+  // Halt if some other CPU already has called panic().
   if (panicstr) {
     for (;;)
       asm volatile("wfi");
@@ -37,13 +37,14 @@ trap(struct Trapframe *tf)
     tf->r0 = sys_dispatch();
     break;
   case T_IRQ:
-    trap_handle_irq();
+    trap_irq_dispatch();
     break;
   default:
-    // Unexpected trap: either the user process or the kernel has a bug.
+    // Either the user process misbehaved or the kernel has a bug.
     if ((tf->psr & PSR_M_MASK) == PSR_M_USR) {
       process_destroy(-1);
     }
+
     print_trapframe(tf);
     panic("unhandled trap in kernel");
   }
@@ -66,13 +67,12 @@ trap_handle_abort(struct Trapframe *tf)
   }
 
   // Abort happened in user mode.
-  
   cprintf("user fault va %p status %#x\n", address, status);
   process_destroy(-1);
 }
 
 static void
-trap_handle_irq(void)
+trap_irq_dispatch(void)
 {
   int irq, resched;
 
@@ -91,7 +91,7 @@ trap_handle_irq(void)
     uart_intr();
     break;
   case IRQ_KMI0:
-    kmi_kbd_intr();
+    kbd_intr();
     break;
   case IRQ_MCIA:
     sd_intr();
@@ -108,7 +108,7 @@ trap_handle_irq(void)
 }
 
 static const char *
-trapname(unsigned trapno)
+trap_name(unsigned trapno)
 {
   static const char *const excnames[] = {
     "Reset",
@@ -144,7 +144,7 @@ print_trapframe(struct Trapframe *tf)
           tf, cpu_id());
   
   cprintf("  trap %p    [%s]\n",
-          tf->trapno, trapname(tf->trapno));
+          tf->trapno, trap_name(tf->trapno));
 
   cprintf("  psr  %p    [%s%s%s%s]\n",
           tf->psr,
