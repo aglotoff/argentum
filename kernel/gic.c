@@ -7,10 +7,9 @@
 #include "trap.h"
 #include "vm.h"
 
-#define GIC_BASE    0x1F000000      // GIC memory base address
-#define GICC        (0x0100 / 4)    // Interrupt interface offset
-#define PTIMER      (0x0600 / 4)    // Private timer offset
-#define GICD        (0x1000 / 4)    // Distributor offset
+#define GICC_BASE     0x1F000100    // Interrupt interface memory base address
+#define PTIMER_BASE   0x1F000600    // Private timer memory base address
+#define GICD_BASE     0x1F001000    // Distributor memory base address
 
 static volatile uint32_t *gicc, *gicd, *ptimer;
 
@@ -40,13 +39,10 @@ static volatile uint32_t *gicc, *gicd, *ptimer;
 
 void
 gic_init(void)
-{
-  uint32_t *gic;
-  
-  gic    = (uint32_t *) vm_map_mmio(GIC_BASE, PAGE_SIZE * 2);
-  gicc   = gic + GICC;
-  gicd   = gic + GICD;
-  ptimer = gic + PTIMER;
+{ 
+  gicc   = (volatile uint32_t *) KADDR(GICC_BASE);
+  gicd   = (volatile uint32_t *) KADDR(GICD_BASE);
+  ptimer = (volatile uint32_t *) KADDR(PTIMER_BASE);
 
   // Enable local PIC.
   gicc[ICCICR] = ICCICR_EN;
@@ -61,7 +57,6 @@ gic_init(void)
 void
 gic_enable(unsigned irq, unsigned cpu)
 {
-  (void) cpu;
   gicd[ICDISER0 + (irq >> 5)] = (1U << (irq & 0x1F));
   gicd[ICDIPR0  + (irq >> 2)] = (0x80 << ((irq & 0x3) << 3));
   gicd[ICDIPTR0 + (irq >> 2)] = ((1U << cpu) << ((irq & 0x3) << 3));

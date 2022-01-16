@@ -9,10 +9,11 @@
 #include "page.h"
 #include "vm.h"
 
-tte_t *kern_trtab;
+// Master kernel translation table.
+static tte_t *kern_trtab;
 
 static pte_t *vm_walk_trtab(tte_t *, uintptr_t, int);
-static void vm_map_region(tte_t *, uintptr_t, uint32_t, size_t, int, int);
+static void   vm_map_region(tte_t *, uintptr_t, uint32_t, size_t, int, int);
 
 void
 vm_init(void)
@@ -30,6 +31,10 @@ vm_init(void)
   // Map all of physical memory at KERNEL_BASE
   // Permissions: kernel RW, user NONE
   vm_map_region(kern_trtab, KERNEL_BASE, 0, PHYS_TOP, AP_PRIV_RW, 0);
+
+  // Map all devices 
+  vm_map_region(kern_trtab, KERNEL_BASE + PHYS_TOP, PHYS_TOP,
+                VECTORS_BASE - KERNEL_BASE - PHYS_TOP, AP_PRIV_RW, 1);
 
   // Map exception vectors at VECTORS_BASE
   // Permissions: kernel R, user NONE
@@ -101,22 +106,6 @@ vm_walk_trtab(tte_t *trtab, uintptr_t va, int alloc)
 
   pgtab = KADDR(TTE_PGTAB_ADDR(*tte));
   return &pgtab[PTX(va)];
-}
-
-void *
-vm_map_mmio(uint32_t pa, size_t n)
-{
-  static uint8_t *base = (uint8_t *) MMIO_BASE;
-  void *ret;
-
-  ret = base;
-  base += n;
-
-  if (base > (uint8_t *) MMIO_LIMIT)
-    panic("out of memory");
-
-  vm_map_region(kern_trtab, (uintptr_t) ret, pa, n, AP_PRIV_RW, 1);
-  return ret;
 }
 
 struct PageInfo *

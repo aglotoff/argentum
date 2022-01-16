@@ -31,9 +31,9 @@ static struct {
   uint32_t       *bitmap;
 } free_pages[PAGE_ORDER_MAX + 1];
 
+static int pages_inited = 0;
 static struct Spinlock pages_lock;
 
-static void            *boot_alloc(size_t);
 static void             page_mark_free(struct PageInfo *, unsigned);
 static void             page_mark_used(struct PageInfo *, unsigned);
 static int              page_is_free(struct PageInfo *, unsigned);
@@ -81,6 +81,8 @@ page_init_low(void)
   // Place pages mapped by 'entry_trtab' to the free list.
   page_free_region(0, KERNEL_LOAD);
   page_free_region(PADDR(boot_alloc(0)), PHYS_ENTRY_TOP);
+
+  pages_inited = 1;
 }
 
 /**
@@ -102,7 +104,7 @@ page_init_high(void)
  *
  */
 
-static void *
+void *
 boot_alloc(size_t n)
 {
   // First address after the kernel loaded from ELF file.
@@ -113,21 +115,23 @@ boot_alloc(size_t n)
 
   uint8_t *ret;
 
-  // If this is the first time, initialize nextptr.
+  if (pages_inited)
+    panic("called after the page allocator is already initialized");
+
+  // If this is the first time the allocator is invoked, initialize nextptr.
   if (nextptr == NULL)
     nextptr = ROUND_UP((uint8_t *) _end, sizeof(uintptr_t));
 
   ret = nextptr;
 
-  // Allocate a chunk large enough to hold 'n' bytes and initialize to 0.
-  // Make sure nextptr is kept aligned to a multiple of word size.
+  // Allocate a chunk large enough to hold 'n' bytes and initialize it to 0.
+  // Make sure nextptr is kept properly aligned.
   if (n != 0) {
     n = ROUND_UP(n, sizeof(uintptr_t));
     nextptr += n;
 
-    if (PADDR(nextptr) > PHYS_ENTRY_TOP) {
-      // TODO: BUG!
-    }
+    if (PADDR(nextptr) > PHYS_ENTRY_TOP)
+      panic("out of memory");
 
     memset(ret, 0, n);
   }

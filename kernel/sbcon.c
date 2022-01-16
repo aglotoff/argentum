@@ -49,7 +49,7 @@ static struct Spinlock rtc_lock;
 void
 sb_init(void)
 {
-  sb = (volatile uint32_t *) vm_map_mmio(SB_CON0, PAGE_SIZE);
+  sb = (volatile uint32_t *) KADDR(SB_CON0);
 
   sb[SB_CONTROLS] = SCL;
   sb[SB_CONTROLS] = SDA;

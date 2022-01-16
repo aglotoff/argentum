@@ -8,8 +8,9 @@
  */
 
 #include <assert.h>
-#include "list.h"
+#include <stddef.h>
 
+#include "list.h"
 #include "memlayout.h"
 
 struct KObjectSlab;
@@ -81,6 +82,8 @@ kva2page(void *va)
 
 /** Fill the allocated page block with zeros. */ 
 #define PAGE_ALLOC_ZERO   (1 << 0)
+
+void            *boot_alloc(size_t);
 
 void             page_init_low(void);
 void             page_init_high(void);

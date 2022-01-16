@@ -96,7 +96,6 @@ lcd_init(void)
 {
   extern uint8_t _binary_kernel_vga_font_psf_start[];
 
-  struct PageInfo *p;
   struct PsfHeader *psf;
 
   // Load the font file.
@@ -108,13 +107,11 @@ lcd_init(void)
   font = (uint8_t *) (psf + 1);
 
   // Allocate the frame buffer.
-  if ((p = page_alloc_block(8, PAGE_ALLOC_ZERO)) == NULL)
+  frame_buf = (uint16_t *) boot_alloc(DISPLAY_SIZE * sizeof(uint16_t));
+  if (frame_buf == NULL)
     return -ENOMEM;
 
-  frame_buf = (uint16_t *) page2kva(p);
-  p->ref_count++;
-
-  lcd = (volatile uint32_t *) vm_map_mmio(LCD_BASE, 4096);
+  lcd = (volatile uint32_t *) KADDR(LCD_BASE);
 
   // Display resolution: VGA (640x480) on VGA.
   lcd[LCD_TIMING0] = 0x3F1F3F9C;

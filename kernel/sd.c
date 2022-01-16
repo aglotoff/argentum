@@ -5,12 +5,12 @@
 #include "buf.h"
 #include "console.h"
 #include "gic.h"
+#include "memlayout.h"
 #include "process.h"
 #include "sd.h"
 #include "sleeplock.h"
 #include "spinlock.h"
 #include "trap.h"
-#include "vm.h"
 
 static int  mci_init(void);
 static int  mci_send_command(uint32_t, uint32_t, int, uint32_t *);
@@ -203,20 +203,20 @@ static volatile uint32_t *mci;
 static int
 mci_init(void)
 {
-  uint32_t resp[4];
+  uint32_t resp[4], rca;
   int attempts;
   
-  mci = (volatile uint32_t *) vm_map_mmio(MCI_BASE, 4096);
+  mci = (volatile uint32_t *) KADDR(MCI_BASE);
 
   // Power on, 3.6 volts, rod control
   mci[MCI_POWER] = MCI_PWR_ON | (0xF << 2) | MCI_PWR_ROD;
 
-  // Reset all cards to Idle State
+  // Set each card into Idle State
   mci_send_command(SD_GO_IDLE_STATE, 0, 0, NULL);
 
   // Check whether the card supports the supplied voltage (2.7-3.6V)
   mci_send_command(SD_SEND_IF_COND, 0x1AA, SD_RESPONSE_R7, resp);
-  if ((resp[0] & 0xFF) != 0xAA)
+  if ((resp[0] & 0xFFF) != 0x1AA)
     // Non-compatible voltage range or check pattern is not correct.
     return -ENODEV;
 
@@ -236,20 +236,23 @@ mci_init(void)
     // TODO: 10ms delay
   } while (!(resp[0] & SD_OCR_BUSY));
 
-  // Get the unique card identifiaction number
+  // Get the unique card identification (CID) number to put it into
+  // Identification State.
   mci_send_command(SD_ALL_SEND_CID, 0, SD_RESPONSE_R2, NULL);
 
-  // Ask the card to publish a new relative card address (RCA)
-  mci_send_command(SD_SEND_RELATIVE_ADDR, 0, SD_RESPONSE_R6, resp);
+  // Ask the card to publish a new relative card address (RCA).
+  mci_send_command(SD_SEND_RELATIVE_ADDR, 0, SD_RESPONSE_R6, &rca);
 
-  // Select the card and put it into the Transfer state
-  mci_send_command(SD_SELECT_CARD, resp[0], SD_RESPONSE_R1B, NULL);
+  // Use this RCA to select the card and put it into Transfer State.
+  mci_send_command(SD_SELECT_CARD, rca & 0xFFFF0000, SD_RESPONSE_R1B, NULL);
 
   // Set the block length (512 bytes) for I/O operations.
   mci_send_command(SD_SET_BLOCKLEN, SD_BLOCK_LENGTH, SD_RESPONSE_R1, NULL);
 
-  // Enable interrupts.
+  // Specify which status flags will generate interrupt requests.
   mci[MCI_MASK0] = MCI_TX_FIFO_EMPTY | MCI_RX_DATA_AVLBL;
+
+  // Enable interrupts.
   gic_enable(IRQ_MCIA, 0);
 
   return 0;

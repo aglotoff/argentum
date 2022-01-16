@@ -26,14 +26,13 @@ static void mp_main(void);
 void
 main(void)
 {
+  console_init();       // Console driver
+  cprintf("Starting CPU %d\n", read_mpidr() & 0x3);
+  
   page_init_low();      // Physical page allocator (lower memory)
   vm_init();            // Kernel virtual memory
   page_init_high();     // Physical page allocator (higher memory)
   gic_init();           // Interrupt controller
-  console_init();       // Console driver
-
-  cprintf("Starting CPU %d\n", read_mpidr() & 0x3);
-
   kobject_pool_init();  // Object allocator
   process_init();       // Process table
   sb_init();            // Serial bus driver
@@ -74,7 +73,7 @@ boot_aps(void)
   extern uint8_t _start[];
   static volatile uint32_t *sys;
 
-  sys = (volatile uint32_t *) vm_map_mmio(SYS_BASE, 4096);
+  sys = (volatile uint32_t *) KADDR(SYS_BASE);
   sys[SYS_FLAGS] = (uint32_t) _start;
 
   gic_start_others();
@@ -130,4 +129,8 @@ entry_trtab[NTTENTRIES] = {
     (0x00E00000 | TTE_TYPE_SECT | TTE_SECT_AP(AP_PRIV_RW)),
   [TTX(KERNEL_BASE+0x00F00000)] =
     (0x00F00000 | TTE_TYPE_SECT | TTE_SECT_AP(AP_PRIV_RW)),
+
+  // Map console devices registers
+  [TTX(KERNEL_BASE+0x10000000)] =
+    (0x10000000 | TTE_TYPE_SECT | TTE_SECT_AP(AP_PRIV_RW)),
 };

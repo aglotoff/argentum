@@ -2,10 +2,10 @@
 #define __KERNEL_MEMLAYOUT_H__
 
 /** The number of bytes mapped by a single physical page. */
-#define PAGE_SIZE         4096U
+#define PAGE_SIZE       4096U
 
 /** Log2 of PAGE_SIZE. */
-#define PAGE_SHIFT        12
+#define PAGE_SHIFT      12
 
 /** Assume that we have at least 256M of physical memory */
 #define PHYS_TOP        (256 * 1024 * 1024)

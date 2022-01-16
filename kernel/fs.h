@@ -4,6 +4,7 @@
 #include <stdint.h>
 
 #include "elf.h"
+#include "ext2.h"
 #include "list.h"
 #include "process.h"
 #include "sleeplock.h"

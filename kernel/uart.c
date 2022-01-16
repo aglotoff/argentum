@@ -43,7 +43,7 @@ static int uart_getc(void);
 void
 uart_init(void)
 {
-  uart = (volatile uint32_t *) vm_map_mmio(UART0, PAGE_SIZE);
+  uart = (volatile uint32_t *) KADDR(UART0);
 
   // Clear all errors.
   uart[UARTECR] = 0;
