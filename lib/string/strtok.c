@@ -14,10 +14,10 @@ strtok(char *s, const char *sep)
   char *begin, *end;
 
   begin = (s != NULL) ? s : state;
+  begin += strspn(begin, sep);
   if (*begin == '\0')
     return NULL;
 
-  begin += strspn(begin, sep);
   if ((end = strpbrk(begin, sep)) != NULL) {
     *end++ = '\0';
     state = end;
