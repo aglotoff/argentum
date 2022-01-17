@@ -4,6 +4,7 @@
 
 #include "armv7.h"
 #include "console.h"
+#include "fs.h"
 #include "kernel.h"
 #include "mmu.h"
 #include "page.h"
@@ -407,6 +408,37 @@ vm_check(tte_t *trtab, void *va, size_t n, unsigned perm)
       return -EFAULT;
 
     a += PAGE_SIZE;
+  }
+
+  return 0;
+}
+
+int
+vm_load(tte_t *trtab, void *va, struct Inode *ip, size_t n, off_t off)
+{
+  struct PageInfo *page;
+  uint8_t *dst, *kva;
+  int ncopied, offset;
+  int r;
+
+  dst = (uint8_t *) va;
+
+  while (n != 0) {
+    page = vm_lookup_page(trtab, dst, NULL);
+    if (page == NULL)
+      return -EFAULT;
+
+    kva = (uint8_t *) page2kva(page);
+
+    offset = (uintptr_t) dst % PAGE_SIZE;
+    ncopied = MIN(PAGE_SIZE - offset, n);
+
+    if ((r = fs_inode_read(ip, kva + offset, ncopied, off)) != ncopied)
+      return r;
+
+    dst += ncopied;
+    off += ncopied;
+    n   -= ncopied;
   }
 
   return 0;

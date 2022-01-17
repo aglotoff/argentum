@@ -23,6 +23,16 @@
         "thread": "c",
         "bitset": "c",
         "algorithm": "c",
-        "rtc.h": "c"
+        "rtc.h": "c",
+        "deque": "c",
+        "forward_list": "c",
+        "list": "c",
+        "string": "c",
+        "unordered_map": "c",
+        "vector": "c",
+        "string_view": "c",
+        "initializer_list": "c",
+        "atomic": "c",
+        "condition_variable": "c"
     }
 }

@@ -378,6 +378,8 @@ process_resume(struct Process *proc)
   assert(spin_holding(&ptable.lock));
 
   proc->state = PROCESS_RUNNABLE;
+
+  list_remove(&proc->link);
   list_add_back(&ptable.runqueue, &proc->link);
 }
 
@@ -484,7 +486,7 @@ void
 process_sleep(struct ListLink *q, struct SpinLock *lock)
 {
   struct Process *current = my_process();
-  
+
   if (lock != &ptable.lock) {
     spin_lock(&ptable.lock);
     spin_unlock(lock);
@@ -514,4 +516,105 @@ process_wakeup(struct ListLink *q)
     process_resume(p);
   }
   spin_unlock(&ptable.lock);
+}
+
+int
+process_exec(const char *path)
+{
+  struct PageInfo *trtab_page;
+  struct Process *proc;
+  struct Inode *ip;
+  Elf32_Ehdr elf;
+  Elf32_Phdr ph;
+  off_t off;
+  tte_t *trtab;
+  unsigned size;
+  int r;
+
+  if ((ip = fs_name_lookup(path)) == NULL)
+    return -ENOENT;
+
+  fs_inode_lock(ip);
+
+  if ((ip->data.mode & EXT2_S_IFMASK) != EXT2_S_IFREG) {
+    r = -ENOENT;
+    goto out1;
+  }
+
+  if ((trtab_page = page_alloc_block(1, PAGE_ALLOC_ZERO)) == NULL) {
+    r = -ENOMEM;
+    goto out1;
+  }
+
+  trtab = (tte_t *) page2kva(trtab_page);
+  trtab_page->ref_count++;
+
+  if ((r = fs_inode_read(ip, &elf, sizeof(elf), 0)) != sizeof(elf))
+    goto out2;
+  
+  if (memcmp(elf.ident, "\x7f""ELF", 4) != 0) {
+    r = -EINVAL;
+    goto out2;
+  }
+
+  size = 0;
+
+  for (off = elf.phoff;
+       (size_t) off < elf.phoff + elf.phnum * sizeof(ph);
+       off += sizeof(ph)) {
+    if ((r = fs_inode_read(ip, &ph, sizeof(ph), off)) != sizeof(ph))
+      goto out2;
+
+    if (ph.type != PT_LOAD)
+      continue;
+
+    if (ph.filesz > ph.memsz) {
+      r = -EINVAL;
+      goto out2;
+    }
+
+    if ((ph.vaddr >= KERNEL_BASE) || (ph.vaddr + ph.memsz > KERNEL_BASE)) {
+      r = -EINVAL;
+      goto out2;
+    }
+
+    if ((r = vm_alloc_region(trtab, (void *) ph.vaddr, ph.memsz) < 0))
+      goto out2;
+
+    if ((r = vm_load(trtab, (void *) ph.vaddr, ip, ph.filesz, ph.offset)) < 0)
+      goto out2;
+
+    size = ph.vaddr + ph.memsz;
+  }
+
+  // Allocate user stack.
+  if ((r = vm_alloc_region(trtab, (void *) (USTACK_TOP - USTACK_SIZE),
+                           USTACK_SIZE)) < 0)
+    return r;
+
+  fs_inode_unlock(ip);
+  fs_inode_put(ip);
+
+  proc = my_process();
+
+  vm_switch_user(trtab);
+  vm_free(proc->trtab);
+  proc->trtab = trtab;
+  proc->size  = size;
+
+  proc->tf->r0     = 0;                   // argc
+  proc->tf->r1     = 0;                   // argv
+  proc->tf->sp_usr = USTACK_TOP;          // stack pointer
+  proc->tf->pc     = elf.entry;           // process entry point
+
+  return 0;
+
+out2:
+  vm_free(trtab);
+
+out1:
+  fs_inode_unlock(ip);
+  fs_inode_put(ip);
+
+  return r;
 }

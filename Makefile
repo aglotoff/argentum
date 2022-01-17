@@ -77,7 +77,7 @@ qemu: $(KERNEL) $(OBJ)/fs.img
 prep-%:
 	$(V)$(MAKE) "PROCESS_NAME=$*" $(KERNEL)
 
-run-%: prep-%
+run-%: prep-% $(OBJ)/fs.img
 	$(QEMU) $(QEMUOPTS)
 
 clean:

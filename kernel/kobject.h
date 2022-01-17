@@ -54,4 +54,7 @@ void                kobject_free(struct KObjectPool *, void *);
 void                kobject_pool_init(void);
 void                kobject_pool_info(void);
 
+void
+kobject_dump(struct KObjectPool *pool);
+
 #endif  // !__KERNEL_KOBJECT_H__

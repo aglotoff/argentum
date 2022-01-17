@@ -2,7 +2,7 @@
 #include <unistd.h>
 
 /**
- * @brief Create a new process.
+ * Create a new process.
  */
 pid_t
 fork(void)

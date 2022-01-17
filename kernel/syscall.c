@@ -23,6 +23,7 @@ static int32_t (*syscalls[])(void) = {
   [__SYS_TIME]    = sys_time,
   [__SYS_FORK]    = sys_fork,
   [__SYS_WAIT]    = sys_wait,
+  [__SYS_EXEC]    = sys_exec,
 };
 
 int32_t
@@ -234,4 +235,16 @@ sys_wait(void)
     return r;
 
   return process_wait(pid, stat_loc, 0);
+}
+
+int32_t
+sys_exec(void)
+{
+  int r;
+  char *path;
+
+  if ((r = sys_arg_str(0, &path)) < 0)
+    return r;
+
+  return process_exec(path);
 }

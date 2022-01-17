@@ -4,6 +4,7 @@
 
 #include "buf.h"
 #include "console.h"
+#include "cpu.h"
 #include "gic.h"
 #include "memlayout.h"
 #include "process.h"

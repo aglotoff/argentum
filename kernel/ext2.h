@@ -64,12 +64,21 @@ struct Ext2Inode {
   uint8_t  osd2[12];
 } __attribute__((packed));
 
+#define EXT2_S_IFMASK   0xF000
+#define EXT2_S_IFIFO    0x1000
+#define EXT2_S_IFCHR    0x2000
+#define EXT2_S_IFDIR    0x4000
+#define EXT2_S_IFBLK    0x6000
+#define EXT2_S_IFREG    0x8000
+#define EXT2_S_IFLINK   0xA000
+#define EXT2_S_IFSOCK   0xC000
+
 struct Ext2DirEntry {
   uint32_t inode;
   uint16_t rec_len;
   uint8_t  name_len;
   uint8_t  file_type;
-  char     name[0];
+  char     name[256];
 } __attribute__((packed));
 
 #endif  // !__KERNEL_EXT2_H__

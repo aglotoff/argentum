@@ -1,5 +1,6 @@
 #include <assert.h>
 #include <errno.h>
+#include <string.h>
 
 #include "console.h"
 #include "kernel.h"
@@ -90,7 +91,7 @@ kobject_pool_create(const char *name, size_t obj_size, size_t align)
     }
 
     // Try to limit internal fragmentation to 12.5% (1/8).
-    obj_num = kobject_pool_estimate(obj_size, flags, page_order, &wastage);
+    obj_num = kobject_pool_estimate(obj_size, page_order, flags, &wastage);
     if ((wastage * 8) <= (PAGE_SIZE << page_order))
       break;
   }
@@ -135,15 +136,13 @@ kobject_pool_estimate(size_t obj_size,
   if (!(flags & KOBJECT_POOL_OFFSLAB))
     wastage -= sizeof(struct KObjectSlab);
 
-  for (obj_num = 0; obj_size * obj_num <= wastage; obj_num++)
-    obj_num++;
-  obj_num--;
+  obj_num = wastage / obj_size;
 
   if (left_over) {
     wastage -= obj_num * obj_size;
     *left_over = wastage;
   }
-    
+
   return obj_num;
 }
 
@@ -308,6 +307,37 @@ kobject_alloc(struct KObjectPool *pool)
   spin_unlock(&pool->lock);
 
   return obj;
+}
+
+void
+kobject_dump(struct KObjectPool *pool)
+{
+  struct ListLink *list;
+  struct KObjectSlab *slab;
+   
+  spin_lock(&pool->lock);
+
+  if (!list_empty(&pool->slabs_partial)) {
+    list = &pool->slabs_partial;
+  } else {
+    list = &pool->slabs_free;
+
+    if (list_empty(list)) {
+      if ((slab = kobject_slab_alloc(pool)) == NULL) {
+        spin_unlock(&pool->lock);
+        return;
+      }
+
+      list_add_back(list, &slab->link);
+    }
+  }
+
+  slab = LIST_CONTAINER(list->next, struct KObjectSlab, link);
+
+  assert(slab->in_use < pool->obj_num);
+  assert(slab->free != NULL);
+
+  spin_unlock(&pool->lock);
 }
 
 /*

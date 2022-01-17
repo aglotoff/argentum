@@ -11,6 +11,7 @@
 #define __SYS_TIME        5
 #define __SYS_FORK        6
 #define __SYS_WAIT        7
+#define __SYS_EXEC        8
 
 // Generic system call: pass system call number as an immediate operand of the
 // SVC instruction, and up to three parameters in R0, R1, R2.

@@ -1,12 +1,13 @@
 #include <assert.h>
 
 #include "buf.h"
+#include "console.h"
 #include "kobject.h"
 #include "list.h"
 #include "sd.h"
 #include "sync.h"
 
-static struct KObjectPool *buf_pool;
+struct KObjectPool *buf_pool;
 
 static struct {
   unsigned        size;

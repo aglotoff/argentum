@@ -1,9 +1,9 @@
 #include <assert.h>
 #include <errno.h>
 #include <string.h>
-#include <sys/types.h>
 
 #include "kernel.h"
+#include "kobject.h"
 #include "buf.h"
 #include "console.h"
 #include "ext2.h"
@@ -15,7 +15,7 @@ static struct {
   struct ListLink head;
 } inode_cache;
 
-static struct Inode *
+struct Inode *
 fs_inode_get(unsigned inum)
 {
   struct ListLink *l;
@@ -104,9 +104,9 @@ fs_inode_lock(struct Inode *ip)
 
   // Determine the index of the inode in the inode table. 
   inodes_per_block = BLOCK_SIZE / sb.inode_size;
-  inode_table_idx = (ip->num - 1) % sb.inodes_per_group;
-  inode_block = gd.inode_table + inode_table_idx / inodes_per_block;
-  inode_block_idx = inode_table_idx % inodes_per_block;
+  inode_table_idx  = (ip->num - 1) % sb.inodes_per_group;
+  inode_block      = gd.inode_table + inode_table_idx / inodes_per_block;
+  inode_block_idx  = inode_table_idx % inodes_per_block;
 
   // Index the inode table (taking into account non-standard inode size)
   buf = buf_read(inode_block);
@@ -132,7 +132,7 @@ fs_inode_put(struct Inode *ip)
 
 void
 fs_inode_unlock(struct Inode *ip)
-{
+{  
   if (!mutex_holding(&ip->mutex))
     panic("not holding buf");
 
@@ -188,23 +188,103 @@ fs_inode_read(struct Inode *ip, void *buf, size_t nbyte, off_t off)
   total = 0;
   while (total < nbyte) {
     b = buf_read(fs_block_map(ip, off / BLOCK_SIZE));
+
     nread = MIN(BLOCK_SIZE - (size_t) off % BLOCK_SIZE, nbyte - total);
     memmove(dst, &((const uint8_t *) b->data)[off % BLOCK_SIZE], nread);
+
     buf_release(b);
 
     total += nread;
     dst   += nread;
+    off   += nread;
   }
 
   return total;
+}
+
+struct Inode *
+fs_dir_lookup(struct Inode *dir, const char *name)
+{
+  struct Ext2DirEntry de;
+  off_t off;
+
+  if ((dir->data.mode & EXT2_S_IFMASK) != EXT2_S_IFDIR)
+    panic("not a directory");
+
+  for (off = 0; (size_t) off < dir->data.size; off += de.rec_len) {
+    fs_inode_read(dir, &de, offsetof(struct Ext2DirEntry, name), off);
+
+    if (de.name_len == strlen(name)) {
+      fs_inode_read(dir, de.name, de.name_len,
+                    off + offsetof(struct Ext2DirEntry, name));
+      if (strncmp(de.name, name, de.name_len) == 0)
+        return fs_inode_get(de.inode);
+    }
+  }
+
+  return NULL;
+}
+
+struct Inode *
+fs_inode_lookup(char *name)
+{
+  char *s;
+  struct Inode *ip, *next;
+
+  if (*name == '\0')
+    return NULL;
+
+  ip = fs_inode_get(2);
+
+  for (s = strtok(name, "/"); s != NULL; s = strtok(NULL, "/")) {
+    fs_inode_lock(ip);
+
+    if ((ip->data.mode & EXT2_S_IFMASK) != EXT2_S_IFDIR) {
+      fs_inode_unlock(ip);
+      fs_inode_put(ip);
+
+      return NULL;
+    }
+
+    if (*s == '\0') {
+      fs_inode_unlock(ip);
+      fs_inode_put(ip);
+
+      return ip;
+    }
+
+    if ((next = fs_dir_lookup(ip, s)) == NULL) {
+      fs_inode_unlock(ip);
+      fs_inode_put(ip);
+      return NULL;
+    }
+
+    fs_inode_unlock(ip);
+    fs_inode_put(ip);
+
+    ip = next;
+  }
+
+  return ip;
+}
+
+struct Inode *
+fs_name_lookup(const char *path)
+{
+  char name[256];
+
+  if (strlen(path) >= sizeof(name))
+    panic("too long name");
+
+  strcpy(name, path);
+
+  return fs_inode_lookup(name);
 }
 
 void
 fs_init(void)
 {
   struct Inode *ip;
-  struct Ext2DirEntry de;
-  off_t off;
   
   spin_init(&inode_cache.lock, "inode_cache");
   list_init(&inode_cache.head);
@@ -217,18 +297,4 @@ fs_init(void)
   }
 
   fs_read_superblock();
-
-  // Read the contents of the root directory
-  ip = fs_inode_get(2);
-  fs_inode_lock(ip);
-
-  for (off = 0; (size_t) off < ip->data.size; off += de.rec_len) {
-    fs_inode_read(ip, &de, sizeof(de), off);
-    fs_inode_read(ip, de.name, de.name_len,
-                  off + offsetof(struct Ext2DirEntry, name));
-    cprintf("%2d %.*s %d\n", de.inode, de.name_len, de.name, de.file_type);
-  }
-
-  fs_inode_unlock(ip);
-  fs_inode_put(ip);
 }

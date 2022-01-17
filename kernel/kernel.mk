@@ -32,7 +32,9 @@ KERNEL_SRCFILES :=	\
 	kernel/fs.c \
 	kernel/kdebug.c \
 	kernel/monitor.c \
-	kernel/main.c \
+	kernel/main.c
+
+KERNEL_SRCFILES += \
 	lib/stdio/__printf.c \
 	lib/string/memcmp.c \
 	lib/string/memcpy.c \
@@ -40,7 +42,12 @@ KERNEL_SRCFILES :=	\
 	lib/string/memset.c \
 	lib/string/strchr.c \
 	lib/string/strcmp.c \
+	lib/string/strcpy.c \
 	lib/string/strlen.c \
+	lib/string/strncmp.c \
+	lib/string/strpbrk.c \
+	lib/string/strspn.c \
+	lib/string/strtok.c \
 	lib/time/mktime.c
 
 KERNEL_OBJFILES := $(patsubst %.c, $(OBJ)/%.o, $(KERNEL_SRCFILES))
@@ -51,7 +58,7 @@ KERNEL_OBJFILES := $(patsubst $(OBJ)/lib/%, $(OBJ)/kernel/%, $(KERNEL_OBJFILES))
 ifdef PROCESS_NAME
 	KERNEL_BINFILES := user/$(PROCESS_NAME)
 else
-	KERNEL_BINFILES := user/hello
+	KERNEL_BINFILES := user/init
 endif
 KERNEL_BINFILES := $(patsubst %, $(OBJ)/%, $(KERNEL_BINFILES))
 

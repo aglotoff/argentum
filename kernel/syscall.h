@@ -16,5 +16,6 @@ int32_t sys_getppid(void);
 int32_t sys_time(void);
 int32_t sys_fork(void);
 int32_t sys_wait(void);
+int32_t sys_exec(void);
 
 #endif  // !__KERNEL_SYSCALL_H__
