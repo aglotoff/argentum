@@ -519,7 +519,7 @@ process_wakeup(struct ListLink *q)
 }
 
 int
-process_exec(const char *path)
+process_exec(const char *path, char *const argv[])
 {
   struct PageInfo *trtab_page;
   struct Process *proc;
@@ -528,7 +528,11 @@ process_exec(const char *path)
   Elf32_Phdr ph;
   off_t off;
   tte_t *trtab;
+  size_t n;
   unsigned size;
+  char *oargv[33];
+  char *sp;
+  int argc;
   int r;
 
   if ((ip = fs_name_lookup(path)) == NULL)
@@ -592,6 +596,39 @@ process_exec(const char *path)
                            USTACK_SIZE)) < 0)
     return r;
 
+  sp = (char *) USTACK_TOP;
+  for (argc = 0; argv[argc] != NULL; argc++) {
+    if (argc >= 32) {
+      r = -E2BIG;
+      goto out2;
+    }
+
+    n = strlen(argv[argc]);
+    sp -= ROUND_UP(n + 1, sizeof(uint32_t));
+
+    if (sp < (char *) (USTACK_TOP - USTACK_SIZE)) {
+      r = -E2BIG;
+      goto out2;
+    }
+
+    if ((r = vm_copy_out(trtab, sp, argv[argc], n)) < 0)
+      goto out2;
+
+    oargv[argc] = sp;
+  }
+  oargv[argc] = NULL;
+
+  n = (argc + 1) * sizeof(char *);
+  sp -= ROUND_UP(n, sizeof(uint32_t));
+  
+  if (sp < (char *) (USTACK_TOP - USTACK_SIZE)) {
+    r = -E2BIG;
+    goto out2;
+  }
+
+  if ((r = vm_copy_out(trtab, sp, oargv, n)) < 0)
+    goto out2;
+
   fs_inode_unlock(ip);
   fs_inode_put(ip);
 
@@ -602,12 +639,12 @@ process_exec(const char *path)
   proc->trtab = trtab;
   proc->size  = size;
 
-  proc->tf->r0     = 0;                   // argc
-  proc->tf->r1     = 0;                   // argv
-  proc->tf->sp_usr = USTACK_TOP;          // stack pointer
+  proc->tf->r0     = argc;                // argc
+  proc->tf->r1     = (uint32_t) sp;       // argv
+  proc->tf->sp_usr = (uint32_t) sp;       // stack pointer
   proc->tf->pc     = elf.entry;           // process entry point
 
-  return 0;
+  return argc;
 
 out2:
   vm_free(trtab);

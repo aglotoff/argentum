@@ -1,8 +1,14 @@
 #include <stdio.h>
 
 int
-main(void)
+main(int argc, const char **argv)
 {
-  printf("Hello world!\n");
+  int i;
+
+  printf("Hello world! %d\n", argc);
+
+  for (i = 0; i < argc; i++)
+    printf("%d: %s\n", i, argv[i]);
+
   return 0;
 }

@@ -68,7 +68,7 @@ pid_t           process_wait(pid_t, int *, int);
 
 void            process_sleep(struct ListLink *, struct SpinLock *);
 void            process_wakeup(struct ListLink *);
-int             process_exec(const char *path);
+int             process_exec(const char *, char *const[]);
 
 void            scheduler(void);
 void            context_switch(struct Context **old, struct Context *new);

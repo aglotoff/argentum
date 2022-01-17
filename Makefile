@@ -60,7 +60,7 @@ $(OBJ)/fs.img: $(USER_APPS)
 	@echo "+ GEN $@"
 	$(V)mkdir -p $@.d
 	$(V)cp -R $^ $@.d
-	$(V)mke2fs -b 1K -d $@.d -t ext2 $@ 32M
+	$(V)mke2fs -F -b 1K -d $@.d -t ext2 $@ 32M
 	$(V)rm -rf $@.d
 
 ifndef CPUS

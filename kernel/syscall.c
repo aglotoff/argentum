@@ -1,3 +1,4 @@
+#include <assert.h>
 #include <errno.h>
 #include <syscall.h>
 
@@ -10,8 +11,6 @@
 #include "trap.h"
 #include "vm.h"
 
-static int     sys_fetch_int(uintptr_t, int *);
-static int     sys_fetch_str(uintptr_t, char **);
 static int     sys_get_num(void);
 static int32_t sys_get_arg(int);
 
@@ -37,7 +36,7 @@ sys_dispatch(void)
   if ((num < (int) ARRAY_SIZE(syscalls)) && syscalls[num])
     return syscalls[num]();
 
-  cprintf("[CPU %d: Unknown system call %d]\n", cpu_id(), num);
+  cprintf("Unknown system call %d\n", cpu_id(), num);
   return -ENOSYS;
 }
 
@@ -47,63 +46,40 @@ sys_dispatch(void)
  * ----------------------------------------------------------------------------
  */
 
-// Fetch the integer at addr from the current process.
-static int
-sys_fetch_int(uintptr_t addr, int *ip)
-{
-  struct Process *curr = my_process();
-  int r;
-
-  if ((r = vm_check(curr->trtab, (void *) addr, sizeof(int), AP_USER_RO)) < 0)
-    return r;
-
-  *ip = *(int *) addr;
-
-  return 0;
-}
-
-// Fetch the null-terminated string at addr from the current process.
-static int
-sys_fetch_str(uintptr_t addr, char **strp)
-{
-  char *s, *end;
-  struct Process *curproc = my_process();
-
-  if (addr >= curproc->size)
-    return -EFAULT;
-  
-  for (s = (char *) addr, end = (char *) curproc->size; s < end; s++) {
-    if (*s == '\0') {
-      *strp = (char *) addr;
-      return s - *strp;
-    }
-  }
-  return -EFAULT;
-}
-
+// Extract system call number from the SVC instruction opcode
 static int
 sys_get_num(void)
 {
-  int svc_code, r;
+  struct Process *current = my_process();
+  int *pc = (int *) (current->tf->pc - 4);
+  int r;
 
-  if ((r = sys_fetch_int(my_process()->tf->pc - 4, &svc_code)) < 0)
+  if ((r = vm_check_user_ptr(current->trtab, pc, sizeof(int), AP_USER_RO)) < 0)
     return r;
-  return svc_code & 0xFFFFFF;
+
+  return *pc & 0xFFFFFF;
 }
 
+// Get the n-th argument from the current process' trap frame.
 static int32_t
 sys_get_arg(int n)
 {
-  struct Process *curproc = my_process();
+  struct Process *current = my_process();
 
   switch (n) {
   case 0:
-    return curproc->tf->r0;
+    return current->tf->r0;
   case 1:
-    return curproc->tf->r1;
+    return current->tf->r1;
   case 2:
-    return curproc->tf->r2;
+    return current->tf->r2;
+  case 3:
+    return current->tf->r3;
   default:
+    if (n < 0)
+      panic("Invalid argument number: %d", n);
+
+    // TODO: grab additional parameters from the user's stack.
     return 0;
   }
 }
@@ -124,14 +100,25 @@ sys_arg_int(int n, int32_t *ip)
   return 0;
 }
 
+/**
+ * Fetch the nth system call argument as pointer to a buffer of the specified
+ * length. Check that the pointer is valid and the user has right permissions.
+ * 
+ * @param n    The argument number.
+ * @param pp   Pointer to the memory address to store the argument value.
+ * @param len  The length of the memory region pointed to.
+ * @param perm The permissions to be checked.
+ * 
+ * @retval 0 on success.
+ * @retval -EFAULT if the arguments doesn't point to a valid memory region.
+ */
 int32_t
 sys_arg_ptr(int n, void **pp, size_t len, int perm)
 { 
-  struct Process *curproc = my_process();
   void *ptr = (void *) sys_get_arg(n);
   int r;
 
-  if ((r = vm_check(curproc->trtab, ptr, len, perm)) < 0)
+  if ((r = vm_check_user_ptr(my_process()->trtab, ptr, len, perm)) < 0)
     return r;
 
   *pp = ptr;
@@ -141,23 +128,28 @@ sys_arg_ptr(int n, void **pp, size_t len, int perm)
 
 /**
  * Fetch the nth system call argument as a string pointer. Check that the
- * pointer is valid and the string is null-terminated.
+ * pointer is valid, the user has right permissions and the string is
+ * null-terminated.
  * 
- * @param n The argument number.
- * @param ip Pointer to the memory address to store the argument value.
+ * @param n    The argument number.
+ * @param strp Pointer to the memory address to store the argument value.
+ * @param perm The permissions to be checked.
  * 
  * @retval 0 on success.
- * @retval -EINVAL if an invalid argument number is specified.
  * @retval -EFAULT if the arguments doesn't point to a valid string.
  */
 int32_t
-sys_arg_str(int n, char **strp)
+sys_arg_str(int n, const char **strp, int perm)
 {
+  char *str = (char *) sys_get_arg(n);
   int r;
 
-  if ((r = sys_get_arg(n)) < 0)
+  if ((r = vm_check_user_str(my_process()->trtab, str, perm)) < 0)
     return r;
-  return sys_fetch_str(r, strp);
+
+  *strp = str;
+
+  return 0;
 }
 
 /*
@@ -169,7 +161,7 @@ sys_arg_str(int n, char **strp)
 int32_t
 sys_cwrite(void)
 {
-  char *s;
+  const char *s;
   int32_t n;
   int r;
 
@@ -240,11 +232,32 @@ sys_wait(void)
 int32_t
 sys_exec(void)
 {
-  int r;
-  char *path;
+  struct Process *current = my_process();
+  const char *path;
+  char **argv, **s;
+  int i, r;
 
-  if ((r = sys_arg_str(0, &path)) < 0)
+  if ((r = sys_arg_str(0, &path, AP_USER_RO)) < 0)
     return r;
 
-  return process_exec(path);
+  if ((r = sys_arg_int(1, (int *) &argv)) < 0)
+    return r;
+
+  for (i = 0; ; i++) {
+    s = argv + i;
+
+    if ((r = vm_check_user_ptr(current->trtab, s, sizeof(*s), AP_USER_RO)) < 0)
+      return r;
+
+    if (*s == NULL)
+      break;
+
+    if (i >= 32)
+      return -E2BIG;
+
+    if ((r = vm_check_user_str(current->trtab, *s, AP_USER_RO)))
+      return r;
+  }
+
+  return process_exec(path, argv);
 }

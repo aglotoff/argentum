@@ -110,7 +110,7 @@ vm_walk_trtab(tte_t *trtab, uintptr_t va, int alloc)
 }
 
 struct PageInfo *
-vm_lookup_page(tte_t *trtab, void *va, pte_t **pte_store)
+vm_lookup_page(tte_t *trtab, const void *va, pte_t **pte_store)
 {
   pte_t *pte;
 
@@ -389,28 +389,53 @@ vm_copy(tte_t *trtab)
 }
 
 int
-vm_check(tte_t *trtab, void *va, size_t n, unsigned perm)
+vm_check_user_ptr(tte_t *trtab, const void *va, size_t n, unsigned perm)
 {
   struct PageInfo *page;
-  uintptr_t a, end;
+  const char *p, *end;
   pte_t *pte;
 
-  a   = ROUND_DOWN((uintptr_t) va, PAGE_SIZE);
-  end = ROUND_UP((uintptr_t) va + n, PAGE_SIZE);
+  p   = ROUND_DOWN((const char *) va, PAGE_SIZE);
+  end = ROUND_UP((const char *) va + n, PAGE_SIZE);
 
-  if ((a >= KERNEL_BASE) || (end > KERNEL_BASE))
+  if ((p >= (const char *) KERNEL_BASE) || (end > (const char *) KERNEL_BASE))
     return -EFAULT;
 
-  while (a != end) {
-    page = vm_lookup_page(trtab, (void *) a, &pte);
+  while (p != end) {
+    page = vm_lookup_page(trtab, (void *) p, &pte);
 
     if ((page == NULL) || ((*pte & PTE_AP(perm)) != PTE_AP(perm)))
       return -EFAULT;
 
-    a += PAGE_SIZE;
+    p += PAGE_SIZE;
   }
 
   return 0;
+}
+
+int
+vm_check_user_str(tte_t *trtab, const char *s, unsigned perm)
+{
+  struct PageInfo *page;
+  const char *p;
+  unsigned off;
+  pte_t *pte;
+
+  assert(KERNEL_BASE % PAGE_SIZE == 0);
+
+  while (s < (char *) KERNEL_BASE) {
+    page = vm_lookup_page(trtab, s, &pte);
+    if ((page == NULL) || ((*pte & PTE_AP(perm)) != PTE_AP(perm)))
+      return -EFAULT;
+
+    p = (const char *) page2kva(page);
+    for (off = (uintptr_t) s % PAGE_SIZE; off < PAGE_SIZE; off++)
+      if (p[off] == '\0')
+        return 0;
+    s += off;
+  }
+
+  return -EFAULT;
 }
 
 int
