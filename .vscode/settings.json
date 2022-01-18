@@ -33,6 +33,7 @@
         "string_view": "c",
         "initializer_list": "c",
         "atomic": "c",
-        "condition_variable": "c"
+        "condition_variable": "c",
+        "random": "c"
     }
 }

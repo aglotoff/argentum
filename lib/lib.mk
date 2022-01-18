@@ -4,10 +4,7 @@
 
 LIB_CFLAGS := $(CFLAGS)
 
-LIB_SRCFILES :=	\
-	lib/syscall.c
-
-LIB_SRCFILES += \
+LIB_SRCFILES := \
   lib/assert/__panic.c
 
 LIB_SRCFILES += \
@@ -88,7 +85,9 @@ LIB_SRCFILES += \
 	lib/unistd/exec.c \
   lib/unistd/fork.c \
 	lib/unistd/getpid.c \
-	lib/unistd/getppid.c
+	lib/unistd/getppid.c \
+	lib/unistd/read.c \
+	lib/unistd/write.c
 
 LIB_OBJFILES := $(patsubst %.c, $(OBJ)/%.o, $(LIB_SRCFILES))
 LIB_OBJFILES := $(patsubst %.S, $(OBJ)/%.o, $(LIB_OBJFILES))

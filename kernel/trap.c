@@ -67,8 +67,9 @@ trap_handle_abort(struct Trapframe *tf)
   }
 
   // Abort happened in user mode.
-  // cprintf("user fault va %p status %#x\n", address, status);
-  panic("user fault va %p status %#x", address, status);
+  cprintf("user fault va %p status %#x\n", address, status);
+  // print_trapframe(tf);
+  // panic("user fault va %p status %#x", address, status);
   process_destroy(-1);
 }
 

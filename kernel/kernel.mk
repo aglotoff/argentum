@@ -30,6 +30,7 @@ KERNEL_SRCFILES :=	\
 	kernel/sd.c \
 	kernel/buf.c \
 	kernel/fs.c \
+	kernel/file.c \
 	kernel/kdebug.c \
 	kernel/monitor.c \
 	kernel/main.c

@@ -7,6 +7,7 @@ USER_SRCFILES := \
 	user/faultwrite.c \
 	user/faultwritekernel.c \
 	user/hello.c \
+	user/sh.c \
 	user/testctype.c \
 	user/testerrno.c \
 	user/testfloat.c \

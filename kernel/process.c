@@ -110,9 +110,9 @@ process_alloc(void)
 
   spin_unlock(&ptable.lock);
 
-  cprintf("[%08x] spawn process %08x\n",
-          my_process() ? my_process()->pid : 0,
-          process->pid);
+  // cprintf("[%08x] spawn process %08x\n",
+  //         my_process() ? my_process()->pid : 0,
+  //         process->pid);
 
   return process;
 }
@@ -246,10 +246,10 @@ process_destroy(int status)
 {
   struct Process *current = my_process();
   
-  if (status == 0)
-    cprintf("[%08x] exit with code %d\n", current->pid, status);
-  else
-    cprintf("[%08x] exit with code %d\n", current->pid, status);
+  // if (status == 0)
+  //   cprintf("[%08x] exit with code %d\n", current->pid, status);
+  // else
+  //   cprintf("[%08x] exit with code %d\n", current->pid, status);
 
   vm_free(current->trtab);
 
@@ -332,7 +332,9 @@ scheduler(void)
     }
 
     // If there are no more proceses to run, drop into the kernel monitor.
-    if (ptable.nprocesses == 0) {
+    if ((ptable.nprocesses == 0) && (cpu_id() == 0)) {
+      spin_unlock(&ptable.lock);
+      
       cprintf("No runnable processes in the system!\n");
       for (;;)
         monitor(NULL);
@@ -343,6 +345,8 @@ scheduler(void)
     vm_switch_kernel();
 
     spin_unlock(&ptable.lock);
+
+    asm volatile("wfi");
   }
 }
 

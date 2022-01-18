@@ -22,13 +22,15 @@ forkchild(int depth)
 void
 forktree(int depth)
 {
+	int status;
+	
 	printf("I am process %04x, my parent is %04x\n", getpid(), getppid());
 
 	forkchild(depth);
 	forkchild(depth);
 
-	waitpid(-1, NULL, 0);
-	waitpid(-1, NULL, 0);
+	waitpid(-1, &status, 0);
+	waitpid(-1, &status, 0);
 }
 
 int

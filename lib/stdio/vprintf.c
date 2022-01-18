@@ -1,5 +1,5 @@
 #include <stdio.h>
-#include <user.h>
+#include <unistd.h>
 
 #define MAXBUF  256
 
@@ -15,7 +15,7 @@ putch(void *arg, int ch)
 
   buf->data[buf->idx++] = ch;
   if (buf->idx == (MAXBUF - 1)) {
-    cwrite(buf->data, buf->idx);
+    write(1, buf->data, buf->idx);
     buf->idx = 0;
   }
   return 1;
@@ -31,7 +31,7 @@ vprintf(const char *format, va_list ap)
 
   ret = __printf(putch, &buf, format, ap);
 
-  if (cwrite(buf.data, buf.idx) < 0)
+  if (write(1, buf.data, buf.idx) < 0)
     return -1;
 
   return ret + buf.idx;

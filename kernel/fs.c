@@ -150,7 +150,7 @@ fs_block_map(struct Inode *ip, unsigned block_no)
     return ip->data.block[block_no];
   
   block_no -= 12;
-  for (idx = 13, bcnt = nindirect; block_no >= bcnt; idx++, bcnt *= nindirect)
+  for (idx = 12, bcnt = nindirect; block_no >= bcnt; idx++, bcnt *= nindirect)
     ;
   idx = ip->data.block[idx];
 

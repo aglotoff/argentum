@@ -8,6 +8,7 @@
  */
 
 #include <stdarg.h>
+#include <sys/types.h>
 
 // ANSI color codes
 #define COLOR_MASK            7
@@ -38,6 +39,9 @@ void console_init(void);
 void console_putc(char);
 void console_intr(int (*)(void));
 int  console_getc(void);
+
+ssize_t console_read(void *, size_t);
+ssize_t console_write(const void *, size_t);
 
 void vcprintf(const char *, va_list);
 void cprintf(const char *, ...);

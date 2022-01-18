@@ -5,6 +5,7 @@
 #include "armv7.h"
 #include "buf.h"
 #include "console.h"
+#include "file.h"
 #include "gic.h"
 #include "kobject.h"
 #include "memlayout.h"
@@ -26,18 +27,19 @@ static void mp_main(void);
 void
 main(void)
 {
+  gic_init();           // Interrupt controller
   console_init();       // Console driver
   cprintf("Starting CPU %d\n", read_mpidr() & 0x3);
-  
+
   page_init_low();      // Physical page allocator (lower memory)
   vm_init();            // Kernel virtual memory
   page_init_high();     // Physical page allocator (higher memory)
-  gic_init();           // Interrupt controller
   kobject_pool_init();  // Object allocator
   process_init();       // Process table
   rtc_init();           // Real-time clock
   sd_init();            // MultiMedia Card Interface
   buf_init();           // Buffer cache
+  file_init();          // File table
 
 #if defined(PROCESS_NAME)
   PROCESS_CREATE(PROCESS_NAME);
@@ -133,4 +135,6 @@ entry_trtab[NTTENTRIES] = {
   // Map console devices registers
   [TTX(KERNEL_BASE+0x10000000)] =
     (0x10000000 | TTE_TYPE_SECT | TTE_SECT_AP(AP_PRIV_RW)),
+  [TTX(KERNEL_BASE+0x1F000000)] =
+    (0x1F000000 | TTE_TYPE_SECT | TTE_SECT_AP(AP_PRIV_RW)),
 };

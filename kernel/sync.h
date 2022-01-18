@@ -7,8 +7,9 @@
  * Kernel synchronization primitives.
  */
 
+#include <stdint.h>
+
 #include "list.h"
-#include "sync.h"
 
 struct Cpu;
 struct Process;

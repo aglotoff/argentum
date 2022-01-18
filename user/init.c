@@ -12,9 +12,11 @@ main(void)
     "test",
     NULL
   };
+
+  printf("Welcome to \x1b[1;36mOSDev-PBX-A9!\x1b[m\n");
   
   if (fork() == 0)
-    exec("/hello", argv);
+    exec("/sh", argv);
 
   while (wait(&status) > 0)
     ;

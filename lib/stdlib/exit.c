@@ -1,5 +1,4 @@
 #include <syscall.h>
-#include <user.h>
 
 /**
  * Terminate a process.

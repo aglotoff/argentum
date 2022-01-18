@@ -52,17 +52,10 @@ read_cmd(void)
     c = console_getc();
 
     if (c == '\r' || c == '\n') {
-      console_putc('\n');
       break;
     }
 
-    if (c == '\b' && i > 0) {
-      i--;
-      console_putc(c);
-    } else if (c != '\b') {
-      buf[i++] = c;
-      console_putc(c);
-    }
+    buf[i++] = c;
   }
 
   // Null-terminate the string

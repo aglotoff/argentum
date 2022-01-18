@@ -15,7 +15,8 @@ static int     sys_get_num(void);
 static int32_t sys_get_arg(int);
 
 static int32_t (*syscalls[])(void) = {
-  [__SYS_CWRITE]  = sys_cwrite,
+  [__SYS_READ]    = sys_read,
+  [__SYS_WRITE]   = sys_write,
   [__SYS_EXIT]    = sys_exit,
   [__SYS_GETPID]  = sys_getpid,
   [__SYS_GETPPID] = sys_getppid,
@@ -159,21 +160,35 @@ sys_arg_str(int n, const char **strp, int perm)
  */
 
 int32_t
-sys_cwrite(void)
+sys_read(void)
 {
-  const char *s;
+  void *buf;
   int32_t n;
   int r;
 
-  if ((r = sys_arg_int(1, &n)) < 0)
+  if ((r = sys_arg_int(2, &n)) < 0)
     return r;
 
-  if ((r = sys_arg_ptr(0, (void **) &s, n, AP_USER_RO)) < 0)
+  if ((r = sys_arg_ptr(1, &buf, n, AP_USER_RO)) < 0)
     return r;
 
-  cprintf("%.*s", n, s);
+  return console_read(buf, n);
+}
 
-  return n;
+int32_t
+sys_write(void)
+{
+  void *buf;
+  int32_t n;
+  int r;
+
+  if ((r = sys_arg_int(2, &n)) < 0)
+    return r;
+
+  if ((r = sys_arg_ptr(1, &buf, n, AP_USER_RO)) < 0)
+    return r;
+
+  return console_write(buf, n);
 }
 
 int32_t

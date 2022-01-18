@@ -6,6 +6,7 @@
 #include "kbd.h"
 #include "lcd.h"
 #include "monitor.h"
+#include "process.h"
 #include "sync.h"
 #include "uart.h"
 
@@ -13,6 +14,15 @@ static struct {
   struct SpinLock lock;
   int             locking;
 } console;
+
+#define CONSOLE_BUF_SIZE  256
+
+static struct {
+  char            buf[CONSOLE_BUF_SIZE];
+  uint32_t        rpos;
+  uint32_t        wpos;
+  struct ListLink queue;
+} input;
 
 /**
  * Initialize the console devices.
@@ -22,6 +32,8 @@ console_init(void)
 {  
   spin_init(&console.lock, "console");
   console.locking = 1;
+
+  list_init(&input.queue);
 
   uart_init();
   kbd_init();
@@ -34,14 +46,6 @@ console_init(void)
  * Console input
  * ----------------------------------------------------------------------------
  */
-
-#define CONSOLE_BUF_SIZE  256
-
-static struct {
-  char            buf[CONSOLE_BUF_SIZE];
-  uint32_t        rpos;
-  uint32_t        wpos;
-} input;
 
 /**
  * Handle console interrupt.
@@ -61,13 +65,28 @@ console_intr(int (*getc)(void))
     spin_lock(&console.lock);
 
   while ((c = getc()) >= 0) {
-    if (c == 0)
+    switch (c) {
+    case 0:
       continue;
+    case '\b':
+      if (input.rpos != input.wpos) {
+        console_putc(c);
+        input.wpos--;
+      }
+      break;
+    default:
+      if (input.wpos == input.rpos + CONSOLE_BUF_SIZE)
+        input.rpos++;
 
-    if (input.wpos == input.rpos + CONSOLE_BUF_SIZE)
-      input.rpos++;
+      console_putc(c);
+      input.buf[input.wpos++ % CONSOLE_BUF_SIZE] = c;
 
-    input.buf[input.wpos++ % CONSOLE_BUF_SIZE] = c;
+      if ((c == '\r') ||
+          (c == '\n') ||
+          (input.wpos == input.rpos + CONSOLE_BUF_SIZE))
+        process_wakeup(&input.queue);
+      break;
+    }
   }
 
   if (console.locking)
@@ -90,6 +109,32 @@ console_getc(void)
   } while (input.rpos == input.wpos);
 
   return input.buf[input.rpos++ % CONSOLE_BUF_SIZE];
+}
+
+ssize_t
+console_read(void *buf, size_t nbytes)
+{
+  char c, *s;
+  size_t i;
+  
+  s = (char *) buf;
+  i = 0;
+  spin_lock(&console.lock);
+
+  while (i < nbytes) {
+    while (input.rpos == input.wpos) {
+      process_sleep(&input.queue, &console.lock);
+    }
+
+    c = input.buf[input.rpos++ % CONSOLE_BUF_SIZE];
+
+    if ((s[i++] = c) == '\n')
+      break;
+  }
+
+  spin_unlock(&console.lock);
+  
+  return i;
 }
 
 
@@ -171,6 +216,17 @@ console_putc(char c)
   lcd_move_cursor(cur_pos);
 }
 
+ssize_t
+console_write(const void *buf, size_t nbytes)
+{
+  const char *s = (const char *) buf;
+  size_t i;
+
+  for (i = 0; i != nbytes; i++)
+    console_putc(s[i]);
+  
+  return i;
+}
 
 /*
  * ----------------------------------------------------------------------------
