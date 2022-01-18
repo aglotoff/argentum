@@ -58,8 +58,7 @@ include user/user.mk
 
 $(OBJ)/fs.img: $(USER_APPS)
 	@echo "+ GEN $@"
-	$(V)mkdir -p $@.d
-	$(V)cp -R $^ $@.d
+	$(V)cp -R $(OBJ)/user $@.d
 	$(V)mke2fs -F -b 1K -d $@.d -t ext2 $@ 32M
 	$(V)rm -rf $@.d
 
@@ -77,14 +76,8 @@ qemu: $(KERNEL) $(OBJ)/fs.img
 qemu-gdb: $(KERNEL) $(OBJ)/fs.img
 	$(QEMU) $(QEMUOPTS) -s -S 
 
-prep-%:
-	$(V)$(MAKE) "PROCESS_NAME=$*" $(KERNEL)
-
-run-%: prep-% $(OBJ)/fs.img
-	$(QEMU) $(QEMUOPTS)
-
 clean:
 	rm -rf $(OBJ)
 
 .PRECIOUS: $(OBJ)/user/%.o
-.PHONY: all qemu clean prep-% run-%
+.PHONY: all qemu clean

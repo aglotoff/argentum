@@ -2,19 +2,25 @@ USER_CFLAGS  := $(CFLAGS) -Wno-return-local-addr
 USER_LDFLAGS := $(LDFLAGS) -T user/user.ld -nostdlib
 
 USER_SRCFILES := \
-	user/faultread.c \
-	user/faultreadkernel.c \
-	user/faultwrite.c \
-	user/faultwritekernel.c \
 	user/hello.c \
-	user/sh.c \
-	user/testctype.c \
-	user/testerrno.c \
-	user/testfloat.c \
-	user/testfork.c \
-	user/testlimits.c \
-	user/testsetjmp.c \
-	user/teststring.c
+	user/init.c
+
+USER_SRCFILES += \
+	user/bin/sh.c
+
+USER_SRCFILES += \
+	user/test/faultread.c \
+	user/test/faultreadkernel.c \
+	user/test/faultwrite.c \
+	user/test/faultwritekernel.c \
+	user/test/ctype.c \
+	user/test/errno.c \
+	user/test/float.c \
+	user/test/fork.c \
+	user/test/limits.c \
+	user/test/setjmp.c \
+	user/test/stdlib.c \
+	user/test/string.c
 
 USER_APPS := $(patsubst %.c, $(OBJ)/%, $(USER_SRCFILES))
 

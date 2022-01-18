@@ -4,7 +4,9 @@
 
 LIB_CFLAGS := $(CFLAGS)
 
-LIB_SRCFILES := \
+LIB_SRCFILES := 
+
+LIB_SRCFILES += \
   lib/assert/__panic.c
 
 LIB_SRCFILES += \
@@ -45,8 +47,13 @@ LIB_SRCFILES += \
 
 LIB_SRCFILES += \
 	lib/stdlib/abort.c \
+	lib/stdlib/abs.c \
+	lib/stdlib/bsearch.c \
+	lib/stdlib/div.c \
 	lib/stdlib/exit.c \
-	lib/stdlib/getenv.c
+	lib/stdlib/getenv.c \
+	lib/stdlib/labs.c \
+	lib/stdlib/ldiv.c
 
 LIB_SRCFILES += \
 	lib/string/memchr.c \

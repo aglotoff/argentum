@@ -41,8 +41,8 @@ spin_init(struct SpinLock *lock, const char *name)
 }
 
 /**
- * Acquire the spinlock.
- * 
+ * @brief Acquire the spinlock.
+ *
  * @param lock A pointer to the spinlock to be acquired.
  */
 void
