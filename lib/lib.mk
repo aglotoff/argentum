@@ -51,12 +51,18 @@ LIB_SRCFILES += \
 LIB_SRCFILES += \
 	lib/stdlib/abort.c \
 	lib/stdlib/abs.c \
+	lib/stdlib/atoi.c \
+	lib/stdlib/atol.c \
 	lib/stdlib/bsearch.c \
 	lib/stdlib/div.c \
 	lib/stdlib/exit.c \
 	lib/stdlib/getenv.c \
 	lib/stdlib/labs.c \
-	lib/stdlib/ldiv.c
+	lib/stdlib/ldiv.c \
+	lib/stdlib/rand.c \
+	lib/stdlib/srand.c \
+	lib/stdlib/strtol.c \
+	lib/stdlib/strtoul.c
 
 LIB_SRCFILES += \
 	lib/string/memchr.c \
