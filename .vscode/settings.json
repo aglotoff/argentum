@@ -35,6 +35,7 @@
         "atomic": "c",
         "condition_variable": "c",
         "random": "c",
-        "stdlib.h": "c"
+        "stdlib.h": "c",
+        "stdio.h": "c"
     }
 }

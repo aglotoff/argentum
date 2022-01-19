@@ -5,6 +5,7 @@
 #include "kernel.h"
 #include "console.h"
 #include "cpu.h"
+#include "file.h"
 #include "process.h"
 #include "rtc.h"
 #include "syscall.h"
@@ -24,6 +25,7 @@ static int32_t (*syscalls[])(void) = {
   [__SYS_FORK]    = sys_fork,
   [__SYS_WAIT]    = sys_wait,
   [__SYS_EXEC]    = sys_exec,
+  [__SYS_OPEN]    = sys_open,
 };
 
 int32_t
@@ -153,6 +155,23 @@ sys_arg_str(int n, const char **strp, int perm)
   return 0;
 }
 
+int
+sys_arg_fd(int n, int *fdstore, struct File **fstore)
+{
+  struct Process *current = my_process();
+  int fd = sys_get_arg(n);
+
+  if ((fd < 0) || (fd >= 32) || (current->files[fd] == NULL))
+    return -EBADF;
+  
+  if (fdstore)
+    *fdstore = fd;
+  if (fstore)
+    *fstore = current->files[fd];
+
+  return 0;
+}
+
 /*
  * ----------------------------------------------------------------------------
  * System call implementations
@@ -164,7 +183,11 @@ sys_read(void)
 {
   void *buf;
   int32_t n;
+  struct File *f;
   int r;
+
+  if ((r = sys_arg_fd(0, NULL, &f)) < 0)
+    return r;
 
   if ((r = sys_arg_int(2, &n)) < 0)
     return r;
@@ -172,7 +195,7 @@ sys_read(void)
   if ((r = sys_arg_ptr(1, &buf, n, AP_USER_RO)) < 0)
     return r;
 
-  return console_read(buf, n);
+  return file_read(f, buf, n);
 }
 
 int32_t
@@ -180,15 +203,19 @@ sys_write(void)
 {
   void *buf;
   int32_t n;
+  struct File *f;
   int r;
+
+  if ((r = sys_arg_fd(0, NULL, &f)) < 0)
+    return r;
 
   if ((r = sys_arg_int(2, &n)) < 0)
     return r;
 
-  if ((r = sys_arg_ptr(1, &buf, n, AP_USER_RO)) < 0)
+  if ((r = sys_arg_ptr(1, &buf, n, AP_BOTH_RW)) < 0)
     return r;
 
-  return console_write(buf, n);
+  return file_write(f, buf, n);
 }
 
 int32_t
@@ -275,4 +302,39 @@ sys_exec(void)
   }
 
   return process_exec(path, argv);
+}
+
+static int
+fd_alloc(struct File *f)
+{
+  struct Process *current = my_process();
+  int i;
+
+  for (i = 0; i < 32; i++)
+    if (current->files[i] == NULL) {
+      current->files[i] = f;
+      return i;
+    }
+  return -ENFILE;
+}
+
+int32_t
+sys_open(void)
+{
+  struct File *f;
+  const char *path;
+  int oflag, r;
+
+  if ((r = sys_arg_str(0, &path, AP_USER_RO)) < 0)
+    return r;
+  if ((r = sys_arg_int(1, &oflag)) < 0)
+    return r;
+
+  if ((r = file_open(path, oflag, &f)) < 0)
+    return r;
+
+  if ((r = fd_alloc(f)) < 0)
+    file_close(f);
+
+  return r;
 }

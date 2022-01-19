@@ -7,6 +7,7 @@
 #include "mmu.h"
 #include "trap.h"
 
+struct File;
 struct SpinLock;
 
 enum {
@@ -54,6 +55,8 @@ struct Process {
   struct Context   *context;    ///< Saved context
 
   int               exit_code;
+
+  struct File      *files[32];
 };
 
 struct Process *my_process(void);

@@ -1,6 +1,8 @@
 #ifndef __KERNEL_EXT2_H__
 #define __KERNEL_EXT2_H__
 
+#include <stdint.h>
+
 struct Ext2Superblock {
   uint32_t inodes_count;
   uint32_t block_count;

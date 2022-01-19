@@ -6,6 +6,8 @@ USER_SRCFILES := \
 	user/init.c
 
 USER_SRCFILES += \
+  user/bin/cat.c \
+	user/bin/ls.c \
 	user/bin/sh.c
 
 USER_SRCFILES += \

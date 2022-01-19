@@ -18,6 +18,11 @@ struct File {
   struct Inode *inode;        ///< Pointer to the corresponding inode
 };
 
-void file_init(void);
+void         file_init(void);
+int          file_open(const char *, int, struct File **);
+struct File *file_dup(struct File *);
+void         file_close(struct File *);
+ssize_t      file_read(struct File *, void *, size_t);
+ssize_t      file_write(struct File *, const void *, size_t);
 
 #endif  // !__KERNEL_FILE__

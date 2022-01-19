@@ -31,6 +31,9 @@ LIB_SRCFILES += \
   lib/errno/errno.c
 
 LIB_SRCFILES += \
+	lib/fcntl/open.c
+
+LIB_SRCFILES += \
 	lib/float/__fvalues.c
 
 LIB_SRCFILES += \

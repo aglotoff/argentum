@@ -9,10 +9,14 @@
 static char buf[MAXBUF];
 static const char prompt[] = "\x1b[1;32m$ \x1b[m";
 
-static char *
+static char **
 get_cmd(void)
 {
+  static char *argv[33];
+
   size_t nread;
+  char *s;
+  int argc;
 
   write(1, prompt, sizeof(prompt)-1);
 
@@ -20,31 +24,50 @@ get_cmd(void)
     return NULL;
 
   buf[nread - 1] = '\0';
-  return strtok(buf, " \t\n\r");
+
+  argc = 0;
+  for (s = strtok(buf, " \t\n\r"); s != NULL; s = strtok(NULL, " \t\n\r")) {
+    if (argc >= 32) {
+      printf("Too many arguments\n");
+      return NULL;
+    }
+
+    argv[argc++] = s;
+  }
+
+  if (argc == 0)
+    return NULL;
+
+  argv[argc] = NULL;
+  return argv; 
 }
+
+static char path[256];
 
 int
 main(void)
 {
-  char *cmd;
-  char *argv[2];
+  char **argv;
   pid_t pid;
   int status;
 
-
   for (;;) {
-    if ((cmd = get_cmd()) == NULL)
+    if ((argv = get_cmd()) == NULL)
       continue;
     
-    if (strcmp(cmd, "exit") == 0)
+    if (strcmp(argv[0], "exit") == 0)
       break;
     
     if ((pid = fork()) == 0) {
-      argv[0] = cmd;
-      argv[1] = NULL;
-  
-      exec(cmd, argv);
-      perror(cmd);
+      exec(argv[0], argv);
+
+      if (argv[0][0] != '/') {
+        strncpy(path, "/bin/", sizeof(path) - 1);
+        strncat(path, argv[0], sizeof(path) - 1);
+        exec(path, argv);
+      }
+
+      perror(argv[0]);
       exit(1);
     } else if (pid > 0) {
       if ((pid = waitpid(pid, &status, 0)) < 0)

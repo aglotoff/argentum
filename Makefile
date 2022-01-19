@@ -58,7 +58,8 @@ include user/user.mk
 
 $(OBJ)/fs.img: $(USER_APPS)
 	@echo "+ GEN $@"
-	$(V)cp -R $(OBJ)/user $@.d
+	$(V)mkdir -p $@.d
+	$(V)(pushd $(OBJ)/user; cp --parent $(patsubst $(OBJ)/user/%, %, $(USER_APPS)) $(PWD)/$@.d; popd)
 	$(V)mke2fs -F -b 1K -d $@.d -t ext2 $@ 32M
 	$(V)rm -rf $@.d
 

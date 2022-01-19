@@ -7,6 +7,7 @@
 #include "console.h"
 #include "cpu.h"
 #include "elf.h"
+#include "file.h"
 #include "fs.h"
 #include "hash.h"
 #include "kobject.h"
@@ -65,6 +66,7 @@ struct Process *
 process_alloc(void)
 {
   static pid_t next_pid;
+  int i;
 
   struct PageInfo *page;
   struct Process *process;
@@ -109,6 +111,9 @@ process_alloc(void)
   ptable.nprocesses++;
 
   spin_unlock(&ptable.lock);
+
+  for (i = 0; i < 32; i++)
+    process->files[i] = NULL;
 
   // cprintf("[%08x] spawn process %08x\n",
   //         my_process() ? my_process()->pid : 0,
@@ -245,6 +250,7 @@ void
 process_destroy(int status)
 {
   struct Process *current = my_process();
+  int fd;
   
   // if (status == 0)
   //   cprintf("[%08x] exit with code %d\n", current->pid, status);
@@ -252,6 +258,10 @@ process_destroy(int status)
   //   cprintf("[%08x] exit with code %d\n", current->pid, status);
 
   vm_free(current->trtab);
+
+  for (fd = 0; fd < 32; fd++)
+    if (current->files[fd])
+      file_close(current->files[fd]);
 
   current->exit_code = status;
 
@@ -270,6 +280,7 @@ pid_t
 process_copy(void)
 {
   struct Process *child, *parent = my_process();
+  int fd;
 
   if ((child = process_alloc()) == NULL)
     return -ENOMEM;
@@ -283,6 +294,10 @@ process_copy(void)
   child->parent = parent;
   *child->tf    = *parent->tf;
   child->tf->r0 = 0;
+
+  for (fd = 0; fd < 32; fd++) {
+    child->files[fd] = parent->files[fd] ? file_dup(parent->files[fd]) : NULL;
+  }
 
   spin_lock(&ptable.lock);
 
