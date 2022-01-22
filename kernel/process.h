@@ -9,6 +9,7 @@
 
 struct File;
 struct SpinLock;
+struct Inode;
 
 enum {
   PROCESS_EMBRIO   = 1,
@@ -57,6 +58,7 @@ struct Process {
   int               exit_code;
 
   struct File      *files[32];
+  struct Inode     *cwd;
 };
 
 struct Process *my_process(void);

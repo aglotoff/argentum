@@ -19,5 +19,6 @@ int32_t sys_fork(void);
 int32_t sys_wait(void);
 int32_t sys_exec(void);
 int32_t sys_open(void);
+int32_t sys_chdir(void);
 
 #endif  // !__KERNEL_SYSCALL_H__

@@ -46,6 +46,7 @@ KERNEL_SRCFILES += \
 	lib/string/strcpy.c \
 	lib/string/strlen.c \
 	lib/string/strncmp.c \
+	lib/string/strncpy.c \
 	lib/string/strpbrk.c \
 	lib/string/strspn.c \
 	lib/string/strtok.c \

@@ -21,14 +21,12 @@ main(int argc, char **argv)
 {
   struct dirent de;
   int fd;
-  
-  if (argc < 2) {
-    printf("Usage: %s <dirname>\n", argv[0]);
-    exit(EXIT_FAILURE);
-  }
+  char *name;
 
-  if ((fd = open(argv[1], O_RDONLY)) < 0) {
-    perror(argv[1]);
+  name = argc < 2 ? "." : argv[1];
+
+  if ((fd = open(name, O_RDONLY)) < 0) {
+    perror(name);
     exit(EXIT_FAILURE);
   }
 

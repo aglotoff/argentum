@@ -6,6 +6,7 @@
 #include "console.h"
 #include "cpu.h"
 #include "file.h"
+#include "fs.h"
 #include "process.h"
 #include "rtc.h"
 #include "syscall.h"
@@ -26,6 +27,7 @@ static int32_t (*syscalls[])(void) = {
   [__SYS_WAIT]    = sys_wait,
   [__SYS_EXEC]    = sys_exec,
   [__SYS_OPEN]    = sys_open,
+  [__SYS_CHDIR]   = sys_chdir,
 };
 
 int32_t
@@ -337,4 +339,32 @@ sys_open(void)
     file_close(f);
 
   return r;
+}
+
+int32_t
+sys_chdir(void)
+{
+  const char *path;
+  struct Inode *ip;
+  int r;
+
+  if ((r = sys_arg_str(0, &path, AP_USER_RO)) < 0)
+    return r;
+  
+  if ((ip = fs_name_lookup(path)) == NULL)
+    return -ENOENT;
+  
+  fs_inode_lock(ip);
+
+  if ((ip->data.mode & EXT2_S_IFMASK) != EXT2_S_IFDIR) {
+    fs_inode_unlock(ip);
+    fs_inode_put(ip);
+    return -ENOTDIR;
+  }
+
+  fs_inode_unlock(ip);
+
+  my_process()->cwd = ip;
+
+  return 0;
 }

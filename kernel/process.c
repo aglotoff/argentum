@@ -263,6 +263,8 @@ process_destroy(int status)
     if (current->files[fd])
       file_close(current->files[fd]);
 
+  fs_inode_put(current->cwd);
+
   current->exit_code = status;
 
   spin_lock(&ptable.lock);
@@ -298,6 +300,8 @@ process_copy(void)
   for (fd = 0; fd < 32; fd++) {
     child->files[fd] = parent->files[fd] ? file_dup(parent->files[fd]) : NULL;
   }
+
+  child->cwd = fs_inode_dup(parent->cwd);
 
   spin_lock(&ptable.lock);
 
@@ -469,16 +473,22 @@ process_run(void)
 {
   static int first;
 
+  struct Process *proc = my_process();
+
   // Still holding the process table lock.
   spin_unlock(&ptable.lock);
 
   if (!first) {
     first = 1;
+
     fs_init();
+
+    if ((proc->cwd == NULL) && ((proc->cwd = fs_name_lookup("/")) == NULL))
+      panic("root not found");
   }
 
   // "Return" to the user space.
-  process_pop_tf(my_process()->tf);
+  process_pop_tf(proc->tf);
 }
 
 // Restores the register values in the Trapframe.

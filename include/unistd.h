@@ -6,7 +6,13 @@
 pid_t   fork(void);
 pid_t   getpid(void);
 pid_t   getppid(void);
-int     exec(const char *, char *const[]);
+
+int     execl(const char *, ...);
+int     execlp(const char *, ...);
+int     execv(const char *, char *const[]);
+int     execvp(const char *, char *const[]);
+
+int     chdir(const char *);
 
 ssize_t read(int, void *, size_t);
 ssize_t write(int, const void *, size_t);

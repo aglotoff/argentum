@@ -34,7 +34,7 @@ struct Ext2Superblock {
   uint16_t block_group_nr;
 } __attribute__((packed));
 
-struct Ext2BlockGroupDesc {
+struct Ext2GroupDesc {
   uint32_t block_bitmap;
   uint32_t inode_bitmap;
   uint32_t inode_table;

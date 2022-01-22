@@ -114,7 +114,11 @@ buf_read(unsigned block_no)
 void
 buf_write(struct Buf *buf)
 {
-  (void) buf;
+  if (!mutex_holding(&buf->mutex))
+    panic("not holding buf");
+
+  buf->flags |= BUF_DIRTY;
+  sd_request(buf);
 }
 
 void 

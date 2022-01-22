@@ -98,7 +98,9 @@ LIB_SRCFILES += \
 	lib/time/time.c
 
 LIB_SRCFILES += \
-	lib/unistd/exec.c \
+  lib/unistd/chdir.c \
+	lib/unistd/execv.c \
+	lib/unistd/execvp.c \
   lib/unistd/fork.c \
 	lib/unistd/getpid.c \
 	lib/unistd/getppid.c \
