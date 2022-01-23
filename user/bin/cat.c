@@ -23,16 +23,18 @@ main(int argc, char **argv)
     while ((nread = read(fd, buf, BUF_SIZE)) != 0) {
       if (nread < 0) {
         perror(argv[i]);
+        close(fd);
         exit(EXIT_FAILURE);
       }
 
       if ((write(1, buf, nread)) != nread) {
         perror(argv[i]);
+        close(fd);
         exit(EXIT_FAILURE);
       }
     }
 
-    // TODO: close
+    close(fd);
   }
 
   return 0;

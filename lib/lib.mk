@@ -106,6 +106,7 @@ LIB_SRCFILES += \
 
 LIB_SRCFILES += \
   lib/unistd/chdir.c \
+	lib/unistd/close.c \
 	lib/unistd/execl.c \
 	lib/unistd/execlp.c \
 	lib/unistd/execv.c \

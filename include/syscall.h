@@ -4,19 +4,21 @@
 #include <errno.h>
 #include <stdint.h>
 
-#define __SYS_READ        1
-#define __SYS_WRITE       2
-#define __SYS_EXIT        3
-#define __SYS_GETPID      4
-#define __SYS_GETPPID     5
-#define __SYS_TIME        6
-#define __SYS_FORK        7
-#define __SYS_WAIT        8
-#define __SYS_EXEC        9
+// System call numbers
+#define __SYS_FORK        1
+#define __SYS_EXEC        2
+#define __SYS_WAIT        3
+#define __SYS_EXIT        4
+#define __SYS_GETPID      5
+#define __SYS_GETPPID     6
+#define __SYS_TIME        7
+#define __SYS_GETDENTS    8
+#define __SYS_CHDIR       9
 #define __SYS_OPEN        10
-#define __SYS_CHDIR       11
-#define __SYS_GETDENTS    12
-#define __SYS_STAT        13
+#define __SYS_STAT        11
+#define __SYS_CLOSE       12
+#define __SYS_READ        13
+#define __SYS_WRITE       14
 
 // Generic system call: pass system call number as an immediate operand of the
 // SVC instruction, and up to three parameters in R0, R1, R2.

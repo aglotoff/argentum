@@ -1,5 +1,6 @@
 #include <fcntl.h>
 #include <sys/stat.h>
+#include <unistd.h>
 
 int
 stat(const char *path, struct stat *buf)
@@ -11,7 +12,7 @@ stat(const char *path, struct stat *buf)
   
   r = fstat(fd, buf);
 
-  // TODO: close
+  close(fd);
 
   return r;
 }

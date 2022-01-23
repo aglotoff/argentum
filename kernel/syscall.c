@@ -18,19 +18,20 @@ static int     sys_get_num(void);
 static int32_t sys_get_arg(int);
 
 static int32_t (*syscalls[])(void) = {
-  [__SYS_READ]     = sys_read,
-  [__SYS_WRITE]    = sys_write,
+  [__SYS_FORK]     = sys_fork,
+  [__SYS_EXEC]     = sys_exec,
+  [__SYS_WAIT]     = sys_wait,
   [__SYS_EXIT]     = sys_exit,
   [__SYS_GETPID]   = sys_getpid,
   [__SYS_GETPPID]  = sys_getppid,
   [__SYS_TIME]     = sys_time,
-  [__SYS_FORK]     = sys_fork,
-  [__SYS_WAIT]     = sys_wait,
-  [__SYS_EXEC]     = sys_exec,
-  [__SYS_OPEN]     = sys_open,
-  [__SYS_CHDIR]    = sys_chdir,
   [__SYS_GETDENTS] = sys_getdents,
+  [__SYS_CHDIR]    = sys_chdir,
+  [__SYS_OPEN]     = sys_open,
   [__SYS_STAT]     = sys_stat,
+  [__SYS_CLOSE]    = sys_close,
+  [__SYS_READ]     = sys_read,
+  [__SYS_WRITE]    = sys_write,
 };
 
 int32_t
@@ -48,13 +49,14 @@ sys_dispatch(void)
   return -ENOSYS;
 }
 
+
 /*
  * ----------------------------------------------------------------------------
  * Helper functions
  * ----------------------------------------------------------------------------
  */
 
-// Extract system call number from the SVC instruction opcode
+// Extract the system call number from the SVC instruction opcode
 static int
 sys_get_num(void)
 {
@@ -121,7 +123,7 @@ sys_arg_int(int n, int32_t *ip)
  * @retval -EFAULT if the arguments doesn't point to a valid memory region.
  */
 int32_t
-sys_arg_ptr(int n, void **pp, size_t len, int perm)
+sys_arg_buf(int n, void **pp, size_t len, int perm)
 { 
   void *ptr = (void *) sys_get_arg(n);
   int r;
@@ -160,6 +162,18 @@ sys_arg_str(int n, const char **strp, int perm)
   return 0;
 }
 
+/**
+ * Fetch the nth system call argument as a file descriptor. Check that the
+ * file desriptor is valid.
+ * 
+ * @param n    The argument number.
+ * @param fdstore Pointer to the memory address to store the file descriptor.
+ * @param fstore  Pointer to the memory address to store the file.
+ * 
+ * @retval 0 on success.
+ * @retval -EFAULT if the arguments doesn't point to a valid string.
+ * @retval -EBADF if the file descriptor is invalid.
+ */
 int
 sys_arg_fd(int n, int *fdstore, struct File **fstore)
 {
@@ -177,6 +191,7 @@ sys_arg_fd(int n, int *fdstore, struct File **fstore)
   return 0;
 }
 
+
 /*
  * ----------------------------------------------------------------------------
  * System call implementations
@@ -184,63 +199,58 @@ sys_arg_fd(int n, int *fdstore, struct File **fstore)
  */
 
 int32_t
-sys_read(void)
+sys_fork(void)
 {
-  void *buf;
-  int32_t n;
-  struct File *f;
-  int r;
-
-  if ((r = sys_arg_fd(0, NULL, &f)) < 0)
-    return r;
-
-  if ((r = sys_arg_int(2, &n)) < 0)
-    return r;
-
-  if ((r = sys_arg_ptr(1, &buf, n, AP_USER_RO)) < 0)
-    return r;
-
-  return file_read(f, buf, n);
+  return process_copy();
 }
 
 int32_t
-sys_write(void)
+sys_exec(void)
 {
-  void *buf;
-  int32_t n;
-  struct File *f;
-  int r;
+  struct Process *current = my_process();
+  const char *path;
+  char **argv, **s;
+  int i, r;
 
-  if ((r = sys_arg_fd(0, NULL, &f)) < 0)
+  if ((r = sys_arg_str(0, &path, AP_USER_RO)) < 0)
     return r;
 
-  if ((r = sys_arg_int(2, &n)) < 0)
+  if ((r = sys_arg_int(1, (int *) &argv)) < 0)
     return r;
 
-  if ((r = sys_arg_ptr(1, &buf, n, AP_BOTH_RW)) < 0)
-    return r;
+  for (i = 0; ; i++) {
+    s = argv + i;
 
-  return file_write(f, buf, n);
+    if ((r = vm_check_user_ptr(current->trtab, s, sizeof(*s), AP_USER_RO)) < 0)
+      return r;
+
+    if (*s == NULL)
+      break;
+
+    if (i >= 32)
+      return -E2BIG;
+
+    if ((r = vm_check_user_str(current->trtab, *s, AP_USER_RO)))
+      return r;
+  }
+
+  return process_exec(path, argv);
 }
 
 int32_t
-sys_getdents(void)
+sys_wait(void)
 {
-  void *buf;
-  int32_t n;
-  struct File *f;
+  pid_t pid;
+  int *stat_loc;
   int r;
-
-  if ((r = sys_arg_fd(0, NULL, &f)) < 0)
+  
+  if ((r = sys_arg_int(0, &pid)) < 0)
     return r;
 
-  if ((r = sys_arg_int(2, &n)) < 0)
+  if ((r = sys_arg_buf(1, (void **) &stat_loc, sizeof(int), AP_BOTH_RW)) < 0)
     return r;
 
-  if ((r = sys_arg_ptr(1, &buf, n, AP_USER_RO)) < 0)
-    return r;
-
-  return file_getdents(f, buf, n);
+  return process_wait(pid, stat_loc, 0);
 }
 
 int32_t
@@ -275,58 +285,51 @@ sys_time(void)
 }
 
 int32_t
-sys_fork(void)
+sys_getdents(void)
 {
-  return process_copy();
-}
-
-int32_t
-sys_wait(void)
-{
-  pid_t pid;
-  int *stat_loc;
+  void *buf;
+  int32_t n;
+  struct File *f;
   int r;
-  
-  if ((r = sys_arg_int(0, &pid)) < 0)
+
+  if ((r = sys_arg_fd(0, NULL, &f)) < 0)
     return r;
 
-  if ((r = sys_arg_ptr(1, (void **) &stat_loc, sizeof(int), AP_BOTH_RW)) < 0)
+  if ((r = sys_arg_int(2, &n)) < 0)
     return r;
 
-  return process_wait(pid, stat_loc, 0);
+  if ((r = sys_arg_buf(1, &buf, n, AP_USER_RO)) < 0)
+    return r;
+
+  return file_getdents(f, buf, n);
 }
 
 int32_t
-sys_exec(void)
+sys_chdir(void)
 {
-  struct Process *current = my_process();
   const char *path;
-  char **argv, **s;
-  int i, r;
+  struct Inode *ip;
+  int r;
 
   if ((r = sys_arg_str(0, &path, AP_USER_RO)) < 0)
     return r;
+  
+  if ((ip = fs_name_lookup(path)) == NULL)
+    return -ENOENT;
+  
+  fs_inode_lock(ip);
 
-  if ((r = sys_arg_int(1, (int *) &argv)) < 0)
-    return r;
-
-  for (i = 0; ; i++) {
-    s = argv + i;
-
-    if ((r = vm_check_user_ptr(current->trtab, s, sizeof(*s), AP_USER_RO)) < 0)
-      return r;
-
-    if (*s == NULL)
-      break;
-
-    if (i >= 32)
-      return -E2BIG;
-
-    if ((r = vm_check_user_str(current->trtab, *s, AP_USER_RO)))
-      return r;
+  if (!S_ISDIR(ip->mode)) {
+    fs_inode_unlock(ip);
+    fs_inode_put(ip);
+    return -ENOTDIR;
   }
 
-  return process_exec(path, argv);
+  fs_inode_unlock(ip);
+
+  my_process()->cwd = ip;
+
+  return 0;
 }
 
 static int
@@ -365,34 +368,6 @@ sys_open(void)
 }
 
 int32_t
-sys_chdir(void)
-{
-  const char *path;
-  struct Inode *ip;
-  int r;
-
-  if ((r = sys_arg_str(0, &path, AP_USER_RO)) < 0)
-    return r;
-  
-  if ((ip = fs_name_lookup(path)) == NULL)
-    return -ENOENT;
-  
-  fs_inode_lock(ip);
-
-  if (!S_ISDIR(ip->mode)) {
-    fs_inode_unlock(ip);
-    fs_inode_put(ip);
-    return -ENOTDIR;
-  }
-
-  fs_inode_unlock(ip);
-
-  my_process()->cwd = ip;
-
-  return 0;
-}
-
-int32_t
 sys_stat(void)
 {
   struct File *f;
@@ -402,8 +377,63 @@ sys_stat(void)
   if ((r = sys_arg_fd(0, NULL, &f)) < 0)
     return r;
 
-  if ((r = sys_arg_ptr(1, (void **) &buf, sizeof(*buf), AP_BOTH_RW)) < 0)
+  if ((r = sys_arg_buf(1, (void **) &buf, sizeof(*buf), AP_BOTH_RW)) < 0)
     return r;
 
   return file_stat(f, buf);
+}
+
+int32_t
+sys_close(void)
+{
+  struct File *f;
+  int r, fd;
+
+  if ((r = sys_arg_fd(0, &fd, &f)) < 0)
+    return r;
+
+  file_close(f);
+  my_process()->files[fd] = NULL;
+
+  return 0;
+}
+
+int32_t
+sys_read(void)
+{
+  void *buf;
+  int32_t n;
+  struct File *f;
+  int r;
+
+  if ((r = sys_arg_fd(0, NULL, &f)) < 0)
+    return r;
+
+  if ((r = sys_arg_int(2, &n)) < 0)
+    return r;
+
+  if ((r = sys_arg_buf(1, &buf, n, AP_USER_RO)) < 0)
+    return r;
+
+  return file_read(f, buf, n);
+}
+
+int32_t
+sys_write(void)
+{
+  void *buf;
+  int32_t n;
+  struct File *f;
+  int r;
+
+  if ((r = sys_arg_fd(0, NULL, &f)) < 0)
+    return r;
+
+  if ((r = sys_arg_int(2, &n)) < 0)
+    return r;
+
+  if ((r = sys_arg_buf(1, &buf, n, AP_BOTH_RW)) < 0)
+    return r;
+
+  return file_write(f, buf, n);
 }

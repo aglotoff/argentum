@@ -29,6 +29,7 @@ main(int argc, char **argv)
 
     if (nread < 0) {
       perror(dirname);
+      close(fd);
       exit(EXIT_FAILURE);
     }
 
@@ -46,6 +47,7 @@ main(int argc, char **argv)
 
       if (stat(name, &st) < 0) {
         perror(name);
+        close(fd);
         exit(EXIT_FAILURE);
       }
 
@@ -76,6 +78,8 @@ main(int argc, char **argv)
       name[0] = '\0';
     }
   }
+
+  close(fd);
 
   return 0;
 }
