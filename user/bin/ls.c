@@ -1,46 +1,39 @@
+#include <dirent.h>
 #include <fcntl.h>
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <unistd.h>
 
-struct dirent {
-  uint32_t inode;
-  uint16_t rec_len;
-  uint8_t  name_len;
-  uint8_t  file_type;
-  char     name[256];
-} __attribute__((packed));
-
-#define DIRENT_LEN  offsetof(struct dirent, name)
-
 char buf[1024];
 
 int
 main(int argc, char **argv)
 {
-  struct dirent de;
+  ssize_t nread;
   int fd;
-  char *name;
+  char *dirname;
 
-  name = argc < 2 ? "." : argv[1];
+  dirname = argc < 2 ? "." : argv[1];
 
-  if ((fd = open(name, O_RDONLY)) < 0) {
-    perror(name);
+  if ((fd = open(dirname, O_RDONLY)) < 0) {
+    perror(dirname);
     exit(EXIT_FAILURE);
   }
 
-  while (read(fd, &de, DIRENT_LEN) == DIRENT_LEN) {
-    if (read(fd, de.name, de.name_len) != de.name_len) {
-      perror("read");
+  while ((nread = getdents(fd, buf, sizeof(buf))) != 0) {
+    char *p;
+
+    if (nread < 0) {
+      perror(dirname);
       exit(EXIT_FAILURE);
     }
 
-    printf("%.*s\n", de.name_len, de.name);
-
-    if (read(fd, buf, de.rec_len - de.name_len - DIRENT_LEN) < 0) {
-      perror("read");
-      exit(EXIT_FAILURE);
+    p = buf;
+    while (p < &buf[nread]) {
+      struct dirent *dp = (struct dirent *) p;
+      printf("%*.s\n", dp->d_namelen, dp->d_name);
+      p += dp->d_reclen;
     }
   }
 

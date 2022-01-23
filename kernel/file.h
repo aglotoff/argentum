@@ -24,5 +24,6 @@ struct File *file_dup(struct File *);
 void         file_close(struct File *);
 ssize_t      file_read(struct File *, void *, size_t);
 ssize_t      file_write(struct File *, const void *, size_t);
+ssize_t      file_getdents(struct File *, void *, size_t);
 
 #endif  // !__KERNEL_FILE__

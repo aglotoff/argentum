@@ -28,6 +28,9 @@ LIB_SRCFILES += \
 	lib/ctype/toupper.c
 
 LIB_SRCFILES += \
+  lib/dirent/getdents.c
+
+LIB_SRCFILES += \
   lib/errno/errno.c
 
 LIB_SRCFILES += \
@@ -99,6 +102,8 @@ LIB_SRCFILES += \
 
 LIB_SRCFILES += \
   lib/unistd/chdir.c \
+	lib/unistd/execl.c \
+	lib/unistd/execlp.c \
 	lib/unistd/execv.c \
 	lib/unistd/execvp.c \
   lib/unistd/fork.c \

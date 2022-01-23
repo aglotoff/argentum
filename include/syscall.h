@@ -15,6 +15,7 @@
 #define __SYS_EXEC        9
 #define __SYS_OPEN        10
 #define __SYS_CHDIR       11
+#define __SYS_GETDENTS    12
 
 // Generic system call: pass system call number as an immediate operand of the
 // SVC instruction, and up to three parameters in R0, R1, R2.

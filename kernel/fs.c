@@ -1,4 +1,5 @@
 #include <assert.h>
+#include <dirent.h>
 #include <errno.h>
 #include <string.h>
 
@@ -444,9 +445,7 @@ fs_inode_read(struct Inode *ip, void *buf, size_t nbyte, off_t off)
 
   // TODO: read device
 
-  if ((off < 0) ||
-     ((size_t) off > ip->data.size) ||
-     ((off + nbyte) < (size_t) off))
+  if ((off > ip->data.size) || ((off + nbyte) < off))
     return -1;
 
   if ((off + nbyte) > ip->data.size)
@@ -482,7 +481,7 @@ fs_inode_write(struct Inode *ip, const void *buf, size_t nbyte, off_t off)
 
   // TODO: write device
 
-  if ((off < 0) || ((off + nbyte) < (size_t) off))
+  if ((off + nbyte) < off)
     return -1;
   
   src = (const uint8_t *) buf;
@@ -504,6 +503,49 @@ fs_inode_write(struct Inode *ip, const void *buf, size_t nbyte, off_t off)
   if ((total > 0) && ((size_t) off > ip->data.size)) {
     ip->data.size = off;
     fs_inode_update(ip);
+  }
+
+  return total;
+}
+
+ssize_t
+fs_inode_getdents(struct Inode *dir, void *buf, size_t n, off_t *off)
+{
+  struct Ext2DirEntry de;
+  struct dirent *dp;
+  size_t total;
+  char *dst;
+
+  if ((dir->data.mode & EXT2_S_IFMASK) != EXT2_S_IFDIR)
+    return -ENOTDIR;
+  
+  dst = (char *) buf;
+  total = 0;
+  while (*off < dir->data.size) {
+    ssize_t nread;
+    
+    nread = fs_inode_read(dir, &de, offsetof(struct Ext2DirEntry, name), *off);
+    if (nread != offsetof(struct Ext2DirEntry, name))
+      return -EINVAL;
+    
+    if ((sizeof(struct dirent) + de.name_len) > n)
+      break;
+    
+    dp = (struct dirent *) dst;
+    dp->d_ino     = de.inode;
+    dp->d_off     = *off + de.rec_len;
+    dp->d_reclen  = sizeof(struct dirent) + de.name_len;
+    dp->d_namelen = de.name_len;
+    dp->d_type    = de.file_type;
+
+    nread = fs_inode_read(dir, dp->d_name, dp->d_namelen, *off + nread);
+    if (nread != de.name_len)
+      return -EINVAL;
+
+    *off += de.rec_len;
+
+    total += dp->d_reclen;
+    dst   += dp->d_reclen;
   }
 
   return total;
@@ -559,18 +601,23 @@ fs_dir_link(struct Inode *dp, char *name, unsigned num, uint8_t file_type)
   return 0;
 }
 
+/*
+ * ----------------------------------------------------------------------------
+ * Path names operations
+ * ----------------------------------------------------------------------------
+ */
+
 struct Inode *
-fs_inode_lookup(char *name)
+fs_path_lookup(char *path)
 {
   char *s;
   struct Inode *ip, *next;
 
-  if (*name == '\0')
-    return NULL;
+  // For absolute paths, begin search from the root directory.
+  // For relative paths, begin search from the current working directory.
+  ip = *path == '/' ? fs_inode_get(2) : fs_inode_dup(my_process()->cwd);
 
-  ip = *name == '/' ? fs_inode_get(2) : fs_inode_dup(my_process()->cwd);
-
-  for (s = strtok(name, "/"); s != NULL; s = strtok(NULL, "/")) {
+  for (s = strtok(path, "/"); s != NULL; s = strtok(NULL, "/")) {
     fs_inode_lock(ip);
 
     if ((ip->data.mode & EXT2_S_IFMASK) != EXT2_S_IFDIR) {
@@ -615,7 +662,7 @@ fs_name_lookup(const char *path)
 
   strcpy(name, path);
 
-  return fs_inode_lookup(name);
+  return fs_path_lookup(name);
 }
 
 void

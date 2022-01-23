@@ -17,17 +17,18 @@ static int     sys_get_num(void);
 static int32_t sys_get_arg(int);
 
 static int32_t (*syscalls[])(void) = {
-  [__SYS_READ]    = sys_read,
-  [__SYS_WRITE]   = sys_write,
-  [__SYS_EXIT]    = sys_exit,
-  [__SYS_GETPID]  = sys_getpid,
-  [__SYS_GETPPID] = sys_getppid,
-  [__SYS_TIME]    = sys_time,
-  [__SYS_FORK]    = sys_fork,
-  [__SYS_WAIT]    = sys_wait,
-  [__SYS_EXEC]    = sys_exec,
-  [__SYS_OPEN]    = sys_open,
-  [__SYS_CHDIR]   = sys_chdir,
+  [__SYS_READ]     = sys_read,
+  [__SYS_WRITE]    = sys_write,
+  [__SYS_EXIT]     = sys_exit,
+  [__SYS_GETPID]   = sys_getpid,
+  [__SYS_GETPPID]  = sys_getppid,
+  [__SYS_TIME]     = sys_time,
+  [__SYS_FORK]     = sys_fork,
+  [__SYS_WAIT]     = sys_wait,
+  [__SYS_EXEC]     = sys_exec,
+  [__SYS_OPEN]     = sys_open,
+  [__SYS_CHDIR]    = sys_chdir,
+  [__SYS_GETDENTS] = sys_getdents,
 };
 
 int32_t
@@ -218,6 +219,26 @@ sys_write(void)
     return r;
 
   return file_write(f, buf, n);
+}
+
+int32_t
+sys_getdents(void)
+{
+  void *buf;
+  int32_t n;
+  struct File *f;
+  int r;
+
+  if ((r = sys_arg_fd(0, NULL, &f)) < 0)
+    return r;
+
+  if ((r = sys_arg_int(2, &n)) < 0)
+    return r;
+
+  if ((r = sys_arg_ptr(1, &buf, n, AP_USER_RO)) < 0)
+    return r;
+
+  return file_getdents(f, buf, n);
 }
 
 int32_t

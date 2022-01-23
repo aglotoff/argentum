@@ -21,7 +21,7 @@ main(void)
   printf("Welcome to \x1b[1;36mOSDev-PBX-A9!\x1b[m\n");
   
   if (fork() == 0)
-    exec("/bin/sh", argv);
+    execv("/bin/sh", argv);
 
   while (wait(&status) > 0)
     ;

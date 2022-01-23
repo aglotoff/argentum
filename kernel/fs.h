@@ -31,5 +31,6 @@ struct Inode *fs_inode_dup(struct Inode *);
 void          fs_inode_lock(struct Inode *);
 void          fs_inode_unlock(struct Inode *);
 ssize_t       fs_inode_read(struct Inode *, void *, size_t, off_t);
+ssize_t       fs_inode_getdents(struct Inode *, void *, size_t, off_t *);
 
 #endif  // !__KERNEL_FS_H__

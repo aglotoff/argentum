@@ -152,6 +152,30 @@ file_read(struct File *f, void *buf, size_t nbytes)
 }
 
 ssize_t
+file_getdents(struct File *f, void *buf, size_t nbytes)
+{
+  int r;
+
+  if (!f->readable)
+    return -EBADF;
+  
+  switch (f->type) {
+  case FD_INODE:
+    assert(f->inode != NULL);
+    fs_inode_lock(f->inode);
+    r = fs_inode_getdents(f->inode, buf, nbytes, &f->offset);
+    fs_inode_unlock(f->inode);
+    return r;
+  case FD_CONSOLE:
+  case FD_PIPE:
+    // TODO: read from a pipe
+  default:
+    panic("Invalid type");
+    return 0;
+  }
+}
+
+ssize_t
 file_write(struct File *f, const void *buf, size_t nbytes)
 {
   if (!f->writeable)

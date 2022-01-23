@@ -1,8 +1,10 @@
 #ifndef __INCLUDE_SYS_TYPES_H__
 #define __INCLUDE_SYS_TYPES_H__
 
+typedef unsigned long ino_t;
+
 /** Used for file sizes. */
-typedef int           off_t;
+typedef unsigned long off_t;
 
 /** Used for process IDs and process group IDs. */
 typedef int           pid_t;
