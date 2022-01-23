@@ -2,6 +2,7 @@
 #include <dirent.h>
 #include <errno.h>
 #include <string.h>
+#include <sys/stat.h>
 
 #include "kernel.h"
 #include "kobject.h"
@@ -128,7 +129,7 @@ static struct {
 } inode_cache;
 
 struct Inode *
-fs_inode_get(unsigned inum)
+fs_inode_get(ino_t ino, dev_t dev)
 {
   struct ListLink *l;
   struct Inode *ip, *empty;
@@ -138,9 +139,8 @@ fs_inode_get(unsigned inum)
   empty = NULL;
   LIST_FOREACH(&inode_cache.head, l) {
     ip = LIST_CONTAINER(l, struct Inode, cache_link);
-    if (ip->num == inum) {
+    if ((ip->ino == ino) && (ip->dev == dev)) {
       ip->ref_count++;
-
       spin_unlock(&inode_cache.lock);
 
       return ip;
@@ -152,8 +152,9 @@ fs_inode_get(unsigned inum)
 
   if (empty != NULL) {
     empty->ref_count = 1;
-    empty->num = inum;
-    empty->valid = 0;
+    empty->ino       = ino;
+    empty->dev       = dev;
+    empty->valid     = 0;
 
     spin_unlock(&inode_cache.lock);
 
@@ -208,7 +209,7 @@ fs_gd_inode_alloc(struct Ext2GroupDesc *gd, uint32_t *istore)
 }
 
 struct Inode *
-fs_inode_alloc(uint16_t mode)
+fs_inode_alloc(mode_t mode, dev_t dev)
 {
   struct Buf *buf;
   struct Ext2GroupDesc *gd;
@@ -226,6 +227,7 @@ fs_inode_alloc(uint16_t mode)
       gd = (struct Ext2GroupDesc *) buf->data + gi;
       if (fs_gd_inode_alloc(gd, &inum) == 0) {
         unsigned inodes_per_block, itab_idx, inode_block_idx, inode_block;
+        struct Ext2Inode *dp;
 
         inum += 1 + (g + gi) * sb.inodes_per_group;
 
@@ -236,15 +238,18 @@ fs_inode_alloc(uint16_t mode)
 
         buf_release(buf);
 
-        inode = fs_inode_get(inum);
+        inode = fs_inode_get(inum, dev);
         if (inode == NULL)
           panic("cannot get inode (%u)", inum);
 
-        inode->data.mode = mode;
+        inode->mode = mode;
 
         buf = buf_read(inode_block);
-        memcpy(&buf->data[inode_block_idx * sb.inode_size], &inode->data,
-               sizeof(inode->data));
+
+        dp = (struct Ext2Inode *) buf->data + inode_block_idx;
+        memset(dp, 0, sizeof(struct Ext2Inode));
+        dp->mode = mode;
+
         buf_write(buf);
         buf_release(buf);
 
@@ -263,6 +268,7 @@ fs_inode_update(struct Inode *ip)
 {
   struct Buf *buf;
   struct Ext2GroupDesc gd;
+  struct Ext2Inode *dp;
   unsigned gds_per_block, inodes_per_block;
   unsigned block_group, table_block, table_idx;
   unsigned inode_table_idx, inode_block_idx, inode_block;
@@ -271,7 +277,7 @@ fs_inode_update(struct Inode *ip)
     panic("caller must hold ip");
 
   // Determine which block group the inode belongs to
-  block_group = (ip->num - 1) / sb.inodes_per_group;
+  block_group = (ip->ino - 1) / sb.inodes_per_group;
 
   // Read the Block Group Descriptor corresponding to the Block Group which
   // contains the inode to be looked up
@@ -288,23 +294,36 @@ fs_inode_update(struct Inode *ip)
 
   // Determine the index of the inode in the inode table. 
   inodes_per_block = BLOCK_SIZE / sb.inode_size;
-  inode_table_idx  = (ip->num - 1) % sb.inodes_per_group;
+  inode_table_idx  = (ip->ino - 1) % sb.inodes_per_group;
   inode_block      = gd.inode_table + inode_table_idx / inodes_per_block;
   inode_block_idx  = inode_table_idx % inodes_per_block;
 
   // Index the inode table (taking into account non-standard inode size)
   buf = buf_read(inode_block);
-  memcpy(&buf->data[inode_block_idx * sb.inode_size], &ip->data,
-         sizeof(ip->data));
+
+  dp = (struct Ext2Inode *) (buf->data + inode_block_idx * sb.inode_size);
+
+  dp->mode        = ip->mode;
+  dp->links_count = ip->nlink;
+  dp->uid         = ip->uid;
+  dp->gid         = ip->gid;
+  dp->size        = ip->size;
+  dp->atime       = ip->atime;
+  dp->mtime       = ip->mtime;
+  dp->ctime       = ip->ctime;
+  dp->blocks      = ip->blocks;
+  memmove(dp->block, ip->block, sizeof(ip->block));
+
+  buf_write(buf);
   buf_release(buf);
 }
-
 
 void
 fs_inode_lock(struct Inode *ip)
 {
   struct Buf *buf;
   struct Ext2GroupDesc gd;
+  struct Ext2Inode *dp;
   unsigned gds_per_block, inodes_per_block;
   unsigned block_group, table_block, table_idx;
   unsigned inode_table_idx, inode_block_idx, inode_block;
@@ -315,7 +334,7 @@ fs_inode_lock(struct Inode *ip)
     return;
 
   // Determine which block group the inode belongs to
-  block_group = (ip->num - 1) / sb.inodes_per_group;
+  block_group = (ip->ino - 1) / sb.inodes_per_group;
 
   // Read the Block Group Descriptor corresponding to the Block Group which
   // contains the inode to be looked up
@@ -332,17 +351,29 @@ fs_inode_lock(struct Inode *ip)
 
   // Determine the index of the inode in the inode table. 
   inodes_per_block = BLOCK_SIZE / sb.inode_size;
-  inode_table_idx  = (ip->num - 1) % sb.inodes_per_group;
+  inode_table_idx  = (ip->ino - 1) % sb.inodes_per_group;
   inode_block      = gd.inode_table + inode_table_idx / inodes_per_block;
   inode_block_idx  = inode_table_idx % inodes_per_block;
 
   // Index the inode table (taking into account non-standard inode size)
   buf = buf_read(inode_block);
-  memcpy(&ip->data, &buf->data[inode_block_idx * sb.inode_size],
-         sizeof(ip->data));
+
+  dp = (struct Ext2Inode *) (buf->data + inode_block_idx * sb.inode_size);
+
+  ip->mode   = dp->mode;
+  ip->nlink  = dp->links_count;
+  ip->uid    = dp->uid;
+  ip->gid    = dp->gid;
+  ip->size   = dp->size;
+  ip->atime  = dp->atime;
+  ip->mtime  = dp->mtime;
+  ip->ctime  = dp->ctime;
+  ip->blocks = dp->blocks;
+  memmove(ip->block, dp->block, sizeof(ip->block));
+
   buf_release(buf);
 
-  if (!ip->data.mode)
+  if (!ip->mode)
     panic("no mode");
 
   ip->valid = 1;
@@ -392,19 +423,19 @@ fs_block_map(struct Inode *ip, unsigned block_no)
   unsigned bcnt;
 
   if (block_no < 12) {
-    if ((addr = ip->data.block[block_no]) == 0) {
+    if ((addr = ip->block[block_no]) == 0) {
       if (fs_block_alloc(&addr) != 0)
         panic("cannot allocate block");
-      ip->data.block[block_no] = addr;
+      ip->block[block_no] = addr;
     }
     return addr;
   }
 
   block_no -= 12;
 
-  ptr = &ip->data.block[12];
+  ptr = &ip->block[12];
   for (bcnt = ADDRS_PER_BLOCK; bcnt <= block_no; bcnt *= ADDRS_PER_BLOCK) {
-    if (++ptr >= &ip->data.block[15])
+    if (++ptr >= &ip->block[15])
       panic("too large block number (%u)", block_no + 12);
   }
 
@@ -445,11 +476,11 @@ fs_inode_read(struct Inode *ip, void *buf, size_t nbyte, off_t off)
 
   // TODO: read device
 
-  if ((off > ip->data.size) || ((off + nbyte) < off))
+  if ((off > ip->size) || ((off + nbyte) < off))
     return -1;
 
-  if ((off + nbyte) > ip->data.size)
-    nbyte = ip->data.size - off;
+  if ((off + nbyte) > ip->size)
+    nbyte = ip->size - off;
   
   dst = (uint8_t *) buf;
   total = 0;
@@ -500,8 +531,8 @@ fs_inode_write(struct Inode *ip, const void *buf, size_t nbyte, off_t off)
     off   += nwrite;
   }
 
-  if ((total > 0) && ((size_t) off > ip->data.size)) {
-    ip->data.size = off;
+  if ((total > 0) && ((size_t) off > ip->size)) {
+    ip->size = off;
     fs_inode_update(ip);
   }
 
@@ -516,12 +547,12 @@ fs_inode_getdents(struct Inode *dir, void *buf, size_t n, off_t *off)
   size_t total;
   char *dst;
 
-  if ((dir->data.mode & EXT2_S_IFMASK) != EXT2_S_IFDIR)
+  if ((dir->mode & EXT2_S_IFMASK) != EXT2_S_IFDIR)
     return -ENOTDIR;
   
   dst = (char *) buf;
   total = 0;
-  while (*off < dir->data.size) {
+  while (*off < dir->size) {
     ssize_t nread;
     
     nread = fs_inode_read(dir, &de, offsetof(struct Ext2DirEntry, name), *off);
@@ -557,17 +588,17 @@ fs_dir_lookup(struct Inode *dir, const char *name)
   struct Ext2DirEntry de;
   off_t off;
 
-  if ((dir->data.mode & EXT2_S_IFMASK) != EXT2_S_IFDIR)
+  if ((dir->mode & EXT2_S_IFMASK) != EXT2_S_IFDIR)
     panic("not a directory");
 
-  for (off = 0; (size_t) off < dir->data.size; off += de.rec_len) {
+  for (off = 0; (size_t) off < dir->size; off += de.rec_len) {
     fs_inode_read(dir, &de, offsetof(struct Ext2DirEntry, name), off);
 
     if (de.name_len == strlen(name)) {
       fs_inode_read(dir, de.name, de.name_len,
                     off + offsetof(struct Ext2DirEntry, name));
       if (strncmp(de.name, name, de.name_len) == 0)
-        return fs_inode_get(de.inode);
+        return fs_inode_get(de.inode, 0);
     }
   }
 
@@ -590,12 +621,12 @@ fs_dir_link(struct Inode *dp, char *name, unsigned num, uint8_t file_type)
   de.rec_len   = sizeof(de) + de.name_len;
   de.file_type = file_type;
 
-  if (fs_inode_write(dp, &de, offsetof(struct Ext2DirEntry, name), dp->data.size) != offsetof(struct Ext2DirEntry, name))
+  if (fs_inode_write(dp, &de, offsetof(struct Ext2DirEntry, name), dp->size) != offsetof(struct Ext2DirEntry, name))
     panic("cannot write");
 
   strncpy(de.name, name, 255);
 
-  if (fs_inode_write(dp, de.name, de.name_len, dp->data.size) != de.name_len)
+  if (fs_inode_write(dp, de.name, de.name_len, dp->size) != de.name_len)
     panic("cannot write");
 
   return 0;
@@ -615,12 +646,12 @@ fs_path_lookup(char *path)
 
   // For absolute paths, begin search from the root directory.
   // For relative paths, begin search from the current working directory.
-  ip = *path == '/' ? fs_inode_get(2) : fs_inode_dup(my_process()->cwd);
+  ip = *path == '/' ? fs_inode_get(2, 0) : fs_inode_dup(my_process()->cwd);
 
   for (s = strtok(path, "/"); s != NULL; s = strtok(NULL, "/")) {
     fs_inode_lock(ip);
 
-    if ((ip->data.mode & EXT2_S_IFMASK) != EXT2_S_IFDIR) {
+    if ((ip->mode & EXT2_S_IFMASK) != EXT2_S_IFDIR) {
       fs_inode_unlock(ip);
       fs_inode_put(ip);
 
@@ -655,7 +686,7 @@ fs_name_lookup(const char *path)
   char name[256];
 
   if (strcmp(path, "/") == 0)
-    return fs_inode_get(2);
+    return fs_inode_get(2, 0);
 
   if (strlen(path) >= sizeof(name))
     panic("too long name");
@@ -663,6 +694,26 @@ fs_name_lookup(const char *path)
   strcpy(name, path);
 
   return fs_path_lookup(name);
+}
+
+int
+fs_inode_stat(struct Inode *ip, struct stat *buf)
+{
+  if (!mutex_holding(&ip->mutex))
+    panic("caller not holding ip->mutex");
+
+  buf->st_mode  = ip->mode;
+  buf->st_ino   = ip->ino;
+  buf->st_dev   = ip->dev;
+  buf->st_nlink = ip->nlink;
+  buf->st_uid   = ip->uid;
+  buf->st_gid   = ip->gid;
+  buf->st_size  = ip->size;
+  buf->st_atime = ip->atime;
+  buf->st_mtime = ip->mtime;
+  buf->st_ctime = ip->ctime;
+
+  return 0;
 }
 
 void

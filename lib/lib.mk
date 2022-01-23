@@ -90,6 +90,10 @@ LIB_SRCFILES += \
 	lib/string/strtok.c
 
 LIB_SRCFILES += \
+	lib/sys/stat/fstat.c \
+	lib/sys/stat/stat.c
+
+LIB_SRCFILES += \
   lib/sys/wait/wait.c \
 	lib/sys/wait/waitpid.c
 

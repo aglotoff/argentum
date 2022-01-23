@@ -2,6 +2,7 @@
 #include <errno.h>
 #include <fcntl.h>
 #include <string.h>
+#include <sys/stat.h>
 
 #include "console.h"
 #include "ext2.h"
@@ -51,8 +52,7 @@ file_open(const char *path, int oflag, struct File **fstore)
     }
 
     fs_inode_lock(ip);
-    if (((ip->data.mode & EXT2_S_IFMASK) == EXT2_S_IFDIR) &&
-        (oflag & O_WRONLY)) {
+    if (S_ISDIR(ip->mode) && (oflag & O_WRONLY)) {
       fs_inode_unlock(ip);
       fs_inode_put(ip);
 
@@ -192,4 +192,21 @@ file_write(struct File *f, const void *buf, size_t nbytes)
     panic("Invalid type");
     return 0;
   }
+}
+
+int
+file_stat(struct File *fp, struct stat *buf)
+{
+  int r;
+  
+  if (fp->type != FD_INODE) 
+    return -EBADF;
+
+  assert(fp->inode != NULL);
+
+  fs_inode_lock(fp->inode);
+  r = fs_inode_stat(fp->inode, buf);
+  fs_inode_unlock(fp->inode);
+
+  return r;
 }

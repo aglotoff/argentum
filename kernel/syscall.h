@@ -21,5 +21,6 @@ int32_t sys_exec(void);
 int32_t sys_open(void);
 int32_t sys_chdir(void);
 int32_t sys_getdents(void);
+int32_t sys_stat(void);
 
 #endif  // !__KERNEL_SYSCALL_H__

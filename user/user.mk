@@ -7,6 +7,7 @@ USER_SRCFILES := \
 
 USER_SRCFILES += \
   user/bin/cat.c \
+	user/bin/echo.c \
 	user/bin/ls.c \
 	user/bin/sh.c
 

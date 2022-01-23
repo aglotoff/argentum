@@ -1,6 +1,7 @@
 #include <assert.h>
 #include <errno.h>
 #include <syscall.h>
+#include <sys/stat.h>
 
 #include "kernel.h"
 #include "console.h"
@@ -29,6 +30,7 @@ static int32_t (*syscalls[])(void) = {
   [__SYS_OPEN]     = sys_open,
   [__SYS_CHDIR]    = sys_chdir,
   [__SYS_GETDENTS] = sys_getdents,
+  [__SYS_STAT]     = sys_stat,
 };
 
 int32_t
@@ -377,7 +379,7 @@ sys_chdir(void)
   
   fs_inode_lock(ip);
 
-  if ((ip->data.mode & EXT2_S_IFMASK) != EXT2_S_IFDIR) {
+  if (!S_ISDIR(ip->mode)) {
     fs_inode_unlock(ip);
     fs_inode_put(ip);
     return -ENOTDIR;
@@ -388,4 +390,20 @@ sys_chdir(void)
   my_process()->cwd = ip;
 
   return 0;
+}
+
+int32_t
+sys_stat(void)
+{
+  struct File *f;
+  struct stat *buf;
+  int r;
+
+  if ((r = sys_arg_fd(0, NULL, &f)) < 0)
+    return r;
+
+  if ((r = sys_arg_ptr(1, (void **) &buf, sizeof(*buf), AP_BOTH_RW)) < 0)
+    return r;
+
+  return file_stat(f, buf);
 }

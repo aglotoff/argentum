@@ -4,6 +4,7 @@
 #include <sys/types.h>
 
 struct Inode;
+struct stat;
 
 #define FD_INODE    0
 #define FD_CONSOLE  1
@@ -25,5 +26,6 @@ void         file_close(struct File *);
 ssize_t      file_read(struct File *, void *, size_t);
 ssize_t      file_write(struct File *, const void *, size_t);
 ssize_t      file_getdents(struct File *, void *, size_t);
+int          file_stat(struct File *, struct stat *);
 
 #endif  // !__KERNEL_FILE__

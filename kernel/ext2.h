@@ -66,14 +66,31 @@ struct Ext2Inode {
   uint8_t  osd2[12];
 } __attribute__((packed));
 
-#define EXT2_S_IFMASK   0xF000
-#define EXT2_S_IFIFO    0x1000
-#define EXT2_S_IFCHR    0x2000
-#define EXT2_S_IFDIR    0x4000
-#define EXT2_S_IFBLK    0x6000
-#define EXT2_S_IFREG    0x8000
-#define EXT2_S_IFLINK   0xA000
-#define EXT2_S_IFSOCK   0xC000
+// File format
+#define EXT2_S_IFMASK   (0xF << 12)
+#define EXT2_S_IFIFO    (0x1 << 12)
+#define EXT2_S_IFCHR    (0x2 << 12)
+#define EXT2_S_IFDIR    (0x4 << 12)
+#define EXT2_S_IFBLK    (0x6 << 12)
+#define EXT2_S_IFREG    (0x8 << 12)
+#define EXT2_S_IFLINK   (0xA << 12)
+#define EXT2_S_IFSOCK   (0xC << 12)
+
+// Process execution user/group override
+#define EXT2_S_ISUID    (1 << 11)
+#define EXT2_S_ISGID    (1 << 10)
+#define EXT2_S_ISVTX    (1 << 9)
+
+// Access rights
+#define EXT2_S_IRUSR    (1 << 8)
+#define EXT2_S_IWUSR    (1 << 7)
+#define EXT2_S_IXUSR    (1 << 6)
+#define EXT2_S_IRGRP    (1 << 5)
+#define EXT2_S_IWGRP    (1 << 4)
+#define EXT2_S_IXGRP    (1 << 3)
+#define EXT2_S_IROTH    (1 << 2)
+#define EXT2_S_IWOTH    (1 << 1)
+#define EXT2_S_IXOTH    (1 << 0)
 
 struct Ext2DirEntry {
   uint32_t inode;

@@ -1,6 +1,7 @@
 #include <assert.h>
 #include <errno.h>
 #include <string.h>
+#include <sys/stat.h>
 #include <sys/wait.h>
 
 #include "armv7.h"
@@ -569,7 +570,7 @@ process_exec(const char *path, char *const argv[])
 
   fs_inode_lock(ip);
 
-  if ((ip->data.mode & EXT2_S_IFMASK) != EXT2_S_IFREG) {
+  if (!S_ISREG(ip->mode)) {
     r = -ENOENT;
     goto out1;
   }
