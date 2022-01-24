@@ -20,7 +20,7 @@ void             vm_switch_kernel(void);
 void             vm_switch_user(tte_t *);
 
 int              vm_alloc_region(tte_t *, void *, size_t);
-void             vm_dealloc_region(tte_t *, void *, size_t);
+int              vm_dealloc_region(tte_t *, void *, size_t);
 void             vm_free(tte_t *);
 tte_t           *vm_copy(tte_t *);
 int              vm_copy_out(tte_t *, void *, const void *, size_t);

@@ -49,7 +49,8 @@ struct Process {
   struct ListLink   sibling;    ///< Link into the siblings list
 
   tte_t            *trtab;      ///< Translation table
-  size_t            size;       ///< Size of process memory (in bytes)
+  uintptr_t         heap;       ///< Process heap end
+  uintptr_t         ustack;     ///< Process user stack bottom
 
   uint8_t          *kstack;     ///< Bottom of process kernel stack
   struct Trapframe *tf;         ///< Trap frame for current exception
@@ -74,6 +75,7 @@ pid_t           process_wait(pid_t, int *, int);
 void            process_sleep(struct ListLink *, struct SpinLock *);
 void            process_wakeup(struct ListLink *);
 int             process_exec(const char *, char *const[]);
+void           *process_grow(ptrdiff_t);
 
 void            scheduler(void);
 void            context_switch(struct Context **old, struct Context *new);

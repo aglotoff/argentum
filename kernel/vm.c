@@ -181,7 +181,7 @@ vm_alloc_region(tte_t *trtab, void *va, size_t n)
   return 0;
 }
 
-void
+int
 vm_dealloc_region(tte_t *trtab, void *va, size_t n)
 {
   uintptr_t a, end;
@@ -207,6 +207,7 @@ vm_dealloc_region(tte_t *trtab, void *va, size_t n)
       a += PAGE_SIZE;
     }
   }
+  return 0;
 }
 
 int

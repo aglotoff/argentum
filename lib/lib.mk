@@ -115,6 +115,7 @@ LIB_SRCFILES += \
 	lib/unistd/getpid.c \
 	lib/unistd/getppid.c \
 	lib/unistd/read.c \
+	lib/unistd/sbrk.c \
 	lib/unistd/write.c
 
 LIB_OBJFILES := $(patsubst %.c, $(OBJ)/%.o, $(LIB_SRCFILES))

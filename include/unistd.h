@@ -1,6 +1,7 @@
 #ifndef __INCLUDE_UNISTD_H__
 #define __INCLUDE_UNISTD_H__
 
+#include <stddef.h>
 #include <sys/types.h>
 
 pid_t   fork(void);
@@ -17,5 +18,7 @@ int     chdir(const char *);
 int     close(int);
 ssize_t read(int, void *, size_t);
 ssize_t write(int, const void *, size_t);
+
+void   *sbrk(ptrdiff_t);
 
 #endif  // !__INCLUDE_UNISTD_H__

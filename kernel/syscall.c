@@ -32,6 +32,7 @@ static int32_t (*syscalls[])(void) = {
   [__SYS_CLOSE]    = sys_close,
   [__SYS_READ]     = sys_read,
   [__SYS_WRITE]    = sys_write,
+  [__SYS_SBRK]     = sys_sbrk,
 };
 
 int32_t
@@ -436,4 +437,16 @@ sys_write(void)
     return r;
 
   return file_write(f, buf, n);
+}
+
+int32_t
+sys_sbrk(void)
+{
+  ptrdiff_t n;
+  int r;
+
+  if ((r = sys_arg_int(0, (int32_t *) &n)) < 0)
+    return r;
+  
+  return (int32_t) process_grow(n);
 }

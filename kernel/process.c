@@ -151,6 +151,9 @@ process_load_binary(struct Process *proc, const void *binary)
   ph = (Elf32_Phdr *) ((uint8_t *) elf + elf->phoff);
   eph = ph + elf->phnum;
 
+  proc->heap   = 0;
+  proc->ustack = USTACK_TOP - USTACK_SIZE;
+
   for ( ; ph < eph; ph++) {
     if (ph->type != PT_LOAD)
       continue;
@@ -165,11 +168,11 @@ process_load_binary(struct Process *proc, const void *binary)
                          ph->filesz)) < 0)
       return r;
 
-    proc->size = ph->vaddr + ph->memsz;
+    proc->heap = MAX(proc->heap, ph->vaddr + ph->memsz);
   }
 
   // Allocate user stack.
-  if ((r = vm_alloc_region(proc->trtab, (void *) (USTACK_TOP - USTACK_SIZE),
+  if ((r = vm_alloc_region(proc->trtab, (void *) (proc->ustack),
                            USTACK_SIZE)) < 0)
     return r;
 
@@ -293,7 +296,8 @@ process_copy(void)
     return -ENOMEM;
   }
 
-  child->size   = parent->size;
+  child->heap   = parent->heap;
+  child->ustack = parent->ustack;
   child->parent = parent;
   *child->tf    = *parent->tf;
   child->tf->r0 = 0;
@@ -559,7 +563,7 @@ process_exec(const char *path, char *const argv[])
   off_t off;
   tte_t *trtab;
   size_t n;
-  unsigned size;
+  uintptr_t heap, ustack;
   char *oargv[33];
   char *sp;
   int argc;
@@ -591,7 +595,8 @@ process_exec(const char *path, char *const argv[])
     goto out2;
   }
 
-  size = 0;
+  heap   = 0;
+  ustack = USTACK_TOP - USTACK_SIZE;
 
   for (off = elf.phoff;
        (size_t) off < elf.phoff + elf.phnum * sizeof(ph);
@@ -618,12 +623,11 @@ process_exec(const char *path, char *const argv[])
     if ((r = vm_load(trtab, (void *) ph.vaddr, ip, ph.filesz, ph.offset)) < 0)
       goto out2;
 
-    size = ph.vaddr + ph.memsz;
+    heap = MAX(heap, ph.vaddr + ph.memsz);
   }
 
   // Allocate user stack.
-  if ((r = vm_alloc_region(trtab, (void *) (USTACK_TOP - USTACK_SIZE),
-                           USTACK_SIZE)) < 0)
+  if ((r = vm_alloc_region(trtab, (void *) ustack, USTACK_SIZE)) < 0)
     return r;
 
   sp = (char *) USTACK_TOP;
@@ -636,7 +640,7 @@ process_exec(const char *path, char *const argv[])
     n = strlen(argv[argc]);
     sp -= ROUND_UP(n + 1, sizeof(uint32_t));
 
-    if (sp < (char *) (USTACK_TOP - USTACK_SIZE)) {
+    if (sp < (char *) ustack) {
       r = -E2BIG;
       goto out2;
     }
@@ -666,8 +670,10 @@ process_exec(const char *path, char *const argv[])
 
   vm_switch_user(trtab);
   vm_free(proc->trtab);
-  proc->trtab = trtab;
-  proc->size  = size;
+
+  proc->trtab  = trtab;
+  proc->heap   = heap;
+  proc->ustack = ustack;
 
   proc->tf->r0     = argc;                // argc
   proc->tf->r1     = (uint32_t) sp;       // argv
@@ -684,4 +690,36 @@ out1:
   fs_inode_put(ip);
 
   return r;
+}
+
+void *
+process_grow(ptrdiff_t increment)
+{
+  struct Process *current = my_process();
+  uintptr_t o, n;
+
+  o = current->heap;
+  n = o + increment;
+
+  if (increment > 0) {
+    if ((n < o) || (n > (current->ustack + PAGE_SIZE)))
+      // Overflow
+      return (void *) -1;
+    if (vm_alloc_region(current->trtab, (void *) ROUND_UP(o, PAGE_SIZE),
+                        ROUND_UP(n, PAGE_SIZE) - ROUND_UP(o, PAGE_SIZE)) != 0)
+      return (void *) -1;
+  } else if (increment < 0) {
+    if (n > o)
+      // Overflow
+      return (void *) -1;
+    if (vm_dealloc_region(current->trtab, (void *) ROUND_UP(n, PAGE_SIZE),
+                          ROUND_UP(o, PAGE_SIZE) - ROUND_UP(n, PAGE_SIZE)) != 0)
+      return (void *) -1;
+  }
+
+  current->heap = n;
+
+  vm_switch_user(current->trtab);
+
+  return (void *) o;
 }

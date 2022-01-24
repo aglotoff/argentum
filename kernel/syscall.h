@@ -23,5 +23,6 @@ int32_t sys_chdir(void);
 int32_t sys_getdents(void);
 int32_t sys_stat(void);
 int32_t sys_close(void);
+int32_t sys_sbrk(void);
 
 #endif  // !__KERNEL_SYSCALL_H__
