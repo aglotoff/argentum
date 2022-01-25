@@ -29,6 +29,7 @@ static int32_t (*syscalls[])(void) = {
   [__SYS_CHDIR]    = sys_chdir,
   [__SYS_OPEN]     = sys_open,
   [__SYS_MKDIR]    = sys_mkdir,
+  [__SYS_MKNOD]    = sys_mknod,
   [__SYS_STAT]     = sys_stat,
   [__SYS_CLOSE]    = sys_close,
   [__SYS_READ]     = sys_read,
@@ -348,21 +349,6 @@ fd_alloc(struct File *f)
 }
 
 int32_t
-sys_mkdir(void)
-{
-  const char *path;
-  mode_t mode;
-  int r;
-
-  if ((r = sys_arg_str(0, &path, AP_USER_RO)) < 0)
-    return r;
-  if ((r = sys_arg_int(1, (int *) &mode)) < 0)
-    return r;
-
-  return fs_mkdir(path, mode, NULL);
-}
-
-int32_t
 sys_open(void)
 {
   struct File *f;
@@ -381,6 +367,42 @@ sys_open(void)
     file_close(f);
 
   return r;
+}
+
+int32_t
+sys_mkdir(void)
+{
+  const char *path;
+  mode_t mode;
+  int r;
+
+  if ((r = sys_arg_str(0, &path, AP_USER_RO)) < 0)
+    return r;
+  if ((r = sys_arg_int(1, (int *) &mode)) < 0)
+    return r;
+
+  if (mode & ~(S_IRWXU | S_IRWXG | S_IRWXO))
+    return -EINVAL;
+
+  return fs_create(path, S_IFDIR | mode, 0, NULL);
+}
+
+int32_t
+sys_mknod(void)
+{
+  const char *path;
+  mode_t mode;
+  dev_t dev;
+  int r;
+
+  if ((r = sys_arg_str(0, &path, AP_USER_RO)) < 0)
+    return r;
+  if ((r = sys_arg_int(1, (int *) &mode)) < 0)
+    return r;
+  if ((r = sys_arg_int(2, (int *) &dev)) < 0)
+    return r;
+
+  return fs_create(path, mode, dev, NULL);
 }
 
 int32_t

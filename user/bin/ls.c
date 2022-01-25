@@ -53,6 +53,8 @@ main(int argc, char **argv)
 
       if (S_ISDIR(st.st_mode)) {
         color = "1;34";
+      } else if (S_ISCHR(st.st_mode) || S_ISBLK(st.st_mode)) {
+        color = "1;33";
       } else if (st.st_mode & (S_IXGRP | S_IXUSR | S_IXUSR)) {
         color = "1;32";
       } else {

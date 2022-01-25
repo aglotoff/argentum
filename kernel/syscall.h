@@ -25,5 +25,6 @@ int32_t sys_stat(void);
 int32_t sys_close(void);
 int32_t sys_sbrk(void);
 int32_t sys_mkdir(void);
+int32_t sys_mknod(void);
 
 #endif  // !__KERNEL_SYSCALL_H__

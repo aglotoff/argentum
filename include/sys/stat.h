@@ -57,6 +57,7 @@ extern "C" {
 
 int fstat(int, struct stat *);
 int mkdir(const char *, mode_t);
+int mknod(const char *path, mode_t, dev_t);
 int stat(const char *, struct stat *);
 
 #ifdef __cplusplus

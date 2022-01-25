@@ -7,8 +7,7 @@ struct Inode;
 struct stat;
 
 #define FD_INODE    0
-#define FD_CONSOLE  1
-#define FD_PIPE     2
+#define FD_PIPE     1
 
 struct File {
   int           type;         ///< File type (inode, console, or pipe)

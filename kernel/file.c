@@ -39,29 +39,25 @@ file_open(const char *path, int oflag, struct File **fstore)
   f->offset    = 0;
   f->inode     = NULL;
 
-  if (strcmp(path, "/dev/console") == 0) {
-    f->type = FD_CONSOLE;
-  } else {
-    struct Inode *ip;
+  struct Inode *ip;
 
-    f->type = FD_INODE;
+  f->type = FD_INODE;
 
-    if ((r = fs_name_lookup(path, &ip)) < 0) 
-      goto fail;
+  if ((r = fs_name_lookup(path, &ip)) < 0) 
+    goto fail;
 
-    fs_inode_lock(ip);
-    if (S_ISDIR(ip->mode) && (oflag & O_WRONLY)) {
-      fs_inode_unlock(ip);
-      fs_inode_put(ip);
-
-      r = -ENOTDIR;
-      goto fail;
-    }
-
-    f->inode = ip;
-
+  fs_inode_lock(ip);
+  if (S_ISDIR(ip->mode) && (oflag & O_WRONLY)) {
     fs_inode_unlock(ip);
+    fs_inode_put(ip);
+
+    r = -ENOTDIR;
+    goto fail;
   }
+
+  f->inode = ip;
+
+  fs_inode_unlock(ip);
 
   if (oflag & O_RDONLY)
     f->readable = 1;
@@ -107,9 +103,6 @@ file_close(struct File *f)
     return;
 
   switch (f->type) {
-    case FD_CONSOLE:
-      // Do nothing.
-      break;
     case FD_INODE:
       assert(f->inode != NULL);
       fs_inode_put(f->inode);
@@ -132,8 +125,6 @@ file_read(struct File *f, void *buf, size_t nbytes)
     return -EBADF;
   
   switch (f->type) {
-  case FD_CONSOLE:
-    return console_read(buf, nbytes);
   case FD_INODE:
     assert(f->inode != NULL);
     fs_inode_lock(f->inode);
@@ -164,7 +155,6 @@ file_getdents(struct File *f, void *buf, size_t nbytes)
     r = fs_inode_getdents(f->inode, buf, nbytes, &f->offset);
     fs_inode_unlock(f->inode);
     return r;
-  case FD_CONSOLE:
   case FD_PIPE:
     // TODO: read from a pipe
   default:
@@ -176,14 +166,19 @@ file_getdents(struct File *f, void *buf, size_t nbytes)
 ssize_t
 file_write(struct File *f, const void *buf, size_t nbytes)
 {
+  int r;
+  
   if (!f->writeable)
     return -EBADF;
-  
+
   switch (f->type) {
-  case FD_CONSOLE:
-    return console_write(buf, nbytes);
   case FD_INODE:
-    // TODO: write to an inode
+    assert(f->inode != NULL);
+    fs_inode_lock(f->inode);
+    if ((r = fs_inode_write(f->inode, buf, nbytes, f->offset)) > 0)
+      f->offset += r;
+    fs_inode_unlock(f->inode);
+    return r;
   case FD_PIPE:
     // TODO: write to a pipe
   default:

@@ -319,6 +319,57 @@ fs_inode_update(struct Inode *ip)
   buf_release(buf);
 }
 
+#define ADDRS_PER_BLOCK BLOCK_SIZE / sizeof(uint32_t)
+
+static unsigned
+fs_block_map(struct Inode *ip, unsigned block_no)
+{
+  struct Buf *buf;
+  uint32_t addr, *ptr;
+  unsigned bcnt;
+
+  if (block_no < 12) {
+    if ((addr = ip->block[block_no]) == 0) {
+      if (fs_block_alloc(&addr) != 0)
+        panic("cannot allocate block");
+      ip->block[block_no] = addr;
+    }
+    return addr;
+  }
+
+  block_no -= 12;
+
+  ptr = &ip->block[12];
+  for (bcnt = ADDRS_PER_BLOCK; bcnt <= block_no; bcnt *= ADDRS_PER_BLOCK) {
+    if (++ptr >= &ip->block[15])
+      panic("too large block number (%u)", block_no + 12);
+  }
+
+  if ((addr = *ptr) == 0) {
+    if (fs_block_alloc(&addr) != 0)
+      panic("cannot allocate block");
+    *ptr = addr;
+  }
+
+  while ((bcnt /= ADDRS_PER_BLOCK) > 0) {
+    buf = buf_read(addr);
+
+    ptr = (uint32_t *) buf->data;
+    if ((addr = ptr[block_no / bcnt]) == 0) {
+      if (fs_block_alloc(&addr) != 0)
+        panic("cannot allocate block");
+      ptr[block_no / bcnt] = addr;
+      buf_write(buf);
+    }
+
+    buf_release(buf);
+
+    block_no %= bcnt;
+  }
+
+  return addr;
+}
+
 void
 fs_inode_lock(struct Inode *ip)
 {
@@ -374,6 +425,18 @@ fs_inode_lock(struct Inode *ip)
 
   buf_release(buf);
 
+  if (((ip->mode & EXT2_S_IFMASK) == EXT2_S_IFCHR) ||
+      ((ip->mode & EXT2_S_IFMASK) == EXT2_S_IFCHR)) {
+    uint16_t dev;
+
+    buf = buf_read(fs_block_map(ip, 0));
+    dev = *(uint16_t *) buf->data;
+    buf_release(buf);
+  
+    ip->major = (dev >> 8) & 0xFF;
+    ip->minor = dev & 0xFF;
+  }
+
   if (!ip->mode)
     panic("no mode");
 
@@ -414,57 +477,6 @@ fs_inode_put(struct Inode *ip)
   spin_unlock(&inode_cache.lock);
 }
 
-#define ADDRS_PER_BLOCK BLOCK_SIZE / sizeof(uint32_t)
-
-static unsigned
-fs_block_map(struct Inode *ip, unsigned block_no)
-{
-  struct Buf *buf;
-  uint32_t addr, *ptr;
-  unsigned bcnt;
-
-  if (block_no < 12) {
-    if ((addr = ip->block[block_no]) == 0) {
-      if (fs_block_alloc(&addr) != 0)
-        panic("cannot allocate block");
-      ip->block[block_no] = addr;
-    }
-    return addr;
-  }
-
-  block_no -= 12;
-
-  ptr = &ip->block[12];
-  for (bcnt = ADDRS_PER_BLOCK; bcnt <= block_no; bcnt *= ADDRS_PER_BLOCK) {
-    if (++ptr >= &ip->block[15])
-      panic("too large block number (%u)", block_no + 12);
-  }
-
-  if ((addr = *ptr) == 0) {
-    if (fs_block_alloc(&addr) != 0)
-      panic("cannot allocate block");
-    *ptr = addr;
-  }
-
-  while ((bcnt /= ADDRS_PER_BLOCK) > 0) {
-    buf = buf_read(addr);
-
-    ptr = (uint32_t *) buf->data;
-    if ((addr = ptr[block_no / bcnt]) == 0) {
-      if (fs_block_alloc(&addr) != 0)
-        panic("cannot allocate block");
-      ptr[block_no / bcnt] = addr;
-      buf_write(buf);
-    }
-
-    buf_release(buf);
-
-    block_no %= bcnt;
-  }
-
-  return addr;
-}
-
 ssize_t
 fs_inode_read(struct Inode *ip, void *buf, size_t nbyte, off_t off)
 {
@@ -475,7 +487,8 @@ fs_inode_read(struct Inode *ip, void *buf, size_t nbyte, off_t off)
   if (!mutex_holding(&ip->mutex))
     panic("not holding ip->mutex");
 
-  // TODO: read device
+  if (S_ISCHR(ip->mode) || S_ISBLK(ip->mode))
+    return console_read(buf, nbyte);
 
   if ((off > ip->size) || ((off + nbyte) < off))
     return -1;
@@ -511,7 +524,8 @@ fs_inode_write(struct Inode *ip, const void *buf, size_t nbyte, off_t off)
   if (!mutex_holding(&ip->mutex))
     panic("not holding ip->mutex");
 
-  // TODO: write device
+  if (S_ISCHR(ip->mode) || S_ISBLK(ip->mode))
+    return console_write(buf, nbyte);
 
   if ((off + nbyte) < off)
     return -1;
@@ -763,7 +777,7 @@ fs_inode_stat(struct Inode *ip, struct stat *buf)
 }
 
 int
-fs_create(const char *path, mode_t mode, struct Inode **istore)
+fs_create(const char *path, mode_t mode, dev_t dev, struct Inode **istore)
 {
   struct Inode *dp, *ip;
   char name[NAME_MAX + 1];
@@ -798,6 +812,15 @@ fs_create(const char *path, mode_t mode, struct Inode **istore)
       panic("Cannot create .");
     if (fs_dir_link(ip, "..", dp->ino, EXT2_S_IFDIR >> 12) < 0)
       panic("Cannot create ..");
+  } else if ((S_ISCHR(mode) || S_ISBLK(mode))) {
+    struct Buf *buf;
+
+    ip->major = (dev >> 8) & 0xFF;
+    ip->minor = dev & 0xFF;
+
+    buf = buf_read(fs_block_map(ip, 0));
+    *(uint16_t *) buf->data = dev;
+    buf_release(buf);
   }
 
   r = fs_dir_link(dp, name, ip->ino, (mode & EXT2_S_IFMASK) >> 12);
@@ -814,14 +837,6 @@ out:
   fs_inode_put(dp);
 
   return r;
-}
-
-int
-fs_mkdir(const char *path, mode_t mode, struct Inode **istore)
-{
-  if (mode & ~(S_IRWXU | S_IRWXG | S_IRWXO))
-    return -EINVAL;
-  return fs_create(path, S_IFDIR | mode, istore);
 }
 
 void
