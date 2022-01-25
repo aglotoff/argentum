@@ -93,6 +93,7 @@ LIB_SRCFILES += \
 
 LIB_SRCFILES += \
 	lib/sys/stat/fstat.c \
+	lib/sys/stat/mkdir.c \
 	lib/sys/stat/stat.c
 
 LIB_SRCFILES += \

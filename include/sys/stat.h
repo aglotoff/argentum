@@ -56,6 +56,7 @@ extern "C" {
 #endif  // __cplusplus
 
 int fstat(int, struct stat *);
+int mkdir(const char *, mode_t);
 int stat(const char *, struct stat *);
 
 #ifdef __cplusplus

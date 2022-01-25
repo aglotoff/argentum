@@ -28,6 +28,7 @@ static int32_t (*syscalls[])(void) = {
   [__SYS_GETDENTS] = sys_getdents,
   [__SYS_CHDIR]    = sys_chdir,
   [__SYS_OPEN]     = sys_open,
+  [__SYS_MKDIR]    = sys_mkdir,
   [__SYS_STAT]     = sys_stat,
   [__SYS_CLOSE]    = sys_close,
   [__SYS_READ]     = sys_read,
@@ -314,8 +315,8 @@ sys_chdir(void)
   if ((r = sys_arg_str(0, &path, AP_USER_RO)) < 0)
     return r;
   
-  if ((ip = fs_name_lookup(path)) == NULL)
-    return -ENOENT;
+  if ((r = fs_name_lookup(path, &ip)) < 0)
+    return r;
   
   fs_inode_lock(ip);
 
@@ -344,6 +345,21 @@ fd_alloc(struct File *f)
       return i;
     }
   return -ENFILE;
+}
+
+int32_t
+sys_mkdir(void)
+{
+  const char *path;
+  mode_t mode;
+  int r;
+
+  if ((r = sys_arg_str(0, &path, AP_USER_RO)) < 0)
+    return r;
+  if ((r = sys_arg_int(1, (int *) &mode)) < 0)
+    return r;
+
+  return fs_mkdir(path, mode, NULL);
 }
 
 int32_t

@@ -37,7 +37,7 @@ struct Inode {
 };
 
 void          fs_init(void);
-struct Inode *fs_name_lookup(const char *);
+int           fs_name_lookup(const char *, struct Inode **);
 
 struct Inode *fs_inode_get(ino_t ino, dev_t dev);
 void          fs_inode_put(struct Inode *);
@@ -47,5 +47,7 @@ void          fs_inode_unlock(struct Inode *);
 ssize_t       fs_inode_read(struct Inode *, void *, size_t, off_t);
 ssize_t       fs_inode_getdents(struct Inode *, void *, size_t, off_t *);
 int           fs_inode_stat(struct Inode *, struct stat *);
+int           fs_create(const char *, mode_t, struct Inode **);
+int           fs_mkdir(const char *, mode_t, struct Inode **);
 
 #endif  // !__KERNEL_FS_H__

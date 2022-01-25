@@ -488,7 +488,7 @@ process_run(void)
 
     fs_init();
 
-    if ((proc->cwd == NULL) && ((proc->cwd = fs_name_lookup("/")) == NULL))
+    if ((proc->cwd == NULL) && (fs_name_lookup("/", &proc->cwd) < 0))
       panic("root not found");
   }
 
@@ -569,8 +569,8 @@ process_exec(const char *path, char *const argv[])
   int argc;
   int r;
 
-  if ((ip = fs_name_lookup(path)) == NULL)
-    return -ENOENT;
+  if ((r = fs_name_lookup(path, &ip)) < 0)
+    return r;
 
   fs_inode_lock(ip);
 

@@ -1,6 +1,7 @@
 #include <assert.h>
 #include <dirent.h>
 #include <errno.h>
+#include <limits.h>
 #include <string.h>
 #include <sys/stat.h>
 
@@ -246,8 +247,8 @@ fs_inode_alloc(mode_t mode, dev_t dev)
 
         buf = buf_read(inode_block);
 
-        dp = (struct Ext2Inode *) buf->data + inode_block_idx;
-        memset(dp, 0, sizeof(struct Ext2Inode));
+        dp = (struct Ext2Inode *) &buf->data[sb.inode_size * inode_block_idx];
+        memset(dp, 0, sb.inode_size);
         dp->mode = mode;
 
         buf_write(buf);
@@ -301,7 +302,7 @@ fs_inode_update(struct Inode *ip)
   // Index the inode table (taking into account non-standard inode size)
   buf = buf_read(inode_block);
 
-  dp = (struct Ext2Inode *) (buf->data + inode_block_idx * sb.inode_size);
+  dp = (struct Ext2Inode *) &buf->data[inode_block_idx * sb.inode_size];
 
   dp->mode        = ip->mode;
   dp->links_count = ip->nlink;
@@ -561,7 +562,7 @@ fs_inode_getdents(struct Inode *dir, void *buf, size_t n, off_t *off)
     
     if ((sizeof(struct dirent) + de.name_len) > n)
       break;
-    
+
     dp = (struct dirent *) dst;
     dp->d_ino     = de.inode;
     dp->d_off     = *off + de.rec_len;
@@ -610,26 +611,30 @@ fs_dir_link(struct Inode *dp, char *name, unsigned num, uint8_t file_type)
 {
   struct Inode *ip;
   struct Ext2DirEntry de;
+  int r;
 
   if ((ip = fs_dir_lookup(dp, name)) != NULL) {
     fs_inode_put(ip);
     return -EEXISTS;
   }
 
+  if (strlen(name) > NAME_MAX)  {
+    fs_inode_put(ip);
+    return -ENAMETOOLONG;
+  }
+
   de.inode     = num;
-  de.name_len  = ROUND_UP(MIN(strlen(name), 256U), sizeof(uint32_t));
-  de.rec_len   = sizeof(de) + de.name_len;
+  de.name_len  = strlen(name);
+  de.rec_len   = offsetof(struct Ext2DirEntry, name) +
+                 ROUND_UP(de.name_len, sizeof(uint32_t));
   de.file_type = file_type;
 
-  if (fs_inode_write(dp, &de, offsetof(struct Ext2DirEntry, name), dp->size) != offsetof(struct Ext2DirEntry, name))
-    panic("cannot write");
+  strncpy(de.name, name, de.name_len);
 
-  strncpy(de.name, name, 255);
+  if ((r = fs_inode_write(dp, &de, de.rec_len, dp->size)) < 0)
+    return r;
 
-  if (fs_inode_write(dp, de.name, de.name_len, dp->size) != de.name_len)
-    panic("cannot write");
-
-  return 0;
+  return r == de.rec_len ? 0 : -EIO;
 }
 
 /*
@@ -638,37 +643,73 @@ fs_dir_link(struct Inode *dp, char *name, unsigned num, uint8_t file_type)
  * ----------------------------------------------------------------------------
  */
 
-struct Inode *
-fs_path_lookup(char *path)
+static size_t
+fs_path_skip(const char *path, char *name, char **next)
 {
-  char *s;
+  const char *end;
+  ptrdiff_t n;
+
+  // Skip leading slashes
+  while (*path == '/')
+    path++;
+  
+  // This was the last element
+  if (*path == '\0')
+    return 0;
+
+  // Find the end of the element
+  for (end = path; (*end != '\0') && (*end != '/'); end++)
+    ;
+
+  n = end - path;
+  strncpy(name, path, MIN(n, NAME_MAX));
+  name[n] = '\0';
+
+  while (*end == '/')
+    end++;
+
+  if (next)
+    *next = (char *) end;
+
+  return n;
+}
+
+int
+fs_path_lookup(const char *path, char *name, int parent, struct Inode **istore)
+{
   struct Inode *ip, *next;
+  size_t namelen;
 
   // For absolute paths, begin search from the root directory.
   // For relative paths, begin search from the current working directory.
   ip = *path == '/' ? fs_inode_get(2, 0) : fs_inode_dup(my_process()->cwd);
 
-  for (s = strtok(path, "/"); s != NULL; s = strtok(NULL, "/")) {
+  while ((namelen = fs_path_skip(path, name, (char **) &path)) > 0) {
+    if (namelen > NAME_MAX) {
+      fs_inode_put(ip);
+      return -ENAMETOOLONG;
+    }
+
     fs_inode_lock(ip);
 
     if ((ip->mode & EXT2_S_IFMASK) != EXT2_S_IFDIR) {
       fs_inode_unlock(ip);
       fs_inode_put(ip);
-
-      return NULL;
+      return -ENOTDIR;
     }
 
-    if (*s == '\0') {
+    if (parent && (*path == '\0')) {
       fs_inode_unlock(ip);
-      fs_inode_put(ip);
 
-      return ip;
+      if (istore)
+        *istore = ip;
+      return 0;
     }
 
-    if ((next = fs_dir_lookup(ip, s)) == NULL) {
+    if ((next = fs_dir_lookup(ip, name)) == NULL) {
       fs_inode_unlock(ip);
       fs_inode_put(ip);
-      return NULL;
+      return -ENOENT;
     }
 
     fs_inode_unlock(ip);
@@ -677,23 +718,28 @@ fs_path_lookup(char *path)
     ip = next;
   }
 
-  return ip;
+  if (parent) {
+    // File exists!
+    fs_inode_put(ip);
+    return -EEXISTS;
+  }
+
+  if (istore)
+    *istore = ip;
+  return 0;
 }
 
-struct Inode *
-fs_name_lookup(const char *path)
+int
+fs_name_lookup(const char *path, struct Inode **ip)
 {
-  char name[256];
+  char name[NAME_MAX + 1];
 
-  if (strcmp(path, "/") == 0)
-    return fs_inode_get(2, 0);
+  if (strcmp(path, "/") == 0) {
+    *ip = fs_inode_get(2, 0);
+    return 0;
+  }
 
-  if (strlen(path) >= sizeof(name))
-    panic("too long name");
-
-  strcpy(name, path);
-
-  return fs_path_lookup(name);
+  return fs_path_lookup(path, name, 0, ip);
 }
 
 int
@@ -714,6 +760,68 @@ fs_inode_stat(struct Inode *ip, struct stat *buf)
   buf->st_ctime = ip->ctime;
 
   return 0;
+}
+
+int
+fs_create(const char *path, mode_t mode, struct Inode **istore)
+{
+  struct Inode *dp, *ip;
+  char name[NAME_MAX + 1];
+  int r;
+
+  if ((r = fs_path_lookup(path, name, 1, &dp)) < 0)
+    return r;
+
+  fs_inode_lock(dp);
+
+  if (fs_dir_lookup(dp, name) != NULL) {
+    r = -EEXISTS;
+    goto out;
+  }
+
+  if ((ip = fs_inode_alloc(mode, dp->dev)) == NULL) {
+    r = -ENOMEM;
+    goto out;
+  }
+
+  fs_inode_lock(ip);
+
+  ip->nlink = 1;
+  fs_inode_update(ip);
+
+  if (S_ISDIR(mode)) {
+    // Create . and .. entries
+    dp->nlink++;
+    fs_inode_update(dp);
+
+    if (fs_dir_link(ip, ".", ip->ino, EXT2_S_IFDIR >> 12) < 0)
+      panic("Cannot create .");
+    if (fs_dir_link(ip, "..", dp->ino, EXT2_S_IFDIR >> 12) < 0)
+      panic("Cannot create ..");
+  }
+
+  r = fs_dir_link(dp, name, ip->ino, (mode & EXT2_S_IFMASK) >> 12);
+
+  if ((r == 0) && istore) {
+    *istore = ip;
+  } else {
+    fs_inode_unlock(ip);
+    fs_inode_put(ip);
+  }
+
+out:
+  fs_inode_unlock(dp);
+  fs_inode_put(dp);
+
+  return r;
+}
+
+int
+fs_mkdir(const char *path, mode_t mode, struct Inode **istore)
+{
+  if (mode & ~(S_IRWXU | S_IRWXG | S_IRWXO))
+    return -EINVAL;
+  return fs_create(path, S_IFDIR | mode, istore);
 }
 
 void
