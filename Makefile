@@ -6,12 +6,13 @@ else
 	V := @
 endif
 
-OBJ := obj
-TOP := .
+TOP     := .
+OBJ     := obj
+SYSROOT := sysroot
 
 # Cross-compiler toolchain
 #
-# The recommended target for the cross-compilr toolchain is "i386-pc-elf".
+# The recommended target for the cross-compiler toolchain is "arm-none-eabi-".
 # If you want to use the host tools (i.e. binutils, gcc, gdb, etc.), comment
 # this line out.
 TOOLPREFIX := arm-none-eabi-
@@ -75,10 +76,10 @@ qemu: $(KERNEL) $(OBJ)/fs.img
 	$(QEMU) $(QEMUOPTS)
 
 qemu-gdb: $(KERNEL) $(OBJ)/fs.img
-	$(QEMU) $(QEMUOPTS) -s -S 
+	$(QEMU) $(QEMUOPTS) -s -S
 
 clean:
-	rm -rf $(OBJ)
+	rm -rf $(OBJ) $(SYSROOT)
 
 .PRECIOUS: $(OBJ)/user/%.o
-.PHONY: all qemu clean
+.PHONY: all lib qemu clean

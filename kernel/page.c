@@ -186,6 +186,9 @@ page_alloc_block(unsigned order, int flags)
 
     page = page_split(page, curr_order, order);
 
+    assert(page->ref_count == 0);
+    assert(!page_is_free(page, order));
+
     spin_unlock(&pages_lock);
 
     if (flags & PAGE_ALLOC_ZERO) {
@@ -260,15 +263,17 @@ page_free_block(struct PageInfo *page, unsigned order)
   pgnum = page - pages;
   mask = (1U << order);
 
+  assert(pgnum % mask == 0);
+
   spin_lock(&pages_lock);
 
   for (curr_order = order; curr_order < PAGE_ORDER_MAX; curr_order++) {
     buddy = &pages[pgnum ^ mask];
 
-    if (!page_is_free(buddy, order))
+    if (!page_is_free(buddy, curr_order))
       break;
 
-    page_mark_used(&pages[pgnum], order);
+    page_mark_used(buddy, curr_order);
 
     pgnum &= ~mask;
     mask <<= 1;
@@ -337,6 +342,9 @@ page_mark_free(struct PageInfo *p, unsigned order)
 
   pageno = p - pages;
 
+  // cprintf("Mark free %p, %d (%d)", page2pa(p), order,
+  //         page_is_free(&pages[0xdda], 0) != 0);
+
   assert((pageno % (1U << order)) == 0);
   assert(!page_is_free(p, order));
 
@@ -344,6 +352,8 @@ page_mark_free(struct PageInfo *p, unsigned order)
 
   blockno = pageno / (1 << order);
   free_pages[order].bitmap[blockno / 32] |= (1U << (blockno % 32));
+
+  // cprintf(" -> (%d)\n", page_is_free(&pages[0xdda], 0) != 0);
 }
 
 // Remove the page block 'p' from the free list for 'order' and clear the
@@ -355,11 +365,16 @@ page_mark_used(struct PageInfo *p, unsigned order)
 
   pageno = p - pages;
 
+  // cprintf("Mark used %p, %d, (%d)", page2pa(p), order,
+  //         page_is_free(&pages[0xdda], 0) != 0);
+
   assert((pageno % (1U << order)) == 0);
   assert(page_is_free(p, order));
 
   list_remove(&p->link);
 
-  blockno = pageno / (1 << order);
+  blockno = pageno / (1U << order);
   free_pages[order].bitmap[blockno / 32] &= ~(1U << (blockno % 32));
+
+  // cprintf(" -> (%d)\n", page_is_free(&pages[0xdda], 0) != 0);
 }

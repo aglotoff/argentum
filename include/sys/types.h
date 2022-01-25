@@ -23,7 +23,7 @@ typedef unsigned long   off_t;
 typedef int             pid_t;
 
 /** Used for sizes of objects. */
-typedef unsigned long   size_t;
+typedef unsigned int    size_t;
 
 /** Used for a count of bytes or an error indication. */
 typedef long            ssize_t;

@@ -17,7 +17,7 @@ typedef long            ptrdiff_t;
 /**
  * Unsigned integer type of the result of the sizeof operator.
  */
-typedef unsigned long   size_t;
+typedef unsigned int   size_t;
 
 /**
  * Integer type to represent wide-character codes.

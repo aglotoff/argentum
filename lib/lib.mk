@@ -47,6 +47,8 @@ LIB_SRCFILES += \
   lib/stdio/__printf.c \
 	lib/stdio/perror.c \
 	lib/stdio/printf.c \
+	lib/stdio/putchar.c \
+	lib/stdio/puts.c \
 	lib/stdio/snprintf.c \
 	lib/stdio/vprintf.c \
 	lib/stdio/vsnprintf.c
@@ -121,6 +123,13 @@ LIB_SRCFILES += \
 LIB_OBJFILES := $(patsubst %.c, $(OBJ)/%.o, $(LIB_SRCFILES))
 LIB_OBJFILES := $(patsubst %.S, $(OBJ)/%.o, $(LIB_OBJFILES))
 
+CRT_SRCFILES := \
+	lib/crt0.S \
+	lib/crti.S \
+	lib/crtn.S
+
+CRT_OBJFILES := $(patsubst %.S, $(OBJ)/%.o, $(CRT_SRCFILES))
+
 $(OBJ)/lib/%.o: lib/%.c $(OBJ)/.vars.LIB_CFLAGS
 	@echo "+ CC  $<"
 	@mkdir -p $(@D)
@@ -134,3 +143,5 @@ $(OBJ)/lib/%.o: lib/%.S $(OBJ)/.vars.LIB_CFLAGS
 $(OBJ)/lib/libc.a: $(LIB_OBJFILES)
 	@echo "+ AR  $@"
 	$(V)$(AR) r $@ $(LIB_OBJFILES)
+
+lib: $(OBJ)/lib/libc.a $(CRT_OBJFILES)

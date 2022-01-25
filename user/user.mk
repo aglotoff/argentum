@@ -37,11 +37,11 @@ $(OBJ)/user/%.o: user/%.S $(OBJ)/.vars.USER_CFLAGS
 	@mkdir -p $(@D)
 	$(V)$(CC) $(USER_CFLAGS) -c -o $@ $<
 
-$(OBJ)/user/%: $(OBJ)/user/%.o $(OBJ)/lib/entry.o $(OBJ)/lib/libc.a \
-		$(OBJ)/.vars.USER_LDFLAGS
+$(OBJ)/user/%: $(OBJ)/user/%.o $(OBJ)/lib/crt0.o $(OBJ)/lib/crti.o \
+		$(OBJ)/lib/crtn.o $(OBJ)/lib/libc.a $(OBJ)/.vars.USER_LDFLAGS
 	@echo "+ LD  $@"
 	@mkdir -p $(@D)
-	$(V)$(LD) -o $@ $(USER_LDFLAGS) $(OBJ)/lib/entry.o $@.o -L$(OBJ)/lib -lc \
-		$(LIBGCC)
+	$(V)$(LD) -o $@ $(USER_LDFLAGS) $(OBJ)/lib/crt0.o $(OBJ)/lib/crti.o $@.o \
+		$(OBJ)/lib/crtn.o -L$(OBJ)/lib -lc $(LIBGCC)
 	$(V)$(OBJDUMP) -S $@ > $@.asm
 	$(V)$(NM) -n $@ > $@.sym

@@ -7,7 +7,7 @@ SECTIONS
   /* Link the entry code at virtual address 0x1000 */
   . = 0x1000;
 
-  .text : { 
+  .text : {
     *(.text*)
     PROVIDE(_etext = .);
   }

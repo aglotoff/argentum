@@ -71,6 +71,9 @@ alltraps:
   str     lr, [sp, #68]           // save lr
   str     r6, [sp, #72]           // save pc
 
+  // Make sure all stack frames are properly terminated
+  mov     fp, #0
+
   // Call trap(tf), where tf=sp
   mov     r0, sp
   bl      trap
@@ -98,6 +101,9 @@ trap_svc:
   sub     sp, #12                 // 
   mov     r0, #T_SWI              // save trap number
   stmia   sp, {r0,sp,lr}^         // save user mode sp and lr
+
+  // Make sure all stack frames are properly terminated
+  mov     fp, #0
 
   // Call trap(tf), where tf=sp
   mov     r0, sp

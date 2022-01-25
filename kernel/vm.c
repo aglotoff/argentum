@@ -162,8 +162,8 @@ vm_alloc_region(tte_t *trtab, void *va, size_t n)
   struct PageInfo *page;
   uintptr_t a, start, end;
 
-  start = (uintptr_t) va & ~(PAGE_SIZE - 1);
-  end   = ((uintptr_t) va + n + PAGE_SIZE - 1) & ~(PAGE_SIZE - 1);
+  start = ROUND_DOWN((uintptr_t) va, PAGE_SIZE);
+  end   = ROUND_UP((uintptr_t) va + n, PAGE_SIZE);
 
   for (a = start; a < end; a += PAGE_SIZE) {
     if ((page = page_alloc(PAGE_ALLOC_ZERO)) == NULL) {
@@ -192,7 +192,7 @@ vm_dealloc_region(tte_t *trtab, void *va, size_t n)
   end = ROUND_UP((uintptr_t) va + n, PAGE_SIZE);
 
   while (a < end) {
-    if ((pte = vm_walk_trtab(trtab, (uintptr_t) va, 0)) == NULL) {
+    if ((pte = vm_walk_trtab(trtab, a, 0)) == NULL) {
       a = ROUND_DOWN(a + PAGE_SIZE * NPTENTRIES, PAGE_SIZE * NPTENTRIES);
     } else {
       if ((*pte & PTE_TYPE_MASK) == PTE_TYPE_SMALL) {
@@ -332,6 +332,9 @@ vm_free(tte_t *trtab)
   vm_dealloc_region(trtab, (void *) 0, KERNEL_BASE);
 
   for (i = 0; i < TTX(KERNEL_BASE); i += 2) {
+    if (!trtab[i])
+      continue;
+
     page = pa2page(PTE_SMALL_ADDR(trtab[i]));
 
     if (--page->ref_count == 0)
