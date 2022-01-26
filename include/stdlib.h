@@ -40,9 +40,9 @@ typedef struct {
 // The seed for the pseudo-random sequence generator
 extern unsigned __randseed;
 
-void   abort(void);
-void   exit(int);
-char  *getenv(const char *);
+void          abort(void);
+void          exit(int);
+char         *getenv(const char *);
 
 int           atoi(const char *);
 long          atol(const char *);
@@ -59,6 +59,11 @@ int           abs(int);
 div_t         div(int, int);
 long          labs(long);
 ldiv_t        ldiv(long, long);
+
+void         *calloc(size_t, size_t);
+void         *malloc(size_t);
+void          free(void *);
+void         *realloc(void *, size_t);
 
 #ifdef __cplusplus
 };

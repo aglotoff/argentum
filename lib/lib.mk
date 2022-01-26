@@ -54,17 +54,22 @@ LIB_SRCFILES += \
 	lib/stdio/vsnprintf.c
 
 LIB_SRCFILES += \
+  lib/stdlib/__getmem.c \
 	lib/stdlib/abort.c \
 	lib/stdlib/abs.c \
 	lib/stdlib/atoi.c \
 	lib/stdlib/atol.c \
 	lib/stdlib/bsearch.c \
+	lib/stdlib/calloc.c \
 	lib/stdlib/div.c \
 	lib/stdlib/exit.c \
+	lib/stdlib/free.c \
 	lib/stdlib/getenv.c \
 	lib/stdlib/labs.c \
 	lib/stdlib/ldiv.c \
+	lib/stdlib/malloc.c \
 	lib/stdlib/rand.c \
+	lib/stdlib/realloc.c \
 	lib/stdlib/srand.c \
 	lib/stdlib/strtol.c \
 	lib/stdlib/strtoul.c

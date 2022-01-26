@@ -698,8 +698,8 @@ process_grow(ptrdiff_t increment)
   struct Process *current = my_process();
   uintptr_t o, n;
 
-  o = current->heap;
-  n = o + increment;
+  o = ROUND_UP(current->heap, sizeof(uintptr_t));
+  n = ROUND_UP(o + increment, sizeof(uintptr_t));
 
   if (increment > 0) {
     if ((n < o) || (n > (current->ustack + PAGE_SIZE)))

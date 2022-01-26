@@ -1,6 +1,7 @@
 #include <assert.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
 
 // Function to compare elements in an array of characters.
 static int
@@ -42,6 +43,26 @@ main(void)
   assert(((i2 = rand()) >= 0) && (i2 <= RAND_MAX));
   srand(1);
   assert((rand() == i1) && (rand() == i2));
+
+  // --------------------------------------------------------------------------
+  // Memory-management functions
+  // --------------------------------------------------------------------------
+
+  assert((s1 = (char *) malloc(sizeof(abc))) != NULL);
+  strcpy(s1, abc);
+  assert(strcmp(s1, abc) == 0);
+
+  assert(((s2 = (char *) calloc(sizeof(abc), 1)) != NULL) && (s2[0] == '\0'));
+  assert(memcmp(s2, s2 + 1, sizeof(abc) - 1) == 0);
+  free(s2);
+
+  assert((s1 = realloc(s1, sizeof(abc) * 2 - 1)) != NULL);
+  strcat(s1, abc);
+  assert(strrchr(s1, 'z') == (s1 + strlen(abc) * 2 - 1));
+
+  assert((s1 = realloc(s1, sizeof(abc) - 3)) != NULL);
+  assert(memcmp(s1, abc, sizeof(abc) - 3) == 0);
+  free(s1);
 
   // --------------------------------------------------------------------------
   // Searching and sorting utilities
