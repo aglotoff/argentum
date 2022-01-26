@@ -2,6 +2,7 @@
 #define __KERNEL_EXT2_H__
 
 #include <stdint.h>
+#include <sys/types.h>
 
 struct Ext2Superblock {
   uint32_t inodes_count;
@@ -99,5 +100,20 @@ struct Ext2DirEntry {
   uint8_t  file_type;
   char     name[256];
 } __attribute__((packed));
+
+// The number of bits per bitmap block
+#define BITS_PER_BLOCK   (BLOCK_SIZE * 8)
+
+struct Inode;
+
+void     ext2_read_superblock(void);
+int      ext2_inode_alloc(mode_t, uint32_t *);
+void     ext2_inode_update(struct Inode *);
+void     ext2_inode_lock(struct Inode *);
+ssize_t  ext2_inode_read(struct Inode *, void *, size_t, off_t);
+ssize_t  ext2_inode_write(struct Inode *, const void *, size_t, off_t);
+ssize_t  ext2_inode_getdents(struct Inode *, void *, size_t, off_t *);
+struct Inode *ext2_dir_lookup(struct Inode *, const char *);
+int      ext2_dir_link(struct Inode *, char *, unsigned, uint8_t);
 
 #endif  // !__KERNEL_EXT2_H__

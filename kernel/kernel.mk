@@ -29,6 +29,7 @@ KERNEL_SRCFILES :=	\
 	kernel/rtc.c \
 	kernel/sd.c \
 	kernel/buf.c \
+	kernel/ext2.c \
 	kernel/fs.c \
 	kernel/file.c \
 	kernel/kdebug.c \
