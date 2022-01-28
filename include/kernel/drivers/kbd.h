@@ -16,5 +16,6 @@
 
 void kbd_init(void);
 void kbd_intr(void);
+int  kbd_getc(void);
 
 #endif  // !__KERNEL_DRIVERS_KBD_H__

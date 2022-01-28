@@ -67,8 +67,6 @@ void
 gic_disable(unsigned irq)
 {
   gicd[ICDICER0 + (irq >> 5)] = (1U << (irq & 0x1F));
-  // gicd[ICDIPR0  + (irq >> 2)] = (0x80 << ((irq & 0x3) << 3));
-  // gicd[ICDIPTR0 + (irq >> 2)] = ((1U << cpu) << ((irq & 0x3) << 3));
 }
 
 unsigned

@@ -67,8 +67,8 @@ console_intr(int (*getc)(void))
 
   while ((c = getc()) >= 0) {
     switch (c) {
-    case 0:
-      continue;
+    case '\0':
+      break;
     case '\b':
       if (input.rpos != input.wpos) {
         console_putc(c);
@@ -79,11 +79,14 @@ console_intr(int (*getc)(void))
       if (input.wpos == input.rpos + CONSOLE_BUF_SIZE)
         input.rpos++;
 
-      console_putc(c);
+      if (c != C('D'))
+        console_putc(c);
+
       input.buf[input.wpos++ % CONSOLE_BUF_SIZE] = c;
 
       if ((c == '\r') ||
           (c == '\n') ||
+          (c == C('D')) ||
           (input.wpos == input.rpos + CONSOLE_BUF_SIZE))
         process_wakeup(&input.queue);
       break;
@@ -103,13 +106,13 @@ console_intr(int (*getc)(void))
 int
 console_getc(void)
 {
-  do {
-    // Poll for any pending characters from UART and the keyboard.
-    uart_intr();
-    kbd_intr();
-  } while (input.rpos == input.wpos);
+  int c;
+  
+  // Poll for any pending characters from UART and the keyboard.
+  while (((c = kbd_getc()) <= 0) && ((c = uart_getc()) <= 0))
+    ;
 
-  return input.buf[input.rpos++ % CONSOLE_BUF_SIZE];
+  return c;
 }
 
 ssize_t
@@ -123,11 +126,16 @@ console_read(void *buf, size_t nbytes)
   spin_lock(&console.lock);
 
   while (i < nbytes) {
-    while (input.rpos == input.wpos) {
+    while (input.rpos == input.wpos)
       process_sleep(&input.queue, &console.lock);
-    }
 
     c = input.buf[input.rpos++ % CONSOLE_BUF_SIZE];
+
+    if (c == C('D')) {
+      if (i > 0)
+        input.rpos--;
+      break;
+    }
 
     if ((s[i++] = c) == '\n')
       break;

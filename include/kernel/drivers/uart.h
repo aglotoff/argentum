@@ -14,5 +14,6 @@
 void uart_init(void);
 void uart_putc(char);
 void uart_intr(void);
+int  uart_getc(void);
 
 #endif  // !__KERNEL_DRIVERS_UART_H__

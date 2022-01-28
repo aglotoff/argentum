@@ -52,11 +52,19 @@ read_cmd(void)
   while (i < BUFSIZE-1) {
     c = console_getc();
 
-    if (c == '\r' || c == '\n') {
-      break;
-    }
+    if (c == '\b') {
+      if (i > 0) {
+        i--;
+        console_putc(c);
+      }
+    } else {
+      console_putc(c);
 
-    buf[i++] = c;
+      if (c == '\r' || c == '\n')
+        break;
+
+      buf[i++] = c;
+    }
   }
 
   // Null-terminate the string

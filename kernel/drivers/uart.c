@@ -36,8 +36,6 @@
 
 static volatile uint32_t *uart;
 
-static int uart_getc(void);
-
 /**
  * Initialize the UART driver.
  */
@@ -96,7 +94,7 @@ uart_intr(void)
   console_intr(uart_getc);
 }
 
-static int
+int
 uart_getc(void)
 {
   int c;

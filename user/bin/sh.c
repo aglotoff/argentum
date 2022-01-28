@@ -21,7 +21,7 @@ get_cmd(void)
   write(1, prompt, sizeof(prompt)-1);
 
   if ((nread = read(0, buf, sizeof(buf))) < 1)
-    return NULL;
+    exit(0);
 
   buf[nread - 1] = '\0';
 

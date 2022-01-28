@@ -25,7 +25,6 @@
 
 static int kmi_read(volatile uint32_t *);
 static int kmi_write(volatile uint32_t *, uint8_t);
-static int kbd_getc(void);
 
 static volatile uint32_t *kmi0;
 
@@ -174,7 +173,7 @@ togglecode[256] = {
   [0x46]  SCROLLLOCK
 };
 
-static int
+int
 kbd_getc(void)
 {
   static int key_state;
