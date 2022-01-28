@@ -22,7 +22,9 @@ ext2_read_superblock(void)
 {
   struct Buf *buf;
 
-  buf = buf_read(1);
+  if ((buf = buf_read(1, 0)) == NULL)
+    panic("cannot read the superblock");
+
   memcpy(&sb, buf->data, sizeof(sb));
   buf_release(buf);
 
@@ -57,7 +59,9 @@ ext2_gd_block_alloc(struct Ext2GroupDesc *gd, uint32_t *bstore)
     struct Buf *buf;
     uint32_t *map;
 
-    buf = buf_read(gd->block_bitmap + b);
+    if ((buf = buf_read(gd->block_bitmap + b, 0)) == NULL)
+      panic("cannot read the bitmap block");
+
     map = (uint32_t *) buf->data;
 
     for (bi = 0; bi < BITS_PER_BLOCK; bi++) {
@@ -97,7 +101,9 @@ ext2_block_alloc(uint32_t *bstore)
   gds_per_block = BLOCK_SIZE / sizeof(struct Ext2GroupDesc);
 
   for (g = 0; g < sb.block_count / sb.blocks_per_group; g += gds_per_block) {
-    buf = buf_read(2 + (g / gds_per_block));
+    if ((buf = buf_read(2 + (g / gds_per_block), 0)) == NULL)
+      panic("cannot read the group descriptor table");
+
     for (gi = 0; gi < gds_per_block; gi++) {
       gd = (struct Ext2GroupDesc *) buf->data + gi;
       if (ext2_gd_block_alloc(gd, &block) == 0) {
@@ -134,7 +140,9 @@ ext2_gd_inode_alloc(struct Ext2GroupDesc *gd, uint32_t *istore)
     struct Buf *buf;
     uint32_t *map;
 
-    buf = buf_read(gd->inode_bitmap + b);
+    if ((buf = buf_read(gd->inode_bitmap + b, 0)) == NULL)
+      panic("cannot read the bitmap block");
+
     map = (uint32_t *) buf->data;
 
     for (bi = 0; bi < BITS_PER_BLOCK; bi++) {
@@ -174,7 +182,9 @@ ext2_inode_alloc(mode_t mode, uint32_t *istore)
   gds_per_block = BLOCK_SIZE / sizeof(struct Ext2GroupDesc);
 
   for (g = 0; g < sb.inodes_count / sb.inodes_per_group; g += gds_per_block) {
-    buf = buf_read(2 + (g / gds_per_block));
+    if ((buf = buf_read(2 + (g / gds_per_block), 0)) == NULL)
+      panic("cannot read the group descriptor table");
+
     for (gi = 0; gi < gds_per_block; gi++) {
       gd = (struct Ext2GroupDesc *) buf->data + gi;
       if (ext2_gd_inode_alloc(gd, &inum) == 0) {
@@ -190,7 +200,8 @@ ext2_inode_alloc(mode_t mode, uint32_t *istore)
 
         buf_release(buf);
 
-        buf = buf_read(inode_block);
+        if ((buf = buf_read(inode_block, 0)) == NULL)
+          panic("cannot read the inode table");
 
         dp = (struct Ext2Inode *) &buf->data[sb.inode_size * inode_block_idx];
         memset(dp, 0, sb.inode_size);
@@ -231,7 +242,8 @@ ext2_inode_update(struct Inode *ip)
   table_block = 2 + (block_group / gds_per_block);
   table_idx = (block_group % gds_per_block);
 
-  buf = buf_read(table_block);
+  if ((buf = buf_read(table_block, ip->dev)) == NULL)
+    panic("cannot read the group descriptor table");
   memcpy(&gd, &buf->data[sizeof(gd) * table_idx], sizeof(gd));
   buf_release(buf);
 
@@ -245,7 +257,8 @@ ext2_inode_update(struct Inode *ip)
   inode_block_idx  = inode_table_idx % inodes_per_block;
 
   // Index the inode table (taking into account non-standard inode size)
-  buf = buf_read(inode_block);
+  if ((buf = buf_read(inode_block, ip->dev)) == NULL)
+    panic("cannot read the inode table");
 
   dp = (struct Ext2Inode *) &buf->data[inode_block_idx * sb.inode_size];
 
@@ -297,7 +310,8 @@ ext2_block_map(struct Inode *ip, unsigned block_no)
   }
 
   while ((bcnt /= ADDRS_PER_BLOCK) > 0) {
-    buf = buf_read(addr);
+    if ((buf = buf_read(addr, ip->dev)) == NULL)
+      panic("cannot read the data block");
 
     ptr = (uint32_t *) buf->data;
     if ((addr = ptr[block_no / bcnt]) == 0) {
@@ -334,7 +348,8 @@ ext2_inode_lock(struct Inode *ip)
   table_block = 2 + (block_group / gds_per_block);
   table_idx = (block_group % gds_per_block);
 
-  buf = buf_read(table_block);
+  if ((buf = buf_read(table_block, ip->dev)) == NULL)
+    panic("cannot read the group descriptor table");
   memcpy(&gd, &buf->data[sizeof(gd) * table_idx], sizeof(gd));
   buf_release(buf);
 
@@ -348,7 +363,8 @@ ext2_inode_lock(struct Inode *ip)
   inode_block_idx  = inode_table_idx % inodes_per_block;
 
   // Index the inode table (taking into account non-standard inode size)
-  buf = buf_read(inode_block);
+  if ((buf = buf_read(inode_block, ip->dev)) == NULL)
+    panic("cannot read the inode table");
 
   dp = (struct Ext2Inode *) (buf->data + inode_block_idx * sb.inode_size);
 
@@ -369,7 +385,8 @@ ext2_inode_lock(struct Inode *ip)
       ((ip->mode & EXT2_S_IFMASK) == EXT2_S_IFCHR)) {
     uint16_t dev;
 
-    buf = buf_read(ext2_block_map(ip, 0));
+    if ((buf = buf_read(ext2_block_map(ip, 0), ip->dev)) == NULL)
+      panic("cannot read the data block");
     dev = *(uint16_t *) buf->data;
     buf_release(buf);
   
@@ -388,7 +405,8 @@ ext2_inode_read(struct Inode *ip, void *buf, size_t nbyte, off_t off)
   dst = (uint8_t *) buf;
   total = 0;
   while (total < nbyte) {
-    b = buf_read(ext2_block_map(ip, off / BLOCK_SIZE));
+    if ((b = buf_read(ext2_block_map(ip, off / BLOCK_SIZE), ip->dev)) == NULL)
+      panic("cannot read the block");
 
     nread = MIN(BLOCK_SIZE - (size_t) off % BLOCK_SIZE, nbyte - total);
     memmove(dst, &((const uint8_t *) b->data)[off % BLOCK_SIZE], nread);
@@ -413,7 +431,8 @@ ext2_inode_write(struct Inode *ip, const void *buf, size_t nbyte, off_t off)
   src = (const uint8_t *) buf;
   total = 0;
   while (total < nbyte) {
-    b = buf_read(ext2_block_map(ip, off / BLOCK_SIZE));
+    if ((b = buf_read(ext2_block_map(ip, off / BLOCK_SIZE), ip->dev)) == NULL)
+      panic("cannot read the block");
 
     nwrite = MIN(BLOCK_SIZE - (size_t) off % BLOCK_SIZE, nbyte - total);
     memmove(&((uint8_t *) b->data)[off % BLOCK_SIZE], src, nwrite);

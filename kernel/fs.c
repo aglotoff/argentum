@@ -11,6 +11,7 @@
 #include "console.h"
 #include "ext2.h"
 #include "fs.h"
+#include "process.h"
 
 /*
  * ----------------------------------------------------------------------------
