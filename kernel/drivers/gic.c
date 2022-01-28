@@ -17,6 +17,7 @@ static volatile uint32_t *gicc, *gicd, *ptimer;
 #define ICDDCR        (0x000 / 4)   // Distributor Control Register
   #define ICDDCR_EN     (1U << 0)   //    Enable
 #define ICDISER0      (0x100 / 4)   // Interrupt Set-Enable Registers
+#define ICDICER0      (0x180 / 4)   // Interrupt Clear-Enable Registers
 #define ICDIPR0       (0x400 / 4)   // Interrupt Priority Registers
 #define ICDIPTR0      (0x800 / 4)   // Interrupt Processor Targets Registers
 #define ICDSGIR       (0xF00 / 4)   // Software Generated Interrupt Register
@@ -60,6 +61,14 @@ gic_enable(unsigned irq, unsigned cpu)
   gicd[ICDISER0 + (irq >> 5)] = (1U << (irq & 0x1F));
   gicd[ICDIPR0  + (irq >> 2)] = (0x80 << ((irq & 0x3) << 3));
   gicd[ICDIPTR0 + (irq >> 2)] = ((1U << cpu) << ((irq & 0x3) << 3));
+}
+
+void
+gic_disable(unsigned irq)
+{
+  gicd[ICDICER0 + (irq >> 5)] = (1U << (irq & 0x1F));
+  // gicd[ICDIPR0  + (irq >> 2)] = (0x80 << ((irq & 0x3) << 3));
+  // gicd[ICDIPTR0 + (irq >> 2)] = ((1U << cpu) << ((irq & 0x3) << 3));
 }
 
 unsigned

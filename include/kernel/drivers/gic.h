@@ -14,6 +14,7 @@
 void     gic_init(void);
 void     gic_init_percpu(void);
 void     gic_enable(unsigned, unsigned);
+void     gic_disable(unsigned);
 unsigned gic_intid(void);
 void     gic_eoi(unsigned);
 void     gic_start_others(void);

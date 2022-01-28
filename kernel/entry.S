@@ -43,23 +43,23 @@ _start:
 
   .globl  entry
 entry:
-  // Load the physical address of the initial translation table
-  ldr   r0, =RELOC(entry_trtab)
-  mcr   p15, 0, r0, c2, c0, 0
-
-  // Assign domain access
-  ldr   r0, =DACR_D(0, DA_CLIENT)
-  mcr   p15, 0, r0, c3, c0, 0
-
-  // Enable MMU, cache, and high exception vectors
-  mrc   p15, 0, r0, c1, c0, 0
-  ldr   r1, =(SCTLR_M | SCTLR_C | SCTLR_I | SCTLR_V)
-  orr   r0, r0, r1
-  mcr   p15, 0, r0, c1, c0, 0
-
   // Get the current processor ID
   mrc   p15, 0, r0, c0, c0, 5
   and   r0, r0, #3
+
+  // Load the physical address of the initial translation table
+  ldr   r2, =RELOC(entry_trtab)
+  mcr   p15, 0, r2, c2, c0, 0
+
+  // Assign domain access
+  ldr   r2, =DACR_D(0, DA_CLIENT)
+  mcr   p15, 0, r2, c3, c0, 0
+
+  // Enable MMU, cache, and high exception vectors
+  mrc   p15, 0, r2, c1, c0, 0
+  ldr   r1, =(SCTLR_M | SCTLR_C | SCTLR_I | SCTLR_V)
+  orr   r2, r2, r1
+  mcr   p15, 0, r2, c1, c0, 0
 
   // Set the kernel exception stack pointer for this CPU
   // sp = kxstack + (KXSTACK_SIZE * <cpu_id>)
@@ -89,9 +89,9 @@ entry:
 
   // BSP calls main(), APs call mp_enter().
   cmp   r0, #0
-  ldreq r0, =main
-  ldrne r0, =mp_enter
-  blx   r0
+  ldreq r1, =main
+  ldrne r1, =mp_enter
+  blx   r1
 
   // Should never return here
   b     .

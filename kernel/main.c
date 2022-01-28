@@ -3,6 +3,7 @@
 #include <stdint.h>
 
 #include <kernel/armv7.h>
+#include <kernel/cpu.h>
 #include <kernel/drivers/console.h>
 #include <kernel/drivers/gic.h>
 #include <kernel/drivers/rtc.h>
@@ -14,6 +15,7 @@
 #include <kernel/mm/page.h>
 #include <kernel/mm/vm.h>
 #include <kernel/process.h>
+#include <kernel/sync.h>
 
 static void boot_aps(void);
 static void mp_main(void);
@@ -50,6 +52,8 @@ main(void)
   mp_main();            // Finish the processor's setup
 }
 
+static int ap_started;
+
 /**
  * Initialization code for non-boot (AP) processors. 
  *
@@ -58,6 +62,20 @@ main(void)
 void
 mp_enter(void)
 {
+  int t;
+
+  gic_init();
+
+  asm volatile("\tdsb\n"
+               "\t1:\n"
+               "\twfi\n"
+               "\tldr   %0, [%1]\n"
+               "\tcmp   %0, #0\n"
+               "\tbeq   1b\n"
+               : "=r"(t)
+               : "r"(&ap_started)
+               : "memory", "cc");
+
   vm_init_percpu();
 
   cprintf("Starting CPU %d\n", read_mpidr() & 0x3);
@@ -65,18 +83,10 @@ mp_enter(void)
   mp_main();
 }
 
-#define SYS_BASE      0x10000000
-#define SYS_FLAGS     (0x030 >> 2)
-
 static void
 boot_aps(void)
 {
-  extern uint8_t _start[];
-  static volatile uint32_t *sys;
-
-  sys = (volatile uint32_t *) KADDR(SYS_BASE);
-  sys[SYS_FLAGS] = (uint32_t) _start;
-
+  ap_started = 1;
   gic_start_others();
 }
 

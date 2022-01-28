@@ -79,9 +79,17 @@ trap_irq_dispatch(void)
 {
   int irq, resched;
 
+  irq_save();
+
   irq = gic_intid();
+  gic_disable(irq);
+  gic_eoi(irq);
+
+  irq_restore();
+
   resched = 0;
 
+  // Process the IRQ.
   switch (irq & 0xFFFFFF) {
   case 0:
     // TODO:
@@ -104,7 +112,8 @@ trap_irq_dispatch(void)
     break;
   }
 
-  gic_eoi(irq);
+  // Re-enable the IRQ
+  gic_enable(irq, cpu_id());
 
   if (resched && (my_process() != NULL))
     process_yield();
