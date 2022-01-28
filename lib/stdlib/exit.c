@@ -1,4 +1,8 @@
-#include <syscall.h>
+#include <limits.h>
+#include <stdlib.h>
+
+void (*__at_funcs[ATEXIT_MAX])(void);
+size_t __at_count;
 
 /**
  * Terminate a process.
@@ -10,5 +14,10 @@
 void
 exit(int status)
 {
-  __syscall(__SYS_EXIT, status, 0, 0);
+  while (__at_count > 0)
+    __at_funcs[--__at_count]();
+
+  // TODO: flush unwritten buffered data and close all open streams
+
+  _Exit(status);
 }

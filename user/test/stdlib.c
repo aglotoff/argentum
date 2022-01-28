@@ -13,6 +13,12 @@ cmp(const void *p1, const void *p2)
   return c1 - c2;
 }
 
+static void
+done()
+{
+  printf("SUCCESS testing <stdlib.h>\n");
+}
+
 int
 main(void)
 {
@@ -85,7 +91,7 @@ main(void)
   assert((ldiv(7L, 2L).quot == 3L) && (ldiv(7L, 2L).rem == 1L));
   assert((ldiv(-7L, 2L).quot == -3L) && (ldiv(-7L, 2L).rem == -1L));
 
-  printf("SUCCESS testing <stdlib.h>\n");
+  atexit(done);
   
   return 0;
 }

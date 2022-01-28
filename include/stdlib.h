@@ -40,9 +40,8 @@ typedef struct {
 // The seed for the pseudo-random sequence generator
 extern unsigned __randseed;
 
-void          abort(void);
-void          exit(int);
-char         *getenv(const char *);
+extern void   (*__at_funcs[])(void);
+extern size_t   __at_count;
 
 int           atoi(const char *);
 long          atol(const char *);
@@ -51,6 +50,12 @@ unsigned long strtoul(const char *, char **, int);
 
 int           rand(void);
 void          srand(unsigned);
+
+void          _Exit(int);
+int           atexit(void (*)(void));
+void          abort(void);
+void          exit(int);
+char         *getenv(const char *);
 
 void         *bsearch(const void *, const void *, size_t, size_t,
                       int (*)(const void *, const void *));

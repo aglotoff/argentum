@@ -55,8 +55,10 @@ LIB_SRCFILES += \
 
 LIB_SRCFILES += \
   lib/stdlib/__getmem.c \
+	lib/stdlib/_Exit.c \
 	lib/stdlib/abort.c \
 	lib/stdlib/abs.c \
+	lib/stdlib/atexit.c \
 	lib/stdlib/atoi.c \
 	lib/stdlib/atol.c \
 	lib/stdlib/bsearch.c \

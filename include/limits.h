@@ -18,6 +18,7 @@
 
 // Runtime Invariant Values
 #define ARG_MAX           4096
+#define ATEXIT_MAX        32
 #define MAX_INPUT         256
 #define NAME_MAX          255
 #define OPEN_MAX          32
