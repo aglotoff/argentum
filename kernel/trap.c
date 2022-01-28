@@ -1,17 +1,18 @@
 #include <assert.h>
 #include <stddef.h>
 
-#include "armv7.h"
-#include "console.h"
-#include "cpu.h"
-#include "gic.h"
-#include "kbd.h"
-#include "process.h"
-#include "sd.h"
-#include "syscall.h"
-#include "trap.h"
-#include "vm.h"
-#include "uart.h"
+#include <kernel/armv7.h>
+#include <kernel/cpu.h>
+#include <kernel/drivers/console.h>
+#include <kernel/drivers/gic.h>
+#include <kernel/drivers/kbd.h>
+#include <kernel/drivers/sd.h>
+#include <kernel/drivers/uart.h>
+#include <kernel/mm/vm.h>
+#include <kernel/process.h>
+#include <kernel/syscall.h>
+
+#include <kernel/trap.h>
 
 static void trap_handle_abort(struct Trapframe *);
 static void trap_irq_dispatch(void);

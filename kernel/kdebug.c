@@ -1,8 +1,9 @@
 #include <dwarf.h>
 #include <stddef.h>
 
-#include "console.h"
-#include "kdebug.h"
+#include <kernel/drivers/console.h>
+
+#include <kernel/kdebug.h>
 
 static int scan_aranges(uintptr_t, struct PcDebugInfo *); 
 static int parse_cu(uint8_t *, uintptr_t, struct PcDebugInfo *);

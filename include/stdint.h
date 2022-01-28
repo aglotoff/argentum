@@ -1,5 +1,5 @@
-#ifndef __INCLUDE_STDINT_H__
-#define __INCLUDE_STDINT_H__
+#ifndef __STDINT_H__
+#define __STDINT_H__
 
 /**
  * @file include/stdint.h
@@ -29,4 +29,4 @@ typedef long                intptr_t;
 /** Unsigned integer wide enough to hold a pointer */
 typedef unsigned long       uintptr_t;
 
-#endif  // !__INCLUDE_STDINT_H__
+#endif  // !__STDINT_H__

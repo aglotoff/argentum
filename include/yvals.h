@@ -1,5 +1,5 @@
-#ifndef __INCLUDE_YVALS_H__
-#define __INCLUDE_YVALS_H__
+#ifndef __YVALS_H__
+#define __YVALS_H__
 
 /**
  * @file include/yvals.h
@@ -56,4 +56,4 @@
 // The number of elements in jmp_buf (we must store R4-R11, IP, SP, and LR)
 #define __NSETJMP   11
 
-#endif  // !__INCLUDE_YVALS_H__
+#endif  // !__YVALS_H__

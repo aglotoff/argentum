@@ -2,12 +2,13 @@
 #include <stddef.h>
 #include <string.h>
 
-#include "armv7.h"
-#include "console.h"
-#include "cpu.h"
-#include "kdebug.h"
-#include "process.h"
-#include "sync.h"
+#include <kernel/armv7.h>
+#include <kernel/cpu.h>
+#include <kernel/drivers/console.h>
+#include <kernel/kdebug.h>
+#include <kernel/process.h>
+
+#include <kernel/sync.h>
 
 /**
  * ----------------------------------------------------------------------------

@@ -1,0 +1,16 @@
+{
+  "configurations": [
+    {
+      "name": "OSDev-PBX-A9",
+      "defines": [
+          "__KERNEL__"
+      ],
+      "includePath": ["./include"],
+      "intelliSenseMode": "linux-gcc-x64",
+      "compilerPath": "/usr/local/bin/arm-none-eabi-gcc",
+      "cStandard": "gnu11",
+      "cppStandard": "c++11"
+    }
+  ],
+  "version": 4
+}

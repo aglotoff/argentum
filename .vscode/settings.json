@@ -1,42 +1,6 @@
 {
-    "C_Cpp.default.includePath": [
-        "./include"
-    ],
     "editor.rulers": [
         80
     ],
-    "editor.tabSize": 2,
-    "files.associations": {
-        "typeinfo": "cpp",
-        "mutex": "c",
-        "array": "c",
-        "chrono": "c",
-        "compare": "c",
-        "functional": "c",
-        "istream": "c",
-        "ostream": "c",
-        "ratio": "c",
-        "tuple": "c",
-        "type_traits": "c",
-        "utility": "c",
-        "variant": "c",
-        "thread": "c",
-        "bitset": "c",
-        "algorithm": "c",
-        "rtc.h": "c",
-        "deque": "c",
-        "forward_list": "c",
-        "list": "c",
-        "string": "c",
-        "unordered_map": "c",
-        "vector": "c",
-        "string_view": "c",
-        "initializer_list": "c",
-        "atomic": "c",
-        "condition_variable": "c",
-        "random": "c",
-        "stdlib.h": "c",
-        "stdio.h": "c",
-        "unistd.h": "c"
-    }
+    "editor.tabSize": 2
 }

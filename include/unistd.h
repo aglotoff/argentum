@@ -1,5 +1,5 @@
-#ifndef __INCLUDE_UNISTD_H__
-#define __INCLUDE_UNISTD_H__
+#ifndef __UNISTD_H__
+#define __UNISTD_H__
 
 #include <stddef.h>
 #include <sys/types.h>
@@ -21,4 +21,4 @@ ssize_t write(int, const void *, size_t);
 
 void   *sbrk(ptrdiff_t);
 
-#endif  // !__INCLUDE_UNISTD_H__
+#endif  // !__UNISTD_H__

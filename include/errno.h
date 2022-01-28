@@ -1,5 +1,5 @@
-#ifndef __INCLUDE_ERRNO_H__
-#define __INCLUDE_ERRNO_H__
+#ifndef __ERRNO_H__
+#define __ERRNO_H__
 
 /**
  * @file include/errno.h
@@ -50,4 +50,4 @@ extern int errno;
 #define ESRCH         36    ///< No such process
 #define EXDEV         37    ///< Improper link
 
-#endif  // !__INCLUDE_ERRNO_H__
+#endif  // !__ERRNO_H__

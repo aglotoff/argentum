@@ -1,5 +1,5 @@
-#ifndef __INCLUDE_TIME_H__
-#define __INCLUDE_TIME_H__
+#ifndef __TIME_H__
+#define __TIME_H__
 
 #include <stddef.h>
 #include <sys/types.h>
@@ -22,4 +22,4 @@ time_t      mktime(struct tm *);
 size_t      strftime(char *, size_t, const char *, const struct tm *);
 time_t      time(time_t *);
 
-#endif  // !__INCLUDE_TIME_H__
+#endif  // !__TIME_H__

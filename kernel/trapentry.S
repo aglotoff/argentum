@@ -1,6 +1,6 @@
-#include "armv7.h"
-#include "memlayout.h"
-#include "trap.h"
+#include <kernel/armv7.h>
+#include <kernel/mm/memlayout.h>
+#include <kernel/trap.h>
 
 .section .text
 

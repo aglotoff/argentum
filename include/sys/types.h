@@ -1,5 +1,5 @@
-#ifndef __INCLUDE_SYS_TYPES_H__
-#define __INCLUDE_SYS_TYPES_H__
+#ifndef __SYS_TYPES_H__
+#define __SYS_TYPES_H__
 
 /** Used for device IDs. */
 typedef short           dev_t;
@@ -34,4 +34,4 @@ typedef long            time_t;
 /** Used for user IDs. */
 typedef short           uid_t;
 
-#endif  // !__INCLUDE_SYS_TYPES_H__
+#endif  // !__SYS_TYPES_H__

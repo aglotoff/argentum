@@ -1,5 +1,5 @@
-#ifndef __INCLUDE_STDDEF_H__
-#define __INCLUDE_STDDEF_H__
+#ifndef __STDDEF_H__
+#define __STDDEF_H__
 
 /**
  * @file include/stdint.h
@@ -39,4 +39,4 @@ typedef unsigned short  wchar_t;
   #define NULL    nullptr
 #endif
 
-#endif  // !__INCLUDE_STDDEF_H__
+#endif  // !__STDDEF_H__

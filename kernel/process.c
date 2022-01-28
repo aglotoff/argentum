@@ -4,21 +4,22 @@
 #include <sys/stat.h>
 #include <sys/wait.h>
 
-#include "armv7.h"
-#include "console.h"
-#include "cpu.h"
-#include "elf.h"
-#include "file.h"
-#include "fs.h"
-#include "hash.h"
-#include "kobject.h"
-#include "mmu.h"
-#include "monitor.h"
-#include "page.h"
-#include "process.h"
-#include "sync.h"
-#include "trap.h"
-#include "vm.h"
+#include <kernel/armv7.h>
+#include <kernel/cpu.h>
+#include <kernel/drivers/console.h>
+#include <kernel/elf.h>
+#include <kernel/fs/file.h>
+#include <kernel/fs/fs.h>
+#include <kernel/hash.h>
+#include <kernel/mm/kobject.h>
+#include <kernel/mm/mmu.h>
+#include <kernel/mm/page.h>
+#include <kernel/mm/vm.h>
+#include <kernel/monitor.h>
+#include <kernel/sync.h>
+#include <kernel/trap.h>
+
+#include <kernel/process.h>
 
 static struct KObjectPool *process_pool;
 

@@ -1,5 +1,5 @@
-#ifndef __INCLUDE_LIMITS_H__
-#define __INCLUDE_LIMITS_H__
+#ifndef __LIMITS_H__
+#define __LIMITS_H__
 
 /**
  * @file include/limits.h
@@ -87,4 +87,4 @@
 /** The maximum value of the unsigned long long int data type. */
 #define ULLONG_MAX        18446744073709551615ULL
 
-#endif  // !__INCLUDE_LIMITS_H__
+#endif  // !__LIMITS_H__

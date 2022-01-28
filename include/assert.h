@@ -1,5 +1,5 @@
-#ifndef __INCLUDE_ASSERT_H__
-#define __INCLUDE_ASSERT_H__
+#ifndef __ASSERT_H__
+#define __ASSERT_H__
 
 #ifdef __cplusplus
 extern "C" {
@@ -36,4 +36,4 @@ void __warn(const char *, int, const char *, ...);
     do { if (!(expr)) panic("Assertion failed: %s", #expr); } while(0)
 #endif
 
-#endif  // !__INCLUDE_ASSERT_H__
+#endif  // !__ASSERT_H__

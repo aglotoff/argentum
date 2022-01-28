@@ -1,5 +1,5 @@
-#ifndef __INCLUDE_CTYPE_H__
-#define __INCLUDE_CTYPE_H__
+#ifndef __CTYPE_H__
+#define __CTYPE_H__
 
 /**
  * @file include/ctype.h
@@ -73,4 +73,4 @@ extern char __toupper[];
 #define tolower(c)  ((c) < 0 ? (c) : __tolower[(unsigned char)(c)])
 #define toupper(c)  ((c) < 0 ? (c) : __toupper[(unsigned char)(c)])
 
-#endif  // !__INCLUDE_CTYPE_H__
+#endif  // !__CTYPE_H__

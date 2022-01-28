@@ -1,5 +1,5 @@
-#ifndef __INCLUDE_FCNTL_H__
-#define __INCLUDE_FCNTL_H__
+#ifndef __FCNTL_H__
+#define __FCNTL_H__
 
 /**
  * @file include/fcntl.h
@@ -19,4 +19,4 @@
 
 int open(const char *, int);
 
-#endif  // !__INCLUDE_FCNTL_H__
+#endif  // !__FCNTL_H__

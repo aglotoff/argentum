@@ -1,5 +1,5 @@
-#ifndef __INCLUDE_SYS_STAT_H__
-#define __INCLUDE_SYS_STAT_H__
+#ifndef __SYS_STAT_H__
+#define __SYS_STAT_H__
 
 #include <sys/types.h>
 
@@ -64,4 +64,4 @@ int stat(const char *, struct stat *);
 };
 #endif  // __cplusplus
 
-#endif  // !__INCLUDE_SYS_STAT_H__
+#endif  // !__SYS_STAT_H__

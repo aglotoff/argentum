@@ -1,5 +1,5 @@
-#ifndef INCLUDE_STDARG_H
-#define INCLUDE_STDARG_H
+#ifndef __STDARG_H__
+#define __STDARG_H__
 
 /**
  * Type to hold information about variable arguments.
@@ -41,4 +41,4 @@ typedef __builtin_va_list va_list;
  */
 #define va_end(ap)          __builtin_va_end(ap)
 
-#endif  // !INCLUDE_STDARG_H
+#endif  // !__STDARG_H__

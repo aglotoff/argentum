@@ -1,13 +1,14 @@
 #include <string.h>
 
-#include "armv7.h"
-#include "console.h"
-#include "kdebug.h"
-#include "kernel.h"
-#include "kobject.h"
-#include "memlayout.h"
-#include "monitor.h"
-#include "trap.h"
+#include <kernel/armv7.h>
+#include <kernel/drivers/console.h>
+#include <kernel/kdebug.h>
+#include <kernel/mm/kobject.h>
+#include <kernel/mm/memlayout.h>
+#include <kernel/trap.h>
+#include <kernel/types.h>
+
+#include <kernel/monitor.h>
 
 static char *read_cmd(void);
 static int exec_cmd(char *s, struct Trapframe *tf);

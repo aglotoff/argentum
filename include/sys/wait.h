@@ -1,5 +1,5 @@
-#ifndef __INCLUDE_SYS_WAIT__
-#define __INCLUDE_SYS_WAIT__
+#ifndef __SYS_WAIT__
+#define __SYS_WAIT__
 
 /**
  * @file include/sys/wait.h
@@ -30,4 +30,4 @@ typedef int   pid_t;
 pid_t wait(int *);
 pid_t waitpid(pid_t, int *, int);
 
-#endif  // !__INCLUDE_SYS_WAIT__
+#endif  // !__SYS_WAIT__

@@ -1,5 +1,5 @@
-#ifndef __INCLUDE_STDIO_H__
-#define __INCLUDE_STDIO_H__
+#ifndef __STDIO_H__
+#define __STDIO_H__
 
 #include <stdarg.h>
 #include <stddef.h>
@@ -22,4 +22,4 @@ void perror(const char *);
 };
 #endif
 
-#endif  // !__INCLUDE_STDIO_H__
+#endif  // !__STDIO_H__

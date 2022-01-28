@@ -1,5 +1,5 @@
-#ifndef INCLUDE_DWARF_H
-#define INCLUDE_DWARF_H
+#ifndef __DWARF_H__
+#define __DWARF_H__
 
 #include <stdint.h>
 
@@ -162,4 +162,4 @@ struct DebugLinePrologue {
   uint8_t  std_opcode_lengths[];
 } __attribute__((packed));
 
-#endif  // !INCLUDE_DWARF_H
+#endif  // !__DWARF_H__

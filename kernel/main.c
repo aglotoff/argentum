@@ -2,19 +2,18 @@
 #include <stddef.h>
 #include <stdint.h>
 
-#include "armv7.h"
-#include "buf.h"
-#include "console.h"
-#include "file.h"
-#include "gic.h"
-#include "kobject.h"
-#include "memlayout.h"
-#include "mmu.h"
-#include "page.h"
-#include "process.h"
-#include "rtc.h"
-#include "sd.h"
-#include "vm.h"
+#include <kernel/armv7.h>
+#include <kernel/drivers/console.h>
+#include <kernel/drivers/gic.h>
+#include <kernel/drivers/rtc.h>
+#include <kernel/drivers/sd.h>
+#include <kernel/fs/buf.h>
+#include <kernel/fs/file.h>
+#include <kernel/mm/kobject.h>
+#include <kernel/mm/memlayout.h>
+#include <kernel/mm/page.h>
+#include <kernel/mm/vm.h>
+#include <kernel/process.h>
 
 static void boot_aps(void);
 static void mp_main(void);

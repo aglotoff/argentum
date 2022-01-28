@@ -1,5 +1,5 @@
-#ifndef __INCLUDE_DIRENT_H__
-#define __INCLUDE_DIRENT_H__
+#ifndef __DIRENT_H__
+#define __DIRENT_H__
 
 #include <stdint.h>
 #include <sys/types.h>
@@ -15,4 +15,4 @@ struct dirent {
 
 ssize_t getdents(int, void *, size_t);
 
-#endif  // !__INCLUDE_DIRENT_H__
+#endif  // !__DIRENT_H__

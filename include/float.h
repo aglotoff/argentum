@@ -1,5 +1,5 @@
-#ifndef __INCLUDE_FLOAT_H__
-#define __INCLUDE_FLOAT_H__
+#ifndef __FLOAT_H__
+#define __FLOAT_H__
 
 /**
  * @file include/float.h
@@ -195,4 +195,4 @@ extern struct __ldbl {
 
 #endif  // !__LDBL
 
-#endif  // !__INCLUDE_FLOAT_H__
+#endif  // !__FLOAT_H__

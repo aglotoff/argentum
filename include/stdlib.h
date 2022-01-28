@@ -1,5 +1,5 @@
-#ifndef __INCLUDE_STDLIB_H__
-#define __INCLUDE_STDLIB_H__
+#ifndef __STDLIB_H__
+#define __STDLIB_H__
 
 /**
  * @file include/stdlib.h
@@ -69,4 +69,4 @@ void         *realloc(void *, size_t);
 };
 #endif
 
-#endif  // !__INCLUDE_STDLIB_H__
+#endif  // !__STDLIB_H__

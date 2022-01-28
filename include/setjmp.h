@@ -1,5 +1,5 @@
-#ifndef __INCLUDE_SETJMP_H__
-#define __INCLUDE_SETJMP_H__
+#ifndef __SETJMP_H__
+#define __SETJMP_H__
 
 /**
  * @file include/setjmp.h
@@ -47,4 +47,4 @@ int setjmp(jmp_buf env);
 };
 #endif
 
-#endif // !__INCLUDE_SETJMP_H__
+#endif // !__SETJMP_H__

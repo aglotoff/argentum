@@ -2,7 +2,7 @@
 # Makefile fragment for the kernel
 #
 
-KERNEL_CFLAGS  := $(CFLAGS) $(INIT_CFLAGS) -DKERNEL
+KERNEL_CFLAGS  := $(CFLAGS) $(INIT_CFLAGS) -Ikernel -D__KERNEL__
 KERNEL_LDFLAGS := $(LDFLAGS) -T kernel/kernel.ld -nostdlib
 
 ifdef PROCESS_NAME
@@ -11,29 +11,31 @@ endif
 
 KERNEL_SRCFILES :=	\
 	kernel/entry.S \
-	kernel/kbd.c \
-	kernel/lcd.c \
-	kernel/uart.c \
-	kernel/console.c \
-	kernel/gic.c \
-	kernel/trapentry.S \
-	kernel/trap.c \
-	kernel/page.c \
-	kernel/kobject.c \
-	kernel/vm.c \
-	kernel/cpu.c \
-	kernel/process.c \
+	kernel/drivers/kbd.c \
+	kernel/drivers/lcd.c \
+	kernel/drivers/uart.c \
+	kernel/drivers/console.c \
+	kernel/drivers/gic.c \
+	kernel/drivers/rtc.c \
+	kernel/drivers/sd.c \
+	kernel/fs/buf.c \
+	kernel/fs/ext2.c \
+	kernel/fs/fs.c \
+	kernel/fs/file.c \
+	kernel/mm/page.c \
+	kernel/mm/kobject.c \
+	kernel/mm/vm.c \
+	kernel/syscall/syscall.c \
+	kernel/syscall/sysfile.c \
+	kernel/syscall/sysproc.c \
 	kernel/context.S \
-	kernel/sync.c \
-	kernel/syscall.c \
-	kernel/rtc.c \
-	kernel/sd.c \
-	kernel/buf.c \
-	kernel/ext2.c \
-	kernel/fs.c \
-	kernel/file.c \
+	kernel/cpu.c \
 	kernel/kdebug.c \
 	kernel/monitor.c \
+	kernel/process.c \
+	kernel/sync.c \
+	kernel/trapentry.S \
+	kernel/trap.c \
 	kernel/main.c
 
 KERNEL_SRCFILES += \
@@ -66,7 +68,7 @@ endif
 KERNEL_BINFILES := $(patsubst %, $(OBJ)/%, $(KERNEL_BINFILES))
 
 # Embed the VGA font to print characters on LCD
-KERNEL_BINFILES += kernel/vga_font.psf
+KERNEL_BINFILES += kernel/drivers/vga_font.psf
 
 $(OBJ)/kernel/%.o: kernel/%.c $(OBJ)/.vars.KERNEL_CFLAGS
 	@echo "+ CC  $<"

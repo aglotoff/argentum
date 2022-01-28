@@ -1,7 +1,8 @@
 #include <assert.h>
 
-#include "armv7.h"
-#include "cpu.h"
+#include <kernel/armv7.h>
+
+#include <kernel/cpu.h>
 
 /*
  * ----------------------------------------------------------------------------
