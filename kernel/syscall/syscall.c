@@ -1,5 +1,6 @@
 #include <assert.h>
 #include <errno.h>
+#include <limits.h>
 #include <syscall.h>
 #include <sys/stat.h>
 
@@ -188,7 +189,7 @@ sys_arg_str(int n, const char **strp, int perm)
  * Fetch the nth system call argument as a file descriptor. Check that the
  * file desriptor is valid.
  * 
- * @param n    The argument number.
+ * @param n       The argument number.
  * @param fdstore Pointer to the memory address to store the file descriptor.
  * @param fstore  Pointer to the memory address to store the file.
  * 
@@ -209,6 +210,35 @@ sys_arg_fd(int n, int *fdstore, struct File **fstore)
     *fdstore = fd;
   if (fstore)
     *fstore = current->files[fd];
+
+  return 0;
+}
+
+int
+sys_arg_args(int n, char ***store)
+{
+  struct Process *current = my_process();
+  char **args;
+  int i;
+
+  args = (char **) sys_get_arg(n);
+  
+  for (i = 0; ; i++) {
+    int r;
+
+    if ((r = vm_check_user_ptr(current->trtab, args + i, sizeof(args[i]),
+                               AP_USER_RO)) < 0)
+      return r;
+
+    if (args[i] == NULL)
+      break;
+    
+    if ((r = vm_check_user_str(current->trtab, args[i], AP_USER_RO)) < 0)
+      return r;
+  }
+
+  if (store)
+    *store = args;
 
   return 0;
 }

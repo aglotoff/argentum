@@ -64,6 +64,7 @@ LIB_SRCFILES += \
 	lib/stdlib/bsearch.c \
 	lib/stdlib/calloc.c \
 	lib/stdlib/div.c \
+	lib/stdlib/environ.c \
 	lib/stdlib/exit.c \
 	lib/stdlib/free.c \
 	lib/stdlib/getenv.c \
@@ -119,8 +120,10 @@ LIB_SRCFILES += \
   lib/unistd/chdir.c \
 	lib/unistd/close.c \
 	lib/unistd/execl.c \
+	lib/unistd/execle.c \
 	lib/unistd/execlp.c \
 	lib/unistd/execv.c \
+	lib/unistd/execve.c \
 	lib/unistd/execvp.c \
   lib/unistd/fork.c \
 	lib/unistd/getpid.c \

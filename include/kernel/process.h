@@ -78,7 +78,7 @@ pid_t           process_wait(pid_t, int *, int);
 
 void            process_sleep(struct ListLink *, struct SpinLock *);
 void            process_wakeup(struct ListLink *);
-int             process_exec(const char *, char *const[]);
+int             process_exec(const char *, char *const[], char *const[]);
 void           *process_grow(ptrdiff_t);
 
 void            scheduler(void);

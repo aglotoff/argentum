@@ -1,31 +1,30 @@
-#include <errno.h>
 #include <stdarg.h>
-#include <stddef.h>
+#include <stdlib.h>
 #include <unistd.h>
 
 int
 execl(const char *path, ...)
 {
-  char *argv[32];
-  char *arg;
+  char **argv;
   int argc;
   va_list ap;
 
-  argv[0] = (char *) path;
-  argc = 1;
-
+  // Count the variable arguments.
   va_start(ap, path);
+  for (argc = 0; va_arg(ap, char *) != NULL ; argc++)
+    ;
+  va_end(ap);
 
-  while ((arg = va_arg(ap, char *)) != NULL) {
-    if (argc == 32) {
-      // TODO: what should I return?
-      errno = -E2BIG;
-      return -1;
-    }
+  if ((argv = (char **) malloc(sizeof(char *) * (argc + 1))) == NULL)
+    return -1;
 
-    argv[argc++] = arg;
-  }
+  // Copy the variable arguments into 'argv' array.
+  va_start(ap, path);
+  for (argc = 0; (argv[argc] = va_arg(ap, char *)) != NULL; argc++)
+    ;
   argv[argc] = NULL;
+
+  va_end(ap);
 
   return execv(path, argv);
 }

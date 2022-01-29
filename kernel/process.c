@@ -179,6 +179,7 @@ process_load_binary(struct Process *proc, const void *binary)
 
   proc->tf->r0     = 0;                   // argc
   proc->tf->r1     = 0;                   // argv
+  proc->tf->r2     = 0;                   // environ
   proc->tf->sp_usr = USTACK_TOP;          // stack pointer
   proc->tf->psr    = PSR_M_USR | PSR_F;   // user mode, interrupts enabled
   proc->tf->pc     = elf->entry;          // process entry point
@@ -553,8 +554,47 @@ process_wakeup(struct ListLink *q)
   spin_unlock(&ptable.lock);
 }
 
+static int
+copy_args(tte_t *trtab, char *const args[], uintptr_t limit, char **sp)
+{
+  char *oargs[32];
+  char *p;
+  size_t n;
+  int i, r;
+  
+  for (p = *sp, i = 0; args[i] != NULL; i++) {
+    if (i >= 32)
+      return -E2BIG;
+
+    n = strlen(args[i]);
+    p -= ROUND_UP(n + 1, sizeof(uint32_t));
+
+    if (p < (char *) limit)
+      return -E2BIG;
+
+    if ((r = vm_copy_out(trtab, p, args[i], n)) < 0)
+      return r;
+
+    oargs[i] = p;
+  }
+  oargs[i] = NULL;
+
+  n = (i + 1) * sizeof(char *);
+  p -= ROUND_UP(n, sizeof(uint32_t));
+  
+  if (p < (char *) (USTACK_TOP - USTACK_SIZE))
+    return -E2BIG;
+
+  if ((r = vm_copy_out(trtab, p, oargs, n)) < 0)
+    return r;
+
+  *sp = p;
+
+  return i;
+}
+
 int
-process_exec(const char *path, char *const argv[])
+process_exec(const char *path, char *const argv[], char *const envp[])
 {
   struct PageInfo *trtab_page;
   struct Process *proc;
@@ -563,12 +603,9 @@ process_exec(const char *path, char *const argv[])
   Elf32_Phdr ph;
   off_t off;
   tte_t *trtab;
-  size_t n;
   uintptr_t heap, ustack;
-  char *oargv[33];
-  char *sp;
-  int argc;
-  int r;
+  char *usp, *uargv, *uenvp;
+  int r, argc;
 
   if ((r = fs_name_lookup(path, &ip)) < 0)
     return r;
@@ -631,38 +668,18 @@ process_exec(const char *path, char *const argv[])
   if ((r = vm_alloc_region(trtab, (void *) ustack, USTACK_SIZE)) < 0)
     return r;
 
-  sp = (char *) USTACK_TOP;
-  for (argc = 0; argv[argc] != NULL; argc++) {
-    if (argc >= 32) {
-      r = -E2BIG;
-      goto out2;
-    }
-
-    n = strlen(argv[argc]);
-    sp -= ROUND_UP(n + 1, sizeof(uint32_t));
-
-    if (sp < (char *) ustack) {
-      r = -E2BIG;
-      goto out2;
-    }
-
-    if ((r = vm_copy_out(trtab, sp, argv[argc], n)) < 0)
-      goto out2;
-
-    oargv[argc] = sp;
-  }
-  oargv[argc] = NULL;
-
-  n = (argc + 1) * sizeof(char *);
-  sp -= ROUND_UP(n, sizeof(uint32_t));
-  
-  if (sp < (char *) (USTACK_TOP - USTACK_SIZE)) {
-    r = -E2BIG;
+  // Copy args and environment.
+  usp = (char *) USTACK_TOP;
+  if ((r = copy_args(trtab, argv, ustack, &usp)) < 0)
     goto out2;
-  }
 
-  if ((r = vm_copy_out(trtab, sp, oargv, n)) < 0)
+  argc = r;
+  uargv = usp;
+
+  if ((r = copy_args(trtab, envp, ustack, &usp)) < 0)
     goto out2;
+
+  uenvp = usp;
 
   fs_inode_unlock(ip);
   fs_inode_put(ip);
@@ -676,9 +693,10 @@ process_exec(const char *path, char *const argv[])
   proc->heap   = heap;
   proc->ustack = ustack;
 
-  proc->tf->r0     = argc;                // argc
-  proc->tf->r1     = (uint32_t) sp;       // argv
-  proc->tf->sp_usr = (uint32_t) sp;       // stack pointer
+  proc->tf->r0     = argc;                // arg #0: argc
+  proc->tf->r1     = (uint32_t) uargv;    // arg #1: argv
+  proc->tf->r2     = (uint32_t) uenvp;    // arg #2: environ
+  proc->tf->sp_usr = (uint32_t) usp;      // stack pointer
   proc->tf->pc     = elf.entry;           // process entry point
 
   return argc;

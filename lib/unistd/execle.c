@@ -3,9 +3,9 @@
 #include <unistd.h>
 
 int
-execl(const char *path, ...)
+execle(const char *path, ...)
 {
-  char **argv;
+  char **argv, **envp;
   int argc;
   va_list ap;
 
@@ -23,8 +23,10 @@ execl(const char *path, ...)
   for (argc = 0; (argv[argc] = va_arg(ap, char *)) != NULL; argc++)
     ;
   argv[argc] = NULL;
+  
+  envp = va_arg(ap, char **);
 
   va_end(ap);
 
-  return execvp(path, argv);
+  return execve(path, argv, envp);
 }

@@ -15,34 +15,18 @@ sys_fork(void)
 int32_t
 sys_exec(void)
 {
-  struct Process *current = my_process();
   const char *path;
-  char **argv, **s;
-  int i, r;
+  char **argv, **envp;
+  int r;
 
   if ((r = sys_arg_str(0, &path, AP_USER_RO)) < 0)
     return r;
-
-  if ((r = sys_arg_int(1, (int *) &argv)) < 0)
+  if ((r = sys_arg_args(1, &argv)) < 0)
+    return r;
+  if ((r = sys_arg_args(2, &envp)) < 0)
     return r;
 
-  for (i = 0; ; i++) {
-    s = argv + i;
-
-    if ((r = vm_check_user_ptr(current->trtab, s, sizeof(*s), AP_USER_RO)) < 0)
-      return r;
-
-    if (*s == NULL)
-      break;
-
-    if (i >= 32)
-      return -E2BIG;
-
-    if ((r = vm_check_user_str(current->trtab, *s, AP_USER_RO)))
-      return r;
-  }
-
-  return process_exec(path, argv);
+  return process_exec(path, argv, envp);
 }
 
 int32_t

@@ -17,6 +17,7 @@ int     sys_arg_short(int, short *);
 int     sys_arg_long(int, long *);
 int     sys_arg_buf(int, void **, size_t, int);
 int     sys_arg_str(int, const char **, int);
+int     sys_arg_args(int n, char ***);
 
 int32_t sys_read(void);
 int32_t sys_write(void);

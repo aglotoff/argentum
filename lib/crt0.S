@@ -8,14 +8,19 @@ _start:
   // terminated properly.
   mov     r11, #0
 
-  // Save argc and argv.
-  stmdb   sp!, {r0,r1}
+  // Save argc, argv, and environ
+  stmdb   sp!, {r0,r1,r2}
 
   // Run the global constructors.
 	bl      _init
 
   // Restore argc and argv.
-  ldmia   sp!, {r0,r1}
+  ldmia   sp!, {r0,r1,r2}
+
+  // Save environment into the global variable
+  ldr     r3, =environ
+  cmp     r2, #0
+  strne   r2, [r3]
 
   // Call the user main routine.
   bl      main
