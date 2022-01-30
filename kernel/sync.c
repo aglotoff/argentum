@@ -60,16 +60,14 @@ spin_lock(struct SpinLock *lock)
   }
 
   asm volatile(
+    "\tmov     %2, #1\n"        // Load the "lock acquired" value
     "\t1:\n"
     "\tldrex   %1, [%0]\n"      // Read the lock field
-    "\tcmp     %1, #0\n"        // Compare with 0
-    "\twfene\n"                 // Not 0 means already locked, do WFE
-    "\tbne     1b\n"            // Retry after woken up by event
-    "\tmov     %1, #1\n" 
-    "\tstrex   %2, %1, [%0]\n"  // Try to store 1 into the lock field
-    "\tcmp     %2, #0\n"        // Check return value: 0=OK, 1=failed
-    "\tbne     1b\n"            // If store failed, try again
-    "\tdmb\n"                   // Memory barrier BEFORE accessing the resource
+    "\tcmp     %1, #0\n"        // Is the lock free?
+    "\tbne     1b\n"            // No - try again
+    "\tstrex   %1, %2, [%0]\n"  // Try and acquire the lock
+    "\tcmp     %1, #0\n"        // Did this succeed?
+    "\tbne     1b\n"            // No - try again
     : "+r"(lock), "=r"(t1), "=r"(t2)
     :
     : "memory", "cc");
@@ -100,10 +98,7 @@ spin_unlock(struct SpinLock *lock)
 
   asm volatile(
     "\tmov     %1, #0\n"
-    "\tdmb\n"                   // Memory barier BEFORE releasing the resource
-    "\tstr     %1, [%0]\n"      // Write 0 into the lock field
-    "\tdsb\n"                   // Ensure update has completed before SEV
-    "\tsev\n"                   // Send event to wakeup other CPUS in WFE mode
+    "\tstr     %1, [%0]\n"
     : "+r"(lock), "=r"(t)
     :
     : "cc", "memory"

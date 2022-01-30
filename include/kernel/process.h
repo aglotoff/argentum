@@ -86,14 +86,4 @@ void            context_switch(struct Context **old, struct Context *new);
 
 extern int nprocesses;
 
-#define PROCESS_PASTE3(x, y, z)   x ## y ## z
-
-#define PROCESS_CREATE(name)                                                  \
-  do {                                                                        \
-    extern uint8_t PROCESS_PASTE3(_binary_obj_user_, name, _start)[];         \
-                                                                              \
-    if (process_create(PROCESS_PASTE3(_binary_obj_user_, name, _start)) < 0)  \
-      panic("cannot create process '%s'", #name);                             \
-  } while (0)
-
 #endif  // __KERNEL_PROCESS_H__

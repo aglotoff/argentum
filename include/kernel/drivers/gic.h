@@ -20,6 +20,6 @@ void     gic_eoi(unsigned);
 void     gic_start_others(void);
 
 void     ptimer_init(void);
-void     ptimer_eoi(void);
+void     ptimer_intr(void);
 
 #endif  // !__KERNEL_DRIVERS_GIC_H__

@@ -54,6 +54,8 @@ my_process(void)
 void
 process_init(void)
 {
+  extern uint8_t _binary_obj_user_init_start[];
+
   process_pool = kobject_pool_create("process_pool", sizeof(struct Process), 0);
   if (process_pool == NULL)
     panic("cannot allocate process_pool");
@@ -62,6 +64,9 @@ process_init(void)
 
   list_init(&ptable.runqueue);
   spin_init(&ptable.lock, "ptable");
+
+  // Create the 'init' process.
+  process_create(_binary_obj_user_init_start);
 }
 
 struct Process *
@@ -116,10 +121,6 @@ process_alloc(void)
 
   for (i = 0; i < 32; i++)
     process->files[i] = NULL;
-
-  // cprintf("[%08x] spawn process %08x\n",
-  //         my_process() ? my_process()->pid : 0,
-  //         process->pid);
 
   return process;
 }

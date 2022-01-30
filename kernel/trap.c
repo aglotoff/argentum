@@ -95,7 +95,7 @@ trap_irq_dispatch(void)
     // TODO:
     break;
   case IRQ_PTIMER:
-    ptimer_eoi();
+    ptimer_intr();
     resched = 1;
     break;
   case IRQ_UART0:

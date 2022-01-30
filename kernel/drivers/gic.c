@@ -127,7 +127,7 @@ ptimer_init(void)
  * Clear the private timer pending interrupt.
  */
 void
-ptimer_eoi(void)
+ptimer_intr(void)
 {
   ptimer[PTISR] = 1;
 }

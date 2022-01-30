@@ -9,11 +9,12 @@
  * ----------------------------------------------------------------------------
  * Vector Table
  * ----------------------------------------------------------------------------
+ *
  */
 
   .globl _start
 _start:
-  b       entry               // Reset
+  ldr     pc, [pc, #0x18]     // Reset
   ldr     pc, [pc, #0x18]     // Undefined Instruction
   ldr     pc, [pc, #0x18]     // Supervisor Call (SVC)
   ldr     pc, [pc, #0x18]     // Prefetch Abort
@@ -23,7 +24,7 @@ _start:
   b       .                   // FIQ (fast interrupt)
 
   // Trap handler addresses
-  .long   0
+  .long   entry
   .long   trap_undef
   .long   trap_svc
   .long   trap_pabt
@@ -43,10 +44,6 @@ _start:
 
   .globl  entry
 entry:
-  // Get the current processor ID
-  mrc   p15, 0, r0, c0, c0, 5
-  and   r0, r0, #3
-
   // Load the physical address of the initial translation table
   ldr   r2, =RELOC(entry_trtab)
   mcr   p15, 0, r2, c2, c0, 0
@@ -60,6 +57,10 @@ entry:
   ldr   r1, =(SCTLR_M | SCTLR_C | SCTLR_I | SCTLR_V)
   orr   r2, r2, r1
   mcr   p15, 0, r2, c1, c0, 0
+
+  // Get the current processor ID
+  mrc   p15, 0, r0, c0, c0, 5
+  and   r0, r0, #3
 
   // Set the kernel exception stack pointer for this CPU
   // sp = kxstack + (KXSTACK_SIZE * <cpu_id>)
@@ -87,13 +88,24 @@ entry:
   // terminated properly.
   mov   r11, #0
 
-  // BSP calls main(), APs call mp_enter().
+  // APs wait until the BSP finished its initialization
   cmp   r0, #0
-  ldreq r1, =main
-  ldrne r1, =mp_enter
-  blx   r1
+  bne   ap_wait
 
-  // Should never return here
+  // BSP calls main().
+  ldr   r1, =main
+  blx   r1
+  b     .
+
+ap_wait:
+  ldr   r1, =bsp_started
+  ldrex r2, [r1]
+  cmp   r2, #0
+  beq   ap_wait
+
+  // Call mp_enter()
+  ldr   r1, =mp_enter
+  blx   r1
   b     .
 
 .bss
@@ -119,6 +131,7 @@ kstack_top:
  * Per-CPU kernel exception stacks
  * ----------------------------------------------------------------------------
  */
+
   .globl    kxstack, kxstack_top
   .p2align  2
 kxstack:
