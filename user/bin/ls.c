@@ -7,8 +7,8 @@
 #include <sys/stat.h>
 #include <unistd.h>
 
-char buf[1024];
-char name[1024];
+char buf[10240];
+char name[256];
 
 int
 main(int argc, char **argv)

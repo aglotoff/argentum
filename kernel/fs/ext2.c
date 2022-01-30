@@ -1,7 +1,9 @@
 #include <assert.h>
 #include <dirent.h>
 #include <errno.h>
+#include <limits.h>
 #include <string.h>
+#include <sys/stat.h>
 
 #include <kernel/drivers/console.h>
 #include <kernel/fs/buf.h>
@@ -449,44 +451,42 @@ ext2_inode_write(struct Inode *ip, const void *buf, size_t nbyte, off_t off)
   return total;
 }
 
+#define DE_NAME_OFFSET    offsetof(struct Ext2DirEntry, name)
+
 ssize_t
-ext2_inode_getdents(struct Inode *dir, void *buf, size_t n, off_t *off)
+ext2_dir_read(struct Inode *dir, void *buf, size_t n, off_t *offp)
 {
   struct Ext2DirEntry de;
   struct dirent *dp;
-  size_t total;
-  char *dst;
+  ssize_t nread;
+  off_t off;
 
-  dst = (char *) buf;
-  total = 0;
-  while (*off < dir->size) {
-    ssize_t nread;
-    
-    nread = fs_inode_read(dir, &de, offsetof(struct Ext2DirEntry, name), *off);
-    if (nread != offsetof(struct Ext2DirEntry, name))
-      return -EINVAL;
-    
-    if ((sizeof(struct dirent) + de.name_len) > n)
-      break;
+  off = *offp;
 
-    dp = (struct dirent *) dst;
-    dp->d_ino     = de.inode;
-    dp->d_off     = *off + de.rec_len;
-    dp->d_reclen  = sizeof(struct dirent) + de.name_len;
-    dp->d_namelen = de.name_len;
-    dp->d_type    = de.file_type;
+  if (off >= dir->size)
+    return 0;
 
-    nread = fs_inode_read(dir, dp->d_name, dp->d_namelen, *off + nread);
-    if (nread != de.name_len)
-      return -EINVAL;
+  nread = fs_inode_read(dir, &de, DE_NAME_OFFSET, off);
+  if (nread != DE_NAME_OFFSET)
+    panic("Cannot read directory");
 
-    *off += de.rec_len;
+  if ((sizeof(struct dirent) + de.name_len) > n)
+    return 0;
 
-    total += dp->d_reclen;
-    dst   += dp->d_reclen;
-  }
+  dp = (struct dirent *) buf;
+  dp->d_ino     = de.inode;
+  dp->d_off     = off + de.rec_len;
+  dp->d_reclen  = sizeof(struct dirent) + de.name_len;
+  dp->d_namelen = de.name_len;
+  dp->d_type    = de.file_type;
 
-  return total;
+  nread = fs_inode_read(dir, dp->d_name, dp->d_namelen, off + nread);
+  if (nread != de.name_len)
+    panic("Cannot read directory");
+
+  *offp = off + de.rec_len;
+
+  return dp->d_reclen;
 }
 
 struct Inode *
@@ -494,37 +494,95 @@ ext2_dir_lookup(struct Inode *dir, const char *name)
 {
   struct Ext2DirEntry de;
   off_t off;
+  size_t name_len;
+  ssize_t nread;
 
-  for (off = 0; (size_t) off < dir->size; off += de.rec_len) {
-    fs_inode_read(dir, &de, offsetof(struct Ext2DirEntry, name), off);
+  name_len = strlen(name);
 
-    if (de.name_len == strlen(name)) {
-      fs_inode_read(dir, de.name, de.name_len,
-                    off + offsetof(struct Ext2DirEntry, name));
-      if (strncmp(de.name, name, de.name_len) == 0)
-        return fs_inode_get(de.inode, 0);
-    }
+  for (off = 0; off < dir->size; off += de.rec_len) {
+    nread = fs_inode_read(dir, &de, DE_NAME_OFFSET, off);
+    if (nread != DE_NAME_OFFSET)
+      panic("Cannot read directory");
+
+    nread = fs_inode_read(dir, de.name, de.name_len, off + DE_NAME_OFFSET);
+    if (nread != de.name_len)
+      panic("Cannot read directory");
+
+    if (de.name_len != name_len)
+      continue;
+
+    if (strncmp(de.name, name, de.name_len) == 0)
+      return fs_inode_get(de.inode, 0);
   }
 
   return NULL;
 }
 
 int
-ext2_dir_link(struct Inode *dp, char *name, unsigned num, uint8_t file_type)
+ext2_dir_link(struct Inode *dir, char *name, unsigned inode, mode_t mode)
 {
-  struct Ext2DirEntry de;
-  int r;
+  struct Ext2DirEntry de, new_de;
+  off_t off;
+  ssize_t name_len, de_len, new_len;
+  uint8_t file_type;
 
-  de.inode     = num;
-  de.name_len  = strlen(name);
-  de.rec_len   = offsetof(struct Ext2DirEntry, name) +
-                 ROUND_UP(de.name_len, sizeof(uint32_t));
-  de.file_type = file_type;
+  name_len = strlen(name);
+  if (name_len > NAME_MAX)
+    return -ENAMETOOLONG;
 
-  strncpy(de.name, name, de.name_len);
+  switch (mode & S_IFMT) {
+  case S_IFREG:
+    file_type = EXT2_FT_REG_FILE; break;
+  case S_IFSOCK:
+    file_type = EXT2_FT_SOCK; break;
+  case S_IFBLK:
+    file_type = EXT2_FT_BLKDEV; break;
+  case S_IFCHR:
+    file_type = EXT2_FT_CHRDEV; break;
+  case S_IFDIR:
+    file_type = EXT2_FT_DIR; break;
+  case S_IFIFO:
+    file_type = EXT2_FT_FIFO; break;
+  case S_IFLNK:
+    file_type = EXT2_FT_SYMLINK; break;
+  default:
+    return -EINVAL;
+  }
 
-  if ((r = fs_inode_write(dp, &de, de.rec_len, dp->size)) < 0)
-    return r;
+  new_len = ROUND_UP(DE_NAME_OFFSET + name_len, sizeof(uint32_t));
 
-  return r == de.rec_len ? 0 : -EIO;
+  new_de.inode     = inode;
+  new_de.name_len  = name_len;
+  new_de.file_type = file_type;
+  strncpy(new_de.name, name, ROUND_UP(name_len, sizeof(uint32_t)));
+
+  for (off = 0; off < dir->size; off += de.rec_len) {
+    if (ext2_inode_read(dir, &de, DE_NAME_OFFSET, off) != DE_NAME_OFFSET)
+      panic("Cannot read directory");
+
+    de_len = ROUND_UP(DE_NAME_OFFSET + de.name_len, sizeof(uint32_t));
+    if ((de.rec_len - de_len) >= new_len) {
+      // Found enough space
+      new_de.rec_len = de.rec_len - de_len;
+      de.rec_len = de_len;
+      
+      if (ext2_inode_write(dir, &de, DE_NAME_OFFSET, off) != DE_NAME_OFFSET)
+        panic("Cannot write directory");
+      if (ext2_inode_write(dir, &new_de, new_len, off + de_len) != new_len)
+        panic("Cannot write directory");
+
+      return 0;
+    }
+  }
+
+  assert(off % BLOCK_SIZE == 0);
+
+  new_de.rec_len = BLOCK_SIZE;
+  if (ext2_inode_write(dir, &new_de, new_len, off) != new_len)
+    panic("Cannot write directory");
+
+  dir->size = off + BLOCK_SIZE;
+  ext2_inode_update(dir);
+
+  return 0;
 }

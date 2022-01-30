@@ -184,10 +184,24 @@ fs_inode_write(struct Inode *ip, const void *buf, size_t nbyte, off_t off)
 ssize_t
 fs_inode_getdents(struct Inode *dir, void *buf, size_t n, off_t *off)
 {
+  ssize_t nread, total;
+  char *dst;
+  
   if (!S_ISDIR(dir->mode))
     return -ENOTDIR;
+  
+  dst = (char *) buf;
+  total = 0;
+  while ((n > 0) && (nread = ext2_dir_read(dir, dst, n, off)) != 0) {
+    if (nread < 0)
+      return nread;
 
-  return ext2_inode_getdents(dir, buf, n, off);
+    dst   += nread;
+    total += nread;
+    n     -= nread;
+  }
+
+  return total;
 }
 
 struct Inode *
@@ -200,7 +214,7 @@ fs_dir_lookup(struct Inode *dir, const char *name)
 }
 
 int
-fs_dir_link(struct Inode *dp, char *name, unsigned num, uint8_t file_type)
+fs_dir_link(struct Inode *dp, char *name, unsigned num, mode_t mode)
 {
   struct Inode *ip;
 
@@ -214,7 +228,7 @@ fs_dir_link(struct Inode *dp, char *name, unsigned num, uint8_t file_type)
     return -ENAMETOOLONG;
   }
 
-  return ext2_dir_link(dp, name, num, file_type);
+  return ext2_dir_link(dp, name, num, mode);
 }
 
 /*
@@ -374,9 +388,9 @@ fs_create(const char *path, mode_t mode, dev_t dev, struct Inode **istore)
     dp->nlink++;
     fs_inode_update(dp);
 
-    if (fs_dir_link(ip, ".", ip->ino, EXT2_S_IFDIR >> 12) < 0)
+    if (fs_dir_link(ip, ".", ip->ino, EXT2_S_IFDIR) < 0)
       panic("Cannot create .");
-    if (fs_dir_link(ip, "..", dp->ino, EXT2_S_IFDIR >> 12) < 0)
+    if (fs_dir_link(ip, "..", dp->ino, EXT2_S_IFDIR) < 0)
       panic("Cannot create ..");
   } else if ((S_ISCHR(mode) || S_ISBLK(mode))) {
     ip->major = (dev >> 8) & 0xFF;
@@ -388,7 +402,7 @@ fs_create(const char *path, mode_t mode, dev_t dev, struct Inode **istore)
     fs_inode_update(ip);
   }
 
-  r = fs_dir_link(dp, name, ip->ino, (mode & EXT2_S_IFMASK) >> 12);
+  r = fs_dir_link(dp, name, ip->ino, mode);
 
   if ((r == 0) && istore) {
     *istore = ip;
