@@ -104,5 +104,13 @@ uart_getc(void)
     return -1;
 
   c = uart[UARTDR] & 0xFF;
-  return c == '\r' ? '\n' : c;
+
+  switch (c) {
+  case '\r':
+    return '\n';
+  case '\x7f':
+    return '\b';
+  default:
+    return c;
+  }
 }

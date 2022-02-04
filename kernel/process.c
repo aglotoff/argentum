@@ -1,5 +1,6 @@
 #include <assert.h>
 #include <errno.h>
+#include <limits.h>
 #include <string.h>
 #include <sys/stat.h>
 #include <sys/wait.h>
@@ -119,7 +120,7 @@ process_alloc(void)
 
   spin_unlock(&ptable.lock);
 
-  for (i = 0; i < 32; i++)
+  for (i = 0; i < OPEN_MAX; i++)
     process->files[i] = NULL;
 
   return process;
@@ -266,7 +267,7 @@ process_destroy(int status)
 
   vm_free(current->trtab);
 
-  for (fd = 0; fd < 32; fd++)
+  for (fd = 0; fd < OPEN_MAX; fd++)
     if (current->files[fd])
       file_close(current->files[fd]);
 
@@ -305,7 +306,7 @@ process_copy(void)
   *child->tf    = *parent->tf;
   child->tf->r0 = 0;
 
-  for (fd = 0; fd < 32; fd++) {
+  for (fd = 0; fd < OPEN_MAX; fd++) {
     child->files[fd] = parent->files[fd] ? file_dup(parent->files[fd]) : NULL;
   }
 

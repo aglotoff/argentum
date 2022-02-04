@@ -203,7 +203,7 @@ sys_arg_fd(int n, int *fdstore, struct File **fstore)
   struct Process *current = my_process();
   int fd = sys_get_arg(n);
 
-  if ((fd < 0) || (fd >= 32) || (current->files[fd] == NULL))
+  if ((fd < 0) || (fd >= OPEN_MAX) || (current->files[fd] == NULL))
     return -EBADF;
   
   if (fdstore)

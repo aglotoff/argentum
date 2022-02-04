@@ -5,6 +5,7 @@
 #error "This is a kernel header; user programs should not #include it"
 #endif
 
+#include <limits.h>
 #include <sys/types.h>
 
 #include <kernel/list.h>
@@ -62,7 +63,7 @@ struct Process {
 
   int               exit_code;
 
-  struct File      *files[32];
+  struct File      *files[OPEN_MAX];
   struct Inode     *cwd;
 };
 

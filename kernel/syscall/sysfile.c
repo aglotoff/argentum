@@ -63,7 +63,7 @@ fd_alloc(struct File *f)
   struct Process *current = my_process();
   int i;
 
-  for (i = 0; i < 32; i++)
+  for (i = 0; i < OPEN_MAX; i++)
     if (current->files[i] == NULL) {
       current->files[i] = f;
       return i;
