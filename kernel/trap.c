@@ -1,5 +1,6 @@
 #include <assert.h>
 #include <stddef.h>
+#include <string.h>
 
 #include <kernel/armv7.h>
 #include <kernel/cpu.h>
@@ -9,6 +10,7 @@
 #include <kernel/drivers/kbd.h>
 #include <kernel/drivers/sd.h>
 #include <kernel/drivers/uart.h>
+#include <kernel/mm/page.h>
 #include <kernel/mm/vm.h>
 #include <kernel/process.h>
 #include <kernel/syscall.h>
@@ -56,6 +58,9 @@ static void
 trap_handle_abort(struct Trapframe *tf)
 {
   uint32_t address, status;
+  struct PageInfo *fault_page, *page;
+  tte_t *trtab;
+  pte_t *pte;
 
   // Read the contents of the corresponsing Fault Address Register (FAR) and 
   // the Fault Status Register (FSR).
@@ -66,6 +71,23 @@ trap_handle_abort(struct Trapframe *tf)
     // Kernel-mode abort.
     print_trapframe(tf);
     panic("kernel fault va %p status %#x", address, status);
+  }
+
+  trtab = my_process()->trtab;
+
+  if ((fault_page = vm_lookup_page(trtab, (void *) address, &pte)) != NULL) {
+    unsigned perm;
+
+    perm = *(pte + NPTENTRIES * 2);
+    if ((perm & VM_COW) && ((page = page_alloc(0)) != NULL)) {
+      memcpy(page2kva(page), page2kva(fault_page), PAGE_SIZE);
+
+      perm &= ~VM_COW;
+      perm |= VM_W;
+
+      if (vm_insert_page(trtab, page, (void *) address, perm) == 0)
+        return;
+    }
   }
 
   // Abort happened in user mode.

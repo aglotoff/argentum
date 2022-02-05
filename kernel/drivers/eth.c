@@ -214,10 +214,6 @@ eth_init(void)
   mac_addr[3] = (mac_addr_lo >> 24) & 0xFF;
   mac_addr[4] = mac_addr_hi & 0xFF;
   mac_addr[5] = (mac_addr_hi >> 8) & 0xFF;
-  
-  cprintf("MAC address: %02x:%02x:%02x:%02x:%02x:%02x\n",
-          mac_addr[0], mac_addr[1], mac_addr[2], mac_addr[3], 
-          mac_addr[4], mac_addr[5]);
 
   // Reset the PHY
   eth_phy_write(PHY_BCR, eth_phy_read(PHY_BCR) | PHY_BCR_RESET);

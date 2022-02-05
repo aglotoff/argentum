@@ -64,7 +64,7 @@ sys_get_num(void)
   int *pc = (int *) (current->tf->pc - 4);
   int r;
 
-  if ((r = vm_check_user_ptr(current->trtab, pc, sizeof(int), AP_USER_RO)) < 0)
+  if ((r = vm_check_user_ptr(current->trtab, pc, sizeof(int), VM_U)) < 0)
     return r;
 
   return *pc & 0xFFFFFF;
@@ -227,13 +227,13 @@ sys_arg_args(int n, char ***store)
     int r;
 
     if ((r = vm_check_user_ptr(current->trtab, args + i, sizeof(args[i]),
-                               AP_USER_RO)) < 0)
+                               VM_U)) < 0)
       return r;
 
     if (args[i] == NULL)
       break;
     
-    if ((r = vm_check_user_str(current->trtab, args[i], AP_USER_RO)) < 0)
+    if ((r = vm_check_user_str(current->trtab, args[i], VM_U)) < 0)
       return r;
   }
 

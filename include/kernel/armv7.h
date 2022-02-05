@@ -222,6 +222,15 @@ tlbiall(void)
   asm volatile ("mcr p15, 0, %0, c8, c7, 0" : : "r"(0));
 }
 
+/**
+ * TLB Invalidate by MVA
+ */
+static inline void
+tlbimva(uintptr_t va)
+{
+  asm volatile ("mcr p15, 0, %0, c8, c7, 1" : : "r"(va));
+}
+
 static inline uint32_t
 read_fp(void)
 {

@@ -13,11 +13,16 @@
 struct Inode;
 struct PageInfo;
 
+#define VM_P    (1 << 0)  ///< Present
+#define VM_W    (1 << 1)  ///< Writeable
+#define VM_U    (1 << 2)  ///< User
+#define VM_COW  (1 << 3)  ///< Copy-on-write
+
 void             vm_init(void);
 void             vm_init_percpu(void);
 
 struct PageInfo *vm_lookup_page(tte_t *, const void *, pte_t **);
-int              vm_insert_page(tte_t *, struct PageInfo *, void *, int);
+int              vm_insert_page(tte_t *, struct PageInfo *, void *, unsigned);
 void             vm_remove_page(tte_t *, void *);
 
 void             vm_switch_kernel(void);

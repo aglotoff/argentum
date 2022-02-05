@@ -5,7 +5,7 @@
 #include <kernel/drivers/console.h>
 #include <kernel/fs/file.h>
 #include <kernel/fs/fs.h>
-#include <kernel/mm/mmu.h>
+#include <kernel/mm/vm.h>
 #include <kernel/process.h>
 #include <kernel/syscall.h>
 
@@ -23,7 +23,7 @@ sys_getdents(void)
   if ((r = sys_arg_int(2, (int *) &n)) < 0)
     return r;
 
-  if ((r = sys_arg_buf(1, &buf, n, AP_USER_RO)) < 0)
+  if ((r = sys_arg_buf(1, &buf, n, VM_U)) < 0)
     return r;
 
   return file_getdents(f, buf, n);
@@ -36,7 +36,7 @@ sys_chdir(void)
   struct Inode *ip;
   int r;
 
-  if ((r = sys_arg_str(0, &path, AP_USER_RO)) < 0)
+  if ((r = sys_arg_str(0, &path, VM_U)) < 0)
     return r;
   
   if ((r = fs_name_lookup(path, &ip)) < 0)
@@ -78,7 +78,7 @@ sys_open(void)
   const char *path;
   int oflag, r;
 
-  if ((r = sys_arg_str(0, &path, AP_USER_RO)) < 0)
+  if ((r = sys_arg_str(0, &path, VM_U)) < 0)
     return r;
   if ((r = sys_arg_int(1, &oflag)) < 0)
     return r;
@@ -99,7 +99,7 @@ sys_mkdir(void)
   mode_t mode;
   int r;
 
-  if ((r = sys_arg_str(0, &path, AP_USER_RO)) < 0)
+  if ((r = sys_arg_str(0, &path, VM_U)) < 0)
     return r;
 
   if ((r = sys_arg_short(1, (short *) &mode)) < 0)
@@ -119,7 +119,7 @@ sys_mknod(void)
   dev_t dev;
   int r;
 
-  if ((r = sys_arg_str(0, &path, AP_USER_RO)) < 0)
+  if ((r = sys_arg_str(0, &path, VM_U)) < 0)
     return r;
   if ((r = sys_arg_short(1, (short *) &mode)) < 0)
     return r;
@@ -139,7 +139,7 @@ sys_stat(void)
   if ((r = sys_arg_fd(0, NULL, &f)) < 0)
     return r;
 
-  if ((r = sys_arg_buf(1, (void **) &buf, sizeof(*buf), AP_BOTH_RW)) < 0)
+  if ((r = sys_arg_buf(1, (void **) &buf, sizeof(*buf), VM_U | VM_W)) < 0)
     return r;
 
   return file_stat(f, buf);
@@ -174,7 +174,7 @@ sys_read(void)
   if ((r = sys_arg_int(2, (int *) &n)) < 0)
     return r;
 
-  if ((r = sys_arg_buf(1, &buf, n, AP_USER_RO)) < 0)
+  if ((r = sys_arg_buf(1, &buf, n, VM_U)) < 0)
     return r;
 
   return file_read(f, buf, n);
@@ -194,7 +194,7 @@ sys_write(void)
   if ((r = sys_arg_int(2, (int *) &n)) < 0)
     return r;
 
-  if ((r = sys_arg_buf(1, &buf, n, AP_BOTH_RW)) < 0)
+  if ((r = sys_arg_buf(1, &buf, n, VM_U | VM_W)) < 0)
     return r;
 
   return file_write(f, buf, n);

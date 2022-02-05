@@ -6,6 +6,7 @@
     "files.associations": {
         "random": "c",
         "numbers": "c",
-        "stdarg.h": "c"
+        "stdarg.h": "c",
+        "vm.h": "c"
     }
 }

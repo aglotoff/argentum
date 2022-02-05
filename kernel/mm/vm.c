@@ -32,16 +32,16 @@ vm_init(void)
 
   // Map all physical memory at KERNEL_BASE
   // Permissions: kernel RW, user NONE
-  vm_map_region(kern_trtab, KERNEL_BASE, 0, PHYS_TOP, AP_PRIV_RW, 0);
+  vm_map_region(kern_trtab, KERNEL_BASE, 0, PHYS_TOP, VM_P | VM_W, 0);
 
   // Map all devices 
   vm_map_region(kern_trtab, KERNEL_BASE + PHYS_TOP, PHYS_TOP,
-                VECTORS_BASE - KERNEL_BASE - PHYS_TOP, AP_PRIV_RW, 1);
+                VECTORS_BASE - KERNEL_BASE - PHYS_TOP, VM_P | VM_W, 1);
 
   // Map exception vectors at VECTORS_BASE
   // Permissions: kernel R, user NONE
   vm_map_region(kern_trtab, VECTORS_BASE, (uint32_t) _start,
-                PAGE_SIZE, AP_PRIV_RO, 0);
+                PAGE_SIZE, VM_P, 0);
 
   vm_init_percpu();
 }
@@ -127,9 +127,10 @@ vm_lookup_page(tte_t *trtab, const void *va, pte_t **pte_store)
 }
 
 int
-vm_insert_page(tte_t *trtab, struct PageInfo *p, void *va, int perm)
+vm_insert_page(tte_t *trtab, struct PageInfo *p, void *va, unsigned perm)
 {
   pte_t *pte;
+  int ap;
 
   if ((pte = vm_walk_trtab(trtab, (uintptr_t ) va, 1)) == NULL)
     return -ENOMEM;
@@ -137,7 +138,13 @@ vm_insert_page(tte_t *trtab, struct PageInfo *p, void *va, int perm)
   p->ref_count++;
   vm_remove_page(trtab, va);
 
-  *pte = page2pa(p) | PTE_AP(perm) | PTE_TYPE_SMALL;
+  if (perm & VM_U)
+    ap = (perm & VM_W) ? AP_BOTH_RW : AP_USER_RO;
+  else
+    ap = (perm & VM_W) ? AP_PRIV_RW : AP_PRIV_RO;
+
+  *pte = page2pa(p) | PTE_AP(ap) | PTE_TYPE_SMALL;
+  *(pte + (NPTENTRIES * 2)) = perm;
 
   return 0;
 }
@@ -155,6 +162,8 @@ vm_remove_page(tte_t *trtab, void *va)
     page_free(page);
 
   *pte = 0;
+
+  tlbimva((uintptr_t) va);
 }
 
 int
@@ -172,7 +181,7 @@ vm_alloc_region(tte_t *trtab, void *va, size_t n)
       return -ENOMEM;
     }
 
-    if ((vm_insert_page(trtab, page, (void *) a, AP_BOTH_RW)) != 0) {
+    if ((vm_insert_page(trtab, page, (void *) a, VM_U | VM_W)) != 0) {
       vm_dealloc_region(trtab, (void *) start, a - start);
       page_free(page);
       return -ENOMEM;
@@ -285,10 +294,16 @@ vm_map_region(tte_t *trtab,
 {
   pte_t *pte;
   tte_t *tte;
+  int ap;
 
   assert(va % PAGE_SIZE == 0);
   assert(pa % PAGE_SIZE == 0);
   assert(n % PAGE_SIZE == 0);
+
+  if (perm & VM_U)
+    ap = (perm & VM_W) ? AP_BOTH_RW : AP_USER_RO;
+  else
+    ap = (perm & VM_W) ? AP_PRIV_RW : AP_PRIV_RO;
 
   while (n != 0) {
     // Whenever possible, map entire 1MB sections to reduce the memory
@@ -299,7 +314,7 @@ vm_map_region(tte_t *trtab,
       if (*tte)
         panic("remap");
 
-      *tte = pa | TTE_SECT_AP(perm) | TTE_TYPE_SECT;
+      *tte = pa | TTE_SECT_AP(ap) | TTE_TYPE_SECT;
       if (!dev)
         *tte |= (TTE_SECT_C | TTE_SECT_B);
 
@@ -313,7 +328,8 @@ vm_map_region(tte_t *trtab,
       if (*pte)
         panic("remap %p", *pte);
 
-      *pte = pa | PTE_AP(perm) | PTE_TYPE_SMALL;
+      *pte = pa | PTE_AP(ap) | PTE_TYPE_SMALL;
+      *(pte + (NPTENTRIES * 2)) = perm;
       if (!dev)
         *pte |= (PTE_C | PTE_B);
 
@@ -371,20 +387,36 @@ vm_copy(tte_t *trtab)
     }
 
     if ((*pte & PTE_TYPE_MASK) == PTE_TYPE_SMALL) {
+      unsigned perm;
+
+      perm = *(pte + (NPTENTRIES * 2));
       src_page = pa2page(PTE_SMALL_ADDR(*pte));
 
-      if ((dst_page = page_alloc(0)) == NULL) {
-        vm_free(t);
-        return NULL;
-      }
+      if ((perm & VM_W) || (perm & VM_COW)) {
+        perm &= ~VM_W;
+        perm |= VM_COW;
 
-      if (vm_insert_page(t, dst_page, va, AP_BOTH_RW) < 0) {
-        page_free(dst_page);
-        vm_free(t);
-        return NULL;
-      }
+        if (vm_insert_page(trtab, src_page, va, perm) < 0)
+          panic("Cannot change page permissions");
 
-      memcpy(page2kva(dst_page), page2kva(src_page), PAGE_SIZE);
+        if (vm_insert_page(t, src_page, va, perm) < 0) {
+          vm_free(t);
+          return NULL;
+        }
+      } else {
+        if ((dst_page = page_alloc(0)) == NULL) {
+          vm_free(t);
+          return NULL;
+        }
+
+        if (vm_insert_page(t, dst_page, va, perm) < 0) {
+          page_free(dst_page);
+          vm_free(t);
+          return NULL;
+        }
+
+        memcpy(page2kva(dst_page), page2kva(src_page), PAGE_SIZE);
+      }
     }
 
     va += PAGE_SIZE;
@@ -409,7 +441,7 @@ vm_check_user_ptr(tte_t *trtab, const void *va, size_t n, unsigned perm)
   while (p != end) {
     page = vm_lookup_page(trtab, (void *) p, &pte);
 
-    if ((page == NULL) || ((*pte & PTE_AP(perm)) != PTE_AP(perm)))
+    if ((page == NULL) || ((*(pte + (NPTENTRIES * 2)) & perm) != perm))
       return -EFAULT;
 
     p += PAGE_SIZE;
@@ -430,7 +462,7 @@ vm_check_user_str(tte_t *trtab, const char *s, unsigned perm)
 
   while (s < (char *) KERNEL_BASE) {
     page = vm_lookup_page(trtab, s, &pte);
-    if ((page == NULL) || ((*pte & PTE_AP(perm)) != PTE_AP(perm)))
+    if ((page == NULL) || ((*(pte + (NPTENTRIES * 2)) & perm) != perm))
       return -EFAULT;
 
     p = (const char *) page2kva(page);
