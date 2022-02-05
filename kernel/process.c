@@ -41,6 +41,8 @@ static void process_suspend(void);
 static void process_resume(struct Process *);
 static void scheduler_yield(void);
 
+static struct Process *init_process;
+
 struct Process *
 my_process(void)
 {
@@ -68,7 +70,8 @@ process_init(void)
   spin_init(&ptable.lock, "ptable");
 
   // Create the 'init' process.
-  process_create(_binary_obj_user_init_start);
+  if (process_create(_binary_obj_user_init_start, &init_process) != 0)
+    panic("Cannot create the init process");
 }
 
 struct Process *
@@ -191,7 +194,7 @@ process_load_binary(struct Process *proc, const void *binary)
 }
 
 int
-process_create(const void *binary)
+process_create(const void *binary, struct Process **pstore)
 {
   struct Process *proc;
   int r;
@@ -213,6 +216,9 @@ process_create(const void *binary)
   list_add_back(&ptable.runqueue, &proc->link);
 
   spin_unlock(&ptable.lock);
+
+  if (pstore != NULL)
+    *pstore = proc;
 
   return 0;
 
@@ -258,13 +264,9 @@ pid_lookup(pid_t pid)
 void
 process_destroy(int status)
 {
-  struct Process *current = my_process();
+  struct ListLink *l;
+  struct Process *child, *current = my_process();
   int fd;
-  
-  // if (status == 0)
-  //   cprintf("[%08x] exit with code %d\n", current->pid, status);
-  // else
-  //   cprintf("[%08x] exit with code %d\n", current->pid, status);
 
   vm_free(current->trtab);
 
@@ -280,6 +282,22 @@ process_destroy(int status)
 
   current->state = PROCESS_ZOMBIE;
   ptable.nprocesses--;
+
+  assert(init_process != NULL);
+
+  // Move children to the init process
+  while (!list_empty(&current->children)) {
+    l = current->children.next;
+    list_remove(l);
+
+    child = LIST_CONTAINER(l, struct Process, sibling);
+    child->parent = init_process;
+    list_add_back(&init_process->children, l);
+
+    if ((child->state == PROCESS_ZOMBIE) &&
+        (init_process->state == PROCESS_SLEEPING))
+      process_resume(init_process);
+  }
 
   if (current->parent && (current->parent->state == PROCESS_SLEEPING))
     process_resume(current->parent);

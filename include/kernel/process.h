@@ -70,7 +70,7 @@ struct Process {
 struct Process *my_process(void);
 
 void            process_init(void);
-int             process_create(const void *);
+int             process_create(const void *, struct Process **);
 void            process_yield(void);
 void            process_destroy(int);
 void            process_free(struct Process *);

@@ -428,7 +428,7 @@ vm_copy(tte_t *trtab)
 int
 vm_check_user_ptr(tte_t *trtab, const void *va, size_t n, unsigned perm)
 {
-  struct PageInfo *page;
+  struct PageInfo *page, *new_page;
   const char *p, *end;
   pte_t *pte;
 
@@ -439,10 +439,31 @@ vm_check_user_ptr(tte_t *trtab, const void *va, size_t n, unsigned perm)
     return -EFAULT;
 
   while (p != end) {
-    page = vm_lookup_page(trtab, (void *) p, &pte);
+    unsigned curr_perm;
 
-    if ((page == NULL) || ((*(pte + (NPTENTRIES * 2)) & perm) != perm))
+    if ((page = vm_lookup_page(trtab, (void *) p, &pte)) == NULL)
       return -EFAULT;
+
+    curr_perm = *(pte + (NPTENTRIES * 2));
+
+    if ((perm & VM_W) && (curr_perm & VM_COW)) {
+      curr_perm &= ~VM_COW;
+      curr_perm |= VM_W;
+
+      if ((curr_perm & perm) != perm)
+        return -EFAULT;
+
+      if ((new_page = page_alloc(0)) == NULL)
+        return -EFAULT;
+
+      memcpy(page2kva(new_page), page2kva(page), PAGE_SIZE);
+
+      if ((vm_insert_page(trtab, page, (void *) p, curr_perm)) != 0)
+        return -EFAULT;
+    } else {
+      if ((curr_perm & perm) != perm)
+        return -EFAULT;
+    }
 
     p += PAGE_SIZE;
   }

@@ -47,12 +47,11 @@ main(void)
   buf_init();           // Buffer cache
   file_init();          // File table
   process_init();       // Process table
-  
 
   // Unblock other CPUs
   bsp_started = 1;       
 
-  cprintf("Starting CPU %d\n", read_mpidr() & 0x3);
+  cprintf("Starting CPU %d\n", cpu_id());
   scheduler();   
 }
 
@@ -69,7 +68,7 @@ mp_enter(void)
   gic_init();           // Interrupt controller
   ptimer_init();        // Private timer
 
-  cprintf("Starting CPU %d\n", read_mpidr() & 0x3);
+  cprintf("Starting CPU %d\n", cpu_id());
   scheduler();   
 }
 

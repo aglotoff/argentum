@@ -44,9 +44,8 @@ main(void)
   if (fork() == 0)
     execve("/bin/sh", argv, envp);
 
-  // Wait for all orphaned children.
-  while (wait(&status) > 0)
-    ;
+  for (;;)
+    wait(&status);
 
   return 0;
 }
