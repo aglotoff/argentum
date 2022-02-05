@@ -88,3 +88,5 @@ To run the kernel, install **qemu-system-arm** and execute `make qemu`.
   * [ARM PrimeCell Multimedia Card Interface (PL180) Technical Reference Manual](https://developer.arm.com/documentation/ddi0172/a)
 * UART - `kernel/uart.c`
   * [PrimeCell UART (PL011) Technical Reference Manual](https://developer.arm.com/documentation/ddi0183/g/)
+* Ethernet - `kernel/eth.c`
+  * [LAN9118 Datasheet](http://ww1.microchip.com/downloads/en/DeviceDoc/00002266B.pdf)

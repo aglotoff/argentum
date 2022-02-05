@@ -20,6 +20,7 @@
 #define IRQ_MCIA    49
 #define IRQ_MCIB    50
 #define IRQ_KMI0    52
+#define IRQ_ETH     60
 
 #ifndef __ASSEMBLER__
 

@@ -11,6 +11,7 @@ endif
 
 KERNEL_SRCFILES :=	\
 	kernel/entry.S \
+	kernel/drivers/eth.c \
 	kernel/drivers/kbd.c \
 	kernel/drivers/lcd.c \
 	kernel/drivers/uart.c \

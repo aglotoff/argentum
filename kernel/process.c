@@ -8,6 +8,7 @@
 #include <kernel/armv7.h>
 #include <kernel/cpu.h>
 #include <kernel/drivers/console.h>
+#include <kernel/drivers/eth.h>
 #include <kernel/elf.h>
 #include <kernel/fs/file.h>
 #include <kernel/fs/fs.h>
@@ -494,6 +495,8 @@ process_run(void)
 
     if ((proc->cwd == NULL) && (fs_name_lookup("/", &proc->cwd) < 0))
       panic("root not found");
+
+    eth_write("This is my test packet!", 24);
   }
 
   // "Return" to the user space.

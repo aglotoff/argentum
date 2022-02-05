@@ -5,6 +5,7 @@
 #include <kernel/armv7.h>
 #include <kernel/cpu.h>
 #include <kernel/drivers/console.h>
+#include <kernel/drivers/eth.h>
 #include <kernel/drivers/gic.h>
 #include <kernel/drivers/rtc.h>
 #include <kernel/drivers/sd.h>
@@ -35,6 +36,7 @@ main(void)
   // Now we can initialize the console and print messages
   gic_init();           // Interrupt controller
   console_init();       // Console driver
+  eth_init();           // Ethernet
 
   // Perform the rest of initialization
   page_init_high();     // Physical page allocator (higher memory)
@@ -45,6 +47,7 @@ main(void)
   buf_init();           // Buffer cache
   file_init();          // File table
   process_init();       // Process table
+  
 
   // Unblock other CPUs
   bsp_started = 1;       

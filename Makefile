@@ -69,7 +69,7 @@ ifndef CPUS
 endif
 
 QEMUOPTS := -M realview-pbx-a9 -m 256 -smp $(CPUS)
-QEMUOPTS += -kernel $(KERNEL) -sd $(OBJ)/fs.img
+QEMUOPTS += -kernel $(KERNEL) -sd $(OBJ)/fs.img # -nic bridge,br=br1
 QEMUOPTS += -serial mon:stdio
 
 qemu: $(KERNEL) $(OBJ)/fs.img
