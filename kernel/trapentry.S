@@ -83,7 +83,7 @@ trapret:
   add     sp, #12                 // skip trapno
   ldmdb   sp, {sp,lr}^            // restore user mode sp and lr
   ldmia   sp!, {r0-r12,lr}        // restore context
-  msr     spsr_c, lr              // restore spsr
+  msr     spsr, lr              // restore spsr
   ldmia   sp!, {lr,pc}^           // return
 
 

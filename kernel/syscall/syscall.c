@@ -43,8 +43,11 @@ sys_dispatch(void)
   if ((num = sys_get_num()) < 0)
     return num;
 
-  if ((num < (int) ARRAY_SIZE(syscalls)) && syscalls[num])
-    return syscalls[num]();
+  if ((num < (int) ARRAY_SIZE(syscalls)) && syscalls[num]) {
+    int r = syscalls[num]();
+    // cprintf("SYS(%d) -> %d, pc = %p\n", num, r, my_process()->tf->pc);
+    return r;
+  }
 
   cprintf("Unknown system call %d\n", cpu_id(), num);
   return -ENOSYS;

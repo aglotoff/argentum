@@ -14,6 +14,7 @@
 #include <kernel/mm/vm.h>
 #include <kernel/process.h>
 #include <kernel/syscall.h>
+#include <kernel/types.h>
 
 #include <kernel/trap.h>
 
@@ -92,8 +93,6 @@ trap_handle_abort(struct Trapframe *tf)
 
   // Abort happened in user mode.
   cprintf("user fault va %p status %#x\n", address, status);
-  // print_trapframe(tf);
-  // panic("user fault va %p status %#x", address, status);
   process_destroy(-1);
 }
 
@@ -104,6 +103,7 @@ trap_irq_dispatch(void)
 
   irq_save();
 
+  // Read the interrupt ID and temporarily disable it.
   irq = gic_intid();
   gic_disable(irq);
   gic_eoi(irq);

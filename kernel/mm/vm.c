@@ -458,7 +458,7 @@ vm_check_user_ptr(tte_t *trtab, const void *va, size_t n, unsigned perm)
 
       memcpy(page2kva(new_page), page2kva(page), PAGE_SIZE);
 
-      if ((vm_insert_page(trtab, page, (void *) p, curr_perm)) != 0)
+      if ((vm_insert_page(trtab, new_page, (void *) p, curr_perm)) != 0)
         return -EFAULT;
     } else {
       if ((curr_perm & perm) != perm)

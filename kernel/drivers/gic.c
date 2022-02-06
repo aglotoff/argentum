@@ -48,7 +48,8 @@ gic_init(void)
   // Enable local PIC.
   gicc[ICCICR] = ICCICR_EN;
 
-  // Set priority mask.
+  // Set priority mask to the lowest possible value, so all interrupts can be
+  // signalled to the processor.
   gicc[ICCPMR] = 0xFF;
 
   // Enable global distributor.
@@ -58,8 +59,13 @@ gic_init(void)
 void
 gic_enable(unsigned irq, unsigned cpu)
 {
+  // Enable the interrupt
   gicd[ICDISER0 + (irq >> 5)] = (1U << (irq & 0x1F));
+
+  // Set priority to 128 for all interrupts
   gicd[ICDIPR0  + (irq >> 2)] = (0x80 << ((irq & 0x3) << 3));
+
+  // Set target CPU
   gicd[ICDIPTR0 + (irq >> 2)] = ((1U << cpu) << ((irq & 0x3) << 3));
 }
 
