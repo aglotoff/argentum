@@ -145,8 +145,15 @@ fs_inode_read(struct Inode *ip, void *buf, size_t nbyte, off_t off)
   if (!mutex_holding(&ip->mutex))
     panic("not holding ip->mutex");
 
-  if (S_ISCHR(ip->mode) || S_ISBLK(ip->mode))
-    return console_read(buf, nbyte);
+  if (S_ISCHR(ip->mode) || S_ISBLK(ip->mode)) {
+    ssize_t ret;
+
+    fs_inode_unlock(ip);
+    ret = console_read(buf, nbyte);
+    fs_inode_lock(ip);
+
+    return ret;
+  }
 
   if ((off > ip->size) || ((off + nbyte) < off))
     return -1;

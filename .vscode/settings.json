@@ -7,6 +7,16 @@
         "random": "c",
         "numbers": "c",
         "stdarg.h": "c",
-        "vm.h": "c"
+        "vm.h": "c",
+        "array": "c",
+        "chrono": "c",
+        "compare": "c",
+        "functional": "c",
+        "istream": "c",
+        "ostream": "c",
+        "ratio": "c",
+        "tuple": "c",
+        "type_traits": "c",
+        "utility": "c"
     }
 }

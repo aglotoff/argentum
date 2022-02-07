@@ -1,4 +1,5 @@
 #include <ctype.h>
+#include <fcntl.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -14,6 +15,44 @@ static void        cmd_free(struct Cmd *);
 #define MAXBUF  1024
 static char buf[MAXBUF];
 static const char prompt[] = "\x1b[1;32m$ \x1b[m";
+
+#define MAXARG      32
+
+#define CMD_EXEC    1
+#define CMD_REDIR   2
+#define CMD_BG      3
+#define CMD_LIST    4
+
+struct Cmd {
+  int   type;
+};
+
+struct ExecCmd {
+  int   type;
+  char *argv[MAXARG + 1];
+  char *eargv[MAXARG];
+  int   argc;
+};
+
+struct BgCmd {
+  int    type;
+  struct Cmd *cmd;
+};
+
+struct RedirCmd {
+  int    type;
+  struct Cmd *cmd;
+  int    fd;
+  char  *name;
+  char  *ename;
+  int    oflag;
+};
+
+struct ListCmd {
+  int   type;
+  struct Cmd *left;
+  struct Cmd *right;
+};
 
 static char *
 get_cmd(void)
@@ -34,44 +73,36 @@ int
 main(void)
 {
   struct Cmd *cmd;
+  struct ExecCmd *ecmd;
+  pid_t pid;
+  int status;
 
   for (;;) {
     if ((cmd = cmd_parse(get_cmd())) == NULL)
       continue;
-    cmd_run(cmd);
+
+    ecmd = (struct ExecCmd *) cmd;
+    if ((cmd->type == CMD_EXEC) && (strcmp(ecmd->argv[0], "cd") == 0)) {
+      if (ecmd->argv[1] == NULL) {
+        printf("Usage: %s <directory>\n", ecmd->argv[0]);
+      } else if (chdir(ecmd->argv[1]) != 0) {
+        perror(ecmd->argv[1]);
+      }
+    } else {
+      if ((pid = fork()) == 0) {
+        cmd_run(cmd);
+      } else if (pid > 0) {
+        waitpid(pid, &status, 0);
+      } else {
+        perror("fork");
+      }
+    }
+
     cmd_free(cmd);
   }
 
   return 0;
 }
-
-#define MAXARG  32
-
-#define CMD_EXEC  1
-#define CMD_BG    2
-#define CMD_LIST  3
-
-struct Cmd {
-  int   type;
-};
-
-struct ExecCmd {
-  int   type;
-  char *argv[MAXARG + 1];
-  char *eargv[MAXARG];
-  int   argc;
-};
-
-struct BgCmd {
-  int    type;
-  struct Cmd *cmd;
-};
-
-struct ListCmd {
-  int   type;
-  struct Cmd *left;
-  struct Cmd *right;
-};
 
 static void
 cmd_run(const struct Cmd * cmd)
@@ -81,56 +112,64 @@ cmd_run(const struct Cmd * cmd)
   struct ExecCmd *ecmd;
   struct ListCmd *lcmd;
   struct BgCmd *bcmd;
+  struct RedirCmd *rcmd;
 
   switch (cmd->type) {
   case CMD_EXEC:
     ecmd = (struct ExecCmd *) cmd;
 
-    // CD is a special case
-    if (strcmp(ecmd->argv[0], "cd") == 0) {
-      if (ecmd->argv[1] == NULL) {
-        printf("Usage: %s <directory>\n", ecmd->argv[0]);
-        exit(1);
-      }
+    execvp(ecmd->argv[0], ecmd->argv);
+    perror(ecmd->argv[0]);
+    exit(1);
 
-      if (chdir(ecmd->argv[1]) != 0) {
-        perror(ecmd->argv[1]);
-        exit(1);
-      }
-
-      return;
-    }
-
-    if ((pid = fork()) == 0) {
-      execvp(ecmd->argv[0], ecmd->argv);
-      perror(ecmd->argv[0]);
-      exit(1);
-    } else if (pid > 0) {
-      if ((pid = waitpid(pid, &status, 0)) < 0)
-        perror("waitpid");
-    } else {
-      perror("fork");
-    }
     break;
 
   case CMD_BG:
     bcmd = (struct BgCmd *) cmd;
+
     if ((pid = fork()) == 0) {
       cmd_run(bcmd->cmd);
       exit(0);
     } else if (pid < 0) {
       perror("fork");
     }
+
     break;
 
   case CMD_LIST:
     lcmd = (struct ListCmd *) cmd;
-    if (lcmd->left != NULL)
-      cmd_run(lcmd->left);
-    if (lcmd->right != NULL)
+
+    if (lcmd->left != NULL) {
+      if ((pid = fork()) == 0) {
+        cmd_run(lcmd->left);
+      } else if (pid > 0) {
+        waitpid(pid, &status, 0);
+      } else {
+        perror("fork");
+        exit(1);
+      }
+    }
+
+    if (lcmd->right != NULL) {
       cmd_run(lcmd->right);
+    }
+
+    break;
+
+  case CMD_REDIR:
+    rcmd = (struct RedirCmd *) cmd;
+
+    close(rcmd->fd);
+    if (open(rcmd->name, rcmd->oflag) < 0) {
+      perror(rcmd->name);
+      exit(1);
+    }
+
+    cmd_run(rcmd->cmd);
     break;
   }
+
+  exit(0);
 }
 
 static struct Cmd *
@@ -140,6 +179,7 @@ cmd_null_terminate(struct Cmd *cmd)
   struct ExecCmd *ecmd;
   struct ListCmd *lcmd;
   struct BgCmd *bcmd;
+  struct RedirCmd *rcmd;
 
   switch (cmd->type) {
   case CMD_EXEC:
@@ -159,6 +199,12 @@ cmd_null_terminate(struct Cmd *cmd)
       lcmd->left = cmd_null_terminate(lcmd->left);
     if (lcmd->right != NULL)
     lcmd->right = cmd_null_terminate(lcmd->right);
+    break;
+
+  case CMD_REDIR:
+    rcmd = (struct RedirCmd *) cmd;
+    *rcmd->ename = '\0';
+    rcmd->cmd = cmd_null_terminate(rcmd->cmd);
     break;
   }
 
@@ -180,7 +226,7 @@ peek(char *s, char *tokens, char **p)
   return strchr(tokens, *s) != NULL;
 }
 
-static const char *symbols = "&;";
+static const char *symbols = "&;<>";
 
 static int
 get_token(char *s, char **p, char **ep)
@@ -198,10 +244,12 @@ get_token(char *s, char **p, char **ep)
     return '\0';
   case '&':
   case ';':
+  case '<':
+  case '>':
     ret = *s++;
     break;
   default:
-    ret = *s;
+    ret = 'a';
     while (*s && !isspace(*s) && (strchr(symbols, *s) == NULL))
       s++;
     break;
@@ -214,9 +262,44 @@ get_token(char *s, char **p, char **ep)
 }
 
 static struct Cmd *
+cmd_parse_redir(struct Cmd *cmd, char *s, char **ep)
+{
+  struct RedirCmd *rcmd;
+  
+  while (peek(s, "<>", &s)) {
+    rcmd = (struct RedirCmd *) malloc(sizeof(struct RedirCmd));
+
+    rcmd->type = CMD_REDIR;
+    rcmd->cmd  = cmd;
+
+    switch (get_token(s, NULL, &s)) {
+    case '<':
+      rcmd->fd = 0;
+      rcmd->oflag = O_RDONLY;
+      break;
+    case '>':
+      rcmd->fd = 1;
+      rcmd->oflag = O_WRONLY | O_CREAT;
+      break;
+    }
+
+    get_token(s, &rcmd->name, &s);
+    rcmd->ename = s;
+
+    cmd = (struct Cmd *) rcmd;
+  }
+
+  if (ep != NULL)
+    *ep = s;
+  
+  return cmd;
+}
+
+static struct Cmd *
 cmd_parse_exec(char *s, char **ep)
 {
   struct ExecCmd *cmd;
+  struct Cmd *ret;
   int argc;
 
   if ((cmd = malloc(sizeof(struct Cmd))) == NULL) {
@@ -225,6 +308,9 @@ cmd_parse_exec(char *s, char **ep)
   }
 
   cmd->type = CMD_EXEC;
+
+  ret = (struct Cmd *) cmd;
+  ret = cmd_parse_redir(ret, s, &s);
 
   for (argc = 0; !peek(s, "&;", &s); argc++) {
     if (get_token(s, &cmd->argv[argc], &s) == '\0')
@@ -237,6 +323,8 @@ cmd_parse_exec(char *s, char **ep)
     }
 
     cmd->eargv[argc] = s;
+
+    ret = cmd_parse_redir(ret, s, &s);
   }
 
   if (argc == 0) {
@@ -250,7 +338,7 @@ cmd_parse_exec(char *s, char **ep)
   if (ep != NULL)
     *ep = s;
 
-  return (struct Cmd *) cmd;
+  return ret;
 }
 
 static struct Cmd *
@@ -320,6 +408,7 @@ cmd_free(struct Cmd *cmd)
 {
   struct BgCmd *bcmd;
   struct ListCmd *lcmd;
+  struct RedirCmd *rcmd;
 
   switch (cmd->type) {
   case CMD_BG:
@@ -332,6 +421,10 @@ cmd_free(struct Cmd *cmd)
       cmd_free(lcmd->left);
     if (lcmd->right != NULL)
       cmd_free(lcmd->right);
+    break;
+  case CMD_REDIR:
+    rcmd = (struct RedirCmd *) cmd;
+    cmd_free(rcmd->cmd);
     break;
   }
 

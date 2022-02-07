@@ -44,10 +44,16 @@ file_open(const char *path, int oflag, struct File **fstore)
 
   f->type = FD_INODE;
 
-  if ((r = fs_name_lookup(path, &ip)) < 0) 
-    goto fail;
+  if ((r = fs_name_lookup(path, &ip)) < 0) {
+    if ((r != -ENOENT) || !(oflag & O_CREAT))
+      goto fail;
 
-  fs_inode_lock(ip);
+    if ((r = fs_create(path, S_IFREG, 0, &ip)) < 0)
+      goto fail;
+  } else {
+    fs_inode_lock(ip);
+  }
+
   if (S_ISDIR(ip->mode) && (oflag & O_WRONLY)) {
     fs_inode_unlock(ip);
     fs_inode_put(ip);

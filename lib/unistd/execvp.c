@@ -32,7 +32,7 @@ execvp(const char *path, char *const argv[])
     
     strncpy(full, pathenv, len);
     full[len] = '/';
-    strncpy(&full[len + 1], path, pathlen);
+    strncpy(&full[len + 1], path, pathlen + 1);
 
     execv(full, argv);
 

@@ -551,6 +551,8 @@ process_sleep(struct ListLink *q, struct SpinLock *lock)
     spin_unlock(lock);
   }
 
+  // cprintf("[%d sleep on %s]\n", current->pid, lock->name);
+
   list_add_back(q, &current->link);
   process_suspend();
 
