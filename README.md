@@ -84,7 +84,7 @@ To run the kernel, install **qemu-system-arm** and execute `make qemu`.
   * [DS1338 data sheet](https://datasheets.maximintegrated.com/en/ds/DS1338-DS1338Z.pdf)
   * [Using the I2C Bus](https://www.robot-electronics.co.uk/i2c-tutorial)
 * SD card - `kernel/sd.c`
-  * [Physical Layer Simplified Specification](https://www.sdcard.org/downloads/pls/pdf?p=Part1_Physical_Layer_Simplified_Specification_Ver8.00.jpg&f=Part1_Physical_Layer_Simplified_Specification_Ver8.00.pdf&e=EN_SS1_8)
+  * [Physical Layer Simplified Specification](https://www.sdcard.org/downloads/pls/pdf/?p=Part1_Physical_Layer_Simplified_Specification_Ver1.10.jpg&f=Part1_Physical_Layer_Simplified_Specification_Ver1.10.pdf&e=EN_P1110)
   * [ARM PrimeCell Multimedia Card Interface (PL180) Technical Reference Manual](https://developer.arm.com/documentation/ddi0172/a)
 * UART - `kernel/uart.c`
   * [PrimeCell UART (PL011) Technical Reference Manual](https://developer.arm.com/documentation/ddi0183/g/)

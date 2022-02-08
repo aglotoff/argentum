@@ -33,6 +33,7 @@ struct Buf {
   struct ListLink queue_link;       ///< Link into the driver queue
   struct ListLink wait_queue;       ///< Processes waiting for the block data
   struct Mutex    mutex;            ///< Mutex protecting the block data
+  size_t          block_size;       ///< Must be BLOCK_SIZE
   uint8_t         data[BLOCK_SIZE]; ///< Block data
 };
 

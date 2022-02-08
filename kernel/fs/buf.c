@@ -44,10 +44,11 @@ buf_alloc(void)
   if ((buf = (struct Buf *) kobject_alloc(buf_pool)) == NULL)
     return NULL;
 
-  buf->block_no  = 0;
-  buf->dev       = 0;
-  buf->flags     = 0;
-  buf->ref_count = 0;
+  buf->block_no   = 0;
+  buf->dev        = 0;
+  buf->flags      = 0;
+  buf->ref_count  = 0;
+  buf->block_size = BLOCK_SIZE;
   list_init(&buf->wait_queue);
   mutex_init(&buf->mutex, "buf");
 

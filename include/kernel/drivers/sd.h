@@ -7,7 +7,7 @@
 
 struct Buf;
 
-int  sd_init(void);
+void sd_init(void);
 void sd_intr(void);
 void sd_request(struct Buf *);
 
