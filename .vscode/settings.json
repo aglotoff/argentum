@@ -18,6 +18,9 @@
         "tuple": "c",
         "type_traits": "c",
         "utility": "c",
-        "string_view": "c"
+        "string_view": "c",
+        "ext2.h": "c",
+        "buf.h": "c",
+        "fs.h": "c"
     }
 }

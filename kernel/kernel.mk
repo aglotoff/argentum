@@ -19,10 +19,13 @@ KERNEL_SRCFILES :=	\
 	kernel/drivers/gic.c \
 	kernel/drivers/rtc.c \
 	kernel/drivers/sd.c \
+	kernel/fs/block.c \
 	kernel/fs/buf.c \
-	kernel/fs/ext2.c \
-	kernel/fs/fs.c \
+	kernel/fs/dir.c \
 	kernel/fs/file.c \
+	kernel/fs/inode.c \
+	kernel/fs/path.c \
+	kernel/fs/super.c \
 	kernel/mm/page.c \
 	kernel/mm/kobject.c \
 	kernel/mm/vm.c \

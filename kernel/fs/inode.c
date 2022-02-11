@@ -1,130 +1,21 @@
 #include <assert.h>
-#include <dirent.h>
 #include <errno.h>
+#include <fcntl.h>
 #include <limits.h>
 #include <string.h>
 #include <sys/stat.h>
 
 #include <kernel/drivers/console.h>
 #include <kernel/fs/buf.h>
+#include <kernel/fs/ext2.h>
 #include <kernel/fs/fs.h>
 #include <kernel/types.h>
 
-#include <kernel/fs/ext2.h>
+static unsigned ext2_inode_block_map(struct Inode *, unsigned);
 
 /*
  * ----------------------------------------------------------------------------
- * Superblock operations
- * ----------------------------------------------------------------------------
- */
-
-struct Ext2Superblock sb;
-
-void
-ext2_read_superblock(void)
-{
-  struct Buf *buf;
-
-  if ((buf = buf_read(1, 0)) == NULL)
-    panic("cannot read the superblock");
-
-  memcpy(&sb, buf->data, sizeof(sb));
-  buf_release(buf);
-
-  if (sb.log_block_size != 0)
-    panic("block size must be 1024 bytes");
-
-  cprintf("Filesystem size = %dM, inodes_count = %d, block_count = %d\n",
-          sb.block_count * BLOCK_SIZE / (1024 * 1024),
-          sb.inodes_count, sb.block_count);
-}
-
-/*
- * ----------------------------------------------------------------------------
- * Block operations
- * ----------------------------------------------------------------------------
- */
-
-
-
-// Try to allocate a block from the block group descriptor pointed to by `gd`.
-// If there is a free block, mark it as used and store its number into the
-// memory location pointed to by `bstore`. Otherwise, return `-ENOMEM`.
-static int
-ext2_gd_block_alloc(struct Ext2GroupDesc *gd, uint32_t *bstore)
-{
-  uint32_t b, bi;
-
-  if (gd->free_blocks_count == 0)
-    return -ENOMEM;
-
-  for (b = 0; b < sb.blocks_per_group; b += BITS_PER_BLOCK) {
-    struct Buf *buf;
-    uint32_t *map;
-
-    if ((buf = buf_read(gd->block_bitmap + b, 0)) == NULL)
-      panic("cannot read the bitmap block");
-
-    map = (uint32_t *) buf->data;
-
-    for (bi = 0; bi < BITS_PER_BLOCK; bi++) {
-      if (map[bi / 32] & (1 << (bi % 32)))
-        continue;
-
-      map[bi / 32] |= (1 << (bi % 32));  
-      gd->free_blocks_count--;
-
-      buf_write(buf);
-      buf_release(buf);
-
-      *bstore = b + bi;
-
-      return 0;
-    }
-
-    buf_release(buf);
-  }
-
-  // If free_blocks_count isn't zero, but we cannot find a free block, the
-  // filesystem is corrupted.
-  panic("cannot allocate block");
-  return -ENOMEM;
-}
-
-int
-ext2_block_alloc(uint32_t *bstore)
-{
-  struct Buf *buf;
-  struct Ext2GroupDesc *gd;
-  uint32_t gds_per_block, g, gi;
-  uint32_t block;
-
-  // TODO: First try to allocate a new block in the same group as its inode
-  
-  gds_per_block = BLOCK_SIZE / sizeof(struct Ext2GroupDesc);
-
-  for (g = 0; g < sb.block_count / sb.blocks_per_group; g += gds_per_block) {
-    if ((buf = buf_read(2 + (g / gds_per_block), 0)) == NULL)
-      panic("cannot read the group descriptor table");
-
-    for (gi = 0; gi < gds_per_block; gi++) {
-      gd = (struct Ext2GroupDesc *) buf->data + gi;
-      if (ext2_gd_block_alloc(gd, &block) == 0) {
-        buf_release(buf);
-        *bstore = (g + gi) * sb.blocks_per_group + block;
-        return 0;
-      }
-    }
-
-    buf_release(buf);
-  }
-  
-  return -ENOMEM;
-}
-
-/*
- * ----------------------------------------------------------------------------
- * Inode operations
+ * Allocating Inodes
  * ----------------------------------------------------------------------------
  */
 
@@ -132,7 +23,7 @@ ext2_block_alloc(uint32_t *bstore)
 // If there is a free inode, mark it as used and store its number into the
 // memory location pointed to by `istore`. Otherwise, return `-ENOMEM`.
 static int
-ext2_gd_inode_alloc(struct Ext2GroupDesc *gd, uint32_t *istore)
+fs_gd_inode_alloc(struct Ext2GroupDesc *gd, uint32_t *istore)
 {
   uint32_t b, bi;
 
@@ -172,6 +63,16 @@ ext2_gd_inode_alloc(struct Ext2GroupDesc *gd, uint32_t *istore)
   return -ENOMEM;
 }
 
+/**
+ * Allocate an inode.
+ * 
+ * @param dev    The device to allocate inode from.
+ * @param istore Pointer to the memory location where to store the allocated
+ *               inode number.
+ *
+ * @retval 0       Success
+ * @retval -ENOMEM Couldn't find a free inode.
+ */
 int
 ext2_inode_alloc(mode_t mode, uint32_t *istore)
 {
@@ -190,7 +91,7 @@ ext2_inode_alloc(mode_t mode, uint32_t *istore)
 
     for (gi = 0; gi < gds_per_block; gi++) {
       gd = (struct Ext2GroupDesc *) buf->data + gi;
-      if (ext2_gd_inode_alloc(gd, &inum) == 0) {
+      if (fs_gd_inode_alloc(gd, &inum) == 0) {
         unsigned inodes_per_block, itab_idx, inode_block_idx, inode_block;
         struct Ext2Inode *dp;
 
@@ -224,6 +125,87 @@ ext2_inode_alloc(mode_t mode, uint32_t *istore)
   }
   
   return -ENOMEM;
+}
+
+/*
+ * ----------------------------------------------------------------------------
+ * Inode Cache
+ * ----------------------------------------------------------------------------
+ */
+
+static struct {
+  struct Inode    buf[INODE_CACHE_SIZE];
+  struct SpinLock lock;
+  struct ListLink head;
+} inode_cache;
+
+void
+fs_inode_cache_init(void)
+{
+  struct Inode *ip;
+  
+  spin_init(&inode_cache.lock, "inode_cache");
+  list_init(&inode_cache.head);
+
+  for (ip = inode_cache.buf; ip < &inode_cache.buf[INODE_CACHE_SIZE]; ip++) {
+    mutex_init(&ip->mutex, "inode");
+    list_init(&ip->wait_queue);
+
+    list_add_back(&inode_cache.head, &ip->cache_link);
+  }
+}
+
+struct Inode *
+fs_inode_get(ino_t ino, dev_t dev)
+{
+  struct ListLink *l;
+  struct Inode *ip, *empty;
+
+  spin_lock(&inode_cache.lock);
+
+  empty = NULL;
+  LIST_FOREACH(&inode_cache.head, l) {
+    ip = LIST_CONTAINER(l, struct Inode, cache_link);
+    if ((ip->ino == ino) && (ip->dev == dev)) {
+      ip->ref_count++;
+      spin_unlock(&inode_cache.lock);
+
+      return ip;
+    }
+
+    if (ip->ref_count == 0)
+      empty = ip;
+  }
+
+  if (empty != NULL) {
+    empty->ref_count = 1;
+    empty->ino       = ino;
+    empty->dev       = dev;
+    empty->valid     = 0;
+
+    spin_unlock(&inode_cache.lock);
+
+    return empty;
+  }
+
+  spin_unlock(&inode_cache.lock);
+
+  return NULL;
+}
+
+void
+fs_inode_put(struct Inode *ip)
+{   
+  spin_lock(&inode_cache.lock);
+
+  assert(ip->ref_count > 0);
+
+  if (--ip->ref_count == 0) {
+    list_remove(&ip->cache_link);
+    list_add_front(&inode_cache.head, &ip->cache_link);
+  }
+
+  spin_unlock(&inode_cache.lock);
 }
 
 void
@@ -278,58 +260,6 @@ ext2_inode_update(struct Inode *ip)
 
   buf_write(buf);
   buf_release(buf);
-}
-
-#define ADDRS_PER_BLOCK BLOCK_SIZE / sizeof(uint32_t)
-
-unsigned
-ext2_block_map(struct Inode *ip, unsigned block_no)
-{
-  struct Buf *buf;
-  uint32_t addr, *ptr;
-  unsigned bcnt;
-
-  if (block_no < 12) {
-    if ((addr = ip->block[block_no]) == 0) {
-      if (ext2_block_alloc(&addr) != 0)
-        panic("cannot allocate block");
-      ip->block[block_no] = addr;
-    }
-    return addr;
-  }
-
-  block_no -= 12;
-
-  ptr = &ip->block[12];
-  for (bcnt = ADDRS_PER_BLOCK; bcnt <= block_no; bcnt *= ADDRS_PER_BLOCK) {
-    if (++ptr >= &ip->block[15])
-      panic("too large block number (%u)", block_no + 12);
-  }
-
-  if ((addr = *ptr) == 0) {
-    if (ext2_block_alloc(&addr) != 0)
-      panic("cannot allocate block");
-    *ptr = addr;
-  }
-
-  while ((bcnt /= ADDRS_PER_BLOCK) > 0) {
-    if ((buf = buf_read(addr, ip->dev)) == NULL)
-      panic("cannot read the data block");
-
-    ptr = (uint32_t *) buf->data;
-    if ((addr = ptr[block_no / bcnt]) == 0) {
-      if (ext2_block_alloc(&addr) != 0)
-        panic("cannot allocate block");
-      ptr[block_no / bcnt] = addr;
-      buf_write(buf);
-    }
-
-    buf_release(buf);
-
-    block_no %= bcnt;
-  }
-
-  return addr;
 }
 
 void
@@ -388,7 +318,7 @@ ext2_inode_lock(struct Inode *ip)
       ((ip->mode & EXT2_S_IFMASK) == EXT2_S_IFCHR)) {
     uint16_t dev;
 
-    if ((buf = buf_read(ext2_block_map(ip, 0), ip->dev)) == NULL)
+    if ((buf = buf_read(ext2_inode_block_map(ip, 0), ip->dev)) == NULL)
       panic("cannot read the data block");
     dev = *(uint16_t *) buf->data;
     buf_release(buf);
@@ -398,17 +328,139 @@ ext2_inode_lock(struct Inode *ip)
   }
 }
 
+struct Inode *
+fs_inode_alloc(mode_t mode, dev_t dev)
+{
+  struct Inode *ip;
+  uint32_t inum;
+
+  if (ext2_inode_alloc(mode, &inum) < 0)
+    return NULL;
+
+  if ((ip = fs_inode_get(inum, dev)) == NULL)
+    panic("cannot get inode (%u)", inum);
+
+  ip->mode = mode;
+
+  return ip;
+}
+
+void
+fs_inode_update(struct Inode *ip)
+{
+  if (!mutex_holding(&ip->mutex))
+    panic("caller must hold ip");
+
+  ext2_inode_update(ip);
+}
+
+void
+fs_inode_lock(struct Inode *ip)
+{
+  mutex_lock(&ip->mutex);
+
+  if (ip->valid)
+    return;
+
+  ext2_inode_lock(ip);
+
+  if (!ip->mode)
+    panic("no mode");
+
+  ip->valid = 1;
+}
+
+struct Inode *
+fs_inode_dup(struct Inode *ip)
+{
+  spin_lock(&inode_cache.lock);
+  ip->ref_count++;
+  spin_unlock(&inode_cache.lock);
+
+  return ip;
+}
+
+void
+fs_inode_unlock(struct Inode *ip)
+{  
+  if (!mutex_holding(&ip->mutex))
+    panic("not holding buf");
+
+  mutex_unlock(&ip->mutex);
+}
+
+
+/*
+ * ----------------------------------------------------------------------------
+ * Inode Contents
+ * ----------------------------------------------------------------------------
+ */
+
+#define ADDRS_PER_BLOCK BLOCK_SIZE / sizeof(uint32_t)
+
+static unsigned
+ext2_inode_block_map(struct Inode *ip, unsigned block_no)
+{
+  struct Buf *buf;
+  uint32_t addr, *ptr;
+  unsigned bcnt;
+
+  if (block_no < 12) {
+    if ((addr = ip->block[block_no]) == 0) {
+      if (fs_block_alloc(ip->dev, &addr) != 0)
+        panic("cannot allocate block");
+      ip->block[block_no] = addr;
+    }
+    return addr;
+  }
+
+  block_no -= 12;
+
+  ptr = &ip->block[12];
+  for (bcnt = ADDRS_PER_BLOCK; bcnt <= block_no; bcnt *= ADDRS_PER_BLOCK) {
+    if (++ptr >= &ip->block[15])
+      panic("too large block number (%u)", block_no + 12);
+  }
+
+  if ((addr = *ptr) == 0) {
+    if (fs_block_alloc(ip->dev, &addr) != 0)
+      panic("cannot allocate block");
+    *ptr = addr;
+  }
+
+  while ((bcnt /= ADDRS_PER_BLOCK) > 0) {
+    if ((buf = buf_read(addr, ip->dev)) == NULL)
+      panic("cannot read the data block");
+
+    ptr = (uint32_t *) buf->data;
+    if ((addr = ptr[block_no / bcnt]) == 0) {
+      if (fs_block_alloc(ip->dev, &addr) != 0)
+        panic("cannot allocate block");
+      ptr[block_no / bcnt] = addr;
+      buf_write(buf);
+    }
+
+    buf_release(buf);
+
+    block_no %= bcnt;
+  }
+
+  return addr;
+}
+
 ssize_t
 ext2_inode_read(struct Inode *ip, void *buf, size_t nbyte, off_t off)
 {
   struct Buf *b;
+  uint32_t bno;
   size_t total, nread;
   uint8_t *dst;
 
   dst = (uint8_t *) buf;
   total = 0;
   while (total < nbyte) {
-    if ((b = buf_read(ext2_block_map(ip, off / BLOCK_SIZE), ip->dev)) == NULL)
+    bno = ext2_inode_block_map(ip, off / BLOCK_SIZE);
+    if ((b = buf_read(bno, ip->dev)) == NULL)
       panic("cannot read the block");
 
     nread = MIN(BLOCK_SIZE - (size_t) off % BLOCK_SIZE, nbyte - total);
@@ -430,11 +482,13 @@ ext2_inode_write(struct Inode *ip, const void *buf, size_t nbyte, off_t off)
   struct Buf *b;
   size_t total, nwrite;
   const uint8_t *src;
+  uint32_t bno;
 
   src = (const uint8_t *) buf;
   total = 0;
   while (total < nbyte) {
-    if ((b = buf_read(ext2_block_map(ip, off / BLOCK_SIZE), ip->dev)) == NULL)
+    bno = ext2_inode_block_map(ip, off / BLOCK_SIZE);
+    if ((b = buf_read(bno, ip->dev)) == NULL)
       panic("cannot read the block");
 
     nwrite = MIN(BLOCK_SIZE - (size_t) off % BLOCK_SIZE, nbyte - total);
@@ -451,138 +505,140 @@ ext2_inode_write(struct Inode *ip, const void *buf, size_t nbyte, off_t off)
   return total;
 }
 
-#define DE_NAME_OFFSET    offsetof(struct Ext2DirEntry, name)
+ssize_t
+fs_inode_read(struct Inode *ip, void *buf, size_t nbyte, off_t off)
+{
+  if (!mutex_holding(&ip->mutex))
+    panic("not holding ip->mutex");
+
+  if (S_ISCHR(ip->mode) || S_ISBLK(ip->mode)) {
+    ssize_t ret;
+
+    fs_inode_unlock(ip);
+    ret = console_read(buf, nbyte);
+    fs_inode_lock(ip);
+
+    return ret;
+  }
+
+  if ((off > ip->size) || ((off + nbyte) < off))
+    return -1;
+
+  if ((off + nbyte) > ip->size)
+    nbyte = ip->size - off;
+
+  return ext2_inode_read(ip, buf, nbyte, off);
+}
 
 ssize_t
-ext2_dir_read(struct Inode *dir, void *buf, size_t n, off_t *offp)
+fs_inode_write(struct Inode *ip, const void *buf, size_t nbyte, off_t off)
 {
-  struct Ext2DirEntry de;
-  struct dirent *dp;
-  ssize_t nread;
-  off_t off;
+  ssize_t total;
 
-  off = *offp;
+  if (!mutex_holding(&ip->mutex))
+    panic("not holding ip->mutex");
 
-  if (off >= dir->size)
-    return 0;
+  if (S_ISCHR(ip->mode) || S_ISBLK(ip->mode))
+    return console_write(buf, nbyte);
 
-  nread = fs_inode_read(dir, &de, DE_NAME_OFFSET, off);
-  if (nread != DE_NAME_OFFSET)
-    panic("Cannot read directory");
+  if ((off + nbyte) < off)
+    return -1;
 
-  if ((sizeof(struct dirent) + de.name_len) > n)
-    return 0;
+  total = ext2_inode_write(ip, buf, nbyte, off);
 
-  dp = (struct dirent *) buf;
-  dp->d_ino     = de.inode;
-  dp->d_off     = off + de.rec_len;
-  dp->d_reclen  = sizeof(struct dirent) + de.name_len;
-  dp->d_namelen = de.name_len;
-  dp->d_type    = de.file_type;
-
-  nread = fs_inode_read(dir, dp->d_name, dp->d_namelen, off + nread);
-  if (nread != de.name_len)
-    panic("Cannot read directory");
-
-  *offp = off + de.rec_len;
-
-  return dp->d_reclen;
-}
-
-struct Inode *
-ext2_dir_lookup(struct Inode *dir, const char *name)
-{
-  struct Ext2DirEntry de;
-  off_t off;
-  size_t name_len;
-  ssize_t nread;
-
-  name_len = strlen(name);
-
-  for (off = 0; off < dir->size; off += de.rec_len) {
-    nread = fs_inode_read(dir, &de, DE_NAME_OFFSET, off);
-    if (nread != DE_NAME_OFFSET)
-      panic("Cannot read directory");
-
-    nread = fs_inode_read(dir, de.name, de.name_len, off + DE_NAME_OFFSET);
-    if (nread != de.name_len)
-      panic("Cannot read directory");
-
-    if (de.name_len != name_len)
-      continue;
-
-    if (strncmp(de.name, name, de.name_len) == 0)
-      return fs_inode_get(de.inode, 0);
+  if ((total > 0) && ((size_t) off + total > ip->size)) {
+    ip->size = off + total;
+    fs_inode_update(ip);
   }
 
-  return NULL;
+  return total;
 }
+
 
 int
-ext2_dir_link(struct Inode *dir, char *name, unsigned inode, mode_t mode)
+fs_inode_stat(struct Inode *ip, struct stat *buf)
 {
-  struct Ext2DirEntry de, new_de;
-  off_t off;
-  ssize_t name_len, de_len, new_len;
-  uint8_t file_type;
+  if (!mutex_holding(&ip->mutex))
+    panic("caller not holding ip->mutex");
 
-  name_len = strlen(name);
-  if (name_len > NAME_MAX)
-    return -ENAMETOOLONG;
-
-  switch (mode & S_IFMT) {
-  case S_IFREG:
-    file_type = EXT2_FT_REG_FILE; break;
-  case S_IFSOCK:
-    file_type = EXT2_FT_SOCK; break;
-  case S_IFBLK:
-    file_type = EXT2_FT_BLKDEV; break;
-  case S_IFCHR:
-    file_type = EXT2_FT_CHRDEV; break;
-  case S_IFDIR:
-    file_type = EXT2_FT_DIR; break;
-  case S_IFIFO:
-    file_type = EXT2_FT_FIFO; break;
-  case S_IFLNK:
-    file_type = EXT2_FT_SYMLINK; break;
-  default:
-    return -EINVAL;
-  }
-
-  new_len = ROUND_UP(DE_NAME_OFFSET + name_len, sizeof(uint32_t));
-
-  new_de.inode     = inode;
-  new_de.name_len  = name_len;
-  new_de.file_type = file_type;
-  strncpy(new_de.name, name, ROUND_UP(name_len, sizeof(uint32_t)));
-
-  for (off = 0; off < dir->size; off += de.rec_len) {
-    if (ext2_inode_read(dir, &de, DE_NAME_OFFSET, off) != DE_NAME_OFFSET)
-      panic("Cannot read directory");
-
-    de_len = ROUND_UP(DE_NAME_OFFSET + de.name_len, sizeof(uint32_t));
-    if ((de.rec_len - de_len) >= new_len) {
-      // Found enough space
-      new_de.rec_len = de.rec_len - de_len;
-      de.rec_len = de_len;
-      
-      if (ext2_inode_write(dir, &de, DE_NAME_OFFSET, off) != DE_NAME_OFFSET)
-        panic("Cannot write directory");
-      if (ext2_inode_write(dir, &new_de, new_len, off + de_len) != new_len)
-        panic("Cannot write directory");
-
-      return 0;
-    }
-  }
-
-  assert(off % BLOCK_SIZE == 0);
-
-  new_de.rec_len = BLOCK_SIZE;
-  if (ext2_inode_write(dir, &new_de, new_len, off) != new_len)
-    panic("Cannot write directory");
-
-  dir->size = off + BLOCK_SIZE;
-  ext2_inode_update(dir);
+  buf->st_mode  = ip->mode;
+  buf->st_ino   = ip->ino;
+  buf->st_dev   = ip->dev;
+  buf->st_nlink = ip->nlink;
+  buf->st_uid   = ip->uid;
+  buf->st_gid   = ip->gid;
+  buf->st_size  = ip->size;
+  buf->st_atime = ip->atime;
+  buf->st_mtime = ip->mtime;
+  buf->st_ctime = ip->ctime;
 
   return 0;
+}
+
+/*
+ * ----------------------------------------------------------------------------
+ * Inode Cache
+ * ----------------------------------------------------------------------------
+ */
+
+int
+fs_create(const char *path, mode_t mode, dev_t dev, struct Inode **istore)
+{
+  struct Inode *dp, *ip;
+  char name[NAME_MAX + 1];
+  int r;
+
+  if ((r = fs_path_lookup(path, name, 1, &dp)) < 0)
+    return r;
+
+  fs_inode_lock(dp);
+
+  if (fs_dir_lookup(dp, name) != NULL) {
+    r = -EEXISTS;
+    goto out;
+  }
+
+  if ((ip = fs_inode_alloc(mode, dp->dev)) == NULL) {
+    r = -ENOMEM;
+    goto out;
+  }
+
+  fs_inode_lock(ip);
+
+  ip->nlink = 1;
+  fs_inode_update(ip);
+
+  if (S_ISDIR(mode)) {
+    // Create . and .. entries
+    dp->nlink++;
+    fs_inode_update(dp);
+
+    if (fs_dir_link(ip, ".", ip->ino, EXT2_S_IFDIR) < 0)
+      panic("Cannot create .");
+    if (fs_dir_link(ip, "..", dp->ino, EXT2_S_IFDIR) < 0)
+      panic("Cannot create ..");
+  } else if ((S_ISCHR(mode) || S_ISBLK(mode))) {
+    ip->major = (dev >> 8) & 0xFF;
+    ip->minor = dev & 0xFF;
+
+    ext2_inode_write(ip, &dev, sizeof(dev), 0);
+    ip->size = sizeof(dev);
+
+    fs_inode_update(ip);
+  }
+
+  r = fs_dir_link(dp, name, ip->ino, mode);
+
+  if ((r == 0) && istore) {
+    *istore = ip;
+  } else {
+    fs_inode_unlock(ip);
+    fs_inode_put(ip);
+  }
+
+out:
+  fs_inode_unlock(dp);
+  fs_inode_put(dp);
+
+  return r;
 }
