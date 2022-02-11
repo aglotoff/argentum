@@ -64,5 +64,10 @@ ssize_t       fs_inode_getdents(struct Inode *, void *, size_t, off_t *);
 int           fs_inode_stat(struct Inode *, struct stat *);
 int           fs_create(const char *, mode_t, dev_t, struct Inode **);
 void          fs_inode_cache_init(void);
+void          fs_inode_trunc(struct Inode *);
+int           fs_dir_unlink(struct Inode *, char *);
+int           fs_dir_empty(struct Inode *);
+int           fs_unlink(const char *);
+int           fs_rmdir(const char *);
 
 #endif  // !__KERNEL_FS_FS_H__

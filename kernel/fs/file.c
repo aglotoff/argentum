@@ -46,20 +46,26 @@ file_open(const char *path, int oflag, struct File **fstore)
 
   if ((r = fs_name_lookup(path, &ip)) < 0) {
     if ((r != -ENOENT) || !(oflag & O_CREAT))
-      goto fail;
+      goto fail1;
 
     if ((r = fs_create(path, S_IFREG, 0, &ip)) < 0)
-      goto fail;
+      goto fail1;
   } else {
     fs_inode_lock(ip);
   }
 
-  if (S_ISDIR(ip->mode) && (oflag & O_WRONLY)) {
-    fs_inode_unlock(ip);
-    fs_inode_put(ip);
+  if ((oflag & O_CREAT) && (oflag & O_EXCL)) {
+    r = -EEXISTS;
+    goto fail2;
+  }
 
+  if (S_ISDIR(ip->mode) && (oflag & O_WRONLY)) {
     r = -ENOTDIR;
-    goto fail;
+    goto fail2;
+  }
+
+  if ((oflag & O_WRONLY) && (oflag & O_TRUNC)) {
+    fs_inode_trunc(ip);
   }
 
   f->inode = ip;
@@ -71,13 +77,19 @@ file_open(const char *path, int oflag, struct File **fstore)
   if (oflag & O_WRONLY)
     f->writeable = 1;
 
+  if (oflag & O_APPEND)
+    f->offset = ip->size;
+
   f->ref_count++;
 
   *fstore = f;
 
   return 0;
 
-fail:
+fail2:
+  fs_inode_unlock(ip);
+  fs_inode_put(ip);
+fail1:
   kobject_free(file_pool, f);
   return r;
 }

@@ -6,6 +6,8 @@ USER_SRCFILES += \
 	user/bin/echo.c \
 	user/bin/ls.c \
 	user/bin/mkdir.c \
+	user/bin/rm.c \
+	user/bin/rmdir.c \
 	user/bin/sh.c
 
 USER_SRCFILES += \

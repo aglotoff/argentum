@@ -196,9 +196,22 @@ fs_inode_get(ino_t ino, dev_t dev)
 void
 fs_inode_put(struct Inode *ip)
 {   
-  spin_lock(&inode_cache.lock);
+  fs_inode_lock(ip);
 
-  assert(ip->ref_count > 0);
+  if (ip->nlink == 0) {
+    int r;
+
+    spin_lock(&inode_cache.lock);
+    r = ip->ref_count;
+    spin_unlock(&inode_cache.lock);
+
+    if (r == 1)
+      fs_inode_trunc(ip);
+  }
+
+  fs_inode_unlock(ip);
+
+  spin_lock(&inode_cache.lock);
 
   if (--ip->ref_count == 0) {
     list_remove(&ip->cache_link);
@@ -396,59 +409,98 @@ fs_inode_unlock(struct Inode *ip)
  * ----------------------------------------------------------------------------
  */
 
-#define ADDRS_PER_BLOCK BLOCK_SIZE / sizeof(uint32_t)
+#define DIRECT_BLOCKS     12
+#define INDIRECT_BLOCKS   BLOCK_SIZE / sizeof(uint32_t)
 
 static unsigned
 ext2_inode_block_map(struct Inode *ip, unsigned block_no)
 {
   struct Buf *buf;
-  uint32_t addr, *ptr;
-  unsigned bcnt;
+  uint32_t addr, *a;
 
-  if (block_no < 12) {
+  if (block_no < DIRECT_BLOCKS) {
     if ((addr = ip->block[block_no]) == 0) {
       if (fs_block_alloc(ip->dev, &addr) != 0)
-        panic("cannot allocate block");
+        panic("cannot allocate direct block");
       ip->block[block_no] = addr;
+      ip->blocks++;
     }
+
     return addr;
   }
 
-  block_no -= 12;
+  block_no -= DIRECT_BLOCKS;
 
-  ptr = &ip->block[12];
-  for (bcnt = ADDRS_PER_BLOCK; bcnt <= block_no; bcnt *= ADDRS_PER_BLOCK) {
-    if (++ptr >= &ip->block[15])
-      panic("too large block number (%u)", block_no + 12);
-  }
-
-  if ((addr = *ptr) == 0) {
+  if (block_no >= INDIRECT_BLOCKS)
+    panic("not implemented");
+  
+  if ((addr = ip->block[DIRECT_BLOCKS]) == 0) {
     if (fs_block_alloc(ip->dev, &addr) != 0)
-      panic("cannot allocate block");
-    *ptr = addr;
+      panic("cannot allocate indirect block");
+    ip->block[DIRECT_BLOCKS] = addr;
+    ip->blocks++;
   }
 
-  while ((bcnt /= ADDRS_PER_BLOCK) > 0) {
-    if ((buf = buf_read(addr, ip->dev)) == NULL)
-      panic("cannot read the data block");
+  if ((buf = buf_read(addr, ip->dev)) == NULL)
+    panic("cannot read the block");
 
-    ptr = (uint32_t *) buf->data;
-    if ((addr = ptr[block_no / bcnt]) == 0) {
-      if (fs_block_alloc(ip->dev, &addr) != 0)
-        panic("cannot allocate block");
-      ptr[block_no / bcnt] = addr;
-      buf_write(buf);
-    }
-
-    buf_release(buf);
-
-    block_no %= bcnt;
+  a = (uint32_t *) buf->data;
+  if ((addr = a[block_no]) == 0) {
+    if (fs_block_alloc(ip->dev, &addr) != 0)
+      panic("cannot allocate indirect block");
+    a[block_no] = addr;
+    ip->blocks++;
   }
+
+  buf_write(buf);
+  buf_release(buf);
 
   return addr;
 }
 
-ssize_t
+static void
+ext2_inode_trunc(struct Inode *ip)
+{
+  struct Buf *buf;
+  uint32_t *a, i;
+
+  for (i = 0; i < DIRECT_BLOCKS; i++) {
+    if (ip->block[i] == 0) {
+      assert(ip->blocks == 0);
+      return;
+    }
+
+    fs_block_free(ip->dev, ip->block[i]);
+    ip->block[i] = 0;
+    ip->blocks--;
+  }
+
+  if (ip->block[DIRECT_BLOCKS] == 0)
+    return;
+  
+  buf = buf_read(ip->block[DIRECT_BLOCKS], ip->dev);
+  a = (uint32_t *) buf->data;
+
+  for (i = 0; i < INDIRECT_BLOCKS; i++) {
+    if (a[i] == 0)
+      break;
+    
+    fs_block_free(ip->dev, a[i]);
+    a[i] = 0;
+    ip->blocks--;
+  }
+
+  buf_write(buf);
+  buf_release(buf);
+
+  fs_block_free(ip->dev, ip->block[DIRECT_BLOCKS]);
+  ip->block[DIRECT_BLOCKS] = 0;
+  ip->blocks--;
+
+  assert(ip->blocks == 0);
+}
+
+static ssize_t
 ext2_inode_read(struct Inode *ip, void *buf, size_t nbyte, off_t off)
 {
   struct Buf *b;
@@ -476,7 +528,7 @@ ext2_inode_read(struct Inode *ip, void *buf, size_t nbyte, off_t off)
   return total;
 }
 
-ssize_t
+static ssize_t
 ext2_inode_write(struct Inode *ip, const void *buf, size_t nbyte, off_t off)
 {
   struct Buf *b;
@@ -554,7 +606,6 @@ fs_inode_write(struct Inode *ip, const void *buf, size_t nbyte, off_t off)
   return total;
 }
 
-
 int
 fs_inode_stat(struct Inode *ip, struct stat *buf)
 {
@@ -575,11 +626,17 @@ fs_inode_stat(struct Inode *ip, struct stat *buf)
   return 0;
 }
 
-/*
- * ----------------------------------------------------------------------------
- * Inode Cache
- * ----------------------------------------------------------------------------
- */
+void
+fs_inode_trunc(struct Inode *ip)
+{
+  if (!mutex_holding(&ip->mutex))
+    panic("not holding");
+
+  ext2_inode_trunc(ip);
+  ip->size = 0;
+  fs_inode_update(ip);
+}
+
 
 int
 fs_create(const char *path, mode_t mode, dev_t dev, struct Inode **istore)
@@ -610,13 +667,15 @@ fs_create(const char *path, mode_t mode, dev_t dev, struct Inode **istore)
 
   if (S_ISDIR(mode)) {
     // Create . and .. entries
-    dp->nlink++;
-    fs_inode_update(dp);
-
     if (fs_dir_link(ip, ".", ip->ino, EXT2_S_IFDIR) < 0)
       panic("Cannot create .");
+    ip->nlink++;
+    fs_inode_update(ip);
+
     if (fs_dir_link(ip, "..", dp->ino, EXT2_S_IFDIR) < 0)
       panic("Cannot create ..");
+    dp->nlink++;
+    fs_inode_update(dp);
   } else if ((S_ISCHR(mode) || S_ISBLK(mode))) {
     ip->major = (dev >> 8) & 0xFF;
     ip->minor = dev & 0xFF;
@@ -639,6 +698,99 @@ fs_create(const char *path, mode_t mode, dev_t dev, struct Inode **istore)
 out:
   fs_inode_unlock(dp);
   fs_inode_put(dp);
+
+  return r;
+}
+
+int
+fs_unlink(const char *path)
+{
+  struct Inode *dir, *ip;
+  char name[NAME_MAX + 1];
+  int r;
+
+  if ((r = fs_path_lookup(path, name, 1, &dir)) < 0)
+    return r;
+
+  fs_inode_lock(dir);
+
+  if ((ip = fs_dir_lookup(dir, name)) == NULL) {
+    r = -ENOENT;
+    goto out1;
+  }
+
+  fs_inode_lock(ip);
+
+  if (S_ISDIR(ip->mode)) {
+    r = -EISDIR;
+    goto out2;
+  }
+  
+  if ((r = fs_dir_unlink(dir, name)) < 0)
+    goto out2;
+
+  ip->nlink--;
+  fs_inode_update(ip);
+
+out2:
+  fs_inode_unlock(ip);
+  fs_inode_put(ip);
+
+out1:
+  fs_inode_unlock(dir);
+  fs_inode_put(dir);
+
+  return r;
+}
+
+int
+fs_rmdir(const char *path)
+{
+  struct Inode *dir, *ip;
+  char name[NAME_MAX + 1];
+  int r;
+
+  if ((r = fs_path_lookup(path, name, 1, &dir)) < 0)
+    return r;
+
+  fs_inode_lock(dir);
+
+  if ((ip = fs_dir_lookup(dir, name)) == NULL) {
+    r = -ENOENT;
+    goto out1;
+  }
+
+  fs_inode_lock(ip);
+
+  if (!S_ISDIR(ip->mode)) {
+    r = -ENOTDIR;
+    goto out2;
+  }
+
+  if (!fs_dir_empty(ip)) {
+    r = -ENOTEMPTY;
+    goto out2;
+  }
+
+  if ((r = fs_dir_unlink(dir, name)) < 0)
+    goto out2;
+
+  assert(ip->nlink >= 2);
+
+  ip->nlink--;
+  ip->nlink--;
+  fs_inode_update(ip);
+
+  dir->nlink--;
+  fs_inode_update(dir);
+
+out2:
+  fs_inode_unlock(ip);
+  fs_inode_put(ip);
+
+out1:
+  fs_inode_unlock(dir);
+  fs_inode_put(dir);
 
   return r;
 }

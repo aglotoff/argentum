@@ -80,8 +80,14 @@ qemu: $(KERNEL) $(OBJ)/fs.img
 qemu-gdb: $(KERNEL) $(OBJ)/fs.img
 	$(QEMU) $(QEMUOPTS) -s -S
 
+sysroot:
+	@mkdir -p $(SYSROOT)
+	@cp -R include $(SYSROOT)
+	@cp -R $(OBJ)/lib $(SYSROOT)
+
 clean:
 	rm -rf $(OBJ) $(SYSROOT)
 
 .PRECIOUS: $(OBJ)/user/%.o
-.PHONY: all lib qemu clean
+.PHONY: all lib qemu clean sysroot
+

@@ -18,6 +18,8 @@ int     execve(const char *, char *const[], char *const[]);
 int     execvp(const char *, char *const[]);
 
 int     chdir(const char *);
+int     unlink(const char *);
+int     rmdir(const char *);
 
 int     close(int);
 ssize_t read(int, void *, size_t);

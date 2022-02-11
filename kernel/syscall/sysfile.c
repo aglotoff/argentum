@@ -130,6 +130,30 @@ sys_mknod(void)
 }
 
 int32_t
+sys_unlink(void)
+{
+  const char *path;
+  int r;
+
+  if ((r = sys_arg_str(0, &path, VM_U)) < 0)
+    return r;
+
+  return fs_unlink(path);
+}
+
+int32_t
+sys_rmdir(void)
+{
+  const char *path;
+  int r;
+
+  if ((r = sys_arg_str(0, &path, VM_U)) < 0)
+    return r;
+
+  return fs_rmdir(path);
+}
+
+int32_t
 sys_stat(void)
 {
   struct File *f;

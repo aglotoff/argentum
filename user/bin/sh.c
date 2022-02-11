@@ -245,8 +245,15 @@ get_token(char *s, char **p, char **ep)
   case '&':
   case ';':
   case '<':
-  case '>':
     ret = *s++;
+    break;
+  case '>':
+    if (*++s == '>') {
+      ret = '+';
+      s++;
+    } else {
+      ret = '>';
+    }
     break;
   default:
     ret = 'a';
@@ -279,7 +286,11 @@ cmd_parse_redir(struct Cmd *cmd, char *s, char **ep)
       break;
     case '>':
       rcmd->fd = 1;
-      rcmd->oflag = O_WRONLY | O_CREAT;
+      rcmd->oflag = O_WRONLY | O_CREAT | O_TRUNC;
+      break;
+    case '+':
+      rcmd->fd = 1;
+      rcmd->oflag = O_WRONLY | O_CREAT | O_APPEND;
       break;
     }
 

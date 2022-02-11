@@ -129,8 +129,10 @@ LIB_SRCFILES += \
 	lib/unistd/getpid.c \
 	lib/unistd/getppid.c \
 	lib/unistd/read.c \
+	lib/unistd/rmdir.c \
 	lib/unistd/sbrk.c \
-	lib/unistd/write.c
+	lib/unistd/write.c \
+	lib/unistd/unlink.c
 
 LIB_OBJFILES := $(patsubst %.c, $(OBJ)/%.o, $(LIB_SRCFILES))
 LIB_OBJFILES := $(patsubst %.S, $(OBJ)/%.o, $(LIB_OBJFILES))
@@ -138,7 +140,9 @@ LIB_OBJFILES := $(patsubst %.S, $(OBJ)/%.o, $(LIB_OBJFILES))
 CRT_SRCFILES := \
 	lib/crt0.S \
 	lib/crti.S \
-	lib/crtn.S
+	lib/crtn.S \
+	lib/crtbegin.S \
+	lib/crtend.S
 
 CRT_OBJFILES := $(patsubst %.S, $(OBJ)/%.o, $(CRT_SRCFILES))
 

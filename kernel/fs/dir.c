@@ -63,6 +63,9 @@ ext2_dir_lookup(struct Inode *dir, const char *name)
     if (nread != DE_NAME_OFFSET)
       panic("Cannot read directory");
 
+    if (de.inode == 0)
+      continue;
+
     nread = fs_inode_read(dir, de.name, de.name_len, off + DE_NAME_OFFSET);
     if (nread != de.name_len)
       panic("Cannot read directory");
@@ -77,7 +80,37 @@ ext2_dir_lookup(struct Inode *dir, const char *name)
   return NULL;
 }
 
-int
+static int
+ext2_dir_empty(struct Inode *dir)
+{
+  struct Ext2DirEntry de;
+  off_t off;
+  ssize_t nread;
+
+  for (off = 0; off < dir->size; off += de.rec_len) {
+    nread = fs_inode_read(dir, &de, DE_NAME_OFFSET, off);
+    if (nread != DE_NAME_OFFSET)
+      panic("Cannot read directory");
+
+    if (de.inode == 0)
+      continue;
+
+    nread = fs_inode_read(dir, de.name, de.name_len, off + DE_NAME_OFFSET);
+    if (nread != de.name_len)
+      panic("Cannot read directory");
+
+    if ((de.name_len == 1) && (strncmp(de.name, ".", de.name_len) == 0))
+      continue;
+    if ((de.name_len == 2) && (strncmp(de.name, "..", de.name_len) == 0))
+      continue;
+
+    return 0;
+  }
+
+  return 1;
+}
+
+static int
 ext2_dir_link(struct Inode *dir, char *name, unsigned inode, mode_t mode)
 {
   struct Ext2DirEntry de, new_de;
@@ -119,7 +152,18 @@ ext2_dir_link(struct Inode *dir, char *name, unsigned inode, mode_t mode)
     if (fs_inode_read(dir, &de, DE_NAME_OFFSET, off) != DE_NAME_OFFSET)
       panic("Cannot read directory");
 
+    if (de.inode == 0) {
+      if (de.rec_len < new_len)
+        continue;
+      
+      // Reuse an empty entry
+      new_de.rec_len = de.rec_len;
+      if (fs_inode_write(dir, &new_de, new_len, off) != new_len)
+        panic("Cannot write directory");
+    }
+
     de_len = ROUND_UP(DE_NAME_OFFSET + de.name_len, sizeof(uint32_t));
+
     if ((de.rec_len - de_len) >= new_len) {
       // Found enough space
       new_de.rec_len = de.rec_len - de_len;
@@ -143,6 +187,69 @@ ext2_dir_link(struct Inode *dir, char *name, unsigned inode, mode_t mode)
     panic("Cannot write directory");
 
   return 0;
+}
+
+int
+ext2_dir_unlink(struct Inode *dir, char *name)
+{
+  struct Ext2DirEntry de;
+  off_t off, prev_off;
+  size_t name_len, rec_len;
+  ssize_t nread, nwrite;
+
+  if ((strcmp(name, ".") == 0) || (strcmp(name, "..") == 0))
+    return -EBUSY;
+
+  name_len = strlen(name);
+
+  for (prev_off = off = 0; off < dir->size; prev_off = off, off += de.rec_len) {
+    nread = fs_inode_read(dir, &de, DE_NAME_OFFSET, off);
+    if (nread != DE_NAME_OFFSET)
+      panic("Cannot read directory");
+
+    nread = fs_inode_read(dir, de.name, de.name_len, off + DE_NAME_OFFSET);
+    if (nread != de.name_len)
+      panic("Cannot read directory");
+
+    if (de.name_len != name_len)
+      continue;
+
+    if (strncmp(de.name, name, de.name_len) == 0) {
+      memset(de.name, 0, name_len);
+      de.name_len  = 0;
+      de.file_type = 0;
+      de.inode     = 0;
+
+      if (prev_off == off) {
+        // Removed the first entry - create an unused entry
+        nwrite = fs_inode_write(dir, de.name, DE_NAME_OFFSET + name_len, off);
+        if (nwrite != (ssize_t) (DE_NAME_OFFSET + name_len))
+          panic("Cannot write directory");
+      } else {
+        rec_len = de.rec_len;
+        de.rec_len = 0;
+
+        nwrite = fs_inode_write(dir, de.name, DE_NAME_OFFSET + name_len, off);
+        if (nwrite != (ssize_t) (DE_NAME_OFFSET + name_len))
+          panic("Cannot write directory");
+
+        // Update the previous entry
+        nread = fs_inode_read(dir, &de, DE_NAME_OFFSET, prev_off);
+        if (nread != DE_NAME_OFFSET)
+          panic("Cannot read directory");
+        
+        de.rec_len += rec_len;
+
+        nwrite = fs_inode_write(dir, &de, DE_NAME_OFFSET, prev_off);
+        if (nwrite != DE_NAME_OFFSET)
+          panic("Cannot write directory");
+      }
+
+      return 0;
+    }
+  }
+
+  return -ENOENT;
 }
 
 struct Inode *
@@ -170,6 +277,18 @@ fs_dir_link(struct Inode *dir, char *name, unsigned num, mode_t mode)
   }
 
   return ext2_dir_link(dir, name, num, mode);
+}
+
+int
+fs_dir_unlink(struct Inode *dir, char *name)
+{
+  return ext2_dir_unlink(dir, name);
+}
+
+int
+fs_dir_empty(struct Inode *dir)
+{
+  return ext2_dir_empty(dir);
 }
 
 ssize_t

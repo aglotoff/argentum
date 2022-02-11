@@ -42,12 +42,13 @@ extern int errno;
 #define ENOTEMPTY     28    ///< Directory not empty
 #define ENOTTY        29    ///< Inappropriate I/O control operation
 #define ENXIO         30    ///< No such device or address
-#define EPERM         31    ///< Operation not permitted
-#define EPIPE         32    ///< Broken pipe
-#define ERANGE        33    ///< Result too large
-#define EROFS         34    ///< Read-only file system
-#define ESPIPE        35    ///< Invalid seek
-#define ESRCH         36    ///< No such process
-#define EXDEV         37    ///< Improper link
+#define EOPNOTSUPP    31
+#define EPERM         32    ///< Operation not permitted
+#define EPIPE         33    ///< Broken pipe
+#define ERANGE        34    ///< Result too large
+#define EROFS         35    ///< Read-only file system
+#define ESPIPE        36    ///< Invalid seek
+#define ESRCH         37    ///< No such process
+#define EXDEV         38    ///< Improper link
 
 #endif  // !__ERRNO_H__

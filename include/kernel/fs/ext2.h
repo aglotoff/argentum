@@ -125,10 +125,7 @@ void          ext2_read_superblock(void);
 int           ext2_inode_alloc(mode_t, uint32_t *);
 void          ext2_inode_update(struct Inode *);
 void          ext2_inode_lock(struct Inode *);
-ssize_t       ext2_inode_read(struct Inode *, void *, size_t, off_t);
-ssize_t       ext2_inode_write(struct Inode *, const void *, size_t, off_t);
 ssize_t       ext2_dir_read(struct Inode *, void *, size_t, off_t *);
 struct Inode *ext2_dir_lookup(struct Inode *, const char *);
-int           ext2_dir_link(struct Inode *, char *, unsigned, mode_t);
 
 #endif  // !__KERNEL_FS_EXT2_H__

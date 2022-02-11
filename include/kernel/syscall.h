@@ -31,6 +31,8 @@ int32_t sys_exec(void);
 int32_t sys_open(void);
 int32_t sys_chdir(void);
 int32_t sys_getdents(void);
+int32_t sys_unlink(void);
+int32_t sys_rmdir(void);
 int32_t sys_stat(void);
 int32_t sys_close(void);
 int32_t sys_sbrk(void);
