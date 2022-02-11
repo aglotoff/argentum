@@ -1,10 +1,6 @@
 USER_CFLAGS  := $(CFLAGS) -Wno-return-local-addr
 USER_LDFLAGS := $(LDFLAGS) -T user/user.ld -nostdlib
 
-USER_SRCFILES := \
-	user/hello.c \
-	user/init.c
-
 USER_SRCFILES += \
   user/bin/cat.c \
 	user/bin/echo.c \
