@@ -1,6 +1,11 @@
 USER_CFLAGS  := $(CFLAGS) -Wno-return-local-addr
 USER_LDFLAGS := $(LDFLAGS) -T user/user.ld -nostdlib
 
+USER_SRCFILES :=
+
+USER_SRCFILES += \
+	user/hello.c
+
 USER_SRCFILES += \
   user/bin/cat.c \
 	user/bin/echo.c \
@@ -41,6 +46,6 @@ $(OBJ)/user/%: $(OBJ)/user/%.o $(OBJ)/lib/crt0.o $(OBJ)/lib/crti.o \
 	@echo "+ LD  $@"
 	@mkdir -p $(@D)
 	$(V)$(LD) -o $@ $(USER_LDFLAGS) $(OBJ)/lib/crt0.o $(OBJ)/lib/crti.o $@.o \
-		$(OBJ)/lib/crtn.o -L$(OBJ)/lib -lc $(LIBGCC)
+		$(OBJ)/lib/crtn.o -L$(OBJ)/lib -L$(dir $(LIBGCC)) -lc -lgcc
 	$(V)$(OBJDUMP) -S $@ > $@.asm
 	$(V)$(NM) -n $@ > $@.sym

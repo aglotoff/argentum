@@ -7,8 +7,27 @@
  */
   .globl context_switch
 context_switch:
-  stmdb sp!, {r4-r11,lr}    // Save old callee-saved registers
-  str   sp, [r0]            // Save old stack pointer
-  mov   sp, r1              // Load new stack pointer
-  ldmia sp!, {r4-r11,lr}    // Load new calee-saved registers
-  bx    lr                  // Return
+  // Save old callee-saved registers
+  stmdb   sp!, {r4-r11,lr}
+
+  // Save old FPU registers
+  vmrs    r4, fpscr
+  stmdb   sp!, {r4}
+  vstmdb  sp!, {s0-s31}
+
+  // Save old stack pointer
+  str     sp, [r0]
+
+  // Load new stack pointer
+  mov     sp, r1              
+
+  // Load new FPU registers
+  vldmia  sp!, {s0-s31}
+  ldmia   sp!, {r4}
+  vmsr    fpscr, r4
+
+  // Load new calee-saved registers
+  ldmia   sp!, {r4-r11,lr}
+
+  // Switch to the new task
+  bx      lr                  

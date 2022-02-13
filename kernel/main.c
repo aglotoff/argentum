@@ -49,7 +49,7 @@ main(void)
   process_init();       // Process table
 
   // Unblock other CPUs
-  bsp_started = 1;       
+  bsp_started = 1;    
 
   cprintf("Starting CPU %d\n", cpu_id());
   scheduler();   

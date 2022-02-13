@@ -33,6 +33,7 @@ CFLAGS := -ffreestanding -nostdlib -fno-builtin -nostdinc -I$(TOP)/include
 CFLAGS += -Wall -Wextra -Werror  -Wno-address-of-packed-member
 CFLAGS += --std=gnu11
 CFLAGS += -O1 -mcpu=cortex-a9 -mapcs-frame -fno-omit-frame-pointer
+CFLAGS += -mhard-float -mfpu=vfp
 CFLAGS += -gdwarf-3
 
 # Common linker flags

@@ -28,6 +28,8 @@ enum {
  * Saved registers for kernel context swithces.
  */
 struct Context {
+  uint32_t fpscr;
+  uint32_t d[32];
   uint32_t r4;
   uint32_t r5;
   uint32_t r6;

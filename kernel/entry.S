@@ -44,6 +44,12 @@ _start:
 
   .globl  entry
 entry:
+  ldr  r0, =(0xF << 20)
+  mcr  p15, 0, r0, c1, c0, 2
+
+  mov  r3, #0x40000000 
+  vmsr fpexc, r3
+
   // Load the physical address of the initial translation table
   ldr   r2, =RELOC(entry_trtab)
   mcr   p15, 0, r2, c2, c0, 0

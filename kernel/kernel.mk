@@ -34,6 +34,7 @@ KERNEL_SRCFILES :=	\
 	kernel/syscall/sysproc.c \
 	kernel/context.S \
 	kernel/cpu.c \
+	kernel/exec.c \
 	kernel/kdebug.c \
 	kernel/monitor.c \
 	kernel/process.c \
