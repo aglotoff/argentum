@@ -2,6 +2,7 @@
 #include <string.h>
 #include <sys/stat.h>
 
+#include <kernel/drivers/console.h>
 #include <kernel/elf.h>
 #include <kernel/fs/fs.h>
 #include <kernel/mm/memlayout.h>
@@ -111,7 +112,8 @@ process_exec(const char *path, char *const argv[], char *const envp[])
       goto out2;
     }
 
-    if ((r = vm_alloc_region(trtab, (void *) ph.vaddr, ph.memsz) < 0))
+    if ((r = vm_alloc_region(trtab, (void *) ph.vaddr, ph.memsz,
+                             VM_READ | VM_WRITE | VM_EXEC | VM_USER) < 0))
       goto out2;
 
     if ((r = vm_load(trtab, (void *) ph.vaddr, ip, ph.filesz, ph.offset)) < 0)
@@ -121,7 +123,8 @@ process_exec(const char *path, char *const argv[], char *const envp[])
   }
 
   // Allocate user stack.
-  if ((r = vm_alloc_region(trtab, (void *) ustack, USTACK_SIZE)) < 0)
+  if ((r = vm_alloc_region(trtab, (void *) ustack, USTACK_SIZE,
+                           VM_READ | VM_WRITE | VM_USER)) < 0)
     return r;
 
   // Copy args and environment.
@@ -143,11 +146,11 @@ process_exec(const char *path, char *const argv[], char *const envp[])
   proc = my_process();
 
   vm_switch_user(trtab);
-  vm_free(proc->trtab);
+  vm_free(proc->vm.trtab);
 
-  proc->trtab  = trtab;
-  proc->heap   = heap;
-  proc->ustack = ustack;
+  proc->vm.trtab = trtab;
+  proc->vm.heap  = heap;
+  proc->vm.stack = ustack;
 
   // Stack must be aligned to an 8-byte boundary in order for variadic args
   // to properly work!

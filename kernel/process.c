@@ -137,7 +137,7 @@ process_setup_vm(struct Process *p)
   if ((trtab_page = page_alloc_block(1, PAGE_ALLOC_ZERO)) == NULL)
     return -ENOMEM;
 
-  p->trtab = (tte_t *) page2kva(trtab_page);
+  p->vm.trtab = (tte_t *) page2kva(trtab_page);
   trtab_page->ref_count++;
 
   return 0;
@@ -147,39 +147,13 @@ static int
 process_load_binary(struct Process *proc, const void *binary)
 {
   Elf32_Ehdr *elf;
-  Elf32_Phdr *ph, *eph;
   int r;
-  
+
   elf = (Elf32_Ehdr *) binary;
   if (memcmp(elf->ident, "\x7f""ELF", 4) != 0)
     return -EINVAL;
 
-  ph = (Elf32_Phdr *) ((uint8_t *) elf + elf->phoff);
-  eph = ph + elf->phnum;
-
-  proc->heap   = 0;
-  proc->ustack = USTACK_TOP - USTACK_SIZE;
-
-  for ( ; ph < eph; ph++) {
-    if (ph->type != PT_LOAD)
-      continue;
-
-    if (ph->filesz > ph->memsz)
-      return -EINVAL;
-    
-    if ((r = vm_alloc_region(proc->trtab, (void *) ph->vaddr, ph->memsz) < 0))
-      return r;
-
-    if ((r = vm_copy_out(proc->trtab, (void *) ph->vaddr, binary + ph->offset,
-                         ph->filesz)) < 0)
-      return r;
-
-    proc->heap = MAX(proc->heap, ph->vaddr + ph->memsz);
-  }
-
-  // Allocate user stack.
-  if ((r = vm_alloc_region(proc->trtab, (void *) (proc->ustack),
-                           USTACK_SIZE)) < 0)
+  if ((r = vm_load_binary(&proc->vm, elf)) != 0)
     return r;
 
   proc->tf->r0     = 0;                   // argc
@@ -222,7 +196,7 @@ process_create(const void *binary, struct Process **pstore)
   return 0;
 
 fail3:
-  vm_free(proc->trtab);
+  vm_free(proc->vm.trtab);
 fail2:
   process_free(proc);
 fail1:
@@ -275,7 +249,7 @@ process_destroy(int status)
   struct Process *child, *current = my_process();
   int fd;
 
-  vm_free(current->trtab);
+  vm_free(current->vm.trtab);
 
   for (fd = 0; fd < OPEN_MAX; fd++)
     if (current->files[fd])
@@ -321,13 +295,13 @@ process_copy(void)
   if ((child = process_alloc()) == NULL)
     return -ENOMEM;
 
-  if ((child->trtab = vm_copy(parent->trtab)) == NULL) {
+  if ((child->vm.trtab = vm_copy(parent->vm.trtab)) == NULL) {
     process_free(child);
     return -ENOMEM;
   }
 
-  child->heap   = parent->heap;
-  child->ustack = parent->ustack;
+  child->vm.heap  = parent->vm.heap;
+  child->vm.stack = parent->vm.stack;
   child->parent = parent;
   *child->tf    = *parent->tf;
   child->tf->r0 = 0;
@@ -383,7 +357,7 @@ scheduler(void)
       next->state = PROCESS_RUNNING;
       my_cpu()->process = next;
 
-      vm_switch_user(next->trtab);
+      vm_switch_user(next->vm.trtab);
 
       context_switch(&my_cpu()->scheduler, next->context);
     }
@@ -611,28 +585,26 @@ process_grow(ptrdiff_t increment)
   struct Process *current = my_process();
   uintptr_t o, n;
 
-  o = ROUND_UP(current->heap, sizeof(uintptr_t));
+  o = ROUND_UP(current->vm.heap, sizeof(uintptr_t));
   n = ROUND_UP(o + increment, sizeof(uintptr_t));
 
   if (increment > 0) {
-    if ((n < o) || (n > (current->ustack + PAGE_SIZE)))
+    if ((n < o) || (n > (current->vm.stack + PAGE_SIZE)))
       // Overflow
       return (void *) -1;
-    if (vm_alloc_region(current->trtab, (void *) ROUND_UP(o, PAGE_SIZE),
-                        ROUND_UP(n, PAGE_SIZE) - ROUND_UP(o, PAGE_SIZE)) != 0)
+    if (vm_alloc_region(current->vm.trtab, (void *) ROUND_UP(o, PAGE_SIZE),
+                        ROUND_UP(n, PAGE_SIZE) - ROUND_UP(o, PAGE_SIZE),
+                        VM_READ | VM_WRITE | VM_USER) != 0)
       return (void *) -1;
   } else if (increment < 0) {
     if (n > o)
       // Overflow
       return (void *) -1;
-    if (vm_dealloc_region(current->trtab, (void *) ROUND_UP(n, PAGE_SIZE),
-                          ROUND_UP(o, PAGE_SIZE) - ROUND_UP(n, PAGE_SIZE)) != 0)
-      return (void *) -1;
+    vm_dealloc_region(current->vm.trtab, (void *) ROUND_UP(n, PAGE_SIZE),
+                          ROUND_UP(o, PAGE_SIZE) - ROUND_UP(n, PAGE_SIZE));
   }
 
-  current->heap = n;
-
-  vm_switch_user(current->trtab);
+  current->vm.heap = n;
 
   return (void *) o;
 }

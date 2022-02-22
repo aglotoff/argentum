@@ -19,7 +19,7 @@ sys_exec(void)
   char **argv, **envp;
   int r;
 
-  if ((r = sys_arg_str(0, &path, VM_U)) < 0)
+  if ((r = sys_arg_str(0, &path, VM_READ)) < 0)
     return r;
   if ((r = sys_arg_args(1, &argv)) < 0)
     return r;
@@ -39,7 +39,7 @@ sys_wait(void)
   if ((r = sys_arg_int(0, &pid)) < 0)
     return r;
 
-  if ((r = sys_arg_buf(1, (void **) &stat_loc, sizeof(int), VM_U | VM_W)) < 0)
+  if ((r = sys_arg_buf(1, (void **) &stat_loc, sizeof(int), VM_WRITE)) < 0)
     return r;
 
   return process_wait(pid, stat_loc, 0);

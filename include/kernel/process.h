@@ -9,7 +9,7 @@
 #include <sys/types.h>
 
 #include <kernel/list.h>
-#include <kernel/mm/mmu.h>
+#include <kernel/mm/vm.h>
 #include <kernel/trap.h>
 
 struct File;
@@ -55,9 +55,7 @@ struct Process {
   struct ListLink   children;   ///< List pf process children
   struct ListLink   sibling;    ///< Link into the siblings list
 
-  tte_t            *trtab;      ///< Translation table
-  uintptr_t         heap;       ///< Process heap end
-  uintptr_t         ustack;     ///< Process user stack bottom
+  struct UserVm     vm;
 
   uint8_t          *kstack;     ///< Bottom of process kernel stack
   struct Trapframe *tf;         ///< Trap frame for current exception

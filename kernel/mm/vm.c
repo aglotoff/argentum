@@ -12,7 +12,13 @@
 #include <kernel/mm/vm.h>
 
 static pte_t *vm_walk_trtab(tte_t *, uintptr_t, int);
-static void   vm_map_region(tte_t *, uintptr_t, uint32_t, size_t, int, int);
+static void   vm_init_map(tte_t *, uintptr_t, uint32_t, size_t, int);
+
+/*
+ * ----------------------------------------------------------------------------
+ * Translation Table Initializaion
+ * ----------------------------------------------------------------------------
+ */
 
 // Master kernel translation table.
 static tte_t *kern_trtab;
@@ -22,42 +28,28 @@ vm_init(void)
 {
   extern uint8_t _start[];
 
-  struct PageInfo *p;
+  struct PageInfo *page;
 
-  // Create the master translation table
-  if ((p = page_alloc_block(2, PAGE_ALLOC_ZERO)) == NULL)
+  // Allocate the master translation table
+  if ((page = page_alloc_block(2, PAGE_ALLOC_ZERO)) == NULL)
     panic("out of memory");
 
-  kern_trtab = (tte_t *) page2kva(p);
+  kern_trtab = (tte_t *) page2kva(page);
 
   // Map all physical memory at KERNEL_BASE
   // Permissions: kernel RW, user NONE
-  vm_map_region(kern_trtab, KERNEL_BASE, 0, PHYS_TOP, VM_P | VM_W, 0);
+  vm_init_map(kern_trtab, KERNEL_BASE, 0, PHYS_TOP, VM_READ | VM_WRITE);
 
   // Map all devices 
-  vm_map_region(kern_trtab, KERNEL_BASE + PHYS_TOP, PHYS_TOP,
-                VECTORS_BASE - KERNEL_BASE - PHYS_TOP, VM_P | VM_W, 1);
+  vm_init_map(kern_trtab, KERNEL_BASE + PHYS_TOP, PHYS_TOP,
+              VECTORS_BASE - KERNEL_BASE - PHYS_TOP,
+              VM_READ | VM_WRITE | VM_NOCACHE);
 
   // Map exception vectors at VECTORS_BASE
   // Permissions: kernel R, user NONE
-  vm_map_region(kern_trtab, VECTORS_BASE, (uint32_t) _start,
-                PAGE_SIZE, VM_P, 0);
+  vm_init_map(kern_trtab, VECTORS_BASE, (uint32_t) _start, PAGE_SIZE, VM_READ);
 
   vm_init_percpu();
-}
-
-void
-vm_switch_user(tte_t *trtab)
-{
-  write_ttbr0(PADDR(trtab));
-  tlbiall();
-}
-
-void
-vm_switch_kernel(void)
-{
-  write_ttbr0(PADDR(kern_trtab));
-  tlbiall();
 }
 
 void
@@ -74,6 +66,64 @@ vm_init_percpu(void)
   tlbiall();
 }
 
+/*
+ * ----------------------------------------------------------------------------
+ * Low-Level Operations
+ * ----------------------------------------------------------------------------
+ */
+
+// VM proptection flags to ARM MMU AP bits
+static int prot_to_ap[] = {
+  [VM_READ]                      = AP_PRIV_RO, 
+  [VM_WRITE]                     = AP_PRIV_RW, 
+  [VM_READ | VM_WRITE]           = AP_PRIV_RW, 
+  [VM_USER | VM_READ]            = AP_USER_RO, 
+  [VM_USER | VM_WRITE]           = AP_BOTH_RW, 
+  [VM_USER | VM_READ | VM_WRITE] = AP_BOTH_RW, 
+};
+
+static inline void
+vm_pte_set(pte_t *pte, physaddr_t pa, int prot)
+{
+  int flags;
+
+  flags = PTE_AP(prot_to_ap[prot & 7]);
+  if ((prot & VM_USER) && !(prot & VM_EXEC))
+    flags |= PTE_SMALL_XN;
+  if (!(prot & VM_NOCACHE))
+    flags |= (PTE_B | PTE_C);
+
+  *pte = pa | flags | PTE_TYPE_SMALL;
+  vm_pte_set_flags(pte, prot);
+}
+
+static inline void
+vm_pte_clear(pte_t *pte)
+{
+  *pte = 0;
+  vm_pte_set_flags(pte, 0);
+}
+
+static inline void
+vm_tte_set_pgtab(tte_t *tte, physaddr_t pa)
+{
+  *tte = pa | TTE_TYPE_PGTAB;
+}
+
+static inline void
+vm_tte_set_sect(tte_t *tte, physaddr_t pa, int prot)
+{
+  int flags;
+
+  flags = TTE_SECT_AP(prot_to_ap[prot & 7]);
+  if ((prot & VM_USER) && !(prot & VM_EXEC))
+    flags |= TTE_SECT_XN;
+  if (!(prot & VM_NOCACHE))
+    flags |= (TTE_SECT_B | TTE_SECT_C);
+
+  *tte = pa | flags | TTE_TYPE_SECT;
+}
+
 //
 // Returns the pointer to the page table entry in the translation table trtab
 // that corresponds to the virtual address va. If alloc is not zero, allocate
@@ -82,202 +132,29 @@ vm_init_percpu(void)
 static pte_t *
 vm_walk_trtab(tte_t *trtab, uintptr_t va, int alloc)
 {
-  struct PageInfo *p;
   tte_t *tte;
   pte_t *pgtab;
 
   tte = &trtab[TTX(va)];
   if ((*tte & TTE_TYPE_MASK) == TTE_TYPE_FAULT) {
-    if (!alloc)
-      return NULL;
+    struct PageInfo *page;
 
-    if ((p = page_alloc(PAGE_ALLOC_ZERO)) == NULL)
+    if (!alloc || (page = page_alloc(PAGE_ALLOC_ZERO)) == NULL)
       return NULL;
     
-    p->ref_count++;
+    page->ref_count++;
 
     // We could fit four page tables into one physical page. But because we
     // also need to associate some metadata with each entry, we store only two
     // page tables in the bottom of the allocated physical page.
-    trtab[(TTX(va) & ~1) + 0] = page2pa(p) | TTE_TYPE_PGTAB;
-    trtab[(TTX(va) & ~1) + 1] = (page2pa(p) + PGTAB_SIZE) | TTE_TYPE_PGTAB;
+    vm_tte_set_pgtab(&trtab[(TTX(va) & ~1) + 0], page2pa(page));
+    vm_tte_set_pgtab(&trtab[(TTX(va) & ~1) + 1], page2pa(page) + PGTAB_SIZE);
   } else if ((*tte & TTE_TYPE_MASK) != TTE_TYPE_PGTAB) {
-    warn("tte type is not page table");
-    return NULL;
+    panic("not a page table");
   }
 
   pgtab = KADDR(TTE_PGTAB_ADDR(*tte));
   return &pgtab[PTX(va)];
-}
-
-struct PageInfo *
-vm_lookup_page(tte_t *trtab, const void *va, pte_t **pte_store)
-{
-  pte_t *pte;
-
-  if ((pte = vm_walk_trtab(trtab, (uintptr_t ) va, 0)) == NULL)
-    return NULL;
-  if ((*pte & PTE_TYPE_MASK) != PTE_TYPE_SMALL)
-    return NULL;
-
-  if (pte_store)
-    *pte_store = pte;
-  
-  return pa2page(PTE_SMALL_ADDR(*pte));
-}
-
-int
-vm_insert_page(tte_t *trtab, struct PageInfo *p, void *va, unsigned perm)
-{
-  pte_t *pte;
-  int ap;
-
-  if ((pte = vm_walk_trtab(trtab, (uintptr_t ) va, 1)) == NULL)
-    return -ENOMEM;
-
-  p->ref_count++;
-  vm_remove_page(trtab, va);
-
-  if (perm & VM_U)
-    ap = (perm & VM_W) ? AP_BOTH_RW : AP_USER_RO;
-  else
-    ap = (perm & VM_W) ? AP_PRIV_RW : AP_PRIV_RO;
-
-  *pte = page2pa(p) | PTE_AP(ap) | PTE_TYPE_SMALL;
-  *(pte + (NPTENTRIES * 2)) = perm;
-
-  return 0;
-}
-
-void
-vm_remove_page(tte_t *trtab, void *va)
-{
-  struct PageInfo *page;
-  pte_t *pte;
-
-  if ((page = vm_lookup_page(trtab, va, &pte)) == NULL)
-    return;
-
-  if (--page->ref_count == 0)
-    page_free(page);
-
-  *pte = 0;
-
-  tlbimva((uintptr_t) va);
-}
-
-int
-vm_alloc_region(tte_t *trtab, void *va, size_t n)
-{
-  struct PageInfo *page;
-  uintptr_t a, start, end;
-
-  start = ROUND_DOWN((uintptr_t) va, PAGE_SIZE);
-  end   = ROUND_UP((uintptr_t) va + n, PAGE_SIZE);
-
-  for (a = start; a < end; a += PAGE_SIZE) {
-    if ((page = page_alloc(PAGE_ALLOC_ZERO)) == NULL) {
-      vm_dealloc_region(trtab, (void *) start, a - start);
-      return -ENOMEM;
-    }
-
-    if ((vm_insert_page(trtab, page, (void *) a, VM_U | VM_W)) != 0) {
-      vm_dealloc_region(trtab, (void *) start, a - start);
-      page_free(page);
-      return -ENOMEM;
-    }
-  }
-
-  return 0;
-}
-
-int
-vm_dealloc_region(tte_t *trtab, void *va, size_t n)
-{
-  uintptr_t a, end;
-  struct PageInfo *page;
-  pte_t *pte;
-
-  a   = ROUND_DOWN((uintptr_t) va, PAGE_SIZE);
-  end = ROUND_UP((uintptr_t) va + n, PAGE_SIZE);
-
-  while (a < end) {
-    if ((pte = vm_walk_trtab(trtab, a, 0)) == NULL) {
-      a = ROUND_DOWN(a + PAGE_SIZE * NPTENTRIES, PAGE_SIZE * NPTENTRIES);
-    } else {
-      if ((*pte & PTE_TYPE_MASK) == PTE_TYPE_SMALL) {
-        page = pa2page(PTE_SMALL_ADDR(*pte));
-
-        if (--page->ref_count == 0)
-          page_free(page);
-    
-        *pte = 0;
-      }
-    
-      a += PAGE_SIZE;
-    }
-  }
-  return 0;
-}
-
-int
-vm_copy_out(tte_t *trtab, void *dst, const void *src, size_t n)
-{
-  struct PageInfo *page;
-  uint8_t *s, *d, *kva;
-  size_t ncopied, offset;
-
-  s = (uint8_t *) src;
-  d = (uint8_t *) dst;
-
-  while (n != 0) {
-    page = vm_lookup_page(trtab, d, NULL);
-    if (page == NULL)
-      return -EFAULT;
-
-    kva = (uint8_t *) page2kva(page);
-
-    offset = (uintptr_t) d % PAGE_SIZE;
-    ncopied = MIN(PAGE_SIZE - offset, n);
-
-    memmove(kva + offset, s, ncopied);
-
-    s += ncopied;
-    d += ncopied;
-    n -= ncopied;
-  }
-
-  return 0;
-}
-
-int
-vm_copy_in(tte_t *trtab, void *dst, const void *src, size_t n)
-{
-  struct PageInfo *page;
-  uint8_t *s, *d, *kva;
-  size_t ncopied, offset;
-
-  s = (uint8_t *) src;
-  d = (uint8_t *) dst;
-
-  while (n != 0) {
-    page = vm_lookup_page(trtab, s, NULL);
-    if (page == NULL)
-      return -EFAULT;
-
-    kva = (uint8_t *) page2kva(page);
-
-    offset  = (uintptr_t) d % PAGE_SIZE;
-    ncopied = MIN(PAGE_SIZE - offset, n);
-
-    memmove(d, kva + offset, ncopied);
-
-    s += ncopied;
-    d += ncopied;
-    n -= ncopied;
-  }
-
-  return 0;
 }
 
 // 
@@ -288,56 +165,267 @@ vm_copy_in(tte_t *trtab, void *dst, const void *src, size_t n)
 // portion of address space.
 //
 static void
-vm_map_region(tte_t *trtab,
-              uintptr_t va, uint32_t pa, size_t n,
-              int perm, int dev)
-{
-  pte_t *pte;
-  tte_t *tte;
-  int ap;
-
+vm_init_map(tte_t *trtab, uintptr_t va, uint32_t pa, size_t n, int prot)
+{ 
   assert(va % PAGE_SIZE == 0);
   assert(pa % PAGE_SIZE == 0);
-  assert(n % PAGE_SIZE == 0);
-
-  if (perm & VM_U)
-    ap = (perm & VM_W) ? AP_BOTH_RW : AP_USER_RO;
-  else
-    ap = (perm & VM_W) ? AP_PRIV_RW : AP_PRIV_RO;
+  assert(n  % PAGE_SIZE == 0);
 
   while (n != 0) {
     // Whenever possible, map entire 1MB sections to reduce the memory
     // management overhead.
-    if ((va % PAGE_SECT_SIZE == 0) && (pa % PAGE_SECT_SIZE == 0) &&
-        (n % PAGE_SECT_SIZE == 0)) {
+    if ((va % PAGE_SECT_SIZE == 0) &&
+        (pa % PAGE_SECT_SIZE == 0) &&
+        (n  % PAGE_SECT_SIZE == 0)) {
+      tte_t *tte;
+
       tte = &trtab[TTX(va)];
       if (*tte)
         panic("remap");
 
-      *tte = pa | TTE_SECT_AP(ap) | TTE_TYPE_SECT;
-      if (!dev)
-        *tte |= (TTE_SECT_C | TTE_SECT_B);
+      vm_tte_set_sect(tte, pa, prot);
 
       va += PAGE_SECT_SIZE;
       pa += PAGE_SECT_SIZE;
-      n -= PAGE_SECT_SIZE;
+      n  -= PAGE_SECT_SIZE;
     } else {
+      pte_t *pte;
+
       if ((pte = vm_walk_trtab(trtab, va, 1)) == NULL)
         panic("out of memory");
-
       if (*pte)
         panic("remap %p", *pte);
 
-      *pte = pa | PTE_AP(ap) | PTE_TYPE_SMALL;
-      *(pte + (NPTENTRIES * 2)) = perm;
-      if (!dev)
-        *pte |= (PTE_C | PTE_B);
+      vm_pte_set(pte, pa, prot);
 
       va += PAGE_SIZE;
       pa += PAGE_SIZE;
-      n -= PAGE_SIZE;
+      n  -= PAGE_SIZE;
     }
   }
+}
+
+/*
+ * ----------------------------------------------------------------------------
+ * Translation Table Switch
+ * ----------------------------------------------------------------------------
+ */
+
+/**
+ * Load the master kernel translation table.
+ */
+void
+vm_switch_kernel(void)
+{
+  write_ttbr0(PADDR(kern_trtab));
+  tlbiall();
+}
+
+/**
+ * Load the user process translation table.
+ * 
+ * @param trtab Pointer to the translation table to be loaded.
+ */
+void
+vm_switch_user(tte_t *trtab)
+{
+  write_ttbr0(PADDR(trtab));
+  tlbiall();
+}
+
+/*
+ * ----------------------------------------------------------------------------
+ * Page Frame Mapping Operations
+ * ----------------------------------------------------------------------------
+ */
+
+struct PageInfo *
+vm_lookup_page(tte_t *trtab, const void *va, pte_t **pte_store)
+{
+  pte_t *pte;
+
+  if ((uintptr_t) va >= KERNEL_BASE)
+    panic("bad va: %p", va);
+
+  pte = vm_walk_trtab(trtab, (uintptr_t ) va, 0);
+
+  if (pte_store)
+    *pte_store = pte;
+
+  if ((pte == NULL) || ((*pte & PTE_TYPE_SMALL) != PTE_TYPE_SMALL))
+    return NULL;
+
+  return pa2page(PTE_SMALL_ADDR(*pte));
+}
+
+int
+vm_insert_page(tte_t *trtab, struct PageInfo *page, void *va, unsigned perm)
+{
+  pte_t *pte;
+
+  if ((uintptr_t) va >= KERNEL_BASE)
+    panic("bad va: %p", va);
+
+  if ((pte = vm_walk_trtab(trtab, (uintptr_t ) va, 1)) == NULL)
+    return -ENOMEM;
+
+  // Incrementing the reference count before calling vm_remove_page() allows
+  // us to elegantly handle the situation when the same page is re-inserted at
+  // the same virtual address, but with different permissions.
+  page->ref_count++;
+
+  // If present, remove the previous mapping.
+  vm_remove_page(trtab, va);
+
+  vm_pte_set(pte, page2pa(page), perm);
+
+  return 0;
+}
+
+void
+vm_remove_page(tte_t *trtab, void *va)
+{
+  struct PageInfo *page;
+  pte_t *pte;
+
+  if ((uintptr_t) va >= KERNEL_BASE)
+    panic("bad va: %p", va);
+
+  if ((page = vm_lookup_page(trtab, va, &pte)) == NULL)
+    return;
+
+  if (--page->ref_count == 0)
+    page_free(page);
+
+  vm_pte_clear(pte);
+
+  tlbimva((uintptr_t) va);
+}
+
+/*
+ * ----------------------------------------------------------------------------
+ * Managing Regions of Memory
+ * ----------------------------------------------------------------------------
+ */
+
+int
+vm_alloc_region(tte_t *trtab, void *va, size_t n, int prot)
+{
+  struct PageInfo *page;
+  uint8_t *a, *start, *end;
+  int r;
+
+  start = ROUND_DOWN((uint8_t *) va, PAGE_SIZE);
+  end   = ROUND_UP((uint8_t *) va + n, PAGE_SIZE);
+
+  if ((start > end) || (end > (uint8_t *) KERNEL_BASE))
+    panic("invalid range [%p,%p)", start, end);
+
+  for (a = start; a < end; a += PAGE_SIZE) {
+    if ((page = page_alloc(PAGE_ALLOC_ZERO)) == NULL) {
+      vm_dealloc_region(trtab, start, a - start);
+      return -ENOMEM;
+    }
+
+    if ((r = (vm_insert_page(trtab, page, a, prot)) != 0)) {
+      page_free(page);
+      vm_dealloc_region(trtab, start, a - start);
+      return r;
+    }
+  }
+
+  return 0;
+}
+
+void
+vm_dealloc_region(tte_t *trtab, void *va, size_t n)
+{
+  uint8_t *a, *end;
+  struct PageInfo *page;
+  pte_t *pte;
+
+  a   = ROUND_DOWN((uint8_t *) va, PAGE_SIZE);
+  end = ROUND_UP((uint8_t *) va + n, PAGE_SIZE);
+
+  if ((a > end) || (end > (uint8_t *) KERNEL_BASE))
+    panic("invalid range [%p,%p)", a, end);
+
+  while (a < end) {
+    page = vm_lookup_page(trtab, a, &pte);
+
+    if (pte == NULL) {
+      // Skip the rest of the page table 
+      a = ROUND_DOWN(a + PAGE_SIZE * NPTENTRIES, PAGE_SIZE * NPTENTRIES);
+      continue;
+    }
+
+    if (page != NULL)
+      vm_remove_page(trtab, a);
+
+    a += PAGE_SIZE;
+  }
+}
+
+/*
+ * ----------------------------------------------------------------------------
+ * Copying Data Between Address Spaces
+ * ----------------------------------------------------------------------------
+ */
+
+int
+vm_copy_out(tte_t *trtab, void *dst_va, const void *src_va, size_t n)
+{
+  uint8_t *src = (uint8_t *) src_va;
+  uint8_t *dst = (uint8_t *) dst_va;
+
+  while (n != 0) {
+    struct PageInfo *page;
+    uint8_t *kva;
+    size_t offset, ncopy;
+
+    if ((page = vm_lookup_page(trtab, dst, NULL)) == NULL)
+      return -EFAULT;
+    
+    kva    = (uint8_t *) page2kva(page);
+    offset = (uintptr_t) dst % PAGE_SIZE;
+    ncopy  = MIN(PAGE_SIZE - offset, n);
+
+    memmove(kva + offset, src, ncopy);
+
+    src += ncopy;
+    dst += ncopy;
+    n   -= ncopy;
+  }
+
+  return 0;
+}
+
+int
+vm_copy_in(tte_t *trtab, void *dst_va, const void *src_va, size_t n)
+{
+  uint8_t *dst = (uint8_t *) dst_va;
+  uint8_t *src = (uint8_t *) src_va;
+
+  while (n != 0) {
+    struct PageInfo *page;
+    uint8_t *kva;
+    size_t offset, ncopy;
+
+    if ((page = vm_lookup_page(trtab, src, NULL)) == NULL)
+      return -EFAULT;
+
+    kva    = (uint8_t *) page2kva(page);
+    offset = (uintptr_t) dst % PAGE_SIZE;
+    ncopy  = MIN(PAGE_SIZE - offset, n);
+
+    memmove(dst, kva + offset, ncopy);
+
+    src += ncopy;
+    dst += ncopy;
+    n   -= ncopy;
+  }
+
+  return 0;
 }
 
 void
@@ -353,7 +441,6 @@ vm_free(tte_t *trtab)
       continue;
 
     page = pa2page(PTE_SMALL_ADDR(trtab[i]));
-
     if (--page->ref_count == 0)
       page_free(page);
   }
@@ -381,19 +468,20 @@ vm_copy(tte_t *trtab)
   va = (uint8_t *) 0;
 
   while (va < (uint8_t *) KERNEL_BASE) {
-    if ((pte = vm_walk_trtab(trtab, (uintptr_t) va, 0)) == NULL) {
+    src_page = vm_lookup_page(trtab, va, &pte);
+    if (pte == NULL) {
+      // Skip the rest of the page table 
       va = ROUND_DOWN(va + PAGE_SIZE * NPTENTRIES, PAGE_SIZE * NPTENTRIES);
       continue;
     }
 
-    if ((*pte & PTE_TYPE_MASK) == PTE_TYPE_SMALL) {
+    if (src_page != NULL) {
       unsigned perm;
 
-      perm = *(pte + (NPTENTRIES * 2));
-      src_page = pa2page(PTE_SMALL_ADDR(*pte));
+      perm = vm_pte_get_flags(pte);
 
-      if ((perm & VM_W) || (perm & VM_COW)) {
-        perm &= ~VM_W;
+      if ((perm & VM_WRITE) || (perm & VM_COW)) {
+        perm &= ~VM_WRITE;
         perm |= VM_COW;
 
         if (vm_insert_page(trtab, src_page, va, perm) < 0)
@@ -425,6 +513,12 @@ vm_copy(tte_t *trtab)
   return t;
 }
 
+/*
+ * ----------------------------------------------------------------------------
+ * Check User Memory Permissions
+ * ----------------------------------------------------------------------------
+ */
+
 int
 vm_check_user_ptr(tte_t *trtab, const void *va, size_t n, unsigned perm)
 {
@@ -435,7 +529,7 @@ vm_check_user_ptr(tte_t *trtab, const void *va, size_t n, unsigned perm)
   p   = ROUND_DOWN((const char *) va, PAGE_SIZE);
   end = ROUND_UP((const char *) va + n, PAGE_SIZE);
 
-  if ((p >= (const char *) KERNEL_BASE) || (end > (const char *) KERNEL_BASE))
+  if ((p >= (char *) KERNEL_BASE) || (end > (char *) KERNEL_BASE))
     return -EFAULT;
 
   while (p != end) {
@@ -444,11 +538,11 @@ vm_check_user_ptr(tte_t *trtab, const void *va, size_t n, unsigned perm)
     if ((page = vm_lookup_page(trtab, (void *) p, &pte)) == NULL)
       return -EFAULT;
 
-    curr_perm = *(pte + (NPTENTRIES * 2));
+    curr_perm = vm_pte_get_flags(pte);
 
-    if ((perm & VM_W) && (curr_perm & VM_COW)) {
+    if ((perm & VM_WRITE) && (curr_perm & VM_COW)) {
       curr_perm &= ~VM_COW;
-      curr_perm |= VM_W;
+      curr_perm |= VM_WRITE;
 
       if ((curr_perm & perm) != perm)
         return -EFAULT;
@@ -496,6 +590,12 @@ vm_check_user_str(tte_t *trtab, const char *s, unsigned perm)
   return -EFAULT;
 }
 
+/*
+ * ----------------------------------------------------------------------------
+ * Loading Binaries
+ * ----------------------------------------------------------------------------
+ */
+
 int
 vm_load(tte_t *trtab, void *va, struct Inode *ip, size_t n, off_t off)
 {
@@ -523,6 +623,43 @@ vm_load(tte_t *trtab, void *va, struct Inode *ip, size_t n, off_t off)
     off += ncopied;
     n   -= ncopied;
   }
+
+  return 0;
+}
+
+int
+vm_load_binary(struct UserVm *vm, const Elf32_Ehdr *elf)
+{
+  Elf32_Phdr *ph, *eph;
+  int r;
+
+  ph = (Elf32_Phdr *) ((uint8_t *) elf + elf->phoff);
+  eph = ph + elf->phnum;
+
+  vm->heap  = 0;
+  vm->stack = USTACK_TOP - USTACK_SIZE;
+
+  for ( ; ph < eph; ph++) {
+    if (ph->type != PT_LOAD)
+      continue;
+
+    if (ph->filesz > ph->memsz)
+      return -EINVAL;
+    
+    if ((r = vm_alloc_region(vm->trtab, (void *) ph->vaddr, ph->memsz,
+                             VM_READ | VM_WRITE | VM_EXEC | VM_USER) < 0))
+      return r;
+
+    if ((r = vm_copy_out(vm->trtab, (void *) ph->vaddr,
+                         (uint8_t *) elf + ph->offset, ph->filesz)) < 0)
+      return r;
+
+    vm->heap = MAX(vm->heap, ph->vaddr + ph->memsz);
+  }
+
+  if ((r = vm_alloc_region(vm->trtab, (void *) (vm->stack), USTACK_SIZE,
+                           VM_READ | VM_WRITE | VM_USER) < 0))
+    return r;
 
   return 0;
 }

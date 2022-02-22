@@ -74,19 +74,19 @@ trap_handle_abort(struct Trapframe *tf)
     panic("kernel fault va %p status %#x", address, status);
   }
 
-  trtab = my_process()->trtab;
+  trtab = my_process()->vm.trtab;
 
   if ((fault_page = vm_lookup_page(trtab, (void *) address, &pte)) != NULL) {
-    unsigned perm;
+    int prot;
 
-    perm = *(pte + NPTENTRIES * 2);
-    if ((perm & VM_COW) && ((page = page_alloc(0)) != NULL)) {
+    prot = vm_pte_get_flags(pte);
+    if ((prot & VM_COW) && ((page = page_alloc(0)) != NULL)) {
       memcpy(page2kva(page), page2kva(fault_page), PAGE_SIZE);
 
-      perm &= ~VM_COW;
-      perm |= VM_W;
+      prot &= ~VM_COW;
+      prot |= VM_WRITE;
 
-      if (vm_insert_page(trtab, page, (void *) address, perm) == 0)
+      if (vm_insert_page(trtab, page, (void *) address, prot) == 0)
         return;
     }
   }
