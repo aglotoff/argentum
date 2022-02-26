@@ -3,63 +3,75 @@
 #include <math.h>
 #include <stdint.h>
 
+/**
+ * Return the floating-point remainder of the division of 'x' by 'y'.
+ * 
+ * @param x The numerator.
+ * @param y The denominator.
+ *
+ * @return The remainder of dividing the arguments.
+ */
 double
 fmod(double x, double y)
 {
-	double t;
-	int xtype, ytype, xexp, yexp, sign, n;
+  // ----------------------------------------------------------
+  // Code adapted from "The Standard C Library" by P.J. Plauger
+  // ----------------------------------------------------------
 
-	xtype = __dclassify(&x);
-	ytype = __dclassify(&y);
+  double t;
+  int xtype, ytype, xexp, yexp, neg, n;
 
-	if (xtype == FP_NAN) {
-		errno = EDOM;
-		return x;
-	}
-	if ((xtype == FP_ZERO) || (ytype == FP_INFINITE)) {
-		return x;
-	}
-	if (ytype == FP_NAN) {
-		errno = EDOM;
-		return y;
-	}
-	if ((xtype == FP_INFINITE) || (ytype == FP_ZERO)) {
-		errno = EDOM;
-		return __dbl.nan.d;
-	}
-	
-	if (x < 0.0) {
-		x = -x;
-		sign = 1;
-	} else {
-		sign = 0;
-	}
+  xtype = __dclassify(&x);
+  ytype = __dclassify(&y);
 
-	if (y < 0.0)
-		y = -y;
-	
-	t = y;
-	n = 0;
-	__dunscale(&t, &yexp);
+  if (xtype == FP_NAN) {
+    errno = EDOM;
+    return x;
+  }
+  if ((xtype == FP_ZERO) || (ytype == FP_INFINITE)) {
+    return x;
+  }
+  if (ytype == FP_NAN) {
+    errno = EDOM;
+    return y;
+  }
+  if ((xtype == FP_INFINITE) || (ytype == FP_ZERO)) {
+    errno = EDOM;
+    return __dbl.nan.d;
+  }
+  
+  if (x < 0.0) {
+    x = -x;
+    neg = 1;
+  } else {
+    neg = 0;
+  }
 
-	// Repeatedly subtract |y| from |x| until the remainder is smaller than |y|.
-	while (n >= 0) {
-		// First, compare the exponents of |x| and |y| to determine whether or
-		// not further subtraction might be possible.
-		t = x;
-		if ((__dunscale(&t, &xexp) == FP_ZERO) || ((n = xexp - yexp) < 0))
-			break;
+  if (y < 0.0)
+    y = -y;
+  
+  t = y;
+  n = 0;
+  __dunscale(&t, &yexp);
 
-		// Try to subtract |y|*2^n.
-		for ( ; n >= 0; n--) {
-			t = y;
-			__dscale(&t, n);
-			if (t <= x) {
-				x -= t;
-				break;
-			}
-		}
-	}
+  // Repeatedly subtract |y| from |x| until the remainder is smaller than |y|.
+  while (n >= 0) {
+    // First, compare the exponents of |x| and |y| to determine whether or
+    // not further subtraction might be possible.
+    t = x;
+    if ((__dunscale(&t, &xexp) == FP_ZERO) || ((n = xexp - yexp) < 0))
+      break;
 
-	return sign ? -x : x;
+    // Try to subtract |y| * 2^n.
+    for ( ; n >= 0; n--) {
+      t = y;
+      __dscale(&t, n);
+      if (t <= x) {
+        x -= t;
+        break;
+      }
+    }
+  }
+
+  return neg ? -x : x;
 }

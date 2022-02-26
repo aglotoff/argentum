@@ -22,15 +22,20 @@ To run the kernel, execute `make qemu`.
 
 ### General OS Development Information
 
-  * [OSDev Wiki](https://wiki.osdev.org/Expanded_Main_Page)
-  * [xv6, a simple Unix-like teaching OS](https://pdos.csail.mit.edu/6.828/2018/xv6.html) by MIT
+* [OSDev Wiki](https://wiki.osdev.org/Expanded_Main_Page)
+* [xv6, a simple Unix-like teaching OS](https://pdos.csail.mit.edu/6.828/2018/xv6.html) by MIT
+
+### C Library
+
+The C Library code is heavily based on the following reference implementation:
+* [The Standard C Library](https://www.amazon.com/Standard-C-Library-P-J-Plauger/dp/0131315099), P.J. Plauger, 1992
 
 ### ARM architecture
 
-  * [ARM Category](https://wiki.osdev.org/Category:ARM) in OSDev Wiki
-  * [ARM System Developer's Guide](https://www.amazon.in/ARM-System-Developers-Guide-Architecture/dp/1558608745), Andrew Sloss, Dominic Symes, Chris Wright, 2004
-  * [Embedded and Real-Time Operating Systems](https://link.springer.com/book/10.1007/978-3-319-51517-5), K.C. Wang, 2017
-  * [ARM GCC Inline Assembler Cookbook](http://www.ethernut.de/en/documents/arm-inline-asm.html)
+* [ARM Category](https://wiki.osdev.org/Category:ARM) in OSDev Wiki
+* [ARM System Developer's Guide](https://www.amazon.in/ARM-System-Developers-Guide-Architecture/dp/1558608745), Andrew Sloss, Dominic Symes, Chris Wright, 2004
+* [Embedded and Real-Time Operating Systems](https://link.springer.com/book/10.1007/978-3-319-51517-5), K.C. Wang, 2017
+* [ARM GCC Inline Assembler Cookbook](http://www.ethernut.de/en/documents/arm-inline-asm.html)
 
 ### Hardware Programming
 

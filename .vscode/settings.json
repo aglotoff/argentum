@@ -33,6 +33,7 @@
         "syscall.h": "c",
         "lcd.h": "c",
         "file.h": "c",
-        "float.h": "c"
+        "float.h": "c",
+        "errno.h": "c"
     }
 }
