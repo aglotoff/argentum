@@ -25,6 +25,7 @@ USER_SRCFILES += \
 	user/test/float.c \
 	user/test/fork.c \
 	user/test/limits.c \
+	user/test/math.c \
 	user/test/setjmp.c \
 	user/test/stdlib.c \
 	user/test/string.c

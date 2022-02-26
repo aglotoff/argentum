@@ -41,6 +41,20 @@ LIB_SRCFILES += \
 	lib/float/__fvalues.c
 
 LIB_SRCFILES += \
+	lib/math/__dclassify.c \
+	lib/math/__dnormalize.c \
+	lib/math/__dscale.c \
+	lib/math/__dtrunc.c \
+	lib/math/__dunscale.c \
+	lib/math/ceil.c \
+	lib/math/fabs.c \
+	lib/math/floor.c \
+	lib/math/fmod.c \
+	lib/math/frexp.c \
+	lib/math/ldexp.c \
+	lib/math/modf.c
+
+LIB_SRCFILES += \
 	lib/setjmp/longjmp.S \
 	lib/setjmp/setjmp.S
 

@@ -20,6 +20,8 @@ struct __dbl __dbl = {
   .max = DBL_INIT((__DBL_EMAX << __DBL_EOFF) - 1, ~0),
   .min = DBL_INIT((1 << __DBL_EOFF), 0),
   .eps = DBL_INIT((__DBL_EBIAS - __DBL_FBITS + 1) << __DBL_EOFF, 0),
+  .inf = DBL_INIT((__DBL_EMAX << __DBL_EOFF), 0),
+  .nan = DBL_INIT(__DBL_SIGN | (__DBL_EMAX << __DBL_EOFF) | (1 << (__DBL_EOFF - 1)), 0),
 };
 
 #if __LDBL

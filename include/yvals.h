@@ -25,9 +25,9 @@
 // Subscripts of words in floating-point representations.
 // D0 is the most significant word.
 #define __D0		      3
-#define __D1		      (D0 - 1)
-#define __D2		      (D1 - 1)
-#define __D3		      (D2 - 1)
+#define __D1		      (__D0 - 1)
+#define __D2		      (__D1 - 1)
+#define __D3		      (__D2 - 1)
 
 // Parameters of the float data type representation
 #define __FLT_SIGN    (1 << 15)                       // Sign bit mask

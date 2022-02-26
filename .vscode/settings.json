@@ -32,6 +32,7 @@
         "sync.h": "c",
         "syscall.h": "c",
         "lcd.h": "c",
-        "file.h": "c"
+        "file.h": "c",
+        "float.h": "c"
     }
 }

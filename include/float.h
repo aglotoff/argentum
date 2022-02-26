@@ -111,7 +111,7 @@ extern struct __dbl {
   union {
     unsigned short w[4];
     double         d;
-  } max, min, eps;
+  } max, min, eps, inf, nan;
 } __dbl;
 
 /**
