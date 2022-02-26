@@ -7,7 +7,7 @@
 
 #include <kernel/armv7.h>
 #include <kernel/cpu.h>
-#include <kernel/drivers/console.h>
+#include <kernel/cprintf.h>
 #include <kernel/elf.h>
 #include <kernel/fs/file.h>
 #include <kernel/fs/fs.h>

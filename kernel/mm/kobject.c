@@ -2,7 +2,7 @@
 #include <errno.h>
 #include <string.h>
 
-#include <kernel/drivers/console.h>
+#include <kernel/cprintf.h>
 #include <kernel/types.h>
 #include <kernel/mm/page.h>
 #include <kernel/sync.h>

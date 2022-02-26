@@ -5,7 +5,7 @@
 #include <string.h>
 #include <sys/stat.h>
 
-#include <kernel/drivers/console.h>
+#include <kernel/cprintf.h>
 #include <kernel/fs/buf.h>
 #include <kernel/fs/fs.h>
 #include <kernel/types.h>

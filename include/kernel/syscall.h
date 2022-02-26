@@ -7,17 +7,7 @@
 
 #include <stdint.h>
 
-struct File;
-
 int32_t sys_dispatch(void);
-
-int     sys_arg_fd(int n, int *, struct File **);
-int     sys_arg_int(int, int *);
-int     sys_arg_short(int, short *);
-int     sys_arg_long(int, long *);
-int     sys_arg_buf(int, void **, size_t, int);
-int     sys_arg_str(int, const char **, int);
-int     sys_arg_args(int n, char ***);
 
 int32_t sys_read(void);
 int32_t sys_write(void);
@@ -36,7 +26,6 @@ int32_t sys_rmdir(void);
 int32_t sys_stat(void);
 int32_t sys_close(void);
 int32_t sys_sbrk(void);
-int32_t sys_mkdir(void);
 int32_t sys_mknod(void);
 
 #endif  // !__KERNEL_SYSCALL_H__

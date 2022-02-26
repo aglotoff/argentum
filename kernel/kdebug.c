@@ -1,7 +1,7 @@
 #include <dwarf.h>
 #include <stddef.h>
 
-#include <kernel/drivers/console.h>
+#include <kernel/cprintf.h>
 
 #include <kernel/kdebug.h>
 

@@ -11,6 +11,8 @@
  * LCD output code.
  */
 
+#include <stddef.h>
+
 int  lcd_init(void);
 void lcd_putc(unsigned, char, int, int);
 void lcd_copy(unsigned, unsigned, size_t);

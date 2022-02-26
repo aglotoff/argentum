@@ -40,35 +40,43 @@ typedef struct {
 // The seed for the pseudo-random sequence generator
 extern unsigned __randseed;
 
+struct __BlkHeader {
+  struct __BlkHeader *next; // Next block (if on the free list)
+  size_t              size; // Size of this block (in bytes)
+};
+
+extern struct __BlkHeader *__alloc_free; // Start of the free list
+
 extern void   (*__at_funcs[])(void);
 extern size_t   __at_count;
 
-int           atoi(const char *);
-long          atol(const char *);
-long          strtol(const char *, char **, int);
-unsigned long strtoul(const char *, char **, int);
+int                 atoi(const char *);
+long                atol(const char *);
+long                strtol(const char *, char **, int);
+unsigned long       strtoul(const char *, char **, int);
 
-int           rand(void);
-void          srand(unsigned);
+int                 rand(void);
+void                srand(unsigned);
 
-void          _Exit(int);
-int           atexit(void (*)(void));
-void          abort(void);
-void          exit(int);
-char         *getenv(const char *);
+void                _Exit(int);
+int                 atexit(void (*)(void));
+void                abort(void);
+void                exit(int);
+char               *getenv(const char *);
 
-void         *bsearch(const void *, const void *, size_t, size_t,
-                      int (*)(const void *, const void *));
+void               *bsearch(const void *, const void *, size_t, size_t,
+                            int (*)(const void *, const void *));
 
-int           abs(int);
-div_t         div(int, int);
-long          labs(long);
-ldiv_t        ldiv(long, long);
+int                 abs(int);
+div_t               div(int, int);
+long                labs(long);
+ldiv_t              ldiv(long, long);
 
-void         *calloc(size_t, size_t);
-void         *malloc(size_t);
-void          free(void *);
-void         *realloc(void *, size_t);
+struct __BlkHeader *__getmem(size_t);
+void               *calloc(size_t, size_t);
+void               *malloc(size_t);
+void                free(void *);
+void               *realloc(void *, size_t);
 
 #ifdef __cplusplus
 };

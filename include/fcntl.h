@@ -7,6 +7,9 @@
  * File control options.
  */
 
+#include <sys/stat.h>
+#include <unistd.h>
+
 #define O_RDONLY    (1 << 0)
 #define O_WRONLY    (1 << 1)
 #define O_RDWR      (O_RDONLY | O_WRONLY)
@@ -17,6 +20,7 @@
 #define O_NONBLOCK  (1 << 6)
 #define O_TRUNC     (1 << 7)
 
+int creat(const char *, mode_t);
 int open(const char *, int);
 
 #endif  // !__FCNTL_H__

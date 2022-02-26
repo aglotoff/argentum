@@ -1,8 +1,6 @@
 #include <stdlib.h>
 #include <unistd.h>
 
-#include "xalloc.h"
-
 #define ALLOC_MIN   (4096 / sizeof(struct __BlkHeader))
 
 struct __BlkHeader *

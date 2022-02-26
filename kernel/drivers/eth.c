@@ -2,7 +2,7 @@
 #include <string.h>
 
 #include <kernel/cpu.h>
-#include <kernel/drivers/console.h>
+#include <kernel/cprintf.h>
 #include <kernel/drivers/gic.h>
 #include <kernel/mm/memlayout.h>
 #include <kernel/mm/page.h>

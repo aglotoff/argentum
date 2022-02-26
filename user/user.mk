@@ -32,18 +32,18 @@ USER_SRCFILES += \
 USER_APPS := $(patsubst %.c, $(OBJ)/%, $(USER_SRCFILES))
 
 $(OBJ)/user/%.o: user/%.c $(OBJ)/.vars.USER_CFLAGS
-	@echo "+ CC  $<"
+	@echo "+ CC [USER] $<"
 	@mkdir -p $(@D)
 	$(V)$(CC) $(USER_CFLAGS) -c -o $@ $<
 
 $(OBJ)/user/%.o: user/%.S $(OBJ)/.vars.USER_CFLAGS
-	@echo "+ AS  $<"
+	@echo "+ AS [USER] $<"
 	@mkdir -p $(@D)
 	$(V)$(CC) $(USER_CFLAGS) -c -o $@ $<
 
 $(OBJ)/user/%: $(OBJ)/user/%.o $(OBJ)/lib/crt0.o $(OBJ)/lib/crti.o \
 		$(OBJ)/lib/crtn.o $(OBJ)/lib/libc.a $(OBJ)/.vars.USER_LDFLAGS
-	@echo "+ LD  $@"
+	@echo "+ LD [USER] $@"
 	@mkdir -p $(@D)
 	$(V)$(LD) -o $@ $(USER_LDFLAGS) $(OBJ)/lib/crt0.o $(OBJ)/lib/crti.o $@.o \
 		$(OBJ)/lib/crtn.o -L$(OBJ)/lib -L$(dir $(LIBGCC)) -lc -lgcc

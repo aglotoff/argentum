@@ -2,6 +2,7 @@
 
 #include <kernel/armv7.h>
 #include <kernel/drivers/console.h>
+#include <kernel/cprintf.h>
 #include <kernel/kdebug.h>
 #include <kernel/mm/kobject.h>
 #include <kernel/mm/memlayout.h>

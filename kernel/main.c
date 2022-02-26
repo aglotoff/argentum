@@ -3,6 +3,7 @@
 #include <stdint.h>
 
 #include <kernel/armv7.h>
+#include <kernel/cprintf.h>
 #include <kernel/cpu.h>
 #include <kernel/drivers/console.h>
 #include <kernel/drivers/eth.h>

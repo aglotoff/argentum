@@ -21,6 +21,17 @@
         "string_view": "c",
         "ext2.h": "c",
         "buf.h": "c",
-        "fs.h": "c"
+        "fs.h": "c",
+        "cprintf.h": "c",
+        "console.h": "c",
+        "kobject.h": "c",
+        "kdebug.h": "c",
+        "gic.h": "c",
+        "types.h": "c",
+        "sd.h": "c",
+        "sync.h": "c",
+        "syscall.h": "c",
+        "lcd.h": "c",
+        "file.h": "c"
     }
 }

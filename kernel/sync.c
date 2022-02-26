@@ -3,8 +3,8 @@
 #include <string.h>
 
 #include <kernel/armv7.h>
+#include <kernel/cprintf.h>
 #include <kernel/cpu.h>
-#include <kernel/drivers/console.h>
 #include <kernel/kdebug.h>
 #include <kernel/process.h>
 
@@ -72,7 +72,7 @@ spin_lock(struct SpinLock *lock)
     :
     : "memory", "cc");
 
-  // Record info about lock acquisition for debugging purposes.
+  // Record information about lock acquisition for debugging purposes.
   lock->cpu = my_cpu();
   spin_save_caller_pcs(lock);
 }
@@ -125,7 +125,7 @@ spin_holding(struct SpinLock *lock)
   return r;
 }
 
-// Record the current stack backtrace by following the frame pointer chain
+// Record the current stack backtrace by following the frame pointer chain.
 static void
 spin_save_caller_pcs(struct SpinLock *lock)
 {
@@ -133,12 +133,12 @@ spin_save_caller_pcs(struct SpinLock *lock)
   int i;
 
   fp = (uint32_t *) read_fp();
-  for (i = 0; i < NCALLERPCS; i++) {
-    if (fp == NULL)
-      break;
+
+  for (i = 0; (fp != NULL) && (i < NCALLERPCS); i++) {
     lock->pcs[i] = fp[-1];
     fp = (uint32_t *) fp[-3];
   }
+
   for ( ; i < NCALLERPCS; i++)
     lock->pcs[i] = 0;
 }

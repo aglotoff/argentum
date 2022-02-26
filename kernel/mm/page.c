@@ -1,6 +1,6 @@
 #include <string.h>
 
-#include <kernel/drivers/console.h>
+#include <kernel/cprintf.h>
 #include <kernel/sync.h>
 #include <kernel/types.h>
 

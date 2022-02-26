@@ -2,8 +2,6 @@
 #include <string.h>
 #include <stdio.h>
 
-#include "xalloc.h"
-
 void *
 realloc(void *ptr, size_t size)
 {

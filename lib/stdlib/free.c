@@ -1,5 +1,4 @@
 #include <stdlib.h>
-#include "xalloc.h"
 
 /**
  * Deallocate space pointed to by ptr.

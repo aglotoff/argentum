@@ -34,6 +34,7 @@ LIB_SRCFILES += \
   lib/errno/errno.c
 
 LIB_SRCFILES += \
+  lib/fcntl/creat.c \
 	lib/fcntl/open.c
 
 LIB_SRCFILES += \
@@ -147,17 +148,17 @@ CRT_SRCFILES := \
 CRT_OBJFILES := $(patsubst %.S, $(OBJ)/%.o, $(CRT_SRCFILES))
 
 $(OBJ)/lib/%.o: lib/%.c $(OBJ)/.vars.LIB_CFLAGS
-	@echo "+ CC  $<"
+	@echo "+ CC [LIB] $<"
 	@mkdir -p $(@D)
 	$(V)$(CC) $(LIB_CFLAGS) -c -o $@ $<
 
 $(OBJ)/lib/%.o: lib/%.S $(OBJ)/.vars.LIB_CFLAGS
-	@echo "+ AS  $<"
+	@echo "+ AS [LIB] $<"
 	@mkdir -p $(@D)
 	$(V)$(CC) $(LIB_CFLAGS) -c -o $@ $<
 
 $(OBJ)/lib/libc.a: $(LIB_OBJFILES)
-	@echo "+ AR  $@"
+	@echo "+ AR [LIB] $@"
 	$(V)$(AR) r $@ $(LIB_OBJFILES)
 
 lib: $(OBJ)/lib/libc.a $(CRT_OBJFILES)

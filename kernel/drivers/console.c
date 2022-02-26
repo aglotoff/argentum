@@ -1,20 +1,13 @@
 #include <stdint.h>
-#include <stdio.h>
 
 #include <kernel/armv7.h>
 #include <kernel/drivers/kbd.h>
 #include <kernel/drivers/lcd.h>
 #include <kernel/drivers/uart.h>
-#include <kernel/monitor.h>
 #include <kernel/process.h>
 #include <kernel/sync.h>
 
 #include <kernel/drivers/console.h>
-
-static struct {
-  struct SpinLock lock;
-  int             locking;
-} console;
 
 #define CONSOLE_BUF_SIZE  256
 
@@ -22,6 +15,7 @@ static struct {
   char            buf[CONSOLE_BUF_SIZE];
   uint32_t        rpos;
   uint32_t        wpos;
+  struct SpinLock lock;
   struct ListLink queue;
 } input;
 
@@ -31,9 +25,7 @@ static struct {
 void
 console_init(void)
 {  
-  spin_init(&console.lock, "console");
-  console.locking = 1;
-
+  spin_init(&input.lock, "input");
   list_init(&input.queue);
 
   uart_init();
@@ -62,8 +54,7 @@ console_intr(int (*getc)(void))
 {
   int c;
 
-  if (console.locking)
-    spin_lock(&console.lock);
+  spin_lock(&input.lock);
 
   while ((c = getc()) >= 0) {
     switch (c) {
@@ -93,8 +84,7 @@ console_intr(int (*getc)(void))
     }
   }
 
-  if (console.locking)
-    spin_unlock(&console.lock);
+  spin_unlock(&input.lock);
 }
 
 /**
@@ -123,11 +113,11 @@ console_read(void *buf, size_t nbytes)
   
   s = (char *) buf;
   i = 0;
-  spin_lock(&console.lock);
+  spin_lock(&input.lock);
 
   while (i < nbytes) {
     while (input.rpos == input.wpos)
-      process_sleep(&input.queue, &console.lock);
+      process_sleep(&input.queue, &input.lock);
 
     c = input.buf[input.rpos++ % CONSOLE_BUF_SIZE];
 
@@ -141,7 +131,7 @@ console_read(void *buf, size_t nbytes)
       break;
   }
 
-  spin_unlock(&console.lock);
+  spin_unlock(&input.lock);
   
   return i;
 }
@@ -338,91 +328,4 @@ console_parse_esc(char c)
 		esc_state = 0;
     break;
 	}
-}
-
-
-/*
- * ----------------------------------------------------------------------------
- * Formatted output
- * ----------------------------------------------------------------------------
- */
-
-static int
-cputc(void *arg, int c)
-{
-  (void) arg;
-  console_putc(c);
-  return 1;
-}
-
-/**
- * Printf-like formatted output to the console.
- * 
- * @param format The format string.
- * @param ap     A variable argument list.
- */
-void
-vcprintf(const char *format, va_list ap)
-{
-  if (console.locking)
-    spin_lock(&console.lock);
-
-  __printf(cputc, NULL, format, ap);
-  
-  if (console.locking)
-    spin_unlock(&console.lock);
-}
-
-/**
- * Printf-like formatted output to the console.
- * 
- * @param format The format string.
- */
-void
-cprintf(const char *format, ...)
-{
-  va_list ap;
-
-  va_start(ap, format);
-  vcprintf(format, ap);
-  va_end(ap);
-}
-
-const char *panicstr;
-
-void
-__panic(const char *file, int line, const char *format, ...)
-{
-  va_list ap;
-
-  if (!panicstr) {
-    panicstr = format;
-    console.locking = 0;
-
-    cprintf("kernel panic at %s:%d: ", file, line);
-
-    va_start(ap, format);
-    vcprintf(format, ap);
-    va_end(ap);
-
-    cprintf("\n");
-  }
-
-  // Never returns.
-  for (;;)
-    monitor(NULL);
-}
-
-void
-__warn(const char *file, int line, const char *format, ...)
-{
-  va_list ap;
-
-  va_start(ap, format);
-  
-  cprintf("kernel warning at %s:%d: ", file, line);
-  vcprintf(format, ap);
-  cprintf("\n");
-
-  va_end(ap);
 }

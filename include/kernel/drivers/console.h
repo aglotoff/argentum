@@ -39,15 +39,12 @@
 #define BUF_HEIGHT        30
 #define BUF_SIZE          (BUF_WIDTH * BUF_HEIGHT) 
 
-void console_init(void);
-void console_putc(char);
-void console_intr(int (*)(void));
-int  console_getc(void);
+void    console_init(void);
+void    console_putc(char);
+void    console_intr(int (*)(void));
+int     console_getc(void);
 
 ssize_t console_read(void *, size_t);
 ssize_t console_write(const void *, size_t);
-
-void vcprintf(const char *, va_list);
-void cprintf(const char *, ...);
 
 #endif  // !__KERNEL_DRIVERS_CONSOLE_H__

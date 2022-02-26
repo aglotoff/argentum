@@ -1,8 +1,6 @@
 #include <errno.h>
 #include <stdlib.h>
 
-#include "xalloc.h"
-
 struct __BlkHeader *__alloc_free;
 static struct __BlkHeader __alloc_base; 
 

@@ -1,6 +1,6 @@
 #include <assert.h>
 
-#include <kernel/drivers/console.h>
+#include <kernel/cprintf.h>
 #include <kernel/drivers/sd.h>
 #include <kernel/list.h>
 #include <kernel/mm/kobject.h>

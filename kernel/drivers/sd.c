@@ -2,8 +2,8 @@
 #include <errno.h>
 #include <stdint.h>
 
+#include <kernel/cprintf.h>
 #include <kernel/cpu.h>
-#include <kernel/drivers/console.h>
 #include <kernel/drivers/gic.h>
 #include <kernel/fs/buf.h>
 #include <kernel/mm/memlayout.h>
