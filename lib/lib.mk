@@ -52,7 +52,8 @@ LIB_SRCFILES += \
 	lib/math/fmod.c \
 	lib/math/frexp.c \
 	lib/math/ldexp.c \
-	lib/math/modf.c
+	lib/math/modf.c \
+	lib/math/sqrt.c
 
 LIB_SRCFILES += \
 	lib/setjmp/longjmp.S \

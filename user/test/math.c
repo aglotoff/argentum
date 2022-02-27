@@ -4,6 +4,8 @@
 #include <math.h>
 #include <stdio.h>
 
+#define SQRT_HALF   0.70710678118654752440    // sqrt(0.5)
+
 static int
 approx(double x, double y)
 {
@@ -50,6 +52,13 @@ main(void)
   assert(fabs(-5.0) == 5.0);
 	assert(fabs(0.0) == 0.0);
 	assert(fabs(5.0) == 5.0);
+
+	// sqrt
+	assert(approx(sqrt(0.0), 0.0));
+	assert(approx(sqrt(0.5), SQRT_HALF));
+	assert(approx(sqrt(1.0), 1.0));
+	assert(approx(sqrt(2.0), 1.0 / SQRT_HALF));
+	assert(approx(sqrt(144.0), 12.0));
 
   // --------------------------------------------------------------------------
   // Nearest integer functions

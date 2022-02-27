@@ -25,6 +25,7 @@ double fmod(double, double);
 double frexp(double, int *);
 double ldexp(double, int);
 double modf(double, double *);
+double sqrt(double);
 
 #ifdef __cplusplus
 };
