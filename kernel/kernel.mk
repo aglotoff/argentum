@@ -38,6 +38,7 @@ KERNEL_SRCFILES :=	\
 	kernel/process.c \
 	kernel/sync.c \
 	kernel/syscall.c \
+	kernel/thread.c \
 	kernel/trapentry.S \
 	kernel/trap.c \
 	kernel/main.c

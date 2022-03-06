@@ -142,8 +142,8 @@ trap_irq_dispatch(void)
   // Re-enable the IRQ
   gic_enable(irq, cpu_id());
 
-  if (resched && (my_process() != NULL))
-    process_yield();
+  if (resched && (my_thread() != NULL))
+    thread_yield();
 }
 
 static const char *

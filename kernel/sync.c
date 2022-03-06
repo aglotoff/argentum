@@ -185,7 +185,7 @@ mutex_init(struct Mutex *mutex, const char *name)
 {
   spin_init(&mutex->lock, name);
   list_init(&mutex->queue);
-  mutex->process = NULL;
+  mutex->thread = NULL;
   mutex->name = name;
 }
 
@@ -200,10 +200,10 @@ mutex_lock(struct Mutex *mutex)
   spin_lock(&mutex->lock);
 
   // Sleep until the mutex becomes available.
-  while (mutex->process != NULL)
-    process_sleep(&mutex->queue, &mutex->lock);
+  while (mutex->thread != NULL)
+    thread_sleep(&mutex->queue, &mutex->lock, THREAD_SLEEPING);
 
-  mutex->process = my_process();
+  mutex->thread = my_thread();
 
   spin_unlock(&mutex->lock);
 }
@@ -221,8 +221,8 @@ mutex_unlock(struct Mutex *mutex)
   
   spin_lock(&mutex->lock);
 
-  mutex->process = NULL;
-  process_wakeup(&mutex->queue);
+  mutex->thread = NULL;
+  thread_wakeup(&mutex->queue);
 
   spin_unlock(&mutex->lock);
 }
@@ -236,11 +236,11 @@ mutex_unlock(struct Mutex *mutex)
 int
 mutex_holding(struct Mutex *mutex)
 {
-  struct Process *process;
+  struct Thread *thread;
 
   spin_lock(&mutex->lock);
-  process = mutex->process;
+  thread = mutex->thread;
   spin_unlock(&mutex->lock);
 
-  return (process != NULL) && (process == my_process());
+  return (thread != NULL) && (thread == my_thread());
 }

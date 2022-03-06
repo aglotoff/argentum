@@ -47,13 +47,14 @@ main(void)
   sd_init();            // MultiMedia Card Interface
   buf_init();           // Buffer cache
   file_init();          // File table
+  scheduler_init();     // Scheduler
   process_init();       // Process table
 
   // Unblock other CPUs
   bsp_started = 1;    
 
   cprintf("Starting CPU %d\n", cpu_id());
-  scheduler();   
+  scheduler_start();   
 }
 
 /**
@@ -70,7 +71,7 @@ mp_enter(void)
   ptimer_init();        // Private timer
 
   cprintf("Starting CPU %d\n", cpu_id());
-  scheduler();   
+  scheduler_start();   
 }
 
 // Initial translation table

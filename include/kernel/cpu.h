@@ -6,14 +6,14 @@
 #endif
 
 struct Context;
-struct Process;
+struct Thread;
 
 /**
  * Per-CPU state.
  */
 struct Cpu {
   struct Context *scheduler;      ///< Saved scheduler context
-  struct Process *process;        ///< The currently running process   
+  struct Thread  *thread;         ///< The currently running thread   
   int             irq_save_count; ///< Depth of irq_save() nesting
   int             irq_flags;      ///< Were interupts enabled before IRQ save?
 };

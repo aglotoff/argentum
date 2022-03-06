@@ -172,7 +172,7 @@ sd_request(struct Buf *buf)
 
   // Wait for the R/W operation to finish
   while ((buf->flags & (BUF_DIRTY | BUF_VALID)) != BUF_VALID)
-    process_sleep(&buf->wait_queue, &sd_queue.lock);
+    thread_sleep(&buf->wait_queue, &sd_queue.lock, THREAD_SLEEPING);
 
   spin_unlock(&sd_queue.lock);
 }
@@ -222,7 +222,7 @@ sd_intr(void)
 
   spin_unlock(&sd_queue.lock);
 
-  process_wakeup(&buf->wait_queue);
+  thread_wakeup(&buf->wait_queue);
 }
 
 

@@ -22,37 +22,25 @@
 
 #include <kernel/process.h>
 
-static struct KObjectPool *process_pool;
+// Process Object Pool
+struct KObjectPool * process_pool;
 
+// Size of PID hash table
 #define NBUCKET   256
 
-HASH_DECLARE(pid_hash, NBUCKET);
-
+// Process ID hash table
 static struct {
-  int             nprocesses;
-  struct ListLink runqueue;
+  struct ListLink table[NBUCKET];
   struct SpinLock lock;
-} ptable;
+} pid_hash;
+
+// Lock to protect the parent/child relationships between the processes
+static struct SpinLock process_lock;
 
 static void process_run(void);
 static void process_pop_tf(struct Trapframe *);
-static void process_suspend(void);
-static void process_resume(struct Process *);
-static void scheduler_yield(void);
 
 static struct Process *init_process;
-
-struct Process *
-my_process(void)
-{
-  struct Process *process;
-
-  irq_save();
-  process = my_cpu()->process;
-  irq_restore();
-
-  return process;
-}
 
 void
 process_init(void)
@@ -63,12 +51,12 @@ process_init(void)
   if (process_pool == NULL)
     panic("cannot allocate process_pool");
 
-  HASH_INIT(pid_hash);
+  HASH_INIT(pid_hash.table);
+  spin_init(&pid_hash.lock, "pid_hash");
 
-  list_init(&ptable.runqueue);
-  spin_init(&ptable.lock, "ptable");
+  spin_init(&process_lock, "process_lock");
 
-  // Create the 'init' process.
+  // Create the init process
   if (process_create(_binary_obj_user_init_start, &init_process) != 0)
     panic("Cannot create the init process");
 }
@@ -100,28 +88,23 @@ process_alloc(void)
   sp -= sizeof *process->tf;
   process->tf = (struct Trapframe *) sp;
 
-  // Setup new context to start executing at process_run.
-  sp -= sizeof *process->context;
-  process->context = (struct Context *) sp;
-  memset(process->context, 0, sizeof *process->context);
-  process->context->lr = (uint32_t) process_run;
+  // Setup new context to start executing at thread_run.
+  thread_init(&process->thread, process_run, sp, process);
 
-  process->state = PROCESS_EMBRIO;
   process->parent = NULL;
+  list_init(&process->wait_queue);
   list_init(&process->children);
   process->sibling.next = NULL;
   process->sibling.prev = NULL;
 
-  spin_lock(&ptable.lock);
+  spin_lock(&pid_hash.lock);
 
   if ((process->pid = ++next_pid) < 0)
     panic("pid overflow");
 
-  HASH_PUT(pid_hash, &process->pid_link, process->pid);
+  HASH_PUT(pid_hash.table, &process->pid_link, process->pid);
 
-  ptable.nprocesses++;
-
-  spin_unlock(&ptable.lock);
+  spin_unlock(&pid_hash.lock);
 
   for (i = 0; i < OPEN_MAX; i++)
     process->files[i] = NULL;
@@ -183,12 +166,7 @@ process_create(const void *binary, struct Process **pstore)
   if ((r = process_load_binary(proc, binary)) < 0)
     goto fail3;
 
-  spin_lock(&ptable.lock);
-
-  proc->state = PROCESS_RUNNABLE;
-  list_add_back(&ptable.runqueue, &proc->link);
-
-  spin_unlock(&ptable.lock);
+  thread_enqueue(&proc->thread);
 
   if (pstore != NULL)
     *pstore = proc;
@@ -219,9 +197,9 @@ process_free(struct Process *proc)
   page_free(kstack_page);
 
   // Remove the pid hash link
-  spin_lock(&ptable.lock);
+  spin_lock(&pid_hash.lock);
   HASH_REMOVE(&proc->pid_link);
-  spin_unlock(&ptable.lock);
+  spin_unlock(&pid_hash.lock);
 
   // Return the process descriptor to the pool
   kobject_free(process_pool, proc);
@@ -233,12 +211,17 @@ pid_lookup(pid_t pid)
   struct ListLink *l;
   struct Process *proc;
 
-  HASH_FOREACH_ENTRY(pid_hash, l, pid) {
+  spin_lock(&pid_hash.lock);
+
+  HASH_FOREACH_ENTRY(pid_hash.table, l, pid) {
     proc = LIST_CONTAINER(l, struct Process, pid_link);
-    if (proc->pid == pid)
+    if (proc->pid == pid) {
+      spin_unlock(&pid_hash.lock);
       return proc;
+    }
   }
 
+  spin_unlock(&pid_hash.lock);
   return NULL;
 }
 
@@ -247,7 +230,7 @@ process_destroy(int status)
 {
   struct ListLink *l;
   struct Process *child, *current = my_process();
-  int fd;
+  int fd, has_zombies;
 
   vm_free(current->vm.trtab);
 
@@ -259,14 +242,12 @@ process_destroy(int status)
 
   current->exit_code = status;
 
-  spin_lock(&ptable.lock);
-
-  current->state = PROCESS_ZOMBIE;
-  ptable.nprocesses--;
-
   assert(init_process != NULL);
 
+  spin_lock(&process_lock);
+
   // Move children to the init process
+  has_zombies = 0;
   while (!list_empty(&current->children)) {
     l = current->children.next;
     list_remove(l);
@@ -275,157 +256,55 @@ process_destroy(int status)
     child->parent = init_process;
     list_add_back(&init_process->children, l);
 
-    if ((child->state == PROCESS_ZOMBIE) &&
-        (init_process->state == PROCESS_SLEEPING))
-      process_resume(init_process);
+    // Check whether there is a child available to be cleaned up
+    if (child->thread.state == THREAD_DESTROYED)
+      has_zombies = 1;
   }
 
-  if (current->parent && (current->parent->state == PROCESS_SLEEPING))
-    process_resume(current->parent);
+  // Wake up the init process to cleanup zombie children
+  if (has_zombies)
+    thread_wakeup(&init_process->wait_queue);
 
-  scheduler_yield();
+  // Wakeup the parent process
+  if (current->parent)
+    thread_wakeup(&current->parent->wait_queue);
+
+  thread_sleep(&current->wait_queue, &process_lock, THREAD_DESTROYED);
 }
 
 pid_t
 process_copy(void)
 {
-  struct Process *child, *parent = my_process();
+  struct Process *child, *current = my_process();
   int fd;
 
   if ((child = process_alloc()) == NULL)
     return -ENOMEM;
 
-  if ((child->vm.trtab = vm_copy(parent->vm.trtab)) == NULL) {
+  if ((child->vm.trtab = vm_copy(current->vm.trtab)) == NULL) {
     process_free(child);
     return -ENOMEM;
   }
 
-  child->vm.heap  = parent->vm.heap;
-  child->vm.stack = parent->vm.stack;
-  child->parent = parent;
-  *child->tf    = *parent->tf;
+  child->vm.heap  = current->vm.heap;
+  child->vm.stack = current->vm.stack;
+  child->parent = current;
+  *child->tf    = *current->tf;
   child->tf->r0 = 0;
 
   for (fd = 0; fd < OPEN_MAX; fd++) {
-    child->files[fd] = parent->files[fd] ? file_dup(parent->files[fd]) : NULL;
+    child->files[fd] = current->files[fd] ? file_dup(current->files[fd]) : NULL;
   }
 
-  child->cwd = fs_inode_dup(parent->cwd);
+  child->cwd = fs_inode_dup(current->cwd);
 
-  spin_lock(&ptable.lock);
+  spin_lock(&process_lock);
+  list_add_back(&current->children, &child->sibling);
+  spin_unlock(&process_lock);
 
-  list_add_back(&parent->children, &child->sibling);
-
-  child->state = PROCESS_RUNNABLE;
-  list_add_back(&ptable.runqueue, &child->link);
-
-  spin_unlock(&ptable.lock);
+  thread_enqueue(&child->thread);
 
   return child->pid;
-}
-
-static void
-scheduler_yield(void)
-{
-  int irq_flags;
-
-  irq_flags = my_cpu()->irq_flags;
-  context_switch(&my_process()->context, my_cpu()->scheduler);
-  my_cpu()->irq_flags = irq_flags;
-}
-
-void
-scheduler(void)
-{
-  struct ListLink *link;
-  struct Process *next;
-
-  //cprintf("Test %f %d %f\n", 23.456, 45, 78.8);
-
-  for (;;) {
-    irq_enable();
-
-    spin_lock(&ptable.lock);
-
-    while (!list_empty(&ptable.runqueue)) {
-      link = ptable.runqueue.next;
-      list_remove(link);
-
-      next = LIST_CONTAINER(link, struct Process, link);
-      assert(next->state == PROCESS_RUNNABLE);
-
-      next->state = PROCESS_RUNNING;
-      my_cpu()->process = next;
-
-      vm_switch_user(next->vm.trtab);
-
-      context_switch(&my_cpu()->scheduler, next->context);
-    }
-
-    // If there are no more proceses to run, drop into the kernel monitor.
-    if ((ptable.nprocesses == 0) && (cpu_id() == 0)) {
-      spin_unlock(&ptable.lock);
-      
-      cprintf("No runnable processes in the system!\n");
-      for (;;)
-        monitor(NULL);
-    }
-
-    // Mark that no process is running on this CPU.
-    my_cpu()->process = NULL;
-    vm_switch_kernel();
-
-    spin_unlock(&ptable.lock);
-
-    asm volatile("wfi");
-  }
-}
-
-void
-process_yield(void)
-{
-  struct Process *current = my_process();
-  
-  spin_lock(&ptable.lock);
-
-  current->state = PROCESS_RUNNABLE;
-  list_add_back(&ptable.runqueue, &current->link);
-
-  // Return into the scheduler loop
-  scheduler_yield();
-
-  spin_unlock(&ptable.lock);
-}
-
-/**
- * Suspend execution of the current process. The caller must hold the
- * ptable.lock.
- */
-static void
-process_suspend(void)
-{
-  assert(spin_holding(&ptable.lock));
-
-  my_process()->state = PROCESS_SLEEPING;
-
-  scheduler_yield();
-}
-
-/**
- * Resume execution of the previously suspended process.
- * 
- * @param proc The process to be resumed.
- */
-static void
-process_resume(struct Process *proc)
-{
-  assert(spin_holding(&ptable.lock));
-  assert(proc->state == PROCESS_SLEEPING);
-
-  proc->state = PROCESS_RUNNABLE;
-
-  list_remove(&proc->link);
-  list_add_back(&ptable.runqueue, &proc->link);
 }
 
 pid_t
@@ -438,7 +317,7 @@ process_wait(pid_t pid, int *stat_loc, int options)
   if (options & ~(WNOHANG | WUNTRACED))
     return -EINVAL;
 
-  spin_lock(&ptable.lock);
+  spin_lock(&process_lock);
 
   for (;;) {
     found = 0;
@@ -459,10 +338,10 @@ process_wait(pid_t pid, int *stat_loc, int options)
 
       found = p->pid;
 
-      if (p->state == PROCESS_ZOMBIE) {
+      if (p->thread.state == THREAD_DESTROYED) {
         list_remove(&p->sibling);
 
-        spin_unlock(&ptable.lock);
+        spin_unlock(&process_lock);
 
         if (stat_loc)
           *stat_loc = p->exit_code;
@@ -481,24 +360,20 @@ process_wait(pid_t pid, int *stat_loc, int options)
       break;
     }
 
-    process_suspend();
+    thread_sleep(&current->wait_queue, &process_lock, THREAD_SLEEPING);
   }
 
-  spin_unlock(&ptable.lock);
+  spin_unlock(&process_lock);
 
   return r;
 }
 
-// A process' very first scheduling by scheduler() will switch here.
 static void
 process_run(void)
 {
   static int first;
 
   struct Process *proc = my_process();
-
-  // Still holding the process table lock.
-  spin_unlock(&ptable.lock);
 
   if (!first) {
     first = 1;
@@ -531,52 +406,6 @@ process_pop_tf(struct Trapframe *tf)
   );
 
   panic("should not return");
-}
-
-/**
- * 
- */
-void
-process_sleep(struct ListLink *wait_queue, struct SpinLock *lock)
-{
-  struct Process *current = my_process();
-
-  if (lock != &ptable.lock) {
-    spin_lock(&ptable.lock);
-    spin_unlock(lock);
-  }
-
-  list_add_back(wait_queue, &current->link);
-  process_suspend();
-
-  if (lock != &ptable.lock) {
-    spin_unlock(&ptable.lock);
-    spin_lock(lock);
-  }
-}
-
-/**
- * Wake up all processes sleeping on the wait queue.
- *
- * @param wait_queue Pointer to the head of the wait queue.
- */
-void
-process_wakeup(struct ListLink *wait_queue)
-{
-  struct ListLink *l;
-  struct Process *p;
-
-  spin_lock(&ptable.lock);
-
-  while (!list_empty(wait_queue)) {
-    l = wait_queue->next;
-    list_remove(l);
-
-    p = LIST_CONTAINER(l, struct Process, link);
-    process_resume(p);
-  }
-
-  spin_unlock(&ptable.lock);
 }
 
 void *

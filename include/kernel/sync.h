@@ -16,7 +16,7 @@
 #include <kernel/list.h>
 
 struct Cpu;
-struct Process;
+struct Thread;
 
 #define NCALLERPCS  10
 
@@ -35,7 +35,7 @@ void spin_unlock(struct SpinLock *);
 int  spin_holding(struct SpinLock *);
 
 struct Mutex {
-  struct Process   *process;      ///< The process holdng the mutex
+  struct Thread    *thread;      ///< The thread holding the mutex
   struct ListLink   queue;        ///< Wait queue
   struct SpinLock   lock;         ///< Spinlock protecting this mutex
   const char       *name;         ///< The name of the mutex (for debugging)

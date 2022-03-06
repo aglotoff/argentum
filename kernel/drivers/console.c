@@ -79,7 +79,7 @@ console_intr(int (*getc)(void))
           (c == '\n') ||
           (c == C('D')) ||
           (input.wpos == input.rpos + CONSOLE_BUF_SIZE))
-        process_wakeup(&input.queue);
+        thread_wakeup(&input.queue);
       break;
     }
   }
@@ -117,7 +117,7 @@ console_read(void *buf, size_t nbytes)
 
   while (i < nbytes) {
     while (input.rpos == input.wpos)
-      process_sleep(&input.queue, &input.lock);
+      thread_sleep(&input.queue, &input.lock, THREAD_SLEEPING);
 
     c = input.buf[input.rpos++ % CONSOLE_BUF_SIZE];
 
