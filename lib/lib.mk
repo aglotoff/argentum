@@ -46,12 +46,16 @@ LIB_SRCFILES += \
 	lib/math/__dscale.c \
 	lib/math/__dtrunc.c \
 	lib/math/__dunscale.c \
+	lib/math/__log.c \
 	lib/math/ceil.c \
+	lib/math/exp.c \
 	lib/math/fabs.c \
 	lib/math/floor.c \
 	lib/math/fmod.c \
 	lib/math/frexp.c \
 	lib/math/ldexp.c \
+	lib/math/log.c \
+	lib/math/log10.c \
 	lib/math/modf.c \
 	lib/math/sqrt.c
 

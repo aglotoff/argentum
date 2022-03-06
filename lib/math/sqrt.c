@@ -13,9 +13,6 @@
 double
 sqrt(double x)
 {
-  int n;
-  double y;
-
   // --------------------------------------------------------------------------
   // Based on "Software Manual for the Elementary Functions" by Cody & Waite
   // --------------------------------------------------------------------------
@@ -31,6 +28,9 @@ sqrt(double x)
   //
   // Compute sqrt(f) using the Newton's method:
   //   y(i) = (y(i-1) + f/y(i-1)) / 2,  i = 1,2,...,j
+
+  int n;
+  double y;
 
   if (x < 0) {
     errno = EDOM;

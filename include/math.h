@@ -18,12 +18,16 @@ int    __dnormalize(uint16_t *);
 int    __dscale(double *, int);
 int    __dtrunc(double *, int);
 int    __dunscale(double *, int *);
+double __log(double, int);
 double ceil(double);
+double exp(double);
 double fabs(double);
 double floor(double);
 double fmod(double, double);
 double frexp(double, int *);
 double ldexp(double, int);
+double log(double);
+double log10(double);
 double modf(double, double *);
 double sqrt(double);
 

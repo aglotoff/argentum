@@ -47,6 +47,9 @@
 #define __DBL_FBITS   (48 + __DBL_EOFF)               // # of fraction bits
 #define __DBL_FRAC    ((1 << __DBL_EOFF) - 1)         // Fraction mask
 
+// Test the sign bit of a double value
+#define __DSIGN(x)    (((short *) &(x))[__D0] & __DBL_SIGN)
+
 // Whether long double has the IEEE 754 80-bit format
 #define __LDBL        0
 

@@ -1,9 +1,12 @@
 // Test <math.h> functions
 #include <assert.h>
+#include <errno.h>
 #include <float.h>
 #include <math.h>
 #include <stdio.h>
 
+#define E						2.71828182845904523536
+#define LN2					0.69314718055994530942
 #define SQRT_HALF   0.70710678118654752440    // sqrt(0.5)
 
 static int
@@ -16,19 +19,26 @@ int
 main(void)
 {
 	double x;
-	int exp;
+	int e;
 	
 	// --------------------------------------------------------------------------
 	// Exponential and logarithmic functions
 	// --------------------------------------------------------------------------
 
+	// exp
+	assert(approx(exp(-1.0), 1.0 / E));
+	assert(approx(exp(0.0), 1.0));
+	assert(approx(exp(LN2), 2.0));
+	assert(approx(exp(1.0), E));
+	assert(approx(exp(3.0), E * E * E));
+
 	// frexp
-	assert(approx(frexp(-3.0, &exp), -0.75) && (exp == 2));
-	assert(approx(frexp(-0.5, &exp), -0.5) && (exp == 0));
-	assert((frexp(0.0, &exp) == 0.0) && (exp == 0));
-	assert(approx(frexp(0.33, &exp), 0.66) && (exp == -1));
-	assert(approx(frexp(0.66, &exp), 0.66) && (exp == 0));
-	assert(approx(frexp(96.0, &exp), 0.75) && (exp == 7));
+	assert(approx(frexp(-3.0, &e), -0.75) && (e == 2));
+	assert(approx(frexp(-0.5, &e), -0.5) && (e == 0));
+	assert((frexp(0.0, &e) == 0.0) && (e == 0));
+	assert(approx(frexp(0.33, &e), 0.66) && (e == -1));
+	assert(approx(frexp(0.66, &e), 0.66) && (e == 0));
+	assert(approx(frexp(96.0, &e), 0.75) && (e == 7));
 
 	// ldexp
 	assert(ldexp(-3.0, 4) == -48.0);
@@ -43,6 +53,16 @@ main(void)
 	assert((modf(0.0, &x) == -0.0) && (x == 0.0));
 	assert((modf(0.6, &x) == 0.6) && (x == 0.0));
 	assert((modf(12.0, &x) == 0.0) && (x == 12.0));
+
+	// log
+	assert(log(1.0) == 0);
+	assert(approx(log(E), 1.0));
+	assert(approx(log(E * E * E), 3.0));
+
+	// log10
+	assert(approx(log10(10.0), 1.0));
+	assert(approx(log10(5.0), 1.0 - log10(2.0)));
+	assert(approx(log10(1e5), 5.0));
 
 	// --------------------------------------------------------------------------
 	// Power and absolute-value functions
