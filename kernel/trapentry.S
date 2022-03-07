@@ -63,7 +63,7 @@ trap_common:
   // Switch to SVC mode
   mrs     lr, cpsr
   bic     lr, lr, #PSR_M_MASK
-  orr     lr, lr, #PSR_M_SVC
+  orr     lr, lr, #(PSR_M_SVC | PSR_I | PSR_F)
   msr     cpsr_c, lr
 
   // Build the trap frame (see struct TrapFrame)
@@ -76,10 +76,11 @@ trap_common:
   mov     r0, sp
 
   // If trap occured in user mode, jump to trap_user
-  bic     r1, #PSR_M_MASK
+  and     r1, #PSR_M_MASK
   cmp     r1, #PSR_M_USR
   beq     trap_user
 
+  // Call trap(tf)
   bl      trap
 
   // Fall through to trap_exit
@@ -123,7 +124,7 @@ trap_user:
   // Make sure all stack frames are properly terminated
   mov     fp, #0
 
-  // Call trap(tf), where tf=sp
+  // Call trap(tf)
   bl      trap
 
   // Load FPU registers

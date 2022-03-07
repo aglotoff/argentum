@@ -86,11 +86,12 @@ process_alloc(void)
   sp -= sizeof *process->tf;
   process->tf = (struct UTrapFrame *) sp;
 
-  // Setup new context to start executing at thread_run.
-  if ((process->thread = thread_create(process, process_run, sp)) == NULL)
+  // Setup new context to start executing at task_run.
+  if ((process->task = task_create(process, process_run, sp)) == NULL)
     goto fail2;
 
   process->parent = NULL;
+  process->zombie = 0;
   list_init(&process->wait_queue);
   list_init(&process->children);
   process->sibling.next = NULL;
@@ -172,7 +173,7 @@ process_create(const void *binary, struct Process **pstore)
   if ((r = process_load_binary(proc, binary)) < 0)
     goto fail3;
 
-  thread_enqueue(proc->thread);
+  task_enqueue(proc->task);
 
   if (pstore != NULL)
     *pstore = proc;
@@ -197,8 +198,8 @@ process_free(struct Process *process)
 {
   struct PageInfo *kstack_page;
 
-  // Destroy the thread descriptor
-  thread_destroy(process->thread);
+  // Destroy the task descriptor
+  task_destroy(process->task);
 
   // Free the kernel stack
   kstack_page = kva2page(process->kstack);
@@ -249,8 +250,6 @@ process_destroy(int status)
 
   fs_inode_put(current->cwd);
 
-  current->exit_code = status;
-
   assert(init_process != NULL);
 
   spin_lock(&process_lock);
@@ -266,19 +265,22 @@ process_destroy(int status)
     list_add_back(&init_process->children, l);
 
     // Check whether there is a child available to be cleaned up
-    if (child->thread->state == THREAD_DESTROYED)
+    if (child->zombie)
       has_zombies = 1;
   }
 
   // Wake up the init process to cleanup zombie children
   if (has_zombies)
-    thread_wakeup(&init_process->wait_queue);
+    task_wakeup(&init_process->wait_queue);
+
+  current->zombie = 1;
+  current->exit_code = status;
 
   // Wakeup the parent process
   if (current->parent)
-    thread_wakeup(&current->parent->wait_queue);
+    task_wakeup(&current->parent->wait_queue);
 
-  thread_sleep(&current->wait_queue, &process_lock, THREAD_DESTROYED);
+  task_sleep(&current->wait_queue, &process_lock);
 }
 
 pid_t
@@ -311,7 +313,7 @@ process_copy(void)
   list_add_back(&current->children, &child->sibling);
   spin_unlock(&process_lock);
 
-  thread_enqueue(child->thread);
+  task_enqueue(child->task);
 
   return child->pid;
 }
@@ -347,7 +349,7 @@ process_wait(pid_t pid, int *stat_loc, int options)
 
       found = p->pid;
 
-      if (p->thread->state == THREAD_DESTROYED) {
+      if (p->zombie) {
         list_remove(&p->sibling);
 
         spin_unlock(&process_lock);
@@ -369,7 +371,7 @@ process_wait(pid_t pid, int *stat_loc, int options)
       break;
     }
 
-    thread_sleep(&current->wait_queue, &process_lock, THREAD_SLEEPING);
+    task_sleep(&current->wait_queue, &process_lock);
   }
 
   spin_unlock(&process_lock);

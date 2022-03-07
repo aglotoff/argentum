@@ -29,8 +29,9 @@ trap(struct TrapFrame *tf)
 
   // Halt if some other CPU already has called panic().
   if (panicstr) {
-    for (;;)
-      asm volatile("wfi");
+    for (;;) {
+      wfi();
+    }
   }
 
   // Dispatch based on what type of trap occured.
@@ -69,8 +70,8 @@ trap_handle_abort(struct TrapFrame *tf)
   address = tf->trapno == T_DABT ? read_dfar() : read_ifar();
   status  = tf->trapno == T_DABT ? read_dfsr() : read_ifsr();
 
+  // If abort happened in kernel mode, print the trap frame and call panic()
   if ((tf->psr & PSR_M_MASK) != PSR_M_USR) {
-    // Kernel-mode abort.
     print_trapframe(tf);
     panic("kernel fault va %p status %#x", address, status);
   }
@@ -104,7 +105,7 @@ trap_irq_dispatch(void)
 
   irq_save();
 
-  // Read the interrupt ID and temporarily disable it.
+  // Get the IRQ number and temporarily disable it
   irq = gic_intid();
   gic_disable(irq);
   gic_eoi(irq);
@@ -113,11 +114,8 @@ trap_irq_dispatch(void)
 
   resched = 0;
 
-  // Process the IRQ.
+  // Process the IRQ
   switch (irq & 0xFFFFFF) {
-  case 0:
-    // TODO:
-    break;
   case IRQ_PTIMER:
     ptimer_intr();
     resched = 1;
@@ -135,15 +133,15 @@ trap_irq_dispatch(void)
     eth_intr();
     break;
   default:
-    cprintf("Unexpected IRQ %d from CPU %d\n", irq & 0xFFFFFF, cpu_id());
+    cprintf("Unexpected IRQ %d from CPU %d\n", irq, cpu_id());
     break;
   }
 
   // Re-enable the IRQ
   gic_enable(irq, cpu_id());
 
-  if (resched && (my_thread() != NULL))
-    thread_yield();
+  if (resched && (my_task() != NULL))
+    task_yield();
 }
 
 static const char *

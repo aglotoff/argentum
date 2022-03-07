@@ -36,9 +36,9 @@ KERNEL_SRCFILES :=	\
 	kernel/kdebug.c \
 	kernel/monitor.c \
 	kernel/process.c \
+	kernel/scheduler.c \
 	kernel/sync.c \
 	kernel/syscall.c \
-	kernel/thread.c \
 	kernel/trapentry.S \
 	kernel/trap.c \
 	kernel/main.c

@@ -8,9 +8,10 @@
 #include <limits.h>
 #include <sys/types.h>
 
+#include <kernel/cpu.h>
 #include <kernel/list.h>
 #include <kernel/mm/vm.h>
-#include <kernel/thread.h>
+#include <kernel/scheduler.h>
 #include <kernel/trap.h>
 
 struct File;
@@ -21,9 +22,9 @@ struct Inode;
  * Process state.
  */
 struct Process {
-  struct Thread     *thread;
+  struct Task       *task;
 
-  uint8_t           *kstack;      ///< Bottom of thread kernel stack
+  uint8_t           *kstack;      ///< Bottom of task kernel stack
   struct UTrapFrame *tf;          ///< Trap frame for current exception
 
   struct UserVm      vm;
@@ -36,6 +37,7 @@ struct Process {
   struct ListLink    wait_queue;  ///< Queue to sleep waiting for children
   struct ListLink    children;    ///< List pf process children
   struct ListLink    sibling;     ///< Link into the siblings list
+  int                zombie;      ///< Whether the process is a zombie
 
   int                exit_code;
 
@@ -46,8 +48,8 @@ struct Process {
 static inline struct Process *
 my_process(void)
 {
-  struct Thread *thread = my_thread();
-  return thread != NULL ? thread->process : NULL;
+  struct Task *task = my_task();
+  return task != NULL ? task->process : NULL;
 }
 
 void  process_init(void);

@@ -10,7 +10,7 @@
  * ----------------------------------------------------------------------------
  * 
  * The caller must disable interrupts while accessing the per-CPU data, since a
- * timer IRQ may cause the current thread to be moved to another processor, and
+ * timer IRQ may cause the current task to be moved to another processor, and
  * the pointer to the CPU struct will no longer be valid.
  *
  */
@@ -43,6 +43,18 @@ my_cpu(void)
     panic("interruptible");
 
   return &cpus[cpu_id()];
+}
+
+struct Task *
+my_task(void)
+{
+  struct Task *task;
+
+  irq_save();
+  task = my_cpu()->task;
+  irq_restore();
+
+  return task;
 }
 
 

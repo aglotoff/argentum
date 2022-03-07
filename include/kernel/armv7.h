@@ -110,6 +110,12 @@ write_cpsr(uint32_t val)
 
 #include <stdint.h>
 
+static inline void
+wfi(void)
+{
+  asm volatile("wfi");
+}
+
 /**
  * Read the value of the MPIDR (Multiprocessor Affinity) register.
  * 

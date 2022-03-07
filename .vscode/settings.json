@@ -34,6 +34,7 @@
         "lcd.h": "c",
         "file.h": "c",
         "float.h": "c",
-        "errno.h": "c"
+        "errno.h": "c",
+        "scheduler.h": "c"
     }
 }
