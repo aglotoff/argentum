@@ -24,7 +24,7 @@ struct Process {
   struct Thread     *thread;
 
   uint8_t           *kstack;      ///< Bottom of thread kernel stack
-  struct UTrapframe *tf;          ///< Trap frame for current exception
+  struct UTrapFrame *tf;          ///< Trap frame for current exception
 
   struct UserVm      vm;
 

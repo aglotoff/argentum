@@ -15,6 +15,7 @@
 #define T_IRQ       6         ///< IRQ (Interrupt)
 #define T_FIQ       7         ///< FIQ (Fast Interrupt)
 
+// IRQ numbers
 #define IRQ_PTIMER  29
 #define IRQ_UART0   44
 #define IRQ_MCIA    49
@@ -26,10 +27,10 @@
 
 #include <stdint.h>
 
-struct Trapframe {
+/** Generic Trap Frame */
+struct TrapFrame {
   uint32_t  trapno;           ///< Trap number
-  uint32_t  sp_usr;           ///< Saved user mode SP
-  uint32_t  lr_usr;           ///< Saved user mode LR
+  uint32_t  psr;              ///< Saved PSR
   uint32_t  r0;               ///< Saved R0
   uint32_t  r1;               ///< Saved R1
   uint32_t  r2;               ///< Saved R2
@@ -43,17 +44,17 @@ struct Trapframe {
   uint32_t  r10;              ///< Saved R10
   uint32_t  r11;              ///< Saved R11
   uint32_t  r12;              ///< Saved R12
-  uint32_t  psr;              ///< Saved PSR
-  uint32_t  lr;               ///< Saved supervisor mode LR
   uint32_t  pc;               ///< Saved PC
 };
 
-struct UTrapframe {
+/** User-mode Trap Frame */
+struct UTrapFrame {
   uint32_t  s[32];            ///< Saved S0-S31
   uint32_t  fpscr;            ///< Saved FPSCR
-  uint32_t  trapno;           ///< Trap number
   uint32_t  sp_usr;           ///< Saved user mode SP
   uint32_t  lr_usr;           ///< Saved user mode LR
+  uint32_t  trapno;           ///< Trap number
+  uint32_t  psr;              ///< Saved PSR
   uint32_t  r0;               ///< Saved R0
   uint32_t  r1;               ///< Saved R1
   uint32_t  r2;               ///< Saved R2
@@ -67,17 +68,15 @@ struct UTrapframe {
   uint32_t  r10;              ///< Saved R10
   uint32_t  r11;              ///< Saved R11
   uint32_t  r12;              ///< Saved R12
-  uint32_t  psr;              ///< Saved PSR
-  uint32_t  lr;               ///< Saved supervisor mode LR
   uint32_t  pc;               ///< Saved PC
 };
 
-void trap(struct Trapframe *tf);
+void trap(struct TrapFrame *tf);
 
 /**
  * Print the contents of the provided trap frame.
  */
-void print_trapframe(struct Trapframe *tf);
+void print_trapframe(struct TrapFrame *tf);
 
 #endif  // !__ASSEMBLER__
 

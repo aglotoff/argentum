@@ -38,7 +38,7 @@ static struct {
 static struct SpinLock process_lock;
 
 static void process_run(void);
-static void process_pop_tf(struct UTrapframe *);
+static void process_pop_tf(struct UTrapFrame *);
 
 static struct Process *init_process;
 
@@ -84,7 +84,7 @@ process_alloc(void)
 
   // Leave room for Trapframe.
   sp -= sizeof *process->tf;
-  process->tf = (struct UTrapframe *) sp;
+  process->tf = (struct UTrapFrame *) sp;
 
   // Setup new context to start executing at thread_run.
   if ((process->thread = thread_create(process, process_run, sp)) == NULL)
@@ -397,27 +397,34 @@ process_run(void)
   process_pop_tf(proc->tf);
 }
 
-// Restores the register values in the Trapframe.
-// This function doesn't return.
+// Restore the user-mode registers from the trap frame.
+// Doesn't return.
+// TODO: essentially this is the same code as trap_exit
 static void
-process_pop_tf(struct UTrapframe *tf)
+process_pop_tf(struct UTrapFrame *tf)
 {
   asm volatile(
     "mov     sp, %0\n"
+
+    // Load FPU registers
     "vldmia  sp!, {s0-s31}\n"
     "ldmia   sp!, {r1}\n"
     "vmsr    fpscr, r1\n"
-    "add     sp, #12\n"                 // skip trapno
-    "ldmdb   sp, {sp,lr}^\n"            // restore user mode sp and lr
-    "ldmia   sp!, {r0-r12,lr}\n"        // restore context
-    "msr     spsr_c, lr\n"              // restore spsr
-    "ldmia   sp!, {lr,pc}^\n"           // return
+
+    // Restore user-mode SP and LR and skip trapno
+    "ldmia   sp, {sp,lr}^\n"
+    "add     sp, #12\n"
+
+    // Restore PSR
+    "ldmia   sp!, {lr}\n"
+    "msr     spsr, lr\n"
+
+    // Restore registers and return
+    "ldmia   sp!, {r0-r12,pc}^\n"
     :
     : "r" (tf)
     : "memory"
   );
-
-  panic("should not return");
 }
 
 void *

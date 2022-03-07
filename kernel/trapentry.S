@@ -5,54 +5,60 @@
 .section .text
 
 /*
- *
- * Entry points for different traps
- *
+ * ----------------------------------------------------------------------------
+ * Trap entry points
+ * ----------------------------------------------------------------------------
  */
 
+// Undefined Instruction
   .globl trap_undef
 trap_undef:
-  sub     lr, lr, #4              // lr_und -= 4
-  str     lr, [sp, #8]            // save lr_und
-  mov     lr, #T_UNDEF            // save trap number
-  b       alltraps
+  sub     lr, #4                // LR_und -= 4
+  str     lr, [sp, #12]         // save LR_und
+  mov     lr, #T_UNDEF          // save trap number
+  b       trap_common
 
+// Prefetch Abort
   .globl trap_pabt
 trap_pabt:
-  sub     lr, lr, #4              // lr_abt -= 4
-  str     lr, [sp, #8]            // save lr_abt
-  mov     lr, #T_PABT             // save trap number
-  b       alltraps
+  sub     lr, #4                // LR_abt -= 4
+  str     lr, [sp, #12]         // save LR_abt
+  mov     lr, #T_PABT           // save trap number
+  b       trap_common
 
+// Data Abort
   .globl trap_dabt
 trap_dabt:
-  sub     lr, lr, #8              // lr_abt -= 8
-  str     lr, [sp, #8]            // save lr_abt
-  mov     lr, #T_DABT             // save trap number
-  b       alltraps
+  sub     lr, #8                // LR_abt -= 8
+  str     lr, [sp, #12]         // save LR_abt
+  mov     lr, #T_DABT           // save trap number
+  b       trap_common
 
+// IRQ (Interrupt)
   .globl trap_irq
 trap_irq:
-  sub     lr, lr, #4              // lr_irq -= 4
-  str     lr, [sp, #8]            // save lr_irq
-  mov     lr, #T_IRQ              // save trap number
-  b       alltraps
-
+  sub     lr, #4                // LR_irq -= 4
+  str     lr, [sp, #12]         // save LR_irq
+  mov     lr, #T_IRQ            // save trap number
+  b       trap_common
 
 /*
+ * ----------------------------------------------------------------------------
+ * Common trap handler code
+ * ----------------------------------------------------------------------------
  *
- * All traps are sent here.
+ * All traps (except system calls) jump here.
  *
  */
 
-  .globl alltraps, trapret
-alltraps:
+  .globl trap_common, trap_exit
+trap_common:
   // Finish building the exception stack frame
-  str     lr, [sp, #12]           // save trap number
-  mrs     lr, spsr                // copy spsr
-  str     lr, [sp, #4]            // save spsr
-  str     r0, [sp, #0]            // save r0
-  mov     r0, sp                  // copy sp
+  str     lr, [sp, #0]          // save the trap number
+  mrs     lr, spsr              // copy SPSR
+  str     lr, [sp, #4]          // save PSR
+  str     r0, [sp, #8]          // save R0
+  mov     r0, sp                // save the resulting pointer in R0
 
   // Switch to SVC mode
   mrs     lr, cpsr
@@ -60,67 +66,54 @@ alltraps:
   orr     lr, lr, #PSR_M_SVC
   msr     cpsr_c, lr
 
-  // Build the trap frame
-  sub     sp, sp, #60             // leave space
-  stmia   sp, {r1-r12}            // save r1-r12
-  ldmia   r0, {r4-r7}             // retrieve data from the exception stack
-  str     r4, [sp, #-4]!          // save r0
-  stmdb   sp, {sp,lr}^            // save user mode sp and lr
-  str     r7, [sp, #-12]!         // save trapno              
-  str     r5, [sp, #64]           // save PSR
-  str     lr, [sp, #68]           // save lr
-  str     r6, [sp, #72]           // save pc
+  // Build the trap frame (see struct TrapFrame)
+  ldr     lr, [r0, #12]         // load PC
+  stmdb   sp!, {r1-r12,lr}      // save R1-R12 and PC
+  ldmia   r0, {r0-r2}           // retrieve data from the exception stack
+  stmdb   sp!, {r0-r2}          // save trapno, PSR, and R0
 
+  // Save pointer to the resulting structure in R0
   mov     r0, sp
 
-  bic     r5, #PSR_M_MASK
-  cmp     r5, #PSR_M_USR
-  bne     no_fpu1
+  // If trap occured in user mode, jump to trap_user
+  bic     r1, #PSR_M_MASK
+  cmp     r1, #PSR_M_USR
+  beq     trap_user
 
-  // Save FPU registers
-  vmrs    r1, fpscr
-  stmdb   sp!, {r1}
-  vstmdb  sp!, {s0-s31}
-
-no_fpu1:
-  // Make sure all stack frames are properly terminated
-  mov     fp, #0
-
-  // Call trap(tf), where tf=sp
   bl      trap
 
-  cmp     r5, #PSR_M_USR
-  bne     no_fpu2
+  // Fall through to trap_exit
 
-  // Return falls through to trapret:
-trapret:
-  // Load FPU registers
-  vldmia  sp!, {s0-s31}
-  ldmia   sp!, {r1}
-  vmsr    fpscr, r1
-
-no_fpu2:
-  add     sp, #12                 // skip trapno
-  ldmdb   sp, {sp,lr}^            // restore user mode sp and lr
-  ldmia   sp!, {r0-r12,lr}        // restore context
-  msr     spsr, lr              // restore spsr
-  ldmia   sp!, {lr,pc}^           // return
+trap_exit:
+  add     sp, #4                // skip trapno
+  ldmia   sp!, {lr}             // load SPSR
+  msr     spsr, lr              // restore PSR
+  ldmia   sp!, {r0-r12,pc}^     // restore registers and return
 
 /*
- *
- * System call entry point.
- *
+ * ----------------------------------------------------------------------------
+ * System call entry point
+ * ----------------------------------------------------------------------------
  */
 
   .globl trap_svc
 trap_svc:
-  stmdb   sp!, {r0,lr}
-  mrs     lr, spsr
-  stmdb   sp!, {r0-r12,lr}        // Save r0-r12
-  sub     sp, #12                 // 
-  mov     r0, #T_SWI              // save trap number
-  stmia   sp, {r0,sp,lr}^         // save user mode sp and lr
+  // Build the trap frame (see struct UTrapFrame)
+  stmdb   sp!, {r0-r12,lr}      // save R0-R12 and PC
+  mrs     lr, spsr              // copy SPSR
+  stmdb   sp!, {lr}             // save SPSR
+  mov     r0, #T_SWI            // save trap number
+  stmdb   sp!, {r0}
+
+  // Save pointer to the resulting structure in R0
   mov     r0, sp
+
+  // Fall through to trap_user
+
+trap_user:
+  // Save user-mode SP and LR
+  sub     sp, #8
+  stmia   sp, {sp,lr}^            
 
   // Save FPU registers
   vmrs    r1, fpscr
@@ -133,4 +126,13 @@ trap_svc:
   // Call trap(tf), where tf=sp
   bl      trap
 
-  b       trapret
+  // Load FPU registers
+  vldmia  sp!, {s0-s31}
+  ldmia   sp!, {r2}
+  vmsr    fpscr, r2
+
+  // Restore user-mode SP and LR
+  ldmia   sp, {sp,lr}^
+  add     sp, #8
+
+  b       trap_exit

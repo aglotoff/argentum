@@ -11,28 +11,28 @@
  * Simple interactive kernel monitor.
  */
 
-struct Trapframe;
+struct TrapFrame;
 
 /**
  * Enter the kernel monitor.
  */
-void monitor(struct Trapframe *);
+void monitor(struct TrapFrame *);
 
 /**
  * Display the list of commands supprted by the kernel monitor.
  */
-int mon_help(int, char **, struct Trapframe *);
+int mon_help(int, char **, struct TrapFrame *);
 
 /**
  * Display info about the kernel executable
  */
-int mon_kerninfo(int, char **, struct Trapframe *);
+int mon_kerninfo(int, char **, struct TrapFrame *);
 
 /**
  * Display the stack backtrace.
  */
-int mon_backtrace(int, char **, struct Trapframe *);
+int mon_backtrace(int, char **, struct TrapFrame *);
 
-int mon_poolinfo(int, char **, struct Trapframe *);
+int mon_poolinfo(int, char **, struct TrapFrame *);
 
 #endif  // !KERNEL_MONITOR_H

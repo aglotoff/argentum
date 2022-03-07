@@ -12,10 +12,10 @@
 #include <kernel/monitor.h>
 
 static char *read_cmd(void);
-static int exec_cmd(char *s, struct Trapframe *tf);
+static int exec_cmd(char *s, struct TrapFrame *tf);
 
 void
-monitor(struct Trapframe *tf)
+monitor(struct TrapFrame *tf)
 {
   char *s;
 
@@ -83,7 +83,7 @@ read_cmd(void)
 struct Command {
   const char  *name;
   const char  *desc;
-  int        (*func)(int, char **, struct Trapframe *);
+  int        (*func)(int, char **, struct TrapFrame *);
 };
 
 static struct Command commands[] = {
@@ -99,7 +99,7 @@ static struct Command commands[] = {
  * Parse and execute the command.
  */
 static int
-exec_cmd(char *s, struct Trapframe *tf)
+exec_cmd(char *s, struct TrapFrame *tf)
 {
   static const char *const whitespace = " \t\r\n\f";
 
@@ -146,7 +146,7 @@ exec_cmd(char *s, struct Trapframe *tf)
 /***** Implementations of kernel monitor commands. *****/
 
 int
-mon_help(int argc, char **argv, struct Trapframe *tf)
+mon_help(int argc, char **argv, struct TrapFrame *tf)
 {
   struct Command *cmd;
 
@@ -162,7 +162,7 @@ mon_help(int argc, char **argv, struct Trapframe *tf)
 }
 
 int
-mon_kerninfo(int argc, char **argv, struct Trapframe *tf)
+mon_kerninfo(int argc, char **argv, struct TrapFrame *tf)
 {
   // The following symbols are defined in the kernel.ld linker script.
   extern uint8_t _start[], _etext[], _edata[], _end[];
@@ -184,7 +184,7 @@ mon_kerninfo(int argc, char **argv, struct Trapframe *tf)
 }
 
 int
-mon_backtrace(int argc, char **argv, struct Trapframe *tf)
+mon_backtrace(int argc, char **argv, struct TrapFrame *tf)
 {
   struct PcDebugInfo info;
   uint32_t *fp;
@@ -217,7 +217,7 @@ mon_backtrace(int argc, char **argv, struct Trapframe *tf)
 }
 
 int
-mon_poolinfo(int argc, char **argv, struct Trapframe *tf)
+mon_poolinfo(int argc, char **argv, struct TrapFrame *tf)
 {
   (void) argc;
   (void) argv;
