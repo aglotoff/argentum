@@ -21,26 +21,26 @@ struct Inode;
  * Process state.
  */
 struct Process {
-  struct Thread     thread;
+  struct Thread     *thread;
 
-  uint8_t          *kstack;     ///< Bottom of thread kernel stack
-  struct Trapframe *tf;         ///< Trap frame for current exception
+  uint8_t           *kstack;      ///< Bottom of thread kernel stack
+  struct UTrapframe *tf;          ///< Trap frame for current exception
 
-  struct UserVm     vm;
+  struct UserVm      vm;
 
-  pid_t             pid;        ///< Process identifier
-  struct ListLink   pid_link;   ///< Link into the PID hash table
+  pid_t              pid;         ///< Process identifier
+  struct ListLink    pid_link;    ///< Link into the PID hash table
 
   // Protected by process_lock:
-  struct Process   *parent;     ///< Link to the parent process
-  struct ListLink   wait_queue; ///< Queue to sleep waiting for children
-  struct ListLink   children;   ///< List pf process children
-  struct ListLink   sibling;    ///< Link into the siblings list
+  struct Process    *parent;      ///< Link to the parent process
+  struct ListLink    wait_queue;  ///< Queue to sleep waiting for children
+  struct ListLink    children;    ///< List pf process children
+  struct ListLink    sibling;     ///< Link into the siblings list
 
-  int               exit_code;
+  int                exit_code;
 
-  struct File      *files[OPEN_MAX];
-  struct Inode     *cwd;
+  struct File       *files[OPEN_MAX];
+  struct Inode      *cwd;
 };
 
 static inline struct Process *

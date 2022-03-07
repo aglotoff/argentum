@@ -9,20 +9,21 @@
 #define __SYS_EXEC        2
 #define __SYS_WAIT        3
 #define __SYS_EXIT        4
-#define __SYS_GETPID      5
-#define __SYS_GETPPID     6
-#define __SYS_TIME        7
-#define __SYS_GETDENTS    8
-#define __SYS_CHDIR       9
-#define __SYS_OPEN        10
-#define __SYS_MKNOD       11
-#define __SYS_UNLINK      12
-#define __SYS_RMDIR       13
-#define __SYS_STAT        14
-#define __SYS_CLOSE       15
-#define __SYS_READ        16
-#define __SYS_WRITE       17
-#define __SYS_SBRK        18
+#define __SYS_ALARM       5
+#define __SYS_GETPID      6
+#define __SYS_GETPPID     7
+#define __SYS_TIME        8
+#define __SYS_GETDENTS    9
+#define __SYS_CHDIR       10
+#define __SYS_OPEN        11
+#define __SYS_MKNOD       12
+#define __SYS_UNLINK      13
+#define __SYS_RMDIR       14
+#define __SYS_STAT        15
+#define __SYS_CLOSE       16
+#define __SYS_READ        17
+#define __SYS_WRITE       18
+#define __SYS_SBRK        19
 
 // Generic system call: pass system call number as an immediate operand of the
 // SVC instruction, and up to three parameters in R0, R1, R2.

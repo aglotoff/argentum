@@ -24,8 +24,6 @@ enum {
  * Saved registers for kernel context swithces.
  */
 struct Context {
-  uint32_t fpscr;
-  uint32_t d[32];
   uint32_t r4;
   uint32_t r5;
   uint32_t r6;
@@ -53,8 +51,8 @@ struct Thread *my_thread(void);
 void           scheduler_init(void);
 void           scheduler_start(void);
 
-void           thread_init(struct Thread *, void (*)(void), uint8_t *,
-                           struct Process *);
+struct Thread *thread_create(struct Process *, void (*)(void), uint8_t *);
+void           thread_destroy(struct Thread *);
 void           thread_enqueue(struct Thread *);
 void           thread_run(void);
 void           thread_yield(void);

@@ -71,21 +71,40 @@ alltraps:
   str     lr, [sp, #68]           // save lr
   str     r6, [sp, #72]           // save pc
 
+  mov     r0, sp
+
+  bic     r5, #PSR_M_MASK
+  cmp     r5, #PSR_M_USR
+  bne     no_fpu1
+
+  // Save FPU registers
+  vmrs    r1, fpscr
+  stmdb   sp!, {r1}
+  vstmdb  sp!, {s0-s31}
+
+no_fpu1:
   // Make sure all stack frames are properly terminated
   mov     fp, #0
 
   // Call trap(tf), where tf=sp
-  mov     r0, sp
   bl      trap
+
+  cmp     r5, #PSR_M_USR
+  bne     no_fpu2
 
   // Return falls through to trapret:
 trapret:
+  // Load FPU registers
+  vldmia  sp!, {s0-s31}
+  ldmia   sp!, {r1}
+  vmsr    fpscr, r1
+
+no_fpu2:
   add     sp, #12                 // skip trapno
   ldmdb   sp, {sp,lr}^            // restore user mode sp and lr
   ldmia   sp!, {r0-r12,lr}        // restore context
   msr     spsr, lr              // restore spsr
   ldmia   sp!, {lr,pc}^           // return
-
 
 /*
  *
@@ -101,12 +120,17 @@ trap_svc:
   sub     sp, #12                 // 
   mov     r0, #T_SWI              // save trap number
   stmia   sp, {r0,sp,lr}^         // save user mode sp and lr
+  mov     r0, sp
+
+  // Save FPU registers
+  vmrs    r1, fpscr
+  stmdb   sp!, {r1}
+  vstmdb  sp!, {s0-s31}
 
   // Make sure all stack frames are properly terminated
   mov     fp, #0
 
   // Call trap(tf), where tf=sp
-  mov     r0, sp
   bl      trap
 
   b       trapret

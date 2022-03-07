@@ -38,7 +38,7 @@ static struct {
 static struct SpinLock process_lock;
 
 static void process_run(void);
-static void process_pop_tf(struct Trapframe *);
+static void process_pop_tf(struct UTrapframe *);
 
 static struct Process *init_process;
 
@@ -74,10 +74,8 @@ process_alloc(void)
   process = (struct Process *) kobject_alloc(process_pool);
 
   // Allocate per-process kernel stack
-  if ((page = page_alloc(0)) == NULL) {
-    kobject_free(process_pool, process);
-    return NULL;
-  }
+  if ((page = page_alloc(0)) == NULL)
+    goto fail1;
 
   process->kstack = (uint8_t *) page2kva(page);
   page->ref_count++;
@@ -86,10 +84,11 @@ process_alloc(void)
 
   // Leave room for Trapframe.
   sp -= sizeof *process->tf;
-  process->tf = (struct Trapframe *) sp;
+  process->tf = (struct UTrapframe *) sp;
 
   // Setup new context to start executing at thread_run.
-  thread_init(&process->thread, process_run, sp, process);
+  if ((process->thread = thread_create(process, process_run, sp)) == NULL)
+    goto fail2;
 
   process->parent = NULL;
   list_init(&process->wait_queue);
@@ -110,6 +109,13 @@ process_alloc(void)
     process->files[i] = NULL;
 
   return process;
+
+fail2:
+  page->ref_count--;
+  page_free(page);
+fail1:
+  kobject_free(process_pool, process);
+  return NULL;
 }
 
 int
@@ -166,7 +172,7 @@ process_create(const void *binary, struct Process **pstore)
   if ((r = process_load_binary(proc, binary)) < 0)
     goto fail3;
 
-  thread_enqueue(&proc->thread);
+  thread_enqueue(proc->thread);
 
   if (pstore != NULL)
     *pstore = proc;
@@ -187,22 +193,25 @@ fail1:
  * @param proc The process to be freed.
  */
 void
-process_free(struct Process *proc)
+process_free(struct Process *process)
 {
   struct PageInfo *kstack_page;
 
+  // Destroy the thread descriptor
+  thread_destroy(process->thread);
+
   // Free the kernel stack
-  kstack_page = kva2page(proc->kstack);
+  kstack_page = kva2page(process->kstack);
   kstack_page->ref_count--;
   page_free(kstack_page);
 
   // Remove the pid hash link
   spin_lock(&pid_hash.lock);
-  HASH_REMOVE(&proc->pid_link);
+  HASH_REMOVE(&process->pid_link);
   spin_unlock(&pid_hash.lock);
 
   // Return the process descriptor to the pool
-  kobject_free(process_pool, proc);
+  kobject_free(process_pool, process);
 }
 
 struct Process *
@@ -257,7 +266,7 @@ process_destroy(int status)
     list_add_back(&init_process->children, l);
 
     // Check whether there is a child available to be cleaned up
-    if (child->thread.state == THREAD_DESTROYED)
+    if (child->thread->state == THREAD_DESTROYED)
       has_zombies = 1;
   }
 
@@ -302,7 +311,7 @@ process_copy(void)
   list_add_back(&current->children, &child->sibling);
   spin_unlock(&process_lock);
 
-  thread_enqueue(&child->thread);
+  thread_enqueue(child->thread);
 
   return child->pid;
 }
@@ -338,7 +347,7 @@ process_wait(pid_t pid, int *stat_loc, int options)
 
       found = p->pid;
 
-      if (p->thread.state == THREAD_DESTROYED) {
+      if (p->thread->state == THREAD_DESTROYED) {
         list_remove(&p->sibling);
 
         spin_unlock(&process_lock);
@@ -391,10 +400,13 @@ process_run(void)
 // Restores the register values in the Trapframe.
 // This function doesn't return.
 static void
-process_pop_tf(struct Trapframe *tf)
+process_pop_tf(struct UTrapframe *tf)
 {
   asm volatile(
     "mov     sp, %0\n"
+    "vldmia  sp!, {s0-s31}\n"
+    "ldmia   sp!, {r1}\n"
+    "vmsr    fpscr, r1\n"
     "add     sp, #12\n"                 // skip trapno
     "ldmdb   sp, {sp,lr}^\n"            // restore user mode sp and lr
     "ldmia   sp!, {r0-r12,lr}\n"        // restore context

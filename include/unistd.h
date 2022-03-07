@@ -6,25 +6,27 @@
 
 extern char **environ;
 
-pid_t   fork(void);
-pid_t   getpid(void);
-pid_t   getppid(void);
+pid_t    fork(void);
+pid_t    getpid(void);
+pid_t    getppid(void);
 
-int     execl(const char *, ...);
-int     execle(const char *, ...);
-int     execlp(const char *, ...);
-int     execv(const char *, char *const[]);
-int     execve(const char *, char *const[], char *const[]);
-int     execvp(const char *, char *const[]);
+int      execl(const char *, ...);
+int      execle(const char *, ...);
+int      execlp(const char *, ...);
+int      execv(const char *, char *const[]);
+int      execve(const char *, char *const[], char *const[]);
+int      execvp(const char *, char *const[]);
 
-int     chdir(const char *);
-int     unlink(const char *);
-int     rmdir(const char *);
+unsigned alarm(unsigned);
 
-int     close(int);
-ssize_t read(int, void *, size_t);
-ssize_t write(int, const void *, size_t);
+int      chdir(const char *);
+int      unlink(const char *);
+int      rmdir(const char *);
 
-void   *sbrk(ptrdiff_t);
+int      close(int);
+ssize_t  read(int, void *, size_t);
+ssize_t  write(int, const void *, size_t);
+
+void    *sbrk(ptrdiff_t);
 
 #endif  // !__UNISTD_H__

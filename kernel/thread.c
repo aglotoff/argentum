@@ -3,9 +3,12 @@
 
 #include <kernel/cpu.h>
 #include <kernel/list.h>
+#include <kernel/mm/kobject.h>
 #include <kernel/process.h>
 #include <kernel/sync.h>
 #include <kernel/thread.h>
+
+static struct KObjectPool *thread_pool;
 
 // Run queue
 static struct {
@@ -34,6 +37,10 @@ my_thread(void)
 void
 scheduler_init(void)
 {
+  thread_pool = kobject_pool_create("thread_pool", sizeof(struct Thread), 0);
+  if (thread_pool == NULL)
+    panic("cannot allocate thread pool");
+
   list_init(&sched.run_queue);
   spin_init(&sched.lock, "sched");
 }
@@ -43,8 +50,6 @@ scheduler_start(void)
 {
   struct ListLink *link;
   struct Thread *next;
-
-  //cprintf("Test %f %d %f\n", 23.456, 45, 78.8);
 
   for (;;) {
     irq_enable();
@@ -89,10 +94,14 @@ scheduler_yield(void)
   my_cpu()->irq_flags = irq_flags;
 }
 
-void
-thread_init(struct Thread *thread, void (*entry)(void), uint8_t *stack,
-            struct Process *process)
+struct Thread *
+thread_create(struct Process *process, void (*entry)(void), uint8_t *stack)
 {
+  struct Thread *thread;
+
+  if ((thread = (struct Thread *) kobject_alloc(thread_pool)) == NULL)
+    return NULL;
+
   stack -= sizeof *thread->context;
   thread->context = (struct Context *) stack;
   memset(thread->context, 0, sizeof *thread->context);
@@ -102,6 +111,17 @@ thread_init(struct Thread *thread, void (*entry)(void), uint8_t *stack,
   thread->state = THREAD_EMBRIO;
 
   thread->process = process;
+
+  return thread;
+}
+
+void
+thread_destroy(struct Thread *thread)
+{
+  if (thread == my_thread())
+    panic("a thread cannot destroy itself");
+
+  kobject_free(thread_pool, thread);
 }
 
 void
