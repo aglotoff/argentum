@@ -263,7 +263,7 @@ eth_rx(void)
       (void) tmp;
     } else {
       uint32_t i;
-      struct PageInfo *p;
+      struct Page *p;
       uint32_t *data;
       uint8_t *packet;
   

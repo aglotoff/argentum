@@ -12,7 +12,7 @@
 #include <kernel/mm/vm.h>
 
 static pte_t *vm_walk_trtab(tte_t *, uintptr_t, int);
-static void   vm_init_map(tte_t *, uintptr_t, uint32_t, size_t, int);
+static void   vm_static_map(tte_t *, uintptr_t, uint32_t, size_t, int);
 
 /*
  * ----------------------------------------------------------------------------
@@ -28,7 +28,7 @@ vm_init(void)
 {
   extern uint8_t _start[];
 
-  struct PageInfo *page;
+  struct Page *page;
 
   // Allocate the master translation table
   if ((page = page_alloc_block(2, PAGE_ALLOC_ZERO)) == NULL)
@@ -38,16 +38,16 @@ vm_init(void)
 
   // Map all physical memory at KERNEL_BASE
   // Permissions: kernel RW, user NONE
-  vm_init_map(kern_trtab, KERNEL_BASE, 0, PHYS_TOP, VM_READ | VM_WRITE);
+  vm_static_map(kern_trtab, KERNEL_BASE, 0, PHYS_TOP, VM_READ | VM_WRITE);
 
   // Map all devices 
-  vm_init_map(kern_trtab, KERNEL_BASE + PHYS_TOP, PHYS_TOP,
+  vm_static_map(kern_trtab, KERNEL_BASE + PHYS_TOP, PHYS_TOP,
               VECTORS_BASE - KERNEL_BASE - PHYS_TOP,
               VM_READ | VM_WRITE | VM_NOCACHE);
 
   // Map exception vectors at VECTORS_BASE
   // Permissions: kernel R, user NONE
-  vm_init_map(kern_trtab, VECTORS_BASE, (uint32_t) _start, PAGE_SIZE, VM_READ);
+  vm_static_map(kern_trtab, VECTORS_BASE, (uint32_t) _start, PAGE_SIZE, VM_READ);
 
   vm_init_percpu();
 }
@@ -81,6 +81,12 @@ static int prot_to_ap[] = {
   [VM_USER | VM_WRITE]           = AP_BOTH_RW, 
   [VM_USER | VM_READ | VM_WRITE] = AP_BOTH_RW, 
 };
+
+static inline void
+vm_pte_set_flags(pte_t *pte, int flags)
+{
+  *(pte + (NPTENTRIES * 2)) = flags;
+}
 
 static inline void
 vm_pte_set(pte_t *pte, physaddr_t pa, int prot)
@@ -137,7 +143,7 @@ vm_walk_trtab(tte_t *trtab, uintptr_t va, int alloc)
 
   tte = &trtab[TTX(va)];
   if ((*tte & TTE_TYPE_MASK) == TTE_TYPE_FAULT) {
-    struct PageInfo *page;
+    struct Page *page;
 
     if (!alloc || (page = page_alloc(PAGE_ALLOC_ZERO)) == NULL)
       return NULL;
@@ -165,7 +171,7 @@ vm_walk_trtab(tte_t *trtab, uintptr_t va, int alloc)
 // portion of address space.
 //
 static void
-vm_init_map(tte_t *trtab, uintptr_t va, uint32_t pa, size_t n, int prot)
+vm_static_map(tte_t *trtab, uintptr_t va, uint32_t pa, size_t n, int prot)
 { 
   assert(va % PAGE_SIZE == 0);
   assert(pa % PAGE_SIZE == 0);
@@ -239,7 +245,7 @@ vm_switch_user(tte_t *trtab)
  * ----------------------------------------------------------------------------
  */
 
-struct PageInfo *
+struct Page *
 vm_lookup_page(tte_t *trtab, const void *va, pte_t **pte_store)
 {
   pte_t *pte;
@@ -259,7 +265,7 @@ vm_lookup_page(tte_t *trtab, const void *va, pte_t **pte_store)
 }
 
 int
-vm_insert_page(tte_t *trtab, struct PageInfo *page, void *va, unsigned perm)
+vm_insert_page(tte_t *trtab, struct Page *page, void *va, unsigned perm)
 {
   pte_t *pte;
 
@@ -285,7 +291,7 @@ vm_insert_page(tte_t *trtab, struct PageInfo *page, void *va, unsigned perm)
 void
 vm_remove_page(tte_t *trtab, void *va)
 {
-  struct PageInfo *page;
+  struct Page *page;
   pte_t *pte;
 
   if ((uintptr_t) va >= KERNEL_BASE)
@@ -309,9 +315,9 @@ vm_remove_page(tte_t *trtab, void *va)
  */
 
 int
-vm_alloc_region(tte_t *trtab, void *va, size_t n, int prot)
+vm_user_alloc(tte_t *trtab, void *va, size_t n, int prot)
 {
-  struct PageInfo *page;
+  struct Page *page;
   uint8_t *a, *start, *end;
   int r;
 
@@ -323,13 +329,13 @@ vm_alloc_region(tte_t *trtab, void *va, size_t n, int prot)
 
   for (a = start; a < end; a += PAGE_SIZE) {
     if ((page = page_alloc(PAGE_ALLOC_ZERO)) == NULL) {
-      vm_dealloc_region(trtab, start, a - start);
+      vm_user_dealloc(trtab, start, a - start);
       return -ENOMEM;
     }
 
     if ((r = (vm_insert_page(trtab, page, a, prot)) != 0)) {
       page_free(page);
-      vm_dealloc_region(trtab, start, a - start);
+      vm_user_dealloc(trtab, start, a - start);
       return r;
     }
   }
@@ -338,10 +344,10 @@ vm_alloc_region(tte_t *trtab, void *va, size_t n, int prot)
 }
 
 void
-vm_dealloc_region(tte_t *trtab, void *va, size_t n)
+vm_user_dealloc(tte_t *trtab, void *va, size_t n)
 {
   uint8_t *a, *end;
-  struct PageInfo *page;
+  struct Page *page;
   pte_t *pte;
 
   a   = ROUND_DOWN((uint8_t *) va, PAGE_SIZE);
@@ -373,13 +379,13 @@ vm_dealloc_region(tte_t *trtab, void *va, size_t n)
  */
 
 int
-vm_copy_out(tte_t *trtab, void *dst_va, const void *src_va, size_t n)
+vm_user_copy_out(tte_t *trtab, void *dst_va, const void *src_va, size_t n)
 {
   uint8_t *src = (uint8_t *) src_va;
   uint8_t *dst = (uint8_t *) dst_va;
 
   while (n != 0) {
-    struct PageInfo *page;
+    struct Page *page;
     uint8_t *kva;
     size_t offset, ncopy;
 
@@ -401,13 +407,13 @@ vm_copy_out(tte_t *trtab, void *dst_va, const void *src_va, size_t n)
 }
 
 int
-vm_copy_in(tte_t *trtab, void *dst_va, const void *src_va, size_t n)
+vm_user_copy_in(tte_t *trtab, void *dst_va, const void *src_va, size_t n)
 {
   uint8_t *dst = (uint8_t *) dst_va;
   uint8_t *src = (uint8_t *) src_va;
 
   while (n != 0) {
-    struct PageInfo *page;
+    struct Page *page;
     uint8_t *kva;
     size_t offset, ncopy;
 
@@ -429,12 +435,12 @@ vm_copy_in(tte_t *trtab, void *dst_va, const void *src_va, size_t n)
 }
 
 void
-vm_free(tte_t *trtab)
+vm_user_destroy(tte_t *trtab)
 {
-  struct PageInfo *page;
+  struct Page *page;
   unsigned i;
 
-  vm_dealloc_region(trtab, (void *) 0, KERNEL_BASE);
+  vm_user_dealloc(trtab, (void *) 0, KERNEL_BASE);
 
   for (i = 0; i < TTX(KERNEL_BASE); i += 2) {
     if (!trtab[i])
@@ -450,10 +456,12 @@ vm_free(tte_t *trtab)
       page_free(page);
 }
 
+
+
 tte_t *
-vm_copy(tte_t *trtab)
+vm_user_clone(tte_t *trtab)
 {
-  struct PageInfo *tab_page, *src_page, *dst_page;
+  struct Page *tab_page, *src_page, *dst_page;
   uint8_t *va;
   tte_t *t;
   pte_t *pte;
@@ -488,18 +496,18 @@ vm_copy(tte_t *trtab)
           panic("Cannot change page permissions");
 
         if (vm_insert_page(t, src_page, va, perm) < 0) {
-          vm_free(t);
+          vm_user_destroy(t);
           return NULL;
         }
       } else {
         if ((dst_page = page_alloc(0)) == NULL) {
-          vm_free(t);
+          vm_user_destroy(t);
           return NULL;
         }
 
         if (vm_insert_page(t, dst_page, va, perm) < 0) {
           page_free(dst_page);
-          vm_free(t);
+          vm_user_destroy(t);
           return NULL;
         }
 
@@ -520,9 +528,9 @@ vm_copy(tte_t *trtab)
  */
 
 int
-vm_check_user_ptr(tte_t *trtab, const void *va, size_t n, unsigned perm)
+vm_user_check_buf(tte_t *trtab, const void *va, size_t n, unsigned perm)
 {
-  struct PageInfo *page, *new_page;
+  struct Page *page, *new_page;
   const char *p, *end;
   pte_t *pte;
 
@@ -566,9 +574,9 @@ vm_check_user_ptr(tte_t *trtab, const void *va, size_t n, unsigned perm)
 }
 
 int
-vm_check_user_str(tte_t *trtab, const char *s, unsigned perm)
+vm_user_check_str(tte_t *trtab, const char *s, unsigned perm)
 {
-  struct PageInfo *page;
+  struct Page *page;
   const char *p;
   unsigned off;
   pte_t *pte;
@@ -597,11 +605,11 @@ vm_check_user_str(tte_t *trtab, const char *s, unsigned perm)
  */
 
 int
-vm_load(tte_t *trtab, void *va, struct Inode *ip, size_t n, off_t off)
+vm_user_load(tte_t *trtab, void *va, struct Inode *ip, size_t n, off_t off)
 {
-  struct PageInfo *page;
+  struct Page *page;
   uint8_t *dst, *kva;
-  int ncopied, offset;
+  int ncopy, offset;
   int r;
 
   dst = (uint8_t *) va;
@@ -614,52 +622,15 @@ vm_load(tte_t *trtab, void *va, struct Inode *ip, size_t n, off_t off)
     kva = (uint8_t *) page2kva(page);
 
     offset = (uintptr_t) dst % PAGE_SIZE;
-    ncopied = MIN(PAGE_SIZE - offset, n);
+    ncopy  = MIN(PAGE_SIZE - offset, n);
 
-    if ((r = fs_inode_read(ip, kva + offset, ncopied, off)) != ncopied)
+    if ((r = fs_inode_read(ip, kva + offset, ncopy, off)) != ncopy)
       return r;
 
-    dst += ncopied;
-    off += ncopied;
-    n   -= ncopied;
+    dst += ncopy;
+    off += ncopy;
+    n   -= ncopy;
   }
-
-  return 0;
-}
-
-int
-vm_load_binary(struct UserVm *vm, const Elf32_Ehdr *elf)
-{
-  Elf32_Phdr *ph, *eph;
-  int r;
-
-  ph = (Elf32_Phdr *) ((uint8_t *) elf + elf->phoff);
-  eph = ph + elf->phnum;
-
-  vm->heap  = 0;
-  vm->stack = USTACK_TOP - USTACK_SIZE;
-
-  for ( ; ph < eph; ph++) {
-    if (ph->type != PT_LOAD)
-      continue;
-
-    if (ph->filesz > ph->memsz)
-      return -EINVAL;
-    
-    if ((r = vm_alloc_region(vm->trtab, (void *) ph->vaddr, ph->memsz,
-                             VM_READ | VM_WRITE | VM_EXEC | VM_USER) < 0))
-      return r;
-
-    if ((r = vm_copy_out(vm->trtab, (void *) ph->vaddr,
-                         (uint8_t *) elf + ph->offset, ph->filesz)) < 0)
-      return r;
-
-    vm->heap = MAX(vm->heap, ph->vaddr + ph->memsz);
-  }
-
-  if ((r = vm_alloc_region(vm->trtab, (void *) (vm->stack), USTACK_SIZE,
-                           VM_READ | VM_WRITE | VM_USER) < 0))
-    return r;
 
   return 0;
 }

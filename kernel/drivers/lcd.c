@@ -98,7 +98,7 @@ lcd_init(void)
 {
   extern uint8_t _binary_kernel_drivers_vga_font_psf_start[];
 
-  struct PageInfo *page;
+  struct Page *page;
   struct PsfHeader *psf;
 
   // Load the font file.

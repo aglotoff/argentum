@@ -5,6 +5,7 @@
 #include <kernel/cpu.h>
 #include <kernel/list.h>
 #include <kernel/mm/kobject.h>
+#include <kernel/mm/vm.h>
 #include <kernel/process.h>
 #include <kernel/sync.h>
 #include <kernel/scheduler.h>
@@ -54,7 +55,7 @@ scheduler_start(void)
       my_cpu()->task = next;
 
       if (next->process != NULL)
-        vm_switch_user(next->process->vm.trtab);
+        vm_switch_user(next->process->vm);
 
       context_switch(&my_cpu()->scheduler, next->context);
 

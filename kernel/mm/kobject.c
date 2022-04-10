@@ -193,7 +193,7 @@ static struct KObjectSlab *
 kobject_slab_alloc(struct KObjectPool *pool)
 {
   struct KObjectSlab *slab;
-  struct PageInfo *page;
+  struct Page *page;
   struct KObjectNode *curr, **prevp;
   unsigned num;
   uint8_t *buf, *p;
@@ -247,7 +247,7 @@ kobject_slab_alloc(struct KObjectPool *pool)
 static void
 kobject_slab_destroy(struct KObjectPool *pool, struct KObjectSlab *slab)
 {
-  struct PageInfo *page;
+  struct Page *page;
   
   assert(spin_holding(&pool->lock));
   assert(slab->in_use == 0);
@@ -350,7 +350,7 @@ kobject_dump(struct KObjectPool *pool)
 void
 kobject_free(struct KObjectPool *pool, void *obj)
 {
-  struct PageInfo *slab_page;
+  struct Page *slab_page;
   struct KObjectSlab *slab;
   struct KObjectNode *node;
 

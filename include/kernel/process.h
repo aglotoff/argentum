@@ -10,7 +10,7 @@
 
 #include <kernel/cpu.h>
 #include <kernel/list.h>
-#include <kernel/mm/vm.h>
+#include <kernel/mm/mmu.h>
 #include <kernel/scheduler.h>
 #include <kernel/trap.h>
 
@@ -19,30 +19,29 @@ struct SpinLock;
 struct Inode;
 
 /**
- * Process state.
+ * Process descriptor.
  */
 struct Process {
-  struct Task       *task;
+  struct Task       *task;            ///< Scheduler state
+  uint8_t           *kstack;          ///< Bottom of the kernel-mode stack
+  struct UTrapFrame *tf;              ///< Current trap frame
 
-  uint8_t           *kstack;      ///< Bottom of task kernel stack
-  struct UTrapFrame *tf;          ///< Trap frame for current exception
+  pid_t              pid;             ///< Process identifier
+  struct ListLink    pid_link;        ///< Link into the PID hash table
 
-  struct UserVm      vm;
+  tte_t             *vm;              ///< Process' translation table
+  uintptr_t          heap;            ///< Heap end virtual address
+  uintptr_t          stack;           ///< Stack bottom virtual address
 
-  pid_t              pid;         ///< Process identifier
-  struct ListLink    pid_link;    ///< Link into the PID hash table
+  struct Process    *parent;          ///< Link to the parent process
+  struct ListLink    wait_queue;      ///< Queue to sleep waiting for children
+  struct ListLink    children;        ///< List of child processes
+  struct ListLink    sibling;         ///< Link into the siblings list
+  int                zombie;          ///< Whether the process is a zombie
+  int                exit_code;       ///< Exit code
 
-  // Protected by process_lock:
-  struct Process    *parent;      ///< Link to the parent process
-  struct ListLink    wait_queue;  ///< Queue to sleep waiting for children
-  struct ListLink    children;    ///< List pf process children
-  struct ListLink    sibling;     ///< Link into the siblings list
-  int                zombie;      ///< Whether the process is a zombie
-
-  int                exit_code;
-
-  struct File       *files[OPEN_MAX];
-  struct Inode      *cwd;
+  struct File       *files[OPEN_MAX]; ///< Open file descriptors
+  struct Inode      *cwd;             ///< Current working directory
 };
 
 static inline struct Process *
@@ -54,7 +53,6 @@ my_process(void)
 
 void  process_init(void);
 int   process_create(const void *, struct Process **);
-
 void  process_destroy(int);
 void  process_free(struct Process *);
 pid_t process_copy(void);

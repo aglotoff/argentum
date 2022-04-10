@@ -7,7 +7,7 @@
 #include <kernel/mm/page.h>
 
 /** The kernel uses this array to keep track of physical pages. */
-struct PageInfo *pages;
+struct Page *pages;
 
 /** The total number of physical pages in memory. */
 unsigned npages;
@@ -35,10 +35,10 @@ static struct {
 static int pages_inited = 0;
 static struct SpinLock pages_lock;
 
-static void             page_mark_free(struct PageInfo *, unsigned);
-static void             page_mark_used(struct PageInfo *, unsigned);
-static int              page_is_free(struct PageInfo *, unsigned);
-static struct PageInfo *page_split(struct PageInfo *, unsigned, unsigned);
+static void             page_mark_free(struct Page *, unsigned);
+static void             page_mark_used(struct Page *, unsigned);
+static int              page_is_free(struct Page *, unsigned);
+static struct Page *page_split(struct Page *, unsigned, unsigned);
 
 /*
  * ----------------------------------------------------------------------------
@@ -69,7 +69,7 @@ page_init_low(void)
   npages = PHYS_TOP / PAGE_SIZE;
 
   // Allocate the 'pages' array.
-  pages = (struct PageInfo *) boot_alloc(npages * sizeof(struct PageInfo));
+  pages = (struct Page *) boot_alloc(npages * sizeof(struct Page));
 
   // Initialize the free page lists.
   for (i = 0; i <= PAGE_ORDER_MAX; i++) {
@@ -153,7 +153,7 @@ boot_alloc(size_t n)
  *
  * @return Address of a page info structure or NULL if out of memory.
  */
-struct PageInfo *
+struct Page *
 page_alloc(int flags)
 {
   return page_alloc_block(0, flags);
@@ -167,11 +167,11 @@ page_alloc(int flags)
  *
  * @return Address of a page info structure or NULL if out of memory.
  */
-struct PageInfo *
+struct Page *
 page_alloc_block(unsigned order, int flags)
 {
   struct ListLink *link;
-  struct PageInfo *page;
+  struct Page *page;
   unsigned curr_order;
 
   spin_lock(&pages_lock);
@@ -182,7 +182,7 @@ page_alloc_block(unsigned order, int flags)
 
     // If there is a free page block at cur_order, allocate it.
     link = free_pages[curr_order].link.next;
-    page = LIST_CONTAINER(link, struct PageInfo, link);
+    page = LIST_CONTAINER(link, struct Page, link);
     page_mark_used(page, curr_order);
 
     page = page_split(page, curr_order, order);
@@ -206,8 +206,8 @@ page_alloc_block(unsigned order, int flags)
 
 // Split page block of order 'high' until a page block of order 'low' is
 // available.
-static struct PageInfo *
-page_split(struct PageInfo *page, unsigned high, unsigned low)
+static struct Page *
+page_split(struct Page *page, unsigned high, unsigned low)
 {
   unsigned block_order, block_size;
 
@@ -241,7 +241,7 @@ page_split(struct PageInfo *page, unsigned high, unsigned low)
  * @param page Address of the page info structure to be freed.
  */
 void
-page_free(struct PageInfo *page)
+page_free(struct Page *page)
 {
   page_free_block(page, 0);
 }
@@ -253,9 +253,9 @@ page_free(struct PageInfo *page)
  * @param order The order of the page block.
  */
 void
-page_free_block(struct PageInfo *page, unsigned order)
+page_free_block(struct Page *page, unsigned order)
 {
-  struct PageInfo *buddy;
+  struct Page *buddy;
   unsigned curr_order, pgnum, mask;
 
   if (page->ref_count != 0)
@@ -326,7 +326,7 @@ page_free_region(physaddr_t start, physaddr_t end)
 
 // Check whether the page block 'p' of the given 'order' is free.
 static int
-page_is_free(struct PageInfo *p, unsigned order)
+page_is_free(struct Page *p, unsigned order)
 {
   unsigned blockno;
 
@@ -337,14 +337,11 @@ page_is_free(struct PageInfo *p, unsigned order)
 // Add the page block 'p' to the free list for 'order' and set the corresponding
 // bit.
 static void
-page_mark_free(struct PageInfo *p, unsigned order)
+page_mark_free(struct Page *p, unsigned order)
 {
   unsigned pageno, blockno;
 
   pageno = p - pages;
-
-  // cprintf("Mark free %p, %d (%d)", page2pa(p), order,
-  //         page_is_free(&pages[0xdda], 0) != 0);
 
   assert((pageno % (1U << order)) == 0);
   assert(!page_is_free(p, order));
@@ -353,21 +350,16 @@ page_mark_free(struct PageInfo *p, unsigned order)
 
   blockno = pageno / (1 << order);
   free_pages[order].bitmap[blockno / 32] |= (1U << (blockno % 32));
-
-  // cprintf(" -> (%d)\n", page_is_free(&pages[0xdda], 0) != 0);
 }
 
 // Remove the page block 'p' from the free list for 'order' and clear the
 // corresponding bit.
 static void
-page_mark_used(struct PageInfo *p, unsigned order)
+page_mark_used(struct Page *p, unsigned order)
 {
   unsigned pageno, blockno;
 
   pageno = p - pages;
-
-  // cprintf("Mark used %p, %d, (%d)", page2pa(p), order,
-  //         page_is_free(&pages[0xdda], 0) != 0);
 
   assert((pageno % (1U << order)) == 0);
   assert(page_is_free(p, order));
@@ -376,6 +368,4 @@ page_mark_used(struct PageInfo *p, unsigned order)
 
   blockno = pageno / (1U << order);
   free_pages[order].bitmap[blockno / 32] &= ~(1U << (blockno % 32));
-
-  // cprintf(" -> (%d)\n", page_is_free(&pages[0xdda], 0) != 0);
 }

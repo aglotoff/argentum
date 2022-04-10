@@ -22,13 +22,13 @@ struct KObjectSlab;
 /**
  * Physical page block info.
  */
-struct PageInfo {
+struct Page {
   struct ListLink     link;         ///< Linked list head
   int                 ref_count;    ///< Reference count to the page block
   struct KObjectSlab *slab;         ///< Slab this page block belongs to
 };
 
-extern struct PageInfo *pages;
+extern struct Page *pages;
 extern unsigned npages;
 
 /**
@@ -38,7 +38,7 @@ extern unsigned npages;
  * @return The corresponding physical address.
  */
 static inline physaddr_t
-page2pa(struct PageInfo *p)
+page2pa(struct Page *p)
 {
   assert((p >= pages) && (p < &pages[npages]));
   return (p - pages) << PAGE_SHIFT;
@@ -51,7 +51,7 @@ page2pa(struct PageInfo *p)
  * @return The corresponding kernel virtual address.
  */
 static inline void *
-page2kva(struct PageInfo *p)
+page2kva(struct Page *p)
 {
   return KADDR(page2pa(p));
 }
@@ -62,7 +62,7 @@ page2kva(struct PageInfo *p)
  * @param pa The physical address.
  * @return The address of the corresponding page info structure.
  */
-static inline struct PageInfo *
+static inline struct Page *
 pa2page(physaddr_t pa)
 {
   assert((pa >> PAGE_SHIFT) < npages);
@@ -75,7 +75,7 @@ pa2page(physaddr_t pa)
  * @param p Address of the page info structure.
  * @return The corresponding kernel virtual address.
  */
-static inline struct PageInfo *
+static inline struct Page *
 kva2page(void *va)
 {
   return pa2page(PADDR(va));
@@ -87,16 +87,16 @@ kva2page(void *va)
 /** Fill the allocated page block with zeros. */ 
 #define PAGE_ALLOC_ZERO   (1 << 0)
 
-void            *boot_alloc(size_t);
+void        *boot_alloc(size_t);
 
-void             page_init_low(void);
-void             page_init_high(void);
+void         page_init_low(void);
+void         page_init_high(void);
 
-struct PageInfo *page_alloc(int flags);
-struct PageInfo *page_alloc_block(unsigned order, int flags);
+struct Page *page_alloc(int flags);
+struct Page *page_alloc_block(unsigned order, int flags);
 
-void             page_free(struct PageInfo *page);
-void             page_free_block(struct PageInfo *page, unsigned order);
-void             page_free_region(physaddr_t start, physaddr_t end);
+void         page_free(struct Page *page);
+void         page_free_block(struct Page *page, unsigned order);
+void         page_free_region(physaddr_t start, physaddr_t end);
 
 #endif  // !__KERNEL_MM_PAGE_H__

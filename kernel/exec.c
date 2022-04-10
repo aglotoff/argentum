@@ -12,7 +12,7 @@
 #include <kernel/types.h>
 
 static int
-copy_args(tte_t *trtab, char *const args[], uintptr_t limit, char **sp)
+copy_args(tte_t *vm, char *const args[], uintptr_t limit, char **sp)
 {
   char *oargs[32];
   char *p;
@@ -29,7 +29,7 @@ copy_args(tte_t *trtab, char *const args[], uintptr_t limit, char **sp)
     if (p < (char *) limit)
       return -E2BIG;
 
-    if ((r = vm_copy_out(trtab, p, args[i], n)) < 0)
+    if ((r = vm_user_copy_out(vm, p, args[i], n)) < 0)
       return r;
 
     oargs[i] = p;
@@ -42,7 +42,7 @@ copy_args(tte_t *trtab, char *const args[], uintptr_t limit, char **sp)
   if (p < (char *) (USTACK_TOP - USTACK_SIZE))
     return -E2BIG;
 
-  if ((r = vm_copy_out(trtab, p, oargs, n)) < 0)
+  if ((r = vm_user_copy_out(vm, p, oargs, n)) < 0)
     return r;
 
   *sp = p;
@@ -53,13 +53,13 @@ copy_args(tte_t *trtab, char *const args[], uintptr_t limit, char **sp)
 int
 process_exec(const char *path, char *const argv[], char *const envp[])
 {
-  struct PageInfo *trtab_page;
+  struct Page *vm_page;
   struct Process *proc;
   struct Inode *ip;
   Elf32_Ehdr elf;
   Elf32_Phdr ph;
   off_t off;
-  tte_t *trtab;
+  tte_t *vm;
   uintptr_t heap, ustack;
   char *usp, *uargv, *uenvp;
   int r, argc;
@@ -74,13 +74,13 @@ process_exec(const char *path, char *const argv[], char *const envp[])
     goto out1;
   }
 
-  if ((trtab_page = page_alloc_block(1, PAGE_ALLOC_ZERO)) == NULL) {
+  if ((vm_page = page_alloc_block(1, PAGE_ALLOC_ZERO)) == NULL) {
     r = -ENOMEM;
     goto out1;
   }
 
-  trtab = (tte_t *) page2kva(trtab_page);
-  trtab_page->ref_count++;
+  vm = (tte_t *) page2kva(vm_page);
+  vm_page->ref_count++;
 
   if ((r = fs_inode_read(ip, &elf, sizeof(elf), 0)) != sizeof(elf))
     goto out2;
@@ -112,30 +112,30 @@ process_exec(const char *path, char *const argv[], char *const envp[])
       goto out2;
     }
 
-    if ((r = vm_alloc_region(trtab, (void *) ph.vaddr, ph.memsz,
+    if ((r = vm_user_alloc(vm, (void *) ph.vaddr, ph.memsz,
                              VM_READ | VM_WRITE | VM_EXEC | VM_USER) < 0))
       goto out2;
 
-    if ((r = vm_load(trtab, (void *) ph.vaddr, ip, ph.filesz, ph.offset)) < 0)
+    if ((r = vm_user_load(vm, (void *) ph.vaddr, ip, ph.filesz, ph.offset)) < 0)
       goto out2;
 
     heap = MAX(heap, ph.vaddr + ph.memsz);
   }
 
   // Allocate user stack.
-  if ((r = vm_alloc_region(trtab, (void *) ustack, USTACK_SIZE,
+  if ((r = vm_user_alloc(vm, (void *) ustack, USTACK_SIZE,
                            VM_READ | VM_WRITE | VM_USER)) < 0)
     return r;
 
   // Copy args and environment.
   usp = (char *) USTACK_TOP;
-  if ((r = copy_args(trtab, argv, ustack, &usp)) < 0)
+  if ((r = copy_args(vm, argv, ustack, &usp)) < 0)
     goto out2;
 
   argc = r;
   uargv = usp;
 
-  if ((r = copy_args(trtab, envp, ustack, &usp)) < 0)
+  if ((r = copy_args(vm, envp, ustack, &usp)) < 0)
     goto out2;
 
   uenvp = usp;
@@ -145,12 +145,12 @@ process_exec(const char *path, char *const argv[], char *const envp[])
 
   proc = my_process();
 
-  vm_switch_user(trtab);
-  vm_free(proc->vm.trtab);
+  vm_switch_user(vm);
+  vm_user_destroy(proc->vm);
 
-  proc->vm.trtab = trtab;
-  proc->vm.heap  = heap;
-  proc->vm.stack = ustack;
+  proc->vm    = vm;
+  proc->heap  = heap;
+  proc->stack = ustack;
 
   // Stack must be aligned to an 8-byte boundary in order for variadic args
   // to properly work!
@@ -165,7 +165,7 @@ process_exec(const char *path, char *const argv[], char *const envp[])
   return argc;
 
 out2:
-  vm_free(trtab);
+  vm_user_destroy(vm);
 
 out1:
   fs_inode_unlock(ip);

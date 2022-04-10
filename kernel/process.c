@@ -67,7 +67,7 @@ process_alloc(void)
   static pid_t next_pid;
   int i;
 
-  struct PageInfo *page;
+  struct Page *page;
   struct Process *process;
   uint8_t *sp;
 
@@ -120,15 +120,15 @@ fail1:
 }
 
 int
-process_setup_vm(struct Process *p)
+process_setup_vm(struct Process *proc)
 {
-  struct PageInfo *trtab_page;
+  struct Page *vm_page;
 
-  if ((trtab_page = page_alloc_block(1, PAGE_ALLOC_ZERO)) == NULL)
+  if ((vm_page = page_alloc_block(1, PAGE_ALLOC_ZERO)) == NULL)
     return -ENOMEM;
 
-  p->vm.trtab = (tte_t *) page2kva(trtab_page);
-  trtab_page->ref_count++;
+  proc->vm = (tte_t *) page2kva(vm_page);
+  vm_page->ref_count++;
 
   return 0;
 }
@@ -137,13 +137,39 @@ static int
 process_load_binary(struct Process *proc, const void *binary)
 {
   Elf32_Ehdr *elf;
+  Elf32_Phdr *ph, *eph;
   int r;
 
   elf = (Elf32_Ehdr *) binary;
   if (memcmp(elf->ident, "\x7f""ELF", 4) != 0)
     return -EINVAL;
 
-  if ((r = vm_load_binary(&proc->vm, elf)) != 0)
+  ph = (Elf32_Phdr *) ((uint8_t *) elf + elf->phoff);
+  eph = ph + elf->phnum;
+
+  proc->heap  = 0;
+  proc->stack = USTACK_TOP - USTACK_SIZE;
+
+  for ( ; ph < eph; ph++) {
+    if (ph->type != PT_LOAD)
+      continue;
+
+    if (ph->filesz > ph->memsz)
+      return -EINVAL;
+    
+    if ((r = vm_user_alloc(proc->vm, (void *) ph->vaddr, ph->memsz,
+                             VM_READ | VM_WRITE | VM_EXEC | VM_USER) < 0))
+      return r;
+
+    if ((r = vm_user_copy_out(proc->vm, (void *) ph->vaddr,
+                         (uint8_t *) elf + ph->offset, ph->filesz)) < 0)
+      return r;
+
+    proc->heap = MAX(proc->heap, ph->vaddr + ph->memsz);
+  }
+
+  if ((r = vm_user_alloc(proc->vm, (void *) (proc->stack), USTACK_SIZE,
+                           VM_READ | VM_WRITE | VM_USER) < 0))
     return r;
 
   proc->tf->r0     = 0;                   // argc
@@ -181,7 +207,7 @@ process_create(const void *binary, struct Process **pstore)
   return 0;
 
 fail3:
-  vm_free(proc->vm.trtab);
+  vm_user_destroy(proc->vm);
 fail2:
   process_free(proc);
 fail1:
@@ -196,7 +222,7 @@ fail1:
 void
 process_free(struct Process *process)
 {
-  struct PageInfo *kstack_page;
+  struct Page *kstack_page;
 
   // Destroy the task descriptor
   task_destroy(process->task);
@@ -242,7 +268,7 @@ process_destroy(int status)
   struct Process *child, *current = my_process();
   int fd, has_zombies;
 
-  vm_free(current->vm.trtab);
+  vm_user_destroy(current->vm);
 
   for (fd = 0; fd < OPEN_MAX; fd++)
     if (current->files[fd])
@@ -292,13 +318,13 @@ process_copy(void)
   if ((child = process_alloc()) == NULL)
     return -ENOMEM;
 
-  if ((child->vm.trtab = vm_copy(current->vm.trtab)) == NULL) {
+  if ((child->vm = vm_user_clone(current->vm)) == NULL) {
     process_free(child);
     return -ENOMEM;
   }
 
-  child->vm.heap  = current->vm.heap;
-  child->vm.stack = current->vm.stack;
+  child->heap  = current->heap;
+  child->stack = current->stack;
   child->parent = current;
   *child->tf    = *current->tf;
   child->tf->r0 = 0;
@@ -435,14 +461,14 @@ process_grow(ptrdiff_t increment)
   struct Process *current = my_process();
   uintptr_t o, n;
 
-  o = ROUND_UP(current->vm.heap, sizeof(uintptr_t));
+  o = ROUND_UP(current->heap, sizeof(uintptr_t));
   n = ROUND_UP(o + increment, sizeof(uintptr_t));
 
   if (increment > 0) {
-    if ((n < o) || (n > (current->vm.stack + PAGE_SIZE)))
+    if ((n < o) || (n > (current->stack + PAGE_SIZE)))
       // Overflow
       return (void *) -1;
-    if (vm_alloc_region(current->vm.trtab, (void *) ROUND_UP(o, PAGE_SIZE),
+    if (vm_user_alloc(current->vm, (void *) ROUND_UP(o, PAGE_SIZE),
                         ROUND_UP(n, PAGE_SIZE) - ROUND_UP(o, PAGE_SIZE),
                         VM_READ | VM_WRITE | VM_USER) != 0)
       return (void *) -1;
@@ -450,11 +476,11 @@ process_grow(ptrdiff_t increment)
     if (n > o)
       // Overflow
       return (void *) -1;
-    vm_dealloc_region(current->vm.trtab, (void *) ROUND_UP(n, PAGE_SIZE),
+    vm_user_dealloc(current->vm, (void *) ROUND_UP(n, PAGE_SIZE),
                           ROUND_UP(o, PAGE_SIZE) - ROUND_UP(n, PAGE_SIZE));
   }
 
-  current->vm.heap = n;
+  current->heap = n;
 
   return (void *) o;
 }

@@ -61,8 +61,8 @@ static void
 trap_handle_abort(struct TrapFrame *tf)
 {
   uint32_t address, status;
-  struct PageInfo *fault_page, *page;
-  tte_t *trtab;
+  struct Page *fault_page, *page;
+  struct Process *process;
   pte_t *pte;
 
   // Read the contents of the corresponsing Fault Address Register (FAR) and 
@@ -76,9 +76,23 @@ trap_handle_abort(struct TrapFrame *tf)
     panic("kernel fault va %p status %#x", address, status);
   }
 
-  trtab = my_process()->vm.trtab;
+  process = my_process();
+  assert(process != NULL);
 
-  if ((fault_page = vm_lookup_page(trtab, (void *) address, &pte)) != NULL) {
+  fault_page = vm_lookup_page(process->vm, (void *) address, &pte);
+
+  if (fault_page == NULL) {
+    if ((address < process->stack) &&
+        (address >= (process->stack - PAGE_SIZE)) &&
+        (process->heap < (process->stack - PAGE_SIZE))) {
+      // Expand stack
+      if (vm_user_alloc(process->vm, (void *) (process->stack - PAGE_SIZE),
+          PAGE_SIZE, VM_WRITE | VM_USER) == 0) {
+        process->stack -= PAGE_SIZE;
+        return;
+      }
+    }
+  } else {
     int prot;
 
     prot = vm_pte_get_flags(pte);
@@ -88,7 +102,7 @@ trap_handle_abort(struct TrapFrame *tf)
       prot &= ~VM_COW;
       prot |= VM_WRITE;
 
-      if (vm_insert_page(trtab, page, (void *) address, prot) == 0)
+      if (vm_insert_page(process->vm, page, (void *) address, prot) == 0)
         return;
     }
   }
