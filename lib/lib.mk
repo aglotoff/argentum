@@ -65,6 +65,9 @@ LIB_SRCFILES += \
 
 LIB_SRCFILES += \
   lib/stdio/__printf.c \
+	lib/stdio/_Files.c \
+	lib/stdio/fclose.c \
+	lib/stdio/fopen.c \
 	lib/stdio/perror.c \
 	lib/stdio/printf.c \
 	lib/stdio/putchar.c \
