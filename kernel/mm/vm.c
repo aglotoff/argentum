@@ -624,11 +624,10 @@ vm_user_load(tte_t *trtab, void *va, struct Inode *ip, size_t n, off_t off)
     offset = (uintptr_t) dst % PAGE_SIZE;
     ncopy  = MIN(PAGE_SIZE - offset, n);
 
-    if ((r = fs_inode_read(ip, kva + offset, ncopy, off)) != ncopy)
+    if ((r = fs_inode_read(ip, kva + offset, ncopy, &off)) != ncopy)
       return r;
 
     dst += ncopy;
-    off += ncopy;
     n   -= ncopy;
   }
 

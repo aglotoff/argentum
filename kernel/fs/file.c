@@ -48,7 +48,7 @@ file_open(const char *path, int oflag, struct File **fstore)
     if ((r != -ENOENT) || !(oflag & O_CREAT))
       goto fail1;
 
-    if ((r = fs_create(path, S_IFREG, 0, &ip)) < 0)
+    if ((r = fs_create(path, S_IFREG | 0644, 0, &ip)) < 0)
       goto fail1;
   } else {
     fs_inode_lock(ip);
@@ -70,12 +70,27 @@ file_open(const char *path, int oflag, struct File **fstore)
 
   f->inode = ip;
 
-  fs_inode_unlock(ip);
+  if (oflag & O_RDONLY) {
+    // TODO: check group and other permissions
+    if (!(f->inode->mode & S_IRUSR)) {
+      r = -EPERM;
+      goto fail2;
+    }
 
-  if (oflag & O_RDONLY)
     f->readable = 1;
-  if (oflag & O_WRONLY)
+  }
+
+  if (oflag & O_WRONLY) {
+    // TODO: check group and other permissions
+    if (!(f->inode->mode & S_IWUSR)) {
+      r = -EPERM;
+      goto fail2;
+    }
+
     f->writeable = 1;
+  }
+
+  fs_inode_unlock(ip);
 
   if (oflag & O_APPEND)
     f->offset = ip->size;
@@ -87,8 +102,7 @@ file_open(const char *path, int oflag, struct File **fstore)
   return 0;
 
 fail2:
-  fs_inode_unlock(ip);
-  fs_inode_put(ip);
+  fs_inode_unlock_put(ip);
 fail1:
   kobject_free(file_pool, f);
   return r;
@@ -146,13 +160,25 @@ file_read(struct File *f, void *buf, size_t nbytes)
   switch (f->type) {
   case FD_INODE:
     assert(f->inode != NULL);
+
     fs_inode_lock(f->inode);
-    if ((r = fs_inode_read(f->inode, buf, nbytes, f->offset)) > 0)
-      f->offset += r;
+
+    // TODO: check group and other permissions
+    // TODO: what if permissions change?
+    if (!(f->inode->mode & S_IRUSR)) {
+      fs_inode_unlock(f->inode);
+      return -EPERM;
+    }
+
+    r = fs_inode_read(f->inode, buf, nbytes, &f->offset);
+
     fs_inode_unlock(f->inode);
+
     return r;
+
   case FD_PIPE:
     // TODO: read from a pipe
+
   default:
     panic("Invalid type");
     return 0;
@@ -162,24 +188,44 @@ file_read(struct File *f, void *buf, size_t nbytes)
 ssize_t
 file_getdents(struct File *f, void *buf, size_t nbytes)
 {
-  int r;
+  ssize_t ret, total;
+  char *dst;
 
   if (!f->readable)
     return -EBADF;
-  
-  switch (f->type) {
-  case FD_INODE:
-    assert(f->inode != NULL);
-    fs_inode_lock(f->inode);
-    r = fs_inode_getdents(f->inode, buf, nbytes, &f->offset);
+
+  if ((f->type != FD_INODE) || !S_ISDIR(f->inode->mode))
+    return -ENOTDIR;
+
+  dst = (char *) buf;
+  total = 0;
+
+  fs_inode_lock(f->inode);
+
+  // TODO: check group and other permissions
+  // TODO: what if permissions change?
+  if (!(f->inode->mode & S_IRUSR)) {
     fs_inode_unlock(f->inode);
-    return r;
-  case FD_PIPE:
-    // TODO: read from a pipe
-  default:
-    panic("Invalid type");
-    return 0;
+    return -EPERM;
   }
+
+  while (nbytes > 0) {
+    if ((ret = ext2_dir_iterate(f->inode, dst, nbytes, &f->offset)) < 0) {
+      fs_inode_unlock(f->inode);
+      return ret;
+    }
+
+    if (ret == 0)
+      break;
+
+    dst    += ret;
+    total  += ret;
+    nbytes -= ret;
+  }
+
+  fs_inode_unlock(f->inode);
+
+  return total;
 }
 
 ssize_t
@@ -193,10 +239,20 @@ file_write(struct File *f, const void *buf, size_t nbytes)
   switch (f->type) {
   case FD_INODE:
     assert(f->inode != NULL);
+
     fs_inode_lock(f->inode);
-    if ((r = fs_inode_write(f->inode, buf, nbytes, f->offset)) > 0)
-      f->offset += r;
+
+    // TODO: check group and other permissions
+    // TODO: what if permissions change?
+    if (!(f->inode->mode & S_IWUSR)) {
+      fs_inode_unlock(f->inode);
+      return -EPERM;
+    }
+  
+    r = fs_inode_write(f->inode, buf, nbytes, &f->offset);
+
     fs_inode_unlock(f->inode);
+
     return r;
   case FD_PIPE:
     // TODO: write to a pipe

@@ -74,6 +74,11 @@ process_exec(const char *path, char *const argv[], char *const envp[])
     goto out1;
   }
 
+  if (!fs_can_exec(ip)) {
+    r = -EPERM;
+    goto out1;
+  }
+
   if ((vm_page = page_alloc_block(1, PAGE_ALLOC_ZERO)) == NULL) {
     r = -ENOMEM;
     goto out1;
@@ -82,7 +87,8 @@ process_exec(const char *path, char *const argv[], char *const envp[])
   vm = (tte_t *) page2kva(vm_page);
   vm_page->ref_count++;
 
-  if ((r = fs_inode_read(ip, &elf, sizeof(elf), 0)) != sizeof(elf))
+  off = 0;
+  if ((r = fs_inode_read(ip, &elf, sizeof(elf), &off)) != sizeof(elf))
     goto out2;
   
   if (memcmp(elf.ident, "\x7f""ELF", 4) != 0) {
@@ -93,10 +99,9 @@ process_exec(const char *path, char *const argv[], char *const envp[])
   heap   = 0;
   ustack = USTACK_TOP - USTACK_SIZE;
 
-  for (off = elf.phoff;
-       (size_t) off < elf.phoff + elf.phnum * sizeof(ph);
-       off += sizeof(ph)) {
-    if ((r = fs_inode_read(ip, &ph, sizeof(ph), off)) != sizeof(ph))
+  off = elf.phoff;
+  while ((size_t) off < elf.phoff + elf.phnum * sizeof(ph)) {
+    if ((r = fs_inode_read(ip, &ph, sizeof(ph), &off)) != sizeof(ph))
       goto out2;
 
     if (ph.type != PT_LOAD)
@@ -140,8 +145,7 @@ process_exec(const char *path, char *const argv[], char *const envp[])
 
   uenvp = usp;
 
-  fs_inode_unlock(ip);
-  fs_inode_put(ip);
+  fs_inode_unlock_put(ip);
 
   proc = my_process();
 
@@ -168,8 +172,7 @@ out2:
   vm_user_destroy(vm);
 
 out1:
-  fs_inode_unlock(ip);
-  fs_inode_put(ip);
+  fs_inode_unlock_put(ip);
 
   return r;
 }

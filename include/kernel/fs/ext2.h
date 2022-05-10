@@ -116,16 +116,24 @@ struct Ext2DirEntry {
 #define EXT2_FT_SOCK      6
 #define EXT2_FT_SYMLINK   7
 
-// The number of bits per bitmap block
-#define BITS_PER_BLOCK   (BLOCK_SIZE * 8)
-
 struct Inode;
 
+int           ext2_bmap_alloc(uint32_t, size_t, dev_t, uint32_t *);
+void          ext2_bmap_free(uint32_t, dev_t, uint32_t);
+
+int           ext2_block_alloc(dev_t, uint32_t *, uint32_t);
+void          ext2_block_free(dev_t, uint32_t);
+void          ext2_block_zero(uint32_t, uint32_t);
+
 void          ext2_read_superblock(void);
-int           ext2_inode_alloc(mode_t, uint32_t *);
-void          ext2_inode_update(struct Inode *);
-void          ext2_inode_lock(struct Inode *);
-ssize_t       ext2_dir_read(struct Inode *, void *, size_t, off_t *);
-struct Inode *ext2_dir_lookup(struct Inode *, const char *);
+int           ext2_inode_alloc(mode_t, dev_t, uint32_t *, uint32_t);
+void          ext2_write_inode(struct Inode *);
+ssize_t       ext2_inode_read(struct Inode *, void *, size_t, off_t);
+ssize_t       ext2_inode_write(struct Inode *, const void *, size_t, off_t);
+ssize_t       ext2_dir_iterate(struct Inode *, void *, size_t, off_t *);
+struct Inode *ext2_inode_lookup(struct Inode *, const char *);
+int           ext2_inode_link(struct Inode *, char *, struct Inode *);
+ssize_t       ext2_dirent_read(struct Inode *, struct Ext2DirEntry *, off_t);
+ssize_t       ext2_dirent_write(struct Inode *, struct Ext2DirEntry *, off_t);
 
 #endif  // !__KERNEL_FS_EXT2_H__

@@ -64,20 +64,23 @@ trap_common:
   mrs     lr, cpsr
   bic     lr, lr, #PSR_M_MASK
   orr     lr, lr, #(PSR_M_SVC | PSR_I | PSR_F)
-  msr     cpsr_c, lr
+  msr     cpsr, lr
 
   // Build the trap frame (see struct TrapFrame)
+  sub     sp, #8
+  str     lr, [sp]
   ldr     lr, [r0, #12]         // load PC
-  stmdb   sp!, {r1-r12,lr}      // save R1-R12 and PC
-  ldmia   r0, {r0-r2}           // retrieve data from the exception stack
-  stmdb   sp!, {r0-r2}          // save trapno, PSR, and R0
+  str     lr, [sp, #4]
+  stmdb   sp!, {r1-r12}         // save R1-R12 and PC
+  ldmia   r0, {r1-r3}           // retrieve data from the exception stack
+  stmdb   sp!, {r1-r3}          // save trapno, PSR, and R0
 
   // Save pointer to the resulting structure in R0
   mov     r0, sp
 
   // If trap occured in user mode, jump to trap_user
-  and     r1, #PSR_M_MASK
-  cmp     r1, #PSR_M_USR
+  and     r2, #PSR_M_MASK
+  cmp     r2, #PSR_M_USR
   beq     trap_user
 
   // Call trap(tf)
@@ -89,7 +92,8 @@ trap_exit:
   add     sp, #4                // skip trapno
   ldmia   sp!, {lr}             // load SPSR
   msr     spsr, lr              // restore PSR
-  ldmia   sp!, {r0-r12,pc}^     // restore registers and return
+  ldmia   sp!, {r0-r12,lr}      // restore registers and return
+  ldmia   sp!, {pc}^            
 
 /*
  * ----------------------------------------------------------------------------
@@ -100,7 +104,8 @@ trap_exit:
   .globl trap_svc
 trap_svc:
   // Build the trap frame (see struct UTrapFrame)
-  stmdb   sp!, {r0-r12,lr}      // save R0-R12 and PC
+  stmdb   sp!, {lr}             // save PC
+  stmdb   sp!, {r0-r12,lr}      // save R0-R12 and SVC mode LR
   mrs     lr, spsr              // copy SPSR
   stmdb   sp!, {lr}             // save SPSR
   mov     r0, #T_SWI            // save trap number
@@ -113,8 +118,8 @@ trap_svc:
 
 trap_user:
   // Save user-mode SP and LR
+  stmdb   sp, {sp,lr}^  
   sub     sp, #8
-  stmia   sp, {sp,lr}^            
 
   // Save FPU registers
   vmrs    r1, fpscr
@@ -136,4 +141,8 @@ trap_user:
   ldmia   sp, {sp,lr}^
   add     sp, #8
 
-  b       trap_exit
+  add     sp, #4                // skip trapno
+  ldmia   sp!, {lr}             // load SPSR
+  msr     spsr, lr              // restore PSR
+  ldmia   sp!, {r0-r12,lr}      // restore registers and return
+  ldmia   sp!, {pc}^            

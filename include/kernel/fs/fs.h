@@ -34,40 +34,37 @@ struct Inode {
   time_t          atime;
   time_t          mtime;
   time_t          ctime;
+  dev_t           rdev;
 
   // Ext2-specific data
   uint32_t        blocks;
   uint32_t        block[15];
-  uint8_t         major;
-  uint8_t         minor;
 };
 
-int           fs_block_alloc(dev_t, uint32_t *);
-void          fs_block_free(dev_t, uint32_t);
+extern struct Inode **fs_root;
 
 void          fs_init(void);
 int           fs_name_lookup(const char *, struct Inode **);
 
-struct Inode *fs_inode_alloc(mode_t, dev_t);
 struct Inode *fs_inode_get(ino_t ino, dev_t dev);
 void          fs_inode_put(struct Inode *);
 struct Inode *fs_inode_dup(struct Inode *);
-void          fs_inode_update(struct Inode *);
 void          fs_inode_lock(struct Inode *);
+void          fs_inode_unlock_put(struct Inode *);
 void          fs_inode_unlock(struct Inode *);
-struct Inode *fs_dir_lookup(struct Inode *, const char *);
-int           fs_dir_link(struct Inode *, char *, unsigned, mode_t);
 int           fs_path_lookup(const char *, char *, int, struct Inode **);
-ssize_t       fs_inode_read(struct Inode *, void *, size_t, off_t);
-ssize_t       fs_inode_write(struct Inode *, const void *, size_t, off_t);
+ssize_t       fs_inode_read(struct Inode *, void *, size_t, off_t *);
+ssize_t       fs_inode_write(struct Inode *, const void *, size_t, off_t *);
 ssize_t       fs_inode_getdents(struct Inode *, void *, size_t, off_t *);
 int           fs_inode_stat(struct Inode *, struct stat *);
 int           fs_create(const char *, mode_t, dev_t, struct Inode **);
 void          fs_inode_cache_init(void);
 void          fs_inode_trunc(struct Inode *);
-int           fs_dir_unlink(struct Inode *, char *);
-int           fs_dir_empty(struct Inode *);
+int           fs_link(const char *, const char *);
 int           fs_unlink(const char *);
 int           fs_rmdir(const char *);
+int           fs_can_read(struct Inode *);
+int           fs_can_write(struct Inode *);
+int           fs_can_exec(struct Inode *);
 
 #endif  // !__KERNEL_FS_FS_H__

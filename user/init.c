@@ -26,7 +26,7 @@ main(void)
   char *const envp[] = { "PATH=/bin", NULL };
 
   // Create the directory for special device files.
-  mkdir("/dev", 0557);
+  mkdir("/dev", 0755);
 
   // Create missing device files.
   for (df = dev_files; df < &dev_files[NDEV]; df++)

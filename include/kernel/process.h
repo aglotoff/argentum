@@ -29,6 +29,9 @@ struct Process {
   pid_t              pid;             ///< Process identifier
   struct ListLink    pid_link;        ///< Link into the PID hash table
 
+  uid_t              uid;
+  gid_t              gid;
+
   tte_t             *vm;              ///< Process' translation table
   uintptr_t          heap;            ///< Heap end virtual address
   uintptr_t          stack;           ///< Stack bottom virtual address

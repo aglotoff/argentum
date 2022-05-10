@@ -2,6 +2,7 @@
 #include <string.h>
 
 #include <kernel/armv7.h>
+#include <kernel/cprintf.h>
 #include <kernel/cpu.h>
 #include <kernel/list.h>
 #include <kernel/mm/kobject.h>

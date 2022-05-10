@@ -17,13 +17,14 @@
 #define __SYS_CHDIR       10
 #define __SYS_OPEN        11
 #define __SYS_MKNOD       12
-#define __SYS_UNLINK      13
-#define __SYS_RMDIR       14
-#define __SYS_STAT        15
-#define __SYS_CLOSE       16
-#define __SYS_READ        17
-#define __SYS_WRITE       18
-#define __SYS_SBRK        19
+#define __SYS_LINK        13
+#define __SYS_UNLINK      14
+#define __SYS_RMDIR       15
+#define __SYS_STAT        16
+#define __SYS_CLOSE       17
+#define __SYS_READ        18
+#define __SYS_WRITE       19
+#define __SYS_SBRK        20
 
 // Generic system call: pass system call number as an immediate operand of the
 // SVC instruction, and up to three parameters in R0, R1, R2.

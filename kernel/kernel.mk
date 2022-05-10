@@ -19,6 +19,7 @@ KERNEL_SRCFILES :=	\
 	kernel/drivers/rtc.c \
 	kernel/drivers/sd.c \
 	kernel/fs/block.c \
+	kernel/fs/bmap.c \
 	kernel/fs/buf.c \
 	kernel/fs/dir.c \
 	kernel/fs/file.c \

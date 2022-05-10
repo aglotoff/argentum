@@ -20,6 +20,7 @@ int      execvp(const char *, char *const[]);
 unsigned alarm(unsigned);
 
 int      chdir(const char *);
+int      link(const char *,const char *);
 int      unlink(const char *);
 int      rmdir(const char *);
 

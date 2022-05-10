@@ -32,6 +32,7 @@ static int32_t (*syscalls[])(void) = {
   [__SYS_CHDIR]    = sys_chdir,
   [__SYS_OPEN]     = sys_open,
   [__SYS_MKNOD]    = sys_mknod,
+  [__SYS_LINK]     = sys_link,
   [__SYS_UNLINK]   = sys_unlink,
   [__SYS_RMDIR]    = sys_rmdir,
   [__SYS_STAT]     = sys_stat,
@@ -361,8 +362,7 @@ sys_chdir(void)
   fs_inode_lock(ip);
 
   if (!S_ISDIR(ip->mode)) {
-    fs_inode_unlock(ip);
-    fs_inode_put(ip);
+    fs_inode_unlock_put(ip);
     return -ENOTDIR;
   }
 
@@ -424,6 +424,20 @@ sys_mknod(void)
     return r;
 
   return fs_create(path, mode, dev, NULL);
+}
+
+int32_t
+sys_link(void)
+{
+  const char *path1, *path2;
+  int r;
+
+  if ((r = sys_arg_str(0, &path1, VM_READ)) < 0)
+    return r;
+  if ((r = sys_arg_str(1, &path2, VM_READ)) < 0)
+    return r;
+
+  return -ENOSYS;
 }
 
 int32_t

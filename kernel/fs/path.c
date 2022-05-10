@@ -13,12 +13,6 @@
 
 #include <kernel/fs/fs.h>
 
-/*
- * ----------------------------------------------------------------------------
- * Path names operations
- * ----------------------------------------------------------------------------
- */
-
 static size_t
 fs_path_skip(const char *path, char *name, char **next)
 {
@@ -69,8 +63,7 @@ fs_path_lookup(const char *path, char *name, int parent, struct Inode **istore)
     fs_inode_lock(ip);
 
     if ((ip->mode & EXT2_S_IFMASK) != EXT2_S_IFDIR) {
-      fs_inode_unlock(ip);
-      fs_inode_put(ip);
+      fs_inode_unlock_put(ip);
       return -ENOTDIR;
     }
 
@@ -82,14 +75,12 @@ fs_path_lookup(const char *path, char *name, int parent, struct Inode **istore)
       return 0;
     }
 
-    if ((next = fs_dir_lookup(ip, name)) == NULL) {
-      fs_inode_unlock(ip);
-      fs_inode_put(ip);
+    if ((next = ext2_inode_lookup(ip, name)) == NULL) {
+      fs_inode_unlock_put(ip);
       return -ENOENT;
     }
 
-    fs_inode_unlock(ip);
-    fs_inode_put(ip);
+    fs_inode_unlock_put(ip);
 
     ip = next;
   }
@@ -102,6 +93,7 @@ fs_path_lookup(const char *path, char *name, int parent, struct Inode **istore)
 
   if (istore)
     *istore = ip;
+
   return 0;
 }
 
@@ -117,6 +109,8 @@ fs_name_lookup(const char *path, struct Inode **ip)
 
   return fs_path_lookup(path, name, 0, ip);
 }
+
+struct Inode **fs_root;
 
 void
 fs_init(void)

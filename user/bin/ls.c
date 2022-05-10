@@ -5,6 +5,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <sys/stat.h>
+#include <time.h>
 #include <unistd.h>
 
 char buf[10240];
@@ -63,18 +64,19 @@ main(int argc, char **argv)
 
       printf("%c%c%c%c%c%c%c%c%c%c ",
              st.st_mode & S_IFDIR ? 'd' : '-',
-             st.st_mode & S_IROTH ? 'r' : '-',
-             st.st_mode & S_IWOTH ? 'w' : '-',
-             st.st_mode & S_IXOTH ? 'x' : '-',
+             st.st_mode & S_IRUSR ? 'r' : '-',
+             st.st_mode & S_IWUSR ? 'w' : '-',
+             st.st_mode & S_IXUSR ? 'x' : '-',
              st.st_mode & S_IRGRP ? 'r' : '-',
              st.st_mode & S_IWGRP ? 'w' : '-',
              st.st_mode & S_IXGRP ? 'x' : '-',
-             st.st_mode & S_IRUSR ? 'r' : '-',
-             st.st_mode & S_IWUSR ? 'w' : '-',
-             st.st_mode & S_IXUSR ? 'x' : '-');
+             st.st_mode & S_IROTH ? 'r' : '-',
+             st.st_mode & S_IWOTH ? 'w' : '-',
+             st.st_mode & S_IXOTH ? 'x' : '-');
+      printf("%2d root root %6d", st.st_nlink, st.st_size);
+      printf(" %s", asctime(gmtime(&st.st_mtime)));
+      printf(" \x1b[%sm%.*s\x1b[m\n", color, dp->d_namelen, dp->d_name);
 
-      printf("%2d root root %6d \x1b[%sm%*.s\x1b[m\n",
-             st.st_nlink, st.st_size, color, dp->d_namelen, dp->d_name);
       p += dp->d_reclen;
 
       name[0] = '\0';
