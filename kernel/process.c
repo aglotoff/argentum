@@ -172,12 +172,12 @@ process_load_binary(struct Process *proc, const void *binary)
                            VM_READ | VM_WRITE | VM_USER) < 0))
     return r;
 
-  proc->tf->r0     = 0;                   // argc
-  proc->tf->r1     = 0;                   // argv
-  proc->tf->r2     = 0;                   // environ
-  proc->tf->sp_usr = USTACK_TOP;          // stack pointer
-  proc->tf->psr    = PSR_M_USR | PSR_F;   // user mode, interrupts enabled
-  proc->tf->pc     = elf->entry;          // process entry point
+  proc->tf->r0  = 0;                   // argc
+  proc->tf->r1  = 0;                   // argv
+  proc->tf->r2  = 0;                   // environ
+  proc->tf->sp  = USTACK_TOP;          // stack pointer
+  proc->tf->psr = PSR_M_USR | PSR_F;   // user mode, interrupts enabled
+  proc->tf->pc  = elf->entry;          // process entry point
 
   return 0;
 }
@@ -431,31 +431,24 @@ process_run(void)
   process_pop_tf(proc->tf);
 }
 
-// Restore the user-mode registers from the trap frame.
+// Load the user-mode registers from the trap frame.
 // Doesn't return.
-// TODO: essentially this is the same code as trap_exit
 static void
 process_pop_tf(struct UTrapFrame *tf)
 {
   asm volatile(
+    // Setup the stack pointer
     "mov     sp, %0\n"
 
-    // Load FPU registers
-    "vldmia  sp!, {s0-s31}\n"
-    "ldmia   sp!, {r1}\n"
-    "vmsr    fpscr, r1\n"
-
-    // Restore user-mode SP and LR and skip trapno
-    "ldmia   sp, {sp,lr}^\n"
-    "add     sp, #12\n"
-
-    // Restore PSR
-    "ldmia   sp!, {lr}\n"
-    "msr     spsr, lr\n"
-
-    // Restore registers and return
-    "ldmia   sp!, {r0-r12,lr}\n"
-    "ldmia   sp!, {pc}^\n"
+    // The following code is identical to the end of trap_user:
+    "vldmia  sp!, {s0-s31}\n" // load FPU registers
+    "ldmia   sp!, {r0-r2}\n"  // FPSCR -> R0, trapno -> R1 (ignore), SPSR -> R2
+    "vmsr    fpscr, r0\n"     // load FPSCR
+    "msr     spsr, r2\n"      // load SPSR
+    "ldmia   sp!, {r0-r12}\n" // load R0-R12
+    "ldmia   sp, {sp,lr}^\n"  // load user SP and LR
+    "add     sp, #8\n"
+    "ldmia   sp!, {pc}^\n"    // jump to user mode
     :
     : "r" (tf)
     : "memory"

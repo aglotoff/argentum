@@ -13,34 +13,48 @@
 // Undefined Instruction
   .globl trap_undef
 trap_undef:
-  sub     lr, #4                // LR_und -= 4
-  str     lr, [sp, #12]         // save LR_und
-  mov     lr, #T_UNDEF          // save trap number
+  stmdb   sp!, {r0-r3}      // save R0-R3
+  sub     r3, lr, #4        // R3 = LR_und - 4
+  mov     r1, #T_UNDEF      // trap number -> R1
   b       trap_common
 
 // Prefetch Abort
   .globl trap_pabt
 trap_pabt:
-  sub     lr, #4                // LR_abt -= 4
-  str     lr, [sp, #12]         // save LR_abt
-  mov     lr, #T_PABT           // save trap number
+  stmdb   sp!, {r0-r3}      // save R0-R3
+  sub     r3, lr, #4        // R3 = LR_und - 4
+  mov     r1, #T_PABT       // trap number -> R1
   b       trap_common
 
 // Data Abort
   .globl trap_dabt
 trap_dabt:
-  sub     lr, #8                // LR_abt -= 8
-  str     lr, [sp, #12]         // save LR_abt
-  mov     lr, #T_DABT           // save trap number
+  stmdb   sp!, {r0-r3}      // save R0-R3
+  sub     r3, lr, #8        // R3 = LR_und - 4
+  mov     r1, #T_DABT       // trap number -> R1
   b       trap_common
 
 // IRQ (Interrupt)
   .globl trap_irq
 trap_irq:
-  sub     lr, #4                // LR_irq -= 4
-  str     lr, [sp, #12]         // save LR_irq
-  mov     lr, #T_IRQ            // save trap number
+  stmdb   sp!, {r0-r3}      // save R0-R3
+  sub     r3, lr, #4        // R3 = LR_und - 4
+  mov     r1, #T_IRQ        // trap number -> R1
   b       trap_common
+
+// System call
+  .globl trap_svc
+trap_svc:
+  // Start building the user-mode trap frame (struct UTrapFrame)
+  stmdb   sp!, {lr}         // save PC
+  stmdb   sp, {sp,lr}^      // save user SP and LR
+  sub     sp, #8
+  stmdb   sp!, {r0-r12}     // save R0-R12 
+  mov     r0, #T_SWI        // trap number -> R0
+  mrs     r1, spsr          // SPSR -> R1
+  stmdb   sp!, {r0,r1}      // save trapno and SPSR
+
+  b       trap_user_common
 
 /*
  * ----------------------------------------------------------------------------
@@ -54,11 +68,10 @@ trap_irq:
   .globl trap_common, trap_exit
 trap_common:
   // Finish building the exception stack frame
-  str     lr, [sp, #0]          // save the trap number
-  mrs     lr, spsr              // copy SPSR
-  str     lr, [sp, #4]          // save PSR
-  str     r0, [sp, #8]          // save R0
-  mov     r0, sp                // save the resulting pointer in R0
+  mrs     r2, spsr          // SPSR -> R2
+  stmdb   sp!, {r1-r2}      // save trapno and SPSR
+  mov     r0, sp            // save pointer to the resulting sructure in R0
+  add     sp, #KXSTACK_SIZE // restore the exception ode stack pointer
 
   // Switch to SVC mode
   mrs     lr, cpsr
@@ -66,83 +79,72 @@ trap_common:
   orr     lr, lr, #(PSR_M_SVC | PSR_I | PSR_F)
   msr     cpsr, lr
 
-  // Build the trap frame (see struct TrapFrame)
-  sub     sp, #8
-  str     lr, [sp]
-  ldr     lr, [r0, #12]         // load PC
-  str     lr, [sp, #4]
-  stmdb   sp!, {r1-r12}         // save R1-R12 and PC
-  ldmia   r0, {r1-r3}           // retrieve data from the exception stack
-  stmdb   sp!, {r1-r3}          // save trapno, PSR, and R0
-
-  // Save pointer to the resulting structure in R0
-  mov     r0, sp
-
-  // If trap occured in user mode, jump to trap_user
+  // If the exception happened in user mode, branch to trap_user
   and     r2, #PSR_M_MASK
   cmp     r2, #PSR_M_USR
   beq     trap_user
 
-  // Call trap(tf)
-  bl      trap
-
-  // Fall through to trap_exit
-
-trap_exit:
-  add     sp, #4                // skip trapno
-  ldmia   sp!, {lr}             // load SPSR
-  msr     spsr, lr              // restore PSR
-  ldmia   sp!, {r0-r12,lr}      // restore registers and return
-  ldmia   sp!, {pc}^            
-
 /*
  * ----------------------------------------------------------------------------
- * System call entry point
+ * Kernel-mode trap handler
  * ----------------------------------------------------------------------------
  */
 
-  .globl trap_svc
-trap_svc:
-  // Build the trap frame (see struct UTrapFrame)
-  stmdb   sp!, {lr}             // save PC
-  stmdb   sp!, {r0-r12,lr}      // save R0-R12 and SVC mode LR
-  mrs     lr, spsr              // copy SPSR
-  stmdb   sp!, {lr}             // save SPSR
-  mov     r0, #T_SWI            // save trap number
-  stmdb   sp!, {r0}
+trap_kernel:
+  // Build the kernel-mode trap frame (struct TrapFrame)
+  mov     r1, sp            // kernel SP -> R1
+  mov     r2, lr            // kernel LR -> R2
+  stmdb   sp!, {r1-r3}      // save kernel SP, LR, and PC
+  stmdb   sp!, {r4-r12}     // save R4-R12 
+  ldmia   r0, {r1-r6}       // get trapno, PSR, R0-R3 from the exception stack
+  stmdb   sp!, {r1-r6}      // save trapno, PSR, R0-R3
 
-  // Save pointer to the resulting structure in R0
+  // Call trap(tf)
   mov     r0, sp
+  bl      trap
 
-  // Fall through to trap_user
+  ldmia   sp!, {r0-r1}      // trapno -> R0 (ignored), SPSR -> R1
+  msr     spsr, r1          // restore SPSR
+  ldmia   sp!, {r0-r12,lr}  // restore R0-R12, kernel SP -> LR (ignored)
+  ldmia   sp!, {lr,pc}^     // return from the trap handler
+
+/*
+ * ----------------------------------------------------------------------------
+ * User-mode trap handler
+ * ----------------------------------------------------------------------------
+ */
 
 trap_user:
-  // Save user-mode SP and LR
-  stmdb   sp, {sp,lr}^  
+  // Start building the user-mode trap frame (struct UTrapFrame)
+  str     r3, [sp, #-4]!    // save user PC
+  stmdb   sp, {sp,lr}^      // save user SP and LR
   sub     sp, #8
+  stmdb   sp!, {r4-r12}     // save R4-R12 
+  ldmia   r0, {r1-r6}       // get trapno, PSR, R0-R3 from the exception stack
+  stmdb   sp!, {r1-r6}      // save trapno, PSR, R0-R3
 
-  // Save FPU registers
-  vmrs    r1, fpscr
-  stmdb   sp!, {r1}
-  vstmdb  sp!, {s0-s31}
+  // fall through
 
+trap_user_common:
   // Make sure all stack frames are properly terminated
   mov     fp, #0
+
+  // Save pointer to the resulting structure
+  mov     r0, sp
+
+  // Finish building the trap frame
+  vmrs    r1, fpscr         // FPSCR -> R1
+  str     r1, [sp, #-4]!    // save FPSCR
+  vstmdb  sp!, {s0-s31}     // save FPU registers
 
   // Call trap(tf)
   bl      trap
 
-  // Load FPU registers
-  vldmia  sp!, {s0-s31}
-  ldmia   sp!, {r2}
-  vmsr    fpscr, r2
-
-  // Restore user-mode SP and LR
-  ldmia   sp, {sp,lr}^
+  vldmia  sp!, {s0-s31}     // restore FPU registers
+  ldmia   sp!, {r0-r2}      // FPSCR -> R0, trapno -> R1 (ignore), SPSR -> R2
+  vmsr    fpscr, r0         // restore FPSCR
+  msr     spsr, r2          // restore SPSR
+  ldmia   sp!, {r0-r12}     // restore R0-R12
+  ldmia   sp, {sp,lr}^      // restore user SP and LR
   add     sp, #8
-
-  add     sp, #4                // skip trapno
-  ldmia   sp!, {lr}             // load SPSR
-  msr     spsr, lr              // restore PSR
-  ldmia   sp!, {r0-r12,lr}      // restore registers and return
-  ldmia   sp!, {pc}^            
+  ldmia   sp!, {pc}^        // return from the trap handler

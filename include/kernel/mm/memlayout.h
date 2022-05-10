@@ -27,11 +27,13 @@
 
 #define KSTACK_SIZE     4096  ///< Size of a per-process kernel stack
 
-#define KXSTACK_SIZE    16    ///< Size of a per-process exception stack
-#define KXSTACK_R0      0
+#define KXSTACK_SIZE    24    ///< Size of a per-process exception stack
+#define KXSTACK_TRAPNO  0
 #define KXSTACK_SPSR    4
-#define KXSTACK_LR      8
-#define KXSTACK_TRAPNO  12
+#define KXSTACK_R0      8
+#define KXSTACK_R1      12
+#define KXSTACK_R2      16
+#define KXSTACK_R3      20
 
 #define USTACK_TOP      KERNEL_BASE
 #define USTACK_SIZE     (PAGE_SIZE * 4)

@@ -44,7 +44,8 @@ struct TrapFrame {
   uint32_t  r10;              ///< Saved R10
   uint32_t  r11;              ///< Saved R11
   uint32_t  r12;              ///< Saved R12
-  uint32_t  lr;               ///< Saved SVC-mode LR
+  uint32_t  sp;               ///< Saved SP
+  uint32_t  lr;               ///< Saved LR
   uint32_t  pc;               ///< Saved PC
 };
 
@@ -52,8 +53,6 @@ struct TrapFrame {
 struct UTrapFrame {
   uint32_t  s[32];            ///< Saved S0-S31
   uint32_t  fpscr;            ///< Saved FPSCR
-  uint32_t  sp_usr;           ///< Saved user mode SP
-  uint32_t  lr_usr;           ///< Saved user mode LR
   uint32_t  trapno;           ///< Trap number
   uint32_t  psr;              ///< Saved PSR
   uint32_t  r0;               ///< Saved R0
@@ -69,7 +68,8 @@ struct UTrapFrame {
   uint32_t  r10;              ///< Saved R10
   uint32_t  r11;              ///< Saved R11
   uint32_t  r12;              ///< Saved R12
-  uint32_t  lr;               ///< Saved SVC-mode LR
+  uint32_t  sp;               ///< Saved SP
+  uint32_t  lr;               ///< Saved LR
   uint32_t  pc;               ///< Saved PC
 };
 

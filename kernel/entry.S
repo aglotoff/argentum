@@ -69,18 +69,18 @@ entry:
   and   r0, r0, #3
 
   // Set the kernel exception stack pointer for this CPU
-  // sp = kxstack + (KXSTACK_SIZE * <cpu_id>)
-  ldr   r2, =kxstack
+  // sp = kxstack_top - (KXSTACK_SIZE * <cpu_id>)
+  ldr   fp, =kxstack_top
   mov   r1, #KXSTACK_SIZE
   mul   r1, r0
-  add   r1, r2
+  sub   fp, r1
 
   msr   CPSR_c, #(PSR_I | PSR_F | PSR_M_IRQ)  // IRQ mode
-  mov   sp, r1
+  mov   sp, fp
   msr   CPSR_c, #(PSR_I | PSR_F | PSR_M_ABT)  // Abort mode
-  mov   sp, r1
+  mov   sp, fp
   msr   CPSR_c, #(PSR_I | PSR_F | PSR_M_UND)  // Undef mode
-  mov   sp, r1
+  mov   sp, fp
 
   // Set the kernel supervisor mode stack pointer for this CPU
   // sp = kstack_top - (KSTACK_SIZE * <cpu_id>)
