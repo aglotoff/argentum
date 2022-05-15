@@ -24,7 +24,7 @@ struct Inode;
 struct Process {
   struct Task       *task;            ///< Scheduler state
   uint8_t           *kstack;          ///< Bottom of the kernel-mode stack
-  struct UTrapFrame *tf;              ///< Current trap frame
+  struct TrapFrame  *tf;              ///< Current trap frame
 
   pid_t              pid;             ///< Process identifier
   struct ListLink    pid_link;        ///< Link into the PID hash table

@@ -38,7 +38,7 @@ static struct {
 static struct SpinLock process_lock;
 
 static void process_run(void);
-static void process_pop_tf(struct UTrapFrame *);
+static void process_pop_tf(struct TrapFrame *);
 
 static struct Process *init_process;
 
@@ -84,7 +84,7 @@ process_alloc(void)
 
   // Leave room for Trapframe.
   sp -= sizeof *process->tf;
-  process->tf = (struct UTrapFrame *) sp;
+  process->tf = (struct TrapFrame *) sp;
 
   // Setup new context to start executing at task_run.
   if ((process->task = task_create(process, process_run, sp)) == NULL)
@@ -434,21 +434,17 @@ process_run(void)
 // Load the user-mode registers from the trap frame.
 // Doesn't return.
 static void
-process_pop_tf(struct UTrapFrame *tf)
+process_pop_tf(struct TrapFrame *tf)
 {
   asm volatile(
     // Setup the stack pointer
     "mov     sp, %0\n"
 
-    // The following code is identical to the end of trap_user:
-    "vldmia  sp!, {s0-s31}\n" // load FPU registers
-    "ldmia   sp!, {r0-r2}\n"  // FPSCR -> R0, trapno -> R1 (ignore), SPSR -> R2
-    "vmsr    fpscr, r0\n"     // load FPSCR
-    "msr     spsr, r2\n"      // load SPSR
-    "ldmia   sp!, {r0-r12}\n" // load R0-R12
-    "ldmia   sp, {sp,lr}^\n"  // load user SP and LR
-    "add     sp, #8\n"
-    "ldmia   sp!, {pc}^\n"    // jump to user mode
+    // This is the same code as at the end of trap_user:
+    "ldr     lr, [sp], #16\n"
+    "msr     spsr, lr\n"
+    "ldmdb   sp, {sp,lr}^\n"
+    "ldmia   sp!, {r0-r12,pc}^\n"
     :
     : "r" (tf)
     : "memory"

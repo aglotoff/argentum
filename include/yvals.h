@@ -3,8 +3,8 @@
 
 /**
  * @file include/yvals.h
- * 
- * Compiler-dependent parameters.
+ *
+ * Implementation-dependent parameters (ARM Cortex-A9 version)
  */
 
 // Whether the encoding is two's complement
@@ -56,7 +56,8 @@
 // The rounding mode for floating-point addition
 #define __FLT_ROUNDS  1
 
-// The number of elements in jmp_buf (we must store R4-R11, IP, SP, and LR)
-#define __NSETJMP   11
+// The number of elements in jmp_buf
+// Need to store: R4-R11, IP, SP, LR, FPSCR and S0-S31
+#define __NSETJMP   44
 
 #endif  // !__YVALS_H__

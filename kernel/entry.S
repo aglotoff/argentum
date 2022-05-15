@@ -69,11 +69,11 @@ entry:
   and   r0, r0, #3
 
   // Set the kernel exception stack pointer for this CPU
-  // sp = kxstack_top - (KXSTACK_SIZE * <cpu_id>)
-  ldr   fp, =kxstack_top
+  // sp = kxstack + (KXSTACK_SIZE * <cpu_id>)
+  ldr   fp, =kxstack
   mov   r1, #KXSTACK_SIZE
   mul   r1, r0
-  sub   fp, r1
+  add   fp, r1
 
   msr   CPSR_c, #(PSR_I | PSR_F | PSR_M_IRQ)  // IRQ mode
   mov   sp, fp
