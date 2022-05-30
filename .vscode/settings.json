@@ -35,6 +35,8 @@
         "file.h": "c",
         "float.h": "c",
         "errno.h": "c",
-        "scheduler.h": "c"
+        "scheduler.h": "c",
+        "rtc.h": "c",
+        "dirent.h": "c"
     }
 }

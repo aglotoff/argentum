@@ -45,7 +45,7 @@ trap_irq:
 // System call
   .globl trap_svc
 trap_svc:
-  // Start building the user-mode trap frame (struct TrapFrame)
+  // Build the user-mode trap frame (struct TrapFrame)
   stmdb   sp!, {r0-r12,lr}  // R0-R12 and PC
   stmdb   sp, {sp,lr}^      // save SP_usr and LR_usr
   sub     sp, #8
@@ -77,6 +77,8 @@ trap_common:
   and     lr, #PSR_M_MASK
   cmp     lr, #PSR_M_USR
   beq     trap_user
+
+  // Otherwise, fall through to trap_kernel
 
 /*
  * ----------------------------------------------------------------------------
@@ -124,7 +126,7 @@ trap_user:
   orr     lr, lr, #(PSR_M_SVC | PSR_I | PSR_F)
   msr     cpsr, lr
 
-  // Start building the user-mode trap frame (struct TrapFrame)
+  // Build the user-mode trap frame (struct TrapFrame)
   ldr     lr, [r0, #12]     // saved PC -> LR
   stmdb   sp!, {r1-r12,lr}  // save R1-R12 and PC
   ldmia   r0, {r1-r3}       // PSR -> R1, trapno -> R2, R0 -> R3
@@ -133,16 +135,14 @@ trap_user:
   str     r2, [sp, #-12]!   // save trapno
   str     r1, [sp, #-4]!    // save PSR
 
-  // fall through
+  // Fall through
 
 trap_user_common:
-  // Save pointer to the previously built structure
-  mov     r0, sp
-
   // Make sure all stack frames are properly terminated
   mov     fp, #0
 
   // Call trap(tf)
+  mov     r0, sp
   bl      trap
 
   // Restore the user state using the contents of the trap frame

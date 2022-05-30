@@ -50,11 +50,18 @@ fs_path_lookup(const char *path, char *name, int parent, struct Inode **istore)
   struct Inode *ip, *next;
   size_t namelen;
 
+  if (*path == '\0')
+    return -ENOENT;
+
+  if (strnlen(path, PATH_MAX) >= PATH_MAX)
+    return -ENAMETOOLONG;
+
   // For absolute paths, begin search from the root directory.
   // For relative paths, begin search from the current working directory.
   ip = *path == '/' ? fs_inode_get(2, 0) : fs_inode_dup(my_process()->cwd);
 
   while ((namelen = fs_path_skip(path, name, (char **) &path)) > 0) {
+    // TODO: _POSIX_NO_TRUNC
     if (namelen > NAME_MAX) {
       fs_inode_put(ip);
       return -ENAMETOOLONG;
@@ -62,7 +69,12 @@ fs_path_lookup(const char *path, char *name, int parent, struct Inode **istore)
 
     fs_inode_lock(ip);
 
-    if ((ip->mode & EXT2_S_IFMASK) != EXT2_S_IFDIR) {
+    if (!fs_permissions(ip, FS_PERM_EXEC)) {
+      fs_inode_unlock_put(ip);
+      return -EACCESS;
+    }
+
+    if (!S_ISDIR(ip->mode)) {
       fs_inode_unlock_put(ip);
       return -ENOTDIR;
     }

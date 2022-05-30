@@ -31,6 +31,7 @@ static int32_t (*syscalls[])(void) = {
   [__SYS_GETDENTS] = sys_getdents,
   [__SYS_CHDIR]    = sys_chdir,
   [__SYS_OPEN]     = sys_open,
+  [__SYS_UMASK]    = sys_umask,
   [__SYS_MKNOD]    = sys_mknod,
   [__SYS_LINK]     = sys_link,
   [__SYS_UNLINK]   = sys_unlink,
@@ -384,7 +385,7 @@ fd_alloc(struct File *f)
       current->files[i] = f;
       return i;
     }
-  return -ENFILE;
+  return -EMFILE;
 }
 
 int32_t
@@ -393,19 +394,52 @@ sys_open(void)
   struct File *f;
   const char *path;
   int oflag, r;
+  mode_t mode;
 
   if ((r = sys_arg_str(0, &path, VM_READ)) < 0)
     return r;
   if ((r = sys_arg_int(1, &oflag)) < 0)
     return r;
+  if ((r = sys_arg_short(2, (short *) &mode)) < 0)
+    return r;
 
-  if ((r = file_open(path, oflag, &f)) < 0)
+  if ((r = file_open(path, oflag, mode, &f)) < 0)
     return r;
 
   if ((r = fd_alloc(f)) < 0)
     file_close(f);
 
   return r;
+}
+
+int32_t
+sys_umask(void)
+{
+  struct Process *proc = my_process();
+  mode_t cmask;
+  int r;
+
+  if ((r = sys_arg_short(0, (short *) &cmask)) < 0)
+    return r;
+
+  r = proc->cmask & (S_IRWXU | S_IRWXG | S_IRWXO);
+  proc->cmask = cmask;
+
+  return r;
+}
+
+int32_t
+sys_link(void)
+{
+  const char *path1, *path2;
+  int r;
+
+  if ((r = sys_arg_str(0, &path1, VM_READ)) < 0)
+    return r;
+  if ((r = sys_arg_str(1, &path2, VM_READ)) < 0)
+    return r;
+
+  return fs_link((char *) path1, (char *) path2);
 }
 
 int32_t
@@ -424,20 +458,6 @@ sys_mknod(void)
     return r;
 
   return fs_create(path, mode, dev, NULL);
-}
-
-int32_t
-sys_link(void)
-{
-  const char *path1, *path2;
-  int r;
-
-  if ((r = sys_arg_str(0, &path1, VM_READ)) < 0)
-    return r;
-  if ((r = sys_arg_str(1, &path2, VM_READ)) < 0)
-    return r;
-
-  return -ENOSYS;
 }
 
 int32_t

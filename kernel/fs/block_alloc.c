@@ -39,7 +39,7 @@ ext2_gd_block_alloc(struct Ext2GroupDesc *gd, dev_t dev, uint32_t *bstore)
   if (gd->free_blocks_count == 0)
     return -ENOMEM;
 
-  if (ext2_bmap_alloc(gd->block_bitmap, sb.blocks_per_group, dev, bstore) < 0)
+  if (ext2_bitmap_alloc(gd->block_bitmap, sb.blocks_per_group, dev, bstore) < 0)
     // If free_blocks_count isn't zero, but we couldn't find a free block, the
     // filesystem is corrupted.
     panic("no free blocks");
@@ -142,7 +142,7 @@ ext2_block_free(dev_t dev, uint32_t bno)
 
   gd = (struct Ext2GroupDesc *) buf->data + gi;
 
-  ext2_bmap_free(gd->block_bitmap, dev, bno % sb.blocks_per_group);
+  ext2_bitmap_free(gd->block_bitmap, dev, bno % sb.blocks_per_group);
 
   gd->free_blocks_count++;
 

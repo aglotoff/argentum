@@ -199,8 +199,9 @@ process_create(const void *binary, struct Process **pstore)
   if ((r = process_load_binary(proc, binary)) < 0)
     goto fail3;
 
-  proc->uid = 0;
-  proc->gid = 0;
+  proc->uid   = 0;
+  proc->gid   = 0;
+  proc->cmask = 0;
 
   task_enqueue(proc->task);
 
@@ -336,10 +337,10 @@ process_copy(void)
     child->files[fd] = current->files[fd] ? file_dup(current->files[fd]) : NULL;
   }
 
-  child->uid = current->uid;
-  child->gid = current->gid;
-
-  child->cwd = fs_inode_dup(current->cwd);
+  child->uid   = current->uid;
+  child->gid   = current->gid;
+  child->cmask = current->cmask;
+  child->cwd   = fs_inode_dup(current->cwd);
 
   spin_lock(&process_lock);
   list_add_back(&current->children, &child->sibling);

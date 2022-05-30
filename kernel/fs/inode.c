@@ -17,137 +17,6 @@ static unsigned ext2_inode_block_map(struct Inode *, unsigned);
 
 /*
  * ----------------------------------------------------------------------------
- * Allocating Inodes
- * ----------------------------------------------------------------------------
- */
-
-// Try to allocate an inode from the block group descriptor pointed to by `gd`.
-// If there is a free inode, mark it as used and store its number into the
-// memory location pointed to by `istore`. Otherwise, return `-ENOMEM`.
-static int
-ext2_gd_inode_alloc(struct Ext2GroupDesc *gd, dev_t dev, uint32_t *istore)
-{
-  if (gd->free_inodes_count == 0)
-    return -ENOMEM;
-
-  if ((ext2_bmap_alloc(gd->inode_bitmap, sb.inodes_per_group, dev, istore)))
-    // If free_inodes_count isn't zero, but we cannot find a free inode, the
-    // filesystem is corrupted.
-    panic("no free inodes");
-
-  gd->free_inodes_count--;
-
-  return 0;
-}
-
-/**
- * Allocate an inode.
- * 
- * @param dev    The device to allocate inode from.
- * @param istore Pointer to the memory location where to store the allocated
- *               inode number.
- *
- * @retval 0       Success
- * @retval -ENOMEM Couldn't find a free inode.
- */
-int
-ext2_inode_alloc(mode_t mode, dev_t dev, uint32_t *istore, uint32_t parent)
-{
-  struct Buf *buf;
-  struct Ext2GroupDesc *gd;
-  uint32_t gds_per_block, g, gi;
-  uint32_t inum;
-
-  gds_per_block = BLOCK_SIZE / sizeof(struct Ext2GroupDesc);
-
-  // First try to find a free block in the same group as the specified inode
-  g  = (parent - 1) / sb.inodes_per_group;
-  gi = g % gds_per_block;
-  g  = g - gi;
-
-  if ((buf = buf_read(2 + (g / gds_per_block), dev)) == NULL)
-    panic("cannot read the group descriptor table");
-
-  gd = (struct Ext2GroupDesc *) buf->data + gi;
-
-  if (ext2_gd_inode_alloc(gd, dev, &inum) == 0) {
-    unsigned inodes_per_block, itab_idx, inode_block_idx, inode_block;
-    struct Ext2Inode *dp;
-
-    inum += 1 + (g + gi) * sb.inodes_per_group;
-
-    inodes_per_block = BLOCK_SIZE / sb.inode_size;
-    itab_idx  = (inum - 1) % sb.inodes_per_group;
-    inode_block      = gd->inode_table + itab_idx / inodes_per_block;
-    inode_block_idx  = itab_idx % inodes_per_block;
-
-    buf_write(buf);
-    buf_release(buf);
-
-    if ((buf = buf_read(inode_block, 0)) == NULL)
-      panic("cannot read the inode table");
-
-    dp = (struct Ext2Inode *) &buf->data[sb.inode_size * inode_block_idx];
-    memset(dp, 0, sb.inode_size);
-    dp->mode  = mode;
-    dp->ctime = dp->atime = dp->mtime = rtc_time();
-
-    buf_write(buf);
-    buf_release(buf);
-
-    if (istore)
-      *istore = inum;
-
-    return 0;
-  }
-
-  // Scan all group descriptors for a free inode
-  for (g = 0; g < sb.inodes_count / sb.inodes_per_group; g += gds_per_block) {
-    if ((buf = buf_read(2 + (g / gds_per_block), 0)) == NULL)
-      panic("cannot read the group descriptor table");
-
-    for (gi = 0; gi < gds_per_block; gi++) {
-      gd = (struct Ext2GroupDesc *) buf->data + gi;
-      if (ext2_gd_inode_alloc(gd, dev, &inum) == 0) {
-        unsigned inodes_per_block, itab_idx, inode_block_idx, inode_block;
-        struct Ext2Inode *dp;
-
-        inum += 1 + (g + gi) * sb.inodes_per_group;
-
-        inodes_per_block = BLOCK_SIZE / sb.inode_size;
-        itab_idx  = (inum - 1) % sb.inodes_per_group;
-        inode_block      = gd->inode_table + itab_idx / inodes_per_block;
-        inode_block_idx  = itab_idx % inodes_per_block;
-
-        buf_write(buf);
-        buf_release(buf);
-
-        if ((buf = buf_read(inode_block, 0)) == NULL)
-          panic("cannot read the inode table");
-
-        dp = (struct Ext2Inode *) &buf->data[sb.inode_size * inode_block_idx];
-        memset(dp, 0, sb.inode_size);
-        dp->mode  = mode;
-        dp->ctime = dp->atime = dp->mtime = rtc_time();
-
-        buf_write(buf);
-        buf_release(buf);
-
-        if (istore)
-          *istore = inum;
-
-        return 0;
-      }
-    }
-
-    buf_release(buf);
-  }
-  
-  return -ENOMEM;
-}
-
-/*
- * ----------------------------------------------------------------------------
  * Inode Cache
  * ----------------------------------------------------------------------------
  */
@@ -200,7 +69,7 @@ fs_inode_get(ino_t ino, dev_t dev)
     empty->ref_count = 1;
     empty->ino       = ino;
     empty->dev       = dev;
-    empty->valid     = 0;
+    empty->flags     = 0;
 
     spin_unlock(&inode_cache.lock);
 
@@ -215,7 +84,7 @@ fs_inode_get(ino_t ino, dev_t dev)
 void
 fs_inode_put(struct Inode *ip)
 {   
-  fs_inode_lock(ip);
+  mutex_lock(&ip->mutex);
 
   if (ip->nlink == 0) {
     int r;
@@ -224,11 +93,13 @@ fs_inode_put(struct Inode *ip)
     r = ip->ref_count;
     spin_unlock(&inode_cache.lock);
 
-    if (r == 1)
-      fs_inode_trunc(ip);
+    if (r == 1) {
+      ext2_put_inode(ip);
+      ip->flags = 0;
+    }
   }
 
-  fs_inode_unlock(ip);
+  mutex_unlock(&ip->mutex);
 
   spin_lock(&inode_cache.lock);
 
@@ -240,147 +111,15 @@ fs_inode_put(struct Inode *ip)
   spin_unlock(&inode_cache.lock);
 }
 
-void
-ext2_write_inode(struct Inode *ip)
-{
-  struct Buf *buf;
-  struct Ext2GroupDesc gd;
-  struct Ext2Inode *dp;
-  unsigned gds_per_block, inodes_per_block;
-  unsigned block_group, table_block, table_idx;
-  unsigned inode_table_idx, inode_block_idx, inode_block;
-
-  // Determine which block group the inode belongs to
-  block_group = (ip->ino - 1) / sb.inodes_per_group;
-
-  // Read the Block Group Descriptor corresponding to the Block Group which
-  // contains the inode to be looked up
-  gds_per_block = BLOCK_SIZE / sizeof(struct Ext2GroupDesc);
-  table_block = 2 + (block_group / gds_per_block);
-  table_idx = (block_group % gds_per_block);
-
-  if ((buf = buf_read(table_block, ip->dev)) == NULL)
-    panic("cannot read the group descriptor table");
-  memcpy(&gd, &buf->data[sizeof(gd) * table_idx], sizeof(gd));
-  buf_release(buf);
-
-  // From the Block Group Descriptor, extract the location of the block
-  // group's inode table
-
-  // Determine the index of the inode in the inode table. 
-  inodes_per_block = BLOCK_SIZE / sb.inode_size;
-  inode_table_idx  = (ip->ino - 1) % sb.inodes_per_group;
-  inode_block      = gd.inode_table + inode_table_idx / inodes_per_block;
-  inode_block_idx  = inode_table_idx % inodes_per_block;
-
-  // Index the inode table (taking into account non-standard inode size)
-  if ((buf = buf_read(inode_block, ip->dev)) == NULL)
-    panic("cannot read the inode table");
-
-  dp = (struct Ext2Inode *) &buf->data[inode_block_idx * sb.inode_size];
-
-  dp->mode        = ip->mode;
-  dp->links_count = ip->nlink;
-  dp->uid         = ip->uid;
-  dp->gid         = ip->gid;
-  dp->size        = ip->size;
-  dp->atime       = ip->atime;
-  dp->mtime       = ip->mtime;
-  dp->ctime       = ip->ctime;
-  dp->blocks      = ip->blocks;
-  memmove(dp->block, ip->block, sizeof(ip->block));
-
-  buf_write(buf);
-  buf_release(buf);
-}
-
-void
-ext2_inode_lock(struct Inode *ip)
-{
-  struct Buf *buf;
-  struct Ext2GroupDesc gd;
-  struct Ext2Inode *dp;
-  unsigned gds_per_block, inodes_per_block;
-  unsigned block_group, table_block, table_idx;
-  unsigned inode_table_idx, inode_block_idx, inode_block;
-
-  // Determine which block group the inode belongs to
-  block_group = (ip->ino - 1) / sb.inodes_per_group;
-
-  // Read the Block Group Descriptor corresponding to the Block Group which
-  // contains the inode to be looked up
-  gds_per_block = BLOCK_SIZE / sizeof(struct Ext2GroupDesc);
-  table_block = 2 + (block_group / gds_per_block);
-  table_idx = (block_group % gds_per_block);
-
-  if ((buf = buf_read(table_block, ip->dev)) == NULL)
-    panic("cannot read the group descriptor table");
-  memcpy(&gd, &buf->data[sizeof(gd) * table_idx], sizeof(gd));
-  buf_release(buf);
-
-  // From the Block Group Descriptor, extract the location of the block
-  // group's inode table
-
-  // Determine the index of the inode in the inode table. 
-  inodes_per_block = BLOCK_SIZE / sb.inode_size;
-  inode_table_idx  = (ip->ino - 1) % sb.inodes_per_group;
-  inode_block      = gd.inode_table + inode_table_idx / inodes_per_block;
-  inode_block_idx  = inode_table_idx % inodes_per_block;
-
-  // Index the inode table (taking into account non-standard inode size)
-  if ((buf = buf_read(inode_block, ip->dev)) == NULL)
-    panic("cannot read the inode table");
-
-  dp = (struct Ext2Inode *) (buf->data + inode_block_idx * sb.inode_size);
-
-  ip->mode   = dp->mode;
-  ip->nlink  = dp->links_count;
-  ip->uid    = dp->uid;
-  ip->gid    = dp->gid;
-  ip->size   = dp->size;
-  ip->atime  = dp->atime;
-  ip->mtime  = dp->mtime;
-  ip->ctime  = dp->ctime;
-  ip->blocks = dp->blocks;
-  memmove(ip->block, dp->block, sizeof(ip->block));
-
-  buf_release(buf);
-
-  if (((ip->mode & EXT2_S_IFMASK) == EXT2_S_IFBLK) ||
-      ((ip->mode & EXT2_S_IFMASK) == EXT2_S_IFCHR)) {
-    if ((buf = buf_read(ext2_inode_block_map(ip, 0), ip->dev)) == NULL)
-      panic("cannot read the data block");
-
-    ip->rdev = *(uint16_t *) buf->data;
-
-    buf_release(buf);
-  }
-}
-
 static struct Inode *
 fs_inode_alloc(mode_t mode, dev_t dev, ino_t parent)
 {
-  struct Inode *ip;
   uint32_t inum;
 
   if (ext2_inode_alloc(mode, dev, &inum, parent) < 0)
     return NULL;
 
-  if ((ip = fs_inode_get(inum, dev)) == NULL)
-    panic("cannot get inode (%u)", inum);
-
-  ip->mode = mode;
-
-  return ip;
-}
-
-void
-fs_write_inode(struct Inode *ip)
-{
-  if (!mutex_holding(&ip->mutex))
-    panic("caller must hold ip");
-
-  ext2_write_inode(ip);
+  return fs_inode_get(inum, dev);
 }
 
 void
@@ -388,15 +127,18 @@ fs_inode_lock(struct Inode *ip)
 {
   mutex_lock(&ip->mutex);
 
-  if (ip->valid)
+  if (ip->flags & FS_INODE_VALID)
     return;
 
-  ext2_inode_lock(ip);
+  if (ip->flags & FS_INODE_DIRTY)
+    panic("inode dirty");
+
+  ext2_read_inode(ip);
 
   if (!ip->mode)
     panic("no mode");
 
-  ip->valid = 1;
+  ip->flags |= FS_INODE_VALID;
 }
 
 struct Inode *
@@ -414,6 +156,14 @@ fs_inode_unlock(struct Inode *ip)
 {  
   if (!mutex_holding(&ip->mutex))
     panic("not holding buf");
+
+  if (!(ip->flags & FS_INODE_VALID))
+    panic("inode nt valid");
+
+  if (ip->flags & FS_INODE_DIRTY) {
+    ext2_write_inode(ip);
+    ip->flags &= ~FS_INODE_DIRTY;
+  }
 
   mutex_unlock(&ip->mutex);
 }
@@ -481,7 +231,7 @@ ext2_inode_block_map(struct Inode *ip, unsigned block_no)
   return addr;
 }
 
-static void
+void
 ext2_inode_trunc(struct Inode *ip)
 {
   struct Buf *buf;
@@ -606,7 +356,7 @@ fs_inode_read(struct Inode *ip, void *buf, size_t nbyte, off_t *off)
     return ret;
 
   ip->atime = rtc_time();
-  fs_write_inode(ip);
+  ip->flags |= FS_INODE_DIRTY;
 
   *off += ret;
 
@@ -636,8 +386,7 @@ fs_inode_write(struct Inode *ip, const void *buf, size_t nbyte, off_t *off)
       ip->size = *off;
     
     ip->mtime = rtc_time();
-
-    fs_write_inode(ip);
+    ip->flags |= FS_INODE_DIRTY;
   }
 
   return total;
@@ -663,15 +412,22 @@ fs_inode_stat(struct Inode *ip, struct stat *buf)
   return 0;
 }
 
-void
+int
 fs_inode_trunc(struct Inode *ip)
 {
   if (!mutex_holding(&ip->mutex))
     panic("not holding");
 
+  if (!fs_permissions(ip, FS_PERM_WRITE))
+    return -EACCESS;
+
   ext2_inode_trunc(ip);
+
   ip->size = 0;
-  fs_write_inode(ip);
+  ip->ctime = ip->mtime = rtc_time();
+  ip->flags |= FS_INODE_DIRTY;
+
+  return 0;
 }
 
 int
@@ -684,6 +440,9 @@ ext2_create(struct Inode *dirp, char *name, mode_t mode, struct Inode **istore)
     return -ENOMEM;
 
   fs_inode_lock(ip);
+
+  ip->uid = my_process()->uid;
+  ip->gid = dirp->gid;
 
   if ((r = ext2_inode_link(dirp, name, ip)))
     panic("Cannot create link");
@@ -704,7 +463,7 @@ ext2_inode_create(struct Inode *dirp, char *name, mode_t mode,
     return r;
 
   ip->nlink = 1;
-  ext2_write_inode(ip);
+  ip->flags |= FS_INODE_DIRTY;
 
   assert(istore != NULL);
   *istore = ip;
@@ -719,6 +478,9 @@ ext2_inode_mkdir(struct Inode *dirp, char *name, mode_t mode,
   struct Inode *ip;
   int r;
 
+  if (dirp->nlink >= LINK_MAX)
+    return -EMLINK;
+
   if ((r = ext2_create(dirp, name, mode, &ip)) != 0)
     return r;
 
@@ -727,13 +489,13 @@ ext2_inode_mkdir(struct Inode *dirp, char *name, mode_t mode,
     panic("Cannot create .");
 
   ip->nlink = 1;
-  ext2_write_inode(ip);
+  ip->flags |= FS_INODE_DIRTY;
 
   // Create the ".." entry
   if (ext2_inode_link(ip, "..", dirp) < 0)
     panic("Cannot create ..");
   dirp->nlink++;
-  ext2_write_inode(dirp);
+  dirp->flags |= FS_INODE_DIRTY;
 
   assert(istore != NULL);
   *istore = ip;
@@ -752,15 +514,8 @@ ext2_inode_mknod(struct Inode *dirp, char *name, mode_t mode, dev_t dev,
     return r;
 
   ip->nlink = 1;
-
-  if (S_ISBLK(mode) || S_ISCHR(mode)) {
-    ip->rdev = dev;
-    ip->size = sizeof(dev);
-
-    ext2_inode_write(ip, &dev, sizeof(dev), 0);
-  }
-
-  ext2_write_inode(ip);
+  ip->rdev = dev;
+  ip->flags |= FS_INODE_DIRTY;
 
   assert(istore != NULL);
   *istore = ip;
@@ -815,6 +570,8 @@ fs_create(const char *path, mode_t mode, dev_t dev, struct Inode **istore)
     goto out;
   }
 
+  mode &= ~my_process()->cmask;
+
   switch (mode & S_IFMT) {
   case S_IFDIR:
     r = ext2_inode_mkdir(dp, name, mode, &ip);
@@ -827,6 +584,14 @@ fs_create(const char *path, mode_t mode, dev_t dev, struct Inode **istore)
     break;
   }
 
+  // TODO: EROFS
+
+  dp->atime = dp->ctime = dp->mtime = rtc_time();
+  dp->flags |= FS_INODE_DIRTY;
+
+  ip->ctime = ip->mtime = rtc_time();
+  ip->flags |= FS_INODE_DIRTY;
+  
   if (r == 0) {
     if (istore == NULL) {
       fs_inode_unlock_put(ip);
@@ -976,11 +741,6 @@ ext2_inode_unlink(struct Inode *dir, struct Inode *ip)
       ext2_dirent_write(dir, &de, prev_off);
     }
 
-    ip->nlink--;
-
-    if (S_ISDIR(ip->mode))
-      dir->nlink--;
-
     return 0;
   }
 
@@ -1015,15 +775,80 @@ ext2_inode_rmdir(struct Inode *dir, char *name)
   if ((r = ext2_inode_unlink(dir, ip)) < 0)
     goto out2;
 
-  ext2_write_inode(ip);
-  ext2_write_inode(dir);
+  if (--ip->nlink > 0)
+    ip->ctime = rtc_time();
+  ip->flags |= FS_INODE_DIRTY;
+
+  dir->nlink--;
+  dir->ctime = dir->mtime = rtc_time();
+  dir->flags |= FS_INODE_DIRTY;
 
 out2:
+  fs_inode_unlock_put(dir);
+out1:
   fs_inode_unlock_put(ip);
 
-out1:
-  fs_inode_unlock_put(dir);
+  return r;
+}
 
+int
+fs_link(char *path1, char *path2)
+{
+  struct Inode *ip, *dirp;
+  char name[NAME_MAX + 1];
+  int r;
+
+  if ((r = fs_name_lookup(path1, &ip)) < 0)
+    return r;
+
+  fs_inode_lock(ip);
+
+  if (S_ISDIR(ip->mode)) {
+    r = -EPERM;
+    goto fail2;
+  }
+
+  if (ip->nlink >= LINK_MAX) {
+    r = -EMLINK;
+    goto fail2;
+  }
+
+  ip->nlink++;
+  ip->ctime = rtc_time();
+  ip->flags |= FS_INODE_DIRTY;
+
+  // TODO: EROFS
+
+  fs_inode_unlock(ip);
+
+  if ((r = fs_path_lookup(path2, name, 1, &dirp)) < 0)
+    goto fail1;
+
+  fs_inode_lock(dirp);
+
+  if (dirp->dev != ip->dev) {
+    r = -EXDEV;
+    goto fail3;
+  }
+
+  if ((r = ext2_inode_link(dirp, name, ip)))
+    goto fail3;
+
+  fs_inode_unlock_put(dirp);
+  fs_inode_put(ip);
+
+  return 0;
+
+fail3:
+  fs_inode_unlock_put(dirp);
+
+  fs_inode_lock(ip);
+  ip->nlink--;
+  ip->flags |= FS_INODE_DIRTY;
+fail2:
+  fs_inode_unlock(ip);
+fail1:
+  fs_inode_put(ip);
   return r;
 }
 
@@ -1047,19 +872,21 @@ fs_unlink(const char *path)
   fs_inode_lock(ip);
 
   if (S_ISDIR(ip->mode)) {
-    r = -EISDIR;
+    r = -EPERM;
     goto out2;
   }
   
   if ((r = ext2_inode_unlink(dir, ip)) < 0)
     goto out2;
 
-  fs_write_inode(ip);
+  if (--ip->nlink > 0)
+    ip->ctime = rtc_time();
+  ip->flags |= FS_INODE_DIRTY;
 
 out2:
-  fs_inode_unlock_put(ip);
-out1:
   fs_inode_unlock_put(dir);
+out1:
+  fs_inode_unlock_put(ip);
 
   return r;
 }
@@ -1078,38 +905,14 @@ fs_rmdir(const char *path)
 }
 
 int
-fs_can_read(struct Inode *inode)
+fs_permissions(struct Inode *inode, mode_t mode)
 {
-  struct Process *current = my_process();
+  struct Process *proc = my_process();
 
-  if (current->uid == inode->uid)
-    return inode->mode & S_IRUSR;
-  if (current->gid == inode->gid)
-    return inode->mode & S_IRGRP;
-  return inode->mode & S_IROTH;
-}
+  if (proc->uid == inode->uid)
+    mode <<= 6;
+  else if (proc->gid == inode->gid)
+    mode <<= 3;
 
-int
-fs_can_write(struct Inode *inode)
-{
-  struct Process *current = my_process();
-
-  if (current->uid == inode->uid)
-    return inode->mode & S_IWUSR;
-  if (current->gid == inode->gid)
-    return inode->mode & S_IWGRP;
-  return inode->mode & S_IWOTH;
-}
-
-
-int
-fs_can_exec(struct Inode *inode)
-{
-  struct Process *current = my_process();
-
-  if (current->uid == inode->uid)
-    return inode->mode & S_IXUSR;
-  if (current->gid == inode->gid)
-    return inode->mode & S_IXGRP;
-  return inode->mode & S_IXOTH;
+  return (inode->mode & mode) == mode;
 }

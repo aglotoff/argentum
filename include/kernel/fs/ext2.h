@@ -118,16 +118,22 @@ struct Ext2DirEntry {
 
 struct Inode;
 
-int           ext2_bmap_alloc(uint32_t, size_t, dev_t, uint32_t *);
-void          ext2_bmap_free(uint32_t, dev_t, uint32_t);
+int           ext2_bitmap_alloc(uint32_t, size_t, dev_t, uint32_t *);
+void          ext2_bitmap_free(uint32_t, dev_t, uint32_t);
 
 int           ext2_block_alloc(dev_t, uint32_t *, uint32_t);
 void          ext2_block_free(dev_t, uint32_t);
 void          ext2_block_zero(uint32_t, uint32_t);
 
-void          ext2_read_superblock(void);
 int           ext2_inode_alloc(mode_t, dev_t, uint32_t *, uint32_t);
+void          ext2_inode_free(dev_t, uint32_t);
+
+void          ext2_read_inode(struct Inode *);
 void          ext2_write_inode(struct Inode *);
+void          ext2_put_inode(struct Inode *);
+
+void          ext2_read_superblock(void);
+void          ext2_inode_trunc(struct Inode *);
 ssize_t       ext2_inode_read(struct Inode *, void *, size_t, off_t);
 ssize_t       ext2_inode_write(struct Inode *, const void *, size_t, off_t);
 ssize_t       ext2_dir_iterate(struct Inode *, void *, size_t, off_t *);

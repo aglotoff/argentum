@@ -3,14 +3,16 @@ USER_LDFLAGS := $(LDFLAGS) -T user/user.ld -nostdlib
 
 USER_SRCFILES :=
 
-USER_SRCFILES += \
-	user/hello.c
+# USER_SRCFILES += \
+# 	user/hello.c
 
 USER_SRCFILES += \
   user/bin/cat.c \
 	user/bin/echo.c \
+	user/bin/link.c \
 	user/bin/ls.c \
 	user/bin/mkdir.c \
+	user/bin/pwd.c \
 	user/bin/rm.c \
 	user/bin/rmdir.c \
 	user/bin/sh.c

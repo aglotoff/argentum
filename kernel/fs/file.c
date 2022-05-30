@@ -25,11 +25,12 @@ file_init(void)
 }
 
 int
-file_open(const char *path, int oflag, struct File **fstore)
+file_open(const char *path, int oflag, mode_t mode, struct File **fstore)
 {
   struct File *f;
   int r;
 
+  // TODO: ENFILE
   if ((f = (struct File *) kobject_alloc(file_pool)) == NULL)
     return -ENOMEM;
   
@@ -44,19 +45,23 @@ file_open(const char *path, int oflag, struct File **fstore)
 
   f->type = FD_INODE;
 
+  // TODO: EINTR
+
+  // TODO: the check and the file creation should be atomic
   if ((r = fs_name_lookup(path, &ip)) < 0) {
     if ((r != -ENOENT) || !(oflag & O_CREAT))
       goto fail1;
 
-    if ((r = fs_create(path, S_IFREG | 0644, 0, &ip)) < 0)
+    mode &= (S_IRWXU | S_IRWXG | S_IRWXO);
+    if ((r = fs_create(path, S_IFREG | mode, 0, &ip)) < 0)
       goto fail1;
   } else {
-    fs_inode_lock(ip);
-  }
+    if ((oflag & O_CREAT) && (oflag & O_EXCL)) {
+      r = -EEXISTS;
+      goto fail2;
+    }
 
-  if ((oflag & O_CREAT) && (oflag & O_EXCL)) {
-    r = -EEXISTS;
-    goto fail2;
+    fs_inode_lock(ip);
   }
 
   if (S_ISDIR(ip->mode) && (oflag & O_WRONLY)) {
@@ -64,8 +69,14 @@ file_open(const char *path, int oflag, struct File **fstore)
     goto fail2;
   }
 
+  // TODO: O_NOCTTY
+  // TODO: O_NONBLOCK
+  // TODO: ENXIO
+  // TODO: EROFS
+
   if ((oflag & O_WRONLY) && (oflag & O_TRUNC)) {
-    fs_inode_trunc(ip);
+    if ((r = fs_inode_trunc(ip)) < 0)
+      goto fail2;
   }
 
   f->inode = ip;
@@ -101,6 +112,8 @@ file_open(const char *path, int oflag, struct File **fstore)
 
   return 0;
 
+
+  
 fail2:
   fs_inode_unlock_put(ip);
 fail1:

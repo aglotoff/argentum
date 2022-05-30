@@ -74,7 +74,7 @@ process_exec(const char *path, char *const argv[], char *const envp[])
     goto out1;
   }
 
-  if (!fs_can_exec(ip)) {
+  if (!fs_permissions(ip, FS_PERM_EXEC)) {
     r = -EPERM;
     goto out1;
   }

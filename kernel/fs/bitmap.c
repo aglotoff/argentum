@@ -21,7 +21,7 @@
  * @return 0 on success, -ENOMEM if there are no unused bits.
  */
 int
-ext2_bmap_alloc(uint32_t bitmap, size_t n, dev_t dev, uint32_t *bstore)
+ext2_bitmap_alloc(uint32_t bitmap, size_t n, dev_t dev, uint32_t *bstore)
 {
   uint32_t b, bi;
 
@@ -62,7 +62,7 @@ ext2_bmap_alloc(uint32_t bitmap, size_t n, dev_t dev, uint32_t *bstore)
  * @param bit_no The bit number to be freed.
  */
 void
-ext2_bmap_free(uint32_t bitmap, dev_t dev, uint32_t bit_no)
+ext2_bitmap_free(uint32_t bitmap, dev_t dev, uint32_t bit_no)
 {
   uint32_t b, bi;
   struct Buf *buf;

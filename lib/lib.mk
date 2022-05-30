@@ -116,6 +116,7 @@ LIB_SRCFILES += \
 	lib/string/strncat.c \
 	lib/string/strncmp.c \
 	lib/string/strncpy.c \
+	lib/string/strnlen.c \
 	lib/string/strpbrk.c \
 	lib/string/strrchr.c \
 	lib/string/strspn.c \
@@ -126,7 +127,8 @@ LIB_SRCFILES += \
 	lib/sys/stat/fstat.c \
 	lib/sys/stat/mkdir.c \
 	lib/sys/stat/mknod.c \
-	lib/sys/stat/stat.c
+	lib/sys/stat/stat.c \
+	lib/sys/stat/umask.c
 
 LIB_SRCFILES += \
   lib/sys/wait/wait.c \
@@ -149,8 +151,10 @@ LIB_SRCFILES += \
 	lib/unistd/execve.c \
 	lib/unistd/execvp.c \
   lib/unistd/fork.c \
+	lib/unistd/getcwd.c \
 	lib/unistd/getpid.c \
 	lib/unistd/getppid.c \
+	lib/unistd/link.c \
 	lib/unistd/read.c \
 	lib/unistd/rmdir.c \
 	lib/unistd/sbrk.c \

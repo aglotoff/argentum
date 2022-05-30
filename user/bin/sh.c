@@ -3,6 +3,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <sys/stat.h>
 #include <sys/wait.h>
 #include <unistd.h>
 
@@ -14,7 +15,7 @@ static void        cmd_free(struct Cmd *);
 
 #define MAXBUF  1024
 static char buf[MAXBUF];
-static const char prompt[] = "\x1b[1;32m$ \x1b[m";
+static char cwd[PATH_MAX];
 
 #define MAXARG      32
 
@@ -57,9 +58,20 @@ struct ListCmd {
 static char *
 get_cmd(void)
 {
-  size_t nread;
+  static const char *home = "/home/root";
 
-  write(1, prompt, sizeof(prompt)-1);
+  size_t nread, n;
+
+  printf("\x1b[1;32m[ \x1b[m");
+
+  n = strlen(home);
+  if ((strncmp(cwd, home, n) == 0) && ((cwd[n] == '/') || (cwd[n] == '\0'))) {
+    printf("~%s", &cwd[n]);
+  } else {
+    printf(cwd);
+  }
+
+  printf("\x1b[1;32m ]$ \x1b[m");
 
   if ((nread = read(0, buf, sizeof(buf))) < 1)
     exit(0);
@@ -77,6 +89,13 @@ main(void)
   pid_t pid;
   int status;
 
+  umask(S_IWGRP | S_IWOTH);
+
+  if (getcwd(cwd, sizeof(cwd)) == NULL) {
+    perror("getcwd");
+    exit(EXIT_FAILURE);
+  }
+
   for (;;) {
     if ((cmd = cmd_parse(get_cmd())) == NULL)
       continue;
@@ -85,8 +104,13 @@ main(void)
     if ((cmd->type == CMD_EXEC) && (strcmp(ecmd->argv[0], "cd") == 0)) {
       if (ecmd->argv[1] == NULL) {
         printf("Usage: %s <directory>\n", ecmd->argv[0]);
-      } else if (chdir(ecmd->argv[1]) != 0) {
-        perror(ecmd->argv[1]);
+      } else {
+        if (chdir(ecmd->argv[1]) != 0) {
+          perror(ecmd->argv[1]);
+        } else if (getcwd(cwd, sizeof(cwd)) == NULL) {
+          perror("getcwd");
+          exit(EXIT_FAILURE);
+        }
       }
     } else {
       if ((pid = fork()) == 0) {
@@ -108,6 +132,7 @@ static void
 cmd_run(const struct Cmd * cmd)
 {
   pid_t pid;
+  int fd;
   int status;
   struct ExecCmd *ecmd;
   struct ListCmd *lcmd;
@@ -160,7 +185,8 @@ cmd_run(const struct Cmd * cmd)
     rcmd = (struct RedirCmd *) cmd;
 
     close(rcmd->fd);
-    if (open(rcmd->name, rcmd->oflag) < 0) {
+
+    if ((fd = open(rcmd->name, rcmd->oflag, 0666)) < 0) {
       perror(rcmd->name);
       exit(1);
     }

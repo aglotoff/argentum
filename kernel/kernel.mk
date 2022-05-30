@@ -18,14 +18,16 @@ KERNEL_SRCFILES :=	\
 	kernel/drivers/gic.c \
 	kernel/drivers/rtc.c \
 	kernel/drivers/sd.c \
-	kernel/fs/block.c \
-	kernel/fs/bmap.c \
+	kernel/fs/bitmap.c \
+	kernel/fs/block_alloc.c \
 	kernel/fs/buf.c \
 	kernel/fs/dir.c \
 	kernel/fs/file.c \
 	kernel/fs/inode.c \
+	kernel/fs/inode_alloc.c \
 	kernel/fs/path.c \
 	kernel/fs/super.c \
+	kernel/fs/super_ops.c \
 	kernel/mm/page.c \
 	kernel/mm/kobject.c \
 	kernel/mm/vm.c \
@@ -56,6 +58,7 @@ KERNEL_SRCFILES += \
 	lib/string/strlen.c \
 	lib/string/strncmp.c \
 	lib/string/strncpy.c \
+	lib/string/strnlen.c \
 	lib/string/strpbrk.c \
 	lib/string/strspn.c \
 	lib/string/strtok.c \

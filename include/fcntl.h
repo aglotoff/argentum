@@ -21,6 +21,6 @@
 #define O_TRUNC     (1 << 7)
 
 int creat(const char *, mode_t);
-int open(const char *, int);
+int open(const char *, int, ...);
 
 #endif  // !__FCNTL_H__

@@ -39,6 +39,7 @@ char  *strtok(char *, const char *);
 void  *memset(void *, int, size_t);
 char  *strerror(int);
 size_t strlen(const char *);
+size_t strnlen(const char *, size_t);
 
 #ifdef __cplusplus
 };

@@ -48,9 +48,8 @@ trap(struct TrapFrame *tf)
     break;
   default:
     // Either the user process misbehaved or the kernel has a bug.
-    if ((tf->psr & PSR_M_MASK) == PSR_M_USR) {
+    if ((tf->psr & PSR_M_MASK) == PSR_M_USR)
       process_destroy(-1);
-    }
 
     print_trapframe(tf);
     panic("unhandled trap in kernel");
@@ -117,14 +116,13 @@ trap_irq_dispatch(void)
 {
   int irq, resched;
 
-  irq_save();
-
   // Get the IRQ number and temporarily disable it
   irq = gic_intid();
   gic_disable(irq);
   gic_eoi(irq);
 
-  irq_restore();
+  // Enable nested IRQs
+  irq_enable();
 
   resched = 0;
 
@@ -150,6 +148,9 @@ trap_irq_dispatch(void)
     cprintf("Unexpected IRQ %d from CPU %d\n", irq, cpu_id());
     break;
   }
+
+  // Disable nested IRQs
+  irq_disable();
 
   // Re-enable the IRQ
   gic_enable(irq, cpu_id());
@@ -192,13 +193,14 @@ print_trapframe(struct TrapFrame *tf)
   };
 
   cprintf("TRAP frame at %p from CPU %d\n", tf, cpu_id());
-  cprintf("  trap %p    [%s]\n", tf->trapno, trap_name(tf->trapno));
   cprintf("  psr  %p    [%s%s%s%s]\n",
           tf->psr,
           tf->psr & PSR_I ? "I," : "",
           tf->psr & PSR_I ? "F," : "",
           tf->psr & PSR_I ? "T," : "",
           modes[tf->psr & PSR_M_MASK] ? modes[tf->psr & PSR_M_MASK] : "");
+  cprintf("  trap %p    [%s]\n", tf->trapno, trap_name(tf->trapno));
+  cprintf("  sp   %p    lr   %p\n", tf->sp,  tf->lr);
   cprintf("  r0   %p    r1   %p\n", tf->r0,  tf->r1);
   cprintf("  r2   %p    r3   %p\n", tf->r2,  tf->r3);
   cprintf("  r4   %p    r5   %p\n", tf->r4,  tf->r5);

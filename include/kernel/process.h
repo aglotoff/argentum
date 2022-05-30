@@ -29,8 +29,7 @@ struct Process {
   pid_t              pid;             ///< Process identifier
   struct ListLink    pid_link;        ///< Link into the PID hash table
 
-  uid_t              uid;
-  gid_t              gid;
+
 
   tte_t             *vm;              ///< Process' translation table
   uintptr_t          heap;            ///< Heap end virtual address
@@ -43,6 +42,9 @@ struct Process {
   int                zombie;          ///< Whether the process is a zombie
   int                exit_code;       ///< Exit code
 
+  uid_t              uid;             ///< User ID
+  gid_t              gid;             ///< Group ID
+  mode_t             cmask;           ///< File mode creation mask
   struct File       *files[OPEN_MAX]; ///< Open file descriptors
   struct Inode      *cwd;             ///< Current working directory
 };

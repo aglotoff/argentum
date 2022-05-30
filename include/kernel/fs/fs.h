@@ -19,7 +19,7 @@ struct stat;
 struct Inode {
   ino_t           ino;
   dev_t           dev;
-  int             valid;
+  int             flags;
   int             ref_count;
   struct ListLink cache_link;
   struct Mutex    mutex;
@@ -41,6 +41,13 @@ struct Inode {
   uint32_t        block[15];
 };
 
+#define FS_INODE_VALID  (1 << 0)
+#define FS_INODE_DIRTY  (1 << 1)
+
+#define FS_PERM_EXEC    (1 << 0)
+#define FS_PERM_WRITE   (1 << 1)
+#define FS_PERM_READ    (1 << 2)
+
 extern struct Inode **fs_root;
 
 void          fs_init(void);
@@ -59,12 +66,10 @@ ssize_t       fs_inode_getdents(struct Inode *, void *, size_t, off_t *);
 int           fs_inode_stat(struct Inode *, struct stat *);
 int           fs_create(const char *, mode_t, dev_t, struct Inode **);
 void          fs_inode_cache_init(void);
-void          fs_inode_trunc(struct Inode *);
-int           fs_link(const char *, const char *);
+int           fs_inode_trunc(struct Inode *);
 int           fs_unlink(const char *);
 int           fs_rmdir(const char *);
-int           fs_can_read(struct Inode *);
-int           fs_can_write(struct Inode *);
-int           fs_can_exec(struct Inode *);
+int           fs_permissions(struct Inode *, mode_t);
+int           fs_link(char *, char *);
 
 #endif  // !__KERNEL_FS_FS_H__

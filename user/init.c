@@ -1,6 +1,7 @@
 #include <errno.h>
 #include <fcntl.h>
 #include <stdio.h>
+#include <stdlib.h>
 #include <sys/stat.h>
 #include <sys/wait.h>
 #include <unistd.h>
@@ -41,8 +42,13 @@ main(void)
   printf("Welcome to \x1b[1;36mOSDev-PBX-A9\x1b[m!\n");
 
   // Spawn the shell
-  if (fork() == 0)
+  if (fork() == 0) {
+    if (chdir("/home/root") != 0) {
+      perror("chdir");
+      exit(EXIT_FAILURE);
+    }
     execve("/bin/sh", argv, envp);
+  }
 
   for (;;)
     wait(&status);

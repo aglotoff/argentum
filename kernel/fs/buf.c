@@ -161,6 +161,7 @@ buf_release(struct Buf *buf)
 { 
   if (!(buf->flags & BUF_VALID))
     warn("buffer isn't valid");
+  
   if (buf->flags & BUF_DIRTY)
     warn("buffer is dirty");
   

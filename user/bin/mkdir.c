@@ -10,7 +10,7 @@ main(int argc, char **argv)
     exit(EXIT_FAILURE);
   }
 
-  if (mkdir(argv[1], 0755) < 0) {
+  if (mkdir(argv[1], 0777) < 0) {
     perror(argv[1]);
     exit(EXIT_FAILURE);
   }
