@@ -22,11 +22,11 @@ typedef struct {
 /** End-of-file return value. */
 #define EOF -1
 
-extern FILE *_Files[];
+extern FILE *__files[];
 
-#define stdin   _Files[0]   ///< Standard input stream
-#define stdout  _Files[1]   ///< Standard output stream
-#define stderr  _Files[2]   ///< Standard error output stream
+#define stdin   __files[0]    ///< Standard input stream
+#define stdout  __files[1]    ///< Standard output stream
+#define stderr  __files[2]    ///< Standard error output stream
 
 #ifdef __cplusplus
 extern "C" {
@@ -34,6 +34,8 @@ extern "C" {
 
 FILE *fopen(const char *, const char *);
 int   fclose(FILE *);
+
+int   remove(const char *);
 
 int   __printf(int (*)(void *, int), void *, const char *, va_list);
 int   printf(const char *, ...);

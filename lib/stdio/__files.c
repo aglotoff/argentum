@@ -18,7 +18,7 @@ static FILE stderr_file = {
   ._Fildes = 2,
 };
 
-FILE *_Files[FOPEN_MAX] = {
+FILE *__files[FOPEN_MAX] = {
   &stdin_file,
   &stdout_file,
   &stderr_file,
