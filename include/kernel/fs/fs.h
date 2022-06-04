@@ -71,5 +71,7 @@ int           fs_unlink(const char *);
 int           fs_rmdir(const char *);
 int           fs_permissions(struct Inode *, mode_t);
 int           fs_link(char *, char *);
+int           fs_chdir(struct Inode *);
+int           fs_chmod(struct Inode *, mode_t);
 
 #endif  // !__KERNEL_FS_FS_H__

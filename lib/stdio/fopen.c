@@ -30,13 +30,13 @@ fopen(const char *pathname, const char *mode)
     FILE *fp;
     int oflag;
 
-    if (_Files[i] == NULL) {
+    if (__files[i] == NULL) {
       if ((fp = (FILE *) malloc(sizeof(FILE))) == NULL)
         return NULL;
 
-      _Files[i] = fp;
-    } else if (_Files[i]->_Mode == 0) {
-      fp = _Files[i];
+      __files[i] = fp;
+    } else if (__files[i]->_Mode == 0) {
+      fp = __files[i];
     } else {
       continue;
     }

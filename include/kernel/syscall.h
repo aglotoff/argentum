@@ -21,6 +21,7 @@ int32_t sys_exec(void);
 int32_t sys_open(void);
 int32_t sys_umask(void);
 int32_t sys_chdir(void);
+int32_t sys_fchdir(void);
 int32_t sys_getdents(void);
 int32_t sys_link(void);
 int32_t sys_unlink(void);
@@ -30,5 +31,6 @@ int32_t sys_close(void);
 int32_t sys_sbrk(void);
 int32_t sys_mknod(void);
 int32_t sys_uname(void);
+int32_t sys_chmod(void);
 
 #endif  // !__KERNEL_SYSCALL_H__

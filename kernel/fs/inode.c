@@ -5,6 +5,7 @@
 #include <string.h>
 #include <sys/stat.h>
 
+#include <kernel/cprintf.h>
 #include <kernel/drivers/console.h>
 #include <kernel/drivers/rtc.h>
 #include <kernel/fs/buf.h>
@@ -915,4 +916,49 @@ fs_permissions(struct Inode *inode, mode_t mode)
     mode <<= 3;
 
   return (inode->mode & mode) == mode;
+}
+
+int
+fs_chdir(struct Inode *ip)
+{
+  struct Process *current = my_process();
+
+  fs_inode_lock(ip);
+
+  if (!S_ISDIR(ip->mode)) {
+    fs_inode_unlock_put(ip);
+    return -ENOTDIR;
+  }
+
+  fs_inode_unlock(ip);
+
+  fs_inode_put(current->cwd);
+  current->cwd = ip;
+
+  return 0;
+}
+
+int
+fs_chmod(struct Inode *ip, mode_t mode)
+{
+  struct Process *current = my_process();
+
+  // TODO: check mode
+  
+  fs_inode_lock(ip);
+
+  if ((current->uid != 0) && (ip->uid != current->uid)) {
+    fs_inode_unlock(ip);
+    return -EPERM;
+  }
+
+  // TODO: additional permission checks
+
+  ip->mode  = mode;
+  ip->ctime = rtc_time();
+
+  ip->flags |= FS_INODE_DIRTY;
+  fs_inode_unlock(ip);
+
+  return 0;
 }

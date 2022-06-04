@@ -32,6 +32,7 @@ static int32_t (*syscalls[])(void) = {
   [__SYS_TIME]     = sys_time,
   [__SYS_GETDENTS] = sys_getdents,
   [__SYS_CHDIR]    = sys_chdir,
+  [__SYS_FCHDIR]   = sys_fchdir,
   [__SYS_OPEN]     = sys_open,
   [__SYS_UMASK]    = sys_umask,
   [__SYS_MKNOD]    = sys_mknod,
@@ -44,6 +45,7 @@ static int32_t (*syscalls[])(void) = {
   [__SYS_WRITE]    = sys_write,
   [__SYS_SBRK]     = sys_sbrk,
   [__SYS_UNAME]    = sys_uname,
+  [__SYS_CHMOD]    = sys_chmod,
 };
 
 int32_t
@@ -363,18 +365,45 @@ sys_chdir(void)
   if ((r = fs_name_lookup(path, &ip)) < 0)
     return r;
   
-  fs_inode_lock(ip);
+  return fs_chdir(ip);
+}
 
-  if (!S_ISDIR(ip->mode)) {
-    fs_inode_unlock_put(ip);
+int32_t
+sys_chmod(void)
+{
+  const char *path;
+  mode_t mode;
+  struct Inode *ip;
+  int r;
+
+  if ((r = sys_arg_str(0, &path, VM_READ)) < 0)
+    return r;
+  if ((r = sys_arg_short(1, (short *) &mode)) < 0)
+    return r;
+
+  if ((r = fs_name_lookup(path, &ip)) < 0)
+    return r;
+
+  r = fs_chmod(ip, mode);
+
+  fs_inode_put(ip);
+
+  return r;
+}
+
+int32_t
+sys_fchdir(void)
+{
+  struct File *f;
+  int r;
+
+  if ((r = sys_arg_fd(0, NULL, &f)) < 0)
+    return r;
+
+  if (f->type != FD_INODE)
     return -ENOTDIR;
-  }
 
-  fs_inode_unlock(ip);
-
-  my_process()->cwd = ip;
-
-  return 0;
+  return fs_chdir(f->inode);
 }
 
 static int

@@ -125,6 +125,7 @@ LIB_SRCFILES += \
 	lib/string/strtok.c
 
 LIB_SRCFILES += \
+  lib/sys/stat/chmod.c \
 	lib/sys/stat/fstat.c \
 	lib/sys/stat/mkdir.c \
 	lib/sys/stat/mknod.c \
@@ -154,6 +155,7 @@ LIB_SRCFILES += \
 	lib/unistd/execv.c \
 	lib/unistd/execve.c \
 	lib/unistd/execvp.c \
+	lib/unistd/fchdir.c \
   lib/unistd/fork.c \
 	lib/unistd/getcwd.c \
 	lib/unistd/getpid.c \
