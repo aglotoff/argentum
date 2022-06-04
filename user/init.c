@@ -39,8 +39,6 @@ main(void)
   open("/dev/console", O_WRONLY);     // Standard output
   open("/dev/console", O_WRONLY);     // Standard error
 
-  printf("Welcome to \x1b[1;36mOSDev-PBX-A9\x1b[m!\n");
-
   // Spawn the shell
   if (fork() == 0) {
     if (chdir("/home/root") != 0) {

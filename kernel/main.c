@@ -1,12 +1,13 @@
 #include <assert.h>
 #include <stddef.h>
 #include <stdint.h>
+#include <sys/utsname.h>
 
 #include <kernel/armv7.h>
 #include <kernel/cprintf.h>
 #include <kernel/cpu.h>
 #include <kernel/drivers/console.h>
-#include <kernel/drivers/eth.h>
+// #include <kernel/drivers/eth.h>
 #include <kernel/drivers/gic.h>
 #include <kernel/drivers/rtc.h>
 #include <kernel/drivers/sd.h>
@@ -19,8 +20,19 @@
 #include <kernel/process.h>
 #include <kernel/sync.h>
 
+static void mp_main(void);
+
 // Whether the bootstrap processor has finished its initialization?
 int bsp_started;
+
+// For uname()
+struct utsname utsname = {
+  .sysname  = "OSDev-PBX-A9",
+  .nodename = "localhost",
+  .release  = "0.1.0",
+  .version  = __DATE__ " " __TIME__,
+  .machine  = "arm",
+};
 
 /**
  * Main kernel function.
@@ -37,7 +49,6 @@ main(void)
   // Now we can initialize the console and print messages
   gic_init();           // Interrupt controller
   console_init();       // Console driver
-  eth_init();           // Ethernet
 
   // Perform the rest of initialization
   page_init_high();     // Physical page allocator (higher memory)
@@ -53,8 +64,7 @@ main(void)
   // Unblock other CPUs
   bsp_started = 1;    
 
-  cprintf("Starting CPU %d\n", cpu_id());
-  scheduler_start();   
+  mp_main();
 }
 
 /**
@@ -70,7 +80,15 @@ mp_enter(void)
   gic_init();           // Interrupt controller
   ptimer_init();        // Private timer
 
+  mp_main();
+}
+
+static void
+mp_main(void)
+{
   cprintf("Starting CPU %d\n", cpu_id());
+
+  // Enter the scheduler loop
   scheduler_start();   
 }
 

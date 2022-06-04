@@ -26,6 +26,7 @@
 #define __SYS_READ        19
 #define __SYS_WRITE       20
 #define __SYS_SBRK        21
+#define __SYS_UNAME       22
 
 // Generic system call: pass system call number as an immediate operand of the
 // SVC instruction, and up to three parameters in R0, R1, R2.

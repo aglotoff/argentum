@@ -15,7 +15,8 @@ USER_SRCFILES += \
 	user/bin/pwd.c \
 	user/bin/rm.c \
 	user/bin/rmdir.c \
-	user/bin/sh.c
+	user/bin/sh.c \
+	user/bin/uname.c
 
 USER_SRCFILES += \
 	user/test/faultread.c \

@@ -2,8 +2,10 @@
 #include <errno.h>
 #include <limits.h>
 #include <stddef.h>
+#include <string.h>
 #include <syscall.h>
 #include <sys/stat.h>
+#include <sys/utsname.h>
 
 #include <kernel/cprintf.h>
 #include <kernel/cpu.h>
@@ -41,6 +43,7 @@ static int32_t (*syscalls[])(void) = {
   [__SYS_READ]     = sys_read,
   [__SYS_WRITE]    = sys_write,
   [__SYS_SBRK]     = sys_sbrk,
+  [__SYS_UNAME]    = sys_uname,
 };
 
 int32_t
@@ -565,4 +568,20 @@ sys_sbrk(void)
     return r;
   
   return (int32_t) process_grow(n);
+}
+
+int32_t
+sys_uname(void)
+{
+  extern struct utsname utsname;  // defined in main.c
+
+  struct utsname *name;
+  int r;
+
+  if ((r = sys_arg_buf(0, (void **) &name, sizeof(*name), VM_WRITE)) < 0)
+    return r;
+  
+  memcpy(name, &utsname, sizeof (*name));
+
+  return 0;
 }

@@ -132,6 +132,9 @@ LIB_SRCFILES += \
 	lib/sys/stat/umask.c
 
 LIB_SRCFILES += \
+	lib/sys/utsname/uname.c
+
+LIB_SRCFILES += \
   lib/sys/wait/wait.c \
 	lib/sys/wait/waitpid.c
 
