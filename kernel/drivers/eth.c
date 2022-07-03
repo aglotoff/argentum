@@ -267,7 +267,7 @@ eth_rx(void)
       uint32_t *data;
       uint8_t *packet;
   
-      p = page_alloc(PAGE_ALLOC_ZERO);
+      p = page_alloc_one(PAGE_ALLOC_ZERO);
       packet = (uint8_t *) page2kva(p);
       data = (uint32_t *) page2kva(p);
 
@@ -281,7 +281,7 @@ eth_rx(void)
           cprintf("\n");
       }
 
-      page_free(p);
+      page_free_one(p);
     }
 
     rx_used = (eth[RX_FIFO_INF] >> 16) & 0xFF;

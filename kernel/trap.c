@@ -78,7 +78,7 @@ trap_handle_abort(struct TrapFrame *tf)
   process = my_process();
   assert(process != NULL);
 
-  fault_page = vm_lookup_page(process->vm, (void *) address, &pte);
+  fault_page = vm_lookup_page(process->vm->trtab, (void *) address, &pte);
 
   if (fault_page == NULL) {
     if ((address < process->stack) &&
@@ -95,13 +95,13 @@ trap_handle_abort(struct TrapFrame *tf)
     int prot;
 
     prot = vm_pte_get_flags(pte);
-    if ((prot & VM_COW) && ((page = page_alloc(0)) != NULL)) {
+    if ((prot & VM_COW) && ((page = page_alloc_one(0)) != NULL)) {
       memcpy(page2kva(page), page2kva(fault_page), PAGE_SIZE);
 
       prot &= ~VM_COW;
       prot |= VM_WRITE;
 
-      if (vm_insert_page(process->vm, page, (void *) address, prot) == 0)
+      if (vm_insert_page(process->vm->trtab, page, (void *) address, prot) == 0)
         return;
     }
   }

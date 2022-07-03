@@ -40,6 +40,8 @@ static void             page_mark_used(struct Page *, unsigned);
 static int              page_is_free(struct Page *, unsigned);
 static struct Page *page_split(struct Page *, unsigned, unsigned);
 
+void        *boot_alloc(size_t);
+
 /*
  * ----------------------------------------------------------------------------
  * Initializing the page allocator
@@ -149,12 +151,12 @@ boot_alloc(size_t n)
 /**
  * Allocate a single page.
  * 
- * @param flags The set of allocation flags.
+ * @param flags Allocation flags.
  *
  * @return Address of a page info structure or NULL if out of memory.
  */
 struct Page *
-page_alloc(int flags)
+page_alloc_one(int flags)
 {
   return page_alloc_block(0, flags);
 }
@@ -241,7 +243,7 @@ page_split(struct Page *page, unsigned high, unsigned low)
  * @param page Address of the page info structure to be freed.
  */
 void
-page_free(struct Page *page)
+page_free_one(struct Page *page)
 {
   page_free_block(page, 0);
 }

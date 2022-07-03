@@ -74,7 +74,7 @@ process_alloc(void)
   process = (struct Process *) kobject_alloc(process_pool);
 
   // Allocate per-process kernel stack
-  if ((page = page_alloc(0)) == NULL)
+  if ((page = page_alloc_one(0)) == NULL)
     goto fail1;
 
   process->kstack = (uint8_t *) page2kva(page);
@@ -113,7 +113,7 @@ process_alloc(void)
 
 fail2:
   page->ref_count--;
-  page_free(page);
+  page_free_one(page);
 fail1:
   kobject_free(process_pool, process);
   return NULL;
@@ -122,13 +122,8 @@ fail1:
 int
 process_setup_vm(struct Process *proc)
 {
-  struct Page *vm_page;
-
-  if ((vm_page = page_alloc_block(1, PAGE_ALLOC_ZERO)) == NULL)
+  if ((proc->vm = vm_create()) == NULL)
     return -ENOMEM;
-
-  proc->vm = (tte_t *) page2kva(vm_page);
-  vm_page->ref_count++;
 
   return 0;
 }
@@ -211,7 +206,7 @@ process_create(const void *binary, struct Process **pstore)
   return 0;
 
 fail3:
-  vm_user_destroy(proc->vm);
+  vm_destroy(proc->vm);
 fail2:
   process_free(proc);
 fail1:
@@ -234,7 +229,7 @@ process_free(struct Process *process)
   // Free the kernel stack
   kstack_page = kva2page(process->kstack);
   kstack_page->ref_count--;
-  page_free(kstack_page);
+  page_free_one(kstack_page);
 
   // Remove the pid hash link
   spin_lock(&pid_hash.lock);
@@ -272,7 +267,7 @@ process_destroy(int status)
   struct Process *child, *current = my_process();
   int fd, has_zombies;
 
-  vm_user_destroy(current->vm);
+  vm_destroy(current->vm);
 
   for (fd = 0; fd < OPEN_MAX; fd++)
     if (current->files[fd])
@@ -322,7 +317,7 @@ process_copy(void)
   if ((child = process_alloc()) == NULL)
     return -ENOMEM;
 
-  if ((child->vm = vm_user_clone(current->vm)) == NULL) {
+  if ((child->vm = vm_clone(current->vm)) == NULL) {
     process_free(child);
     return -ENOMEM;
   }

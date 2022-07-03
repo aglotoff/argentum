@@ -10,7 +10,7 @@
 
 #include <kernel/cpu.h>
 #include <kernel/list.h>
-#include <kernel/mm/mmu.h>
+#include <kernel/mm/vm.h>
 #include <kernel/scheduler.h>
 #include <kernel/trap.h>
 
@@ -29,9 +29,7 @@ struct Process {
   pid_t              pid;             ///< Process identifier
   struct ListLink    pid_link;        ///< Link into the PID hash table
 
-
-
-  tte_t             *vm;              ///< Process' translation table
+  struct VM         *vm;              ///< Process' address space
   uintptr_t          heap;            ///< Heap end virtual address
   uintptr_t          stack;           ///< Stack bottom virtual address
 

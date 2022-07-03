@@ -23,9 +23,9 @@ struct KObjectSlab;
  * Physical page block info.
  */
 struct Page {
-  struct ListLink     link;         ///< Linked list head
-  int                 ref_count;    ///< Reference count to the page block
-  struct KObjectSlab *slab;         ///< Slab this page block belongs to
+  struct ListLink     link;         ///< Linked list node
+  int                 ref_count;    ///< Reference counter
+  struct KObjectSlab *slab;         ///< The slab this page belongs to
 };
 
 extern struct Page *pages;
@@ -87,16 +87,14 @@ kva2page(void *va)
 /** Fill the allocated page block with zeros. */ 
 #define PAGE_ALLOC_ZERO   (1 << 0)
 
-void        *boot_alloc(size_t);
-
 void         page_init_low(void);
 void         page_init_high(void);
 
-struct Page *page_alloc(int flags);
-struct Page *page_alloc_block(unsigned order, int flags);
+struct Page *page_alloc_one(int);
+struct Page *page_alloc_block(unsigned, int);
 
-void         page_free(struct Page *page);
-void         page_free_block(struct Page *page, unsigned order);
-void         page_free_region(physaddr_t start, physaddr_t end);
+void         page_free_one(struct Page *);
+void         page_free_block(struct Page *, unsigned);
+void         page_free_region(physaddr_t, physaddr_t);
 
 #endif  // !__KERNEL_MM_PAGE_H__

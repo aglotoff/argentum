@@ -44,6 +44,7 @@ main(void)
 {
   // Setup the memory mappings first
   page_init_low();      // Physical page allocator (lower memory)
+  kobject_pool_init();  // Object allocator
   vm_init();            // Kernel virtual memory
 
   // Now we can initialize the console and print messages
@@ -52,7 +53,7 @@ main(void)
 
   // Perform the rest of initialization
   page_init_high();     // Physical page allocator (higher memory)
-  kobject_pool_init();  // Object allocator
+  
   ptimer_init();        // Private timer
   rtc_init();           // Real-time clock
   sd_init();            // MultiMedia Card Interface

@@ -12,7 +12,7 @@
 #include <kernel/types.h>
 
 static int
-copy_args(tte_t *vm, char *const args[], uintptr_t limit, char **sp)
+copy_args(struct VM *vm, char *const args[], uintptr_t limit, char **sp)
 {
   char *oargs[32];
   char *p;
@@ -59,7 +59,7 @@ process_exec(const char *path, char *const argv[], char *const envp[])
   Elf32_Ehdr elf;
   Elf32_Phdr ph;
   off_t off;
-  tte_t *vm;
+  struct VM *vm;
   uintptr_t heap, ustack;
   char *usp, *uargv, *uenvp;
   int r, argc;
@@ -84,8 +84,7 @@ process_exec(const char *path, char *const argv[], char *const envp[])
     goto out1;
   }
 
-  vm = (tte_t *) page2kva(vm_page);
-  vm_page->ref_count++;
+  vm = vm_create();
 
   off = 0;
   if ((r = fs_inode_read(ip, &elf, sizeof(elf), &off)) != sizeof(elf))
@@ -150,7 +149,7 @@ process_exec(const char *path, char *const argv[], char *const envp[])
   proc = my_process();
 
   vm_switch_user(vm);
-  vm_user_destroy(proc->vm);
+  vm_destroy(proc->vm);
 
   proc->vm    = vm;
   proc->heap  = heap;
@@ -169,7 +168,7 @@ process_exec(const char *path, char *const argv[], char *const envp[])
   return argc;
 
 out2:
-  vm_user_destroy(vm);
+  vm_destroy(vm);
 
 out1:
   fs_inode_unlock_put(ip);

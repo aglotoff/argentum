@@ -7,12 +7,16 @@
 #include <kernel/fs/fs.h>
 #include <kernel/types.h>
 #include <kernel/mm/mmu.h>
+#include <kernel/mm/kobject.h>
 #include <kernel/mm/page.h>
 
 #include <kernel/mm/vm.h>
 
 static pte_t *vm_walk_trtab(tte_t *, uintptr_t, int);
 static void   vm_static_map(tte_t *, uintptr_t, uint32_t, size_t, int);
+
+static struct KObjectPool *vm_pool;
+// static struct KObjectPool *vm_area_pool;
 
 /*
  * ----------------------------------------------------------------------------
@@ -50,6 +54,8 @@ vm_init(void)
   vm_static_map(kern_trtab, VECTORS_BASE, (uint32_t) _start, PAGE_SIZE, VM_READ);
 
   vm_init_percpu();
+
+  vm_pool = kobject_pool_create("vm_pool", sizeof(struct VM), 0);
 }
 
 void
@@ -145,7 +151,7 @@ vm_walk_trtab(tte_t *trtab, uintptr_t va, int alloc)
   if ((*tte & TTE_TYPE_MASK) == TTE_TYPE_FAULT) {
     struct Page *page;
 
-    if (!alloc || (page = page_alloc(PAGE_ALLOC_ZERO)) == NULL)
+    if (!alloc || (page = page_alloc_one(PAGE_ALLOC_ZERO)) == NULL)
       return NULL;
     
     page->ref_count++;
@@ -233,9 +239,9 @@ vm_switch_kernel(void)
  * @param trtab Pointer to the translation table to be loaded.
  */
 void
-vm_switch_user(tte_t *trtab)
+vm_switch_user(struct VM *vm)
 {
-  write_ttbr0(PADDR(trtab));
+  write_ttbr0(PADDR(vm->trtab));
   tlbiall();
 }
 
@@ -301,7 +307,7 @@ vm_remove_page(tte_t *trtab, void *va)
     return;
 
   if (--page->ref_count == 0)
-    page_free(page);
+    page_free_one(page);
 
   vm_pte_clear(pte);
 
@@ -315,7 +321,7 @@ vm_remove_page(tte_t *trtab, void *va)
  */
 
 int
-vm_user_alloc(tte_t *trtab, void *va, size_t n, int prot)
+vm_user_alloc(struct VM *vm, void *va, size_t n, int prot)
 {
   struct Page *page;
   uint8_t *a, *start, *end;
@@ -328,14 +334,14 @@ vm_user_alloc(tte_t *trtab, void *va, size_t n, int prot)
     panic("invalid range [%p,%p)", start, end);
 
   for (a = start; a < end; a += PAGE_SIZE) {
-    if ((page = page_alloc(PAGE_ALLOC_ZERO)) == NULL) {
-      vm_user_dealloc(trtab, start, a - start);
+    if ((page = page_alloc_one(PAGE_ALLOC_ZERO)) == NULL) {
+      vm_user_dealloc(vm, start, a - start);
       return -ENOMEM;
     }
 
-    if ((r = (vm_insert_page(trtab, page, a, prot)) != 0)) {
-      page_free(page);
-      vm_user_dealloc(trtab, start, a - start);
+    if ((r = (vm_insert_page(vm->trtab, page, a, prot)) != 0)) {
+      page_free_one(page);
+      vm_user_dealloc(vm, start, a - start);
       return r;
     }
   }
@@ -344,7 +350,7 @@ vm_user_alloc(tte_t *trtab, void *va, size_t n, int prot)
 }
 
 void
-vm_user_dealloc(tte_t *trtab, void *va, size_t n)
+vm_user_dealloc(struct VM *vm, void *va, size_t n)
 {
   uint8_t *a, *end;
   struct Page *page;
@@ -357,7 +363,7 @@ vm_user_dealloc(tte_t *trtab, void *va, size_t n)
     panic("invalid range [%p,%p)", a, end);
 
   while (a < end) {
-    page = vm_lookup_page(trtab, a, &pte);
+    page = vm_lookup_page(vm->trtab, a, &pte);
 
     if (pte == NULL) {
       // Skip the rest of the page table 
@@ -366,7 +372,7 @@ vm_user_dealloc(tte_t *trtab, void *va, size_t n)
     }
 
     if (page != NULL)
-      vm_remove_page(trtab, a);
+      vm_remove_page(vm->trtab, a);
 
     a += PAGE_SIZE;
   }
@@ -379,7 +385,7 @@ vm_user_dealloc(tte_t *trtab, void *va, size_t n)
  */
 
 int
-vm_user_copy_out(tte_t *trtab, void *dst_va, const void *src_va, size_t n)
+vm_user_copy_out(struct VM *vm, void *dst_va, const void *src_va, size_t n)
 {
   uint8_t *src = (uint8_t *) src_va;
   uint8_t *dst = (uint8_t *) dst_va;
@@ -389,7 +395,7 @@ vm_user_copy_out(tte_t *trtab, void *dst_va, const void *src_va, size_t n)
     uint8_t *kva;
     size_t offset, ncopy;
 
-    if ((page = vm_lookup_page(trtab, dst, NULL)) == NULL)
+    if ((page = vm_lookup_page(vm->trtab, dst, NULL)) == NULL)
       return -EFAULT;
     
     kva    = (uint8_t *) page2kva(page);
@@ -407,7 +413,7 @@ vm_user_copy_out(tte_t *trtab, void *dst_va, const void *src_va, size_t n)
 }
 
 int
-vm_user_copy_in(tte_t *trtab, void *dst_va, const void *src_va, size_t n)
+vm_user_copy_in(struct VM *vm, void *dst_va, const void *src_va, size_t n)
 {
   uint8_t *dst = (uint8_t *) dst_va;
   uint8_t *src = (uint8_t *) src_va;
@@ -417,7 +423,7 @@ vm_user_copy_in(tte_t *trtab, void *dst_va, const void *src_va, size_t n)
     uint8_t *kva;
     size_t offset, ncopy;
 
-    if ((page = vm_lookup_page(trtab, src, NULL)) == NULL)
+    if ((page = vm_lookup_page(vm->trtab, src, NULL)) == NULL)
       return -EFAULT;
 
     kva    = (uint8_t *) page2kva(page);
@@ -434,93 +440,6 @@ vm_user_copy_in(tte_t *trtab, void *dst_va, const void *src_va, size_t n)
   return 0;
 }
 
-void
-vm_user_destroy(tte_t *trtab)
-{
-  struct Page *page;
-  unsigned i;
-
-  vm_user_dealloc(trtab, (void *) 0, KERNEL_BASE);
-
-  for (i = 0; i < TTX(KERNEL_BASE); i += 2) {
-    if (!trtab[i])
-      continue;
-
-    page = pa2page(PTE_SMALL_ADDR(trtab[i]));
-    if (--page->ref_count == 0)
-      page_free(page);
-  }
-
-  page = kva2page(trtab);
-  if (--page->ref_count == 0)
-      page_free(page);
-}
-
-
-
-tte_t *
-vm_user_clone(tte_t *trtab)
-{
-  struct Page *tab_page, *src_page, *dst_page;
-  uint8_t *va;
-  tte_t *t;
-  pte_t *pte;
-
-  // Allocate the translation table.
-  if ((tab_page = page_alloc_block(1, PAGE_ALLOC_ZERO)) == NULL)
-    return NULL;
-
-  t = page2kva(tab_page);
-  tab_page->ref_count++;
-
-  va = (uint8_t *) 0;
-
-  while (va < (uint8_t *) KERNEL_BASE) {
-    src_page = vm_lookup_page(trtab, va, &pte);
-    if (pte == NULL) {
-      // Skip the rest of the page table 
-      va = ROUND_DOWN(va + PAGE_SIZE * NPTENTRIES, PAGE_SIZE * NPTENTRIES);
-      continue;
-    }
-
-    if (src_page != NULL) {
-      unsigned perm;
-
-      perm = vm_pte_get_flags(pte);
-
-      if ((perm & VM_WRITE) || (perm & VM_COW)) {
-        perm &= ~VM_WRITE;
-        perm |= VM_COW;
-
-        if (vm_insert_page(trtab, src_page, va, perm) < 0)
-          panic("Cannot change page permissions");
-
-        if (vm_insert_page(t, src_page, va, perm) < 0) {
-          vm_user_destroy(t);
-          return NULL;
-        }
-      } else {
-        if ((dst_page = page_alloc(0)) == NULL) {
-          vm_user_destroy(t);
-          return NULL;
-        }
-
-        if (vm_insert_page(t, dst_page, va, perm) < 0) {
-          page_free(dst_page);
-          vm_user_destroy(t);
-          return NULL;
-        }
-
-        memcpy(page2kva(dst_page), page2kva(src_page), PAGE_SIZE);
-      }
-    }
-
-    va += PAGE_SIZE;
-  }
-
-  return t;
-}
-
 /*
  * ----------------------------------------------------------------------------
  * Check User Memory Permissions
@@ -528,7 +447,7 @@ vm_user_clone(tte_t *trtab)
  */
 
 int
-vm_user_check_buf(tte_t *trtab, const void *va, size_t n, unsigned perm)
+vm_user_check_buf(struct VM *vm, const void *va, size_t n, unsigned perm)
 {
   struct Page *page, *new_page;
   const char *p, *end;
@@ -543,7 +462,7 @@ vm_user_check_buf(tte_t *trtab, const void *va, size_t n, unsigned perm)
   while (p != end) {
     unsigned curr_perm;
 
-    if ((page = vm_lookup_page(trtab, (void *) p, &pte)) == NULL)
+    if ((page = vm_lookup_page(vm->trtab, (void *) p, &pte)) == NULL)
       return -EFAULT;
 
     curr_perm = vm_pte_get_flags(pte);
@@ -555,12 +474,12 @@ vm_user_check_buf(tte_t *trtab, const void *va, size_t n, unsigned perm)
       if ((curr_perm & perm) != perm)
         return -EFAULT;
 
-      if ((new_page = page_alloc(0)) == NULL)
+      if ((new_page = page_alloc_one(0)) == NULL)
         return -EFAULT;
 
       memcpy(page2kva(new_page), page2kva(page), PAGE_SIZE);
 
-      if ((vm_insert_page(trtab, new_page, (void *) p, curr_perm)) != 0)
+      if ((vm_insert_page(vm->trtab, new_page, (void *) p, curr_perm)) != 0)
         return -EFAULT;
     } else {
       if ((curr_perm & perm) != perm)
@@ -574,7 +493,7 @@ vm_user_check_buf(tte_t *trtab, const void *va, size_t n, unsigned perm)
 }
 
 int
-vm_user_check_str(tte_t *trtab, const char *s, unsigned perm)
+vm_user_check_str(struct VM *vm, const char *s, unsigned perm)
 {
   struct Page *page;
   const char *p;
@@ -584,7 +503,7 @@ vm_user_check_str(tte_t *trtab, const char *s, unsigned perm)
   assert(KERNEL_BASE % PAGE_SIZE == 0);
 
   while (s < (char *) KERNEL_BASE) {
-    page = vm_lookup_page(trtab, s, &pte);
+    page = vm_lookup_page(vm->trtab, s, &pte);
     if ((page == NULL) || ((*(pte + (NPTENTRIES * 2)) & perm) != perm))
       return -EFAULT;
 
@@ -605,7 +524,7 @@ vm_user_check_str(tte_t *trtab, const char *s, unsigned perm)
  */
 
 int
-vm_user_load(tte_t *trtab, void *va, struct Inode *ip, size_t n, off_t off)
+vm_user_load(struct VM *vm, void *va, struct Inode *ip, size_t n, off_t off)
 {
   struct Page *page;
   uint8_t *dst, *kva;
@@ -615,7 +534,7 @@ vm_user_load(tte_t *trtab, void *va, struct Inode *ip, size_t n, off_t off)
   dst = (uint8_t *) va;
 
   while (n != 0) {
-    page = vm_lookup_page(trtab, dst, NULL);
+    page = vm_lookup_page(vm->trtab, dst, NULL);
     if (page == NULL)
       return -EFAULT;
 
@@ -632,4 +551,109 @@ vm_user_load(tte_t *trtab, void *va, struct Inode *ip, size_t n, off_t off)
   }
 
   return 0;
+}
+
+struct VM   *
+vm_create(void)
+{
+  struct VM *vm;
+  struct Page *trtab_page;
+
+  if ((vm = (struct VM *) kobject_alloc(vm_pool)) == NULL)
+    return NULL;
+
+  if ((trtab_page = page_alloc_block(1, PAGE_ALLOC_ZERO)) == NULL) {
+    kobject_free(vm_pool, vm);
+    return NULL;
+  }
+
+  trtab_page->ref_count++;
+
+  vm->trtab = page2kva(trtab_page);
+  list_init(&vm->areas);
+
+  return vm;
+}
+
+void
+vm_destroy(struct VM *vm)
+{
+  struct Page *page;
+  unsigned i;
+
+  vm_user_dealloc(vm, (void *) 0, KERNEL_BASE);
+
+  for (i = 0; i < TTX(KERNEL_BASE); i += 2) {
+    if (!vm->trtab[i])
+      continue;
+
+    page = pa2page(PTE_SMALL_ADDR(vm->trtab[i]));
+    if (--page->ref_count == 0)
+      page_free_one(page);
+  }
+
+  page = kva2page(vm->trtab);
+  if (--page->ref_count == 0)
+      page_free_one(page);
+
+  kobject_free(vm_pool, vm);
+}
+
+struct VM   *
+vm_clone(struct VM *vm)
+{
+  struct VM *new_vm;
+  struct Page *src_page, *dst_page;
+  uint8_t *va;
+  pte_t *pte;
+
+  if ((new_vm = vm_create()) == NULL)
+    return NULL;
+
+  va = (uint8_t *) 0;
+
+  while (va < (uint8_t *) KERNEL_BASE) {
+    src_page = vm_lookup_page(vm->trtab, va, &pte);
+    if (pte == NULL) {
+      // Skip the rest of the page table 
+      va = ROUND_DOWN(va + PAGE_SIZE * NPTENTRIES, PAGE_SIZE * NPTENTRIES);
+      continue;
+    }
+
+    if (src_page != NULL) {
+      unsigned perm;
+
+      perm = vm_pte_get_flags(pte);
+
+      if ((perm & VM_WRITE) || (perm & VM_COW)) {
+        perm &= ~VM_WRITE;
+        perm |= VM_COW;
+
+        if (vm_insert_page(vm->trtab, src_page, va, perm) < 0)
+          panic("Cannot change page permissions");
+
+        if (vm_insert_page(new_vm->trtab, src_page, va, perm) < 0) {
+          vm_destroy(new_vm);
+          return NULL;
+        }
+      } else {
+        if ((dst_page = page_alloc_one(0)) == NULL) {
+          vm_destroy(new_vm);
+          return NULL;
+        }
+
+        if (vm_insert_page(new_vm->trtab, dst_page, va, perm) < 0) {
+          page_free_one(dst_page);
+          vm_destroy(new_vm);
+          return NULL;
+        }
+
+        memcpy(page2kva(dst_page), page2kva(src_page), PAGE_SIZE);
+      }
+    }
+
+    va += PAGE_SIZE;
+  }
+
+  return new_vm;
 }
