@@ -1,4 +1,4 @@
-# OSDev-PBX-A9
+# Codename Argentum
 
 Toy UNIX-like operating system written for RealView Platform Baseboard Explore
 for Cortex-A9.
