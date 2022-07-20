@@ -7,7 +7,7 @@
 
 #include <stdint.h>
 
-#include <kernel/list.h>
+#include <list.h>
 
 struct Process;
 struct SpinLock;

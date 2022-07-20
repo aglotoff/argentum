@@ -5,22 +5,22 @@
 #include <sys/stat.h>
 #include <sys/wait.h>
 
-#include <kernel/armv7.h>
-#include <kernel/cpu.h>
-#include <kernel/cprintf.h>
-#include <kernel/elf.h>
-#include <kernel/fs/file.h>
-#include <kernel/fs/fs.h>
-#include <kernel/hash.h>
-#include <kernel/mm/kobject.h>
-#include <kernel/mm/mmu.h>
-#include <kernel/mm/page.h>
-#include <kernel/mm/vm.h>
-#include <kernel/monitor.h>
-#include <kernel/sync.h>
-#include <kernel/trap.h>
+#include <armv7.h>
+#include <cpu.h>
+#include <cprintf.h>
+#include <elf.h>
+#include <fs/file.h>
+#include <fs/fs.h>
+#include <hash.h>
+#include <mm/kobject.h>
+#include <mm/mmu.h>
+#include <mm/page.h>
+#include <mm/vm.h>
+#include <monitor.h>
+#include <sync.h>
+#include <trap.h>
 
-#include <kernel/process.h>
+#include <process.h>
 
 // Process Object Pool
 struct KObjectPool * process_pool;

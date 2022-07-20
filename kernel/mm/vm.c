@@ -2,15 +2,15 @@
 #include <errno.h>
 #include <string.h>
 
-#include <kernel/armv7.h>
-#include <kernel/drivers/console.h>
-#include <kernel/fs/fs.h>
-#include <kernel/types.h>
-#include <kernel/mm/mmu.h>
-#include <kernel/mm/kobject.h>
-#include <kernel/mm/page.h>
+#include <armv7.h>
+#include <drivers/console.h>
+#include <fs/fs.h>
+#include <types.h>
+#include <mm/mmu.h>
+#include <mm/kobject.h>
+#include <mm/page.h>
 
-#include <kernel/mm/vm.h>
+#include <mm/vm.h>
 
 static pte_t *vm_walk_trtab(tte_t *, uintptr_t, int);
 static void   vm_static_map(tte_t *, uintptr_t, uint32_t, size_t, int);

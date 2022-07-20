@@ -3,22 +3,22 @@
 #include <stdint.h>
 #include <sys/utsname.h>
 
-#include <kernel/armv7.h>
-#include <kernel/cprintf.h>
-#include <kernel/cpu.h>
-#include <kernel/drivers/console.h>
-// #include <kernel/drivers/eth.h>
-#include <kernel/drivers/gic.h>
-#include <kernel/drivers/rtc.h>
-#include <kernel/drivers/sd.h>
-#include <kernel/fs/buf.h>
-#include <kernel/fs/file.h>
-#include <kernel/mm/kobject.h>
-#include <kernel/mm/memlayout.h>
-#include <kernel/mm/page.h>
-#include <kernel/mm/vm.h>
-#include <kernel/process.h>
-#include <kernel/sync.h>
+#include <armv7.h>
+#include <cprintf.h>
+#include <cpu.h>
+#include <drivers/console.h>
+// #include <drivers/eth.h>
+#include <drivers/gic.h>
+#include <drivers/rtc.h>
+#include <drivers/sd.h>
+#include <fs/buf.h>
+#include <fs/file.h>
+#include <mm/kobject.h>
+#include <mm/memlayout.h>
+#include <mm/page.h>
+#include <mm/vm.h>
+#include <process.h>
+#include <sync.h>
 
 static void mp_main(void);
 

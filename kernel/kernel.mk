@@ -2,7 +2,7 @@
 # Makefile fragment for the kernel
 #
 
-KERNEL_CFLAGS  := $(CFLAGS) $(INIT_CFLAGS) -Ikernel -D__KERNEL__
+KERNEL_CFLAGS  := $(CFLAGS) $(INIT_CFLAGS) -Ikernel/include -D__KERNEL__
 KERNEL_LDFLAGS := $(LDFLAGS) -T kernel/kernel.ld -nostdlib
 
 ifdef PROCESS_NAME

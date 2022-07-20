@@ -1,9 +1,9 @@
 #include <assert.h>
 #include <errno.h>
 
-#include <kernel/fs/buf.h>
-#include <kernel/fs/ext2.h>
-#include <kernel/fs/fs.h>
+#include <fs/buf.h>
+#include <fs/ext2.h>
+#include <fs/fs.h>
 
 // The number of bits per bitmap block
 // TODO: what about different block sizes?

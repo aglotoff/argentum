@@ -30,7 +30,7 @@
         "types.h": "c",
         "sd.h": "c",
         "sync.h": "c",
-        "syscall.h": "c",
+        "sys.h": "c",
         "lcd.h": "c",
         "file.h": "c",
         "float.h": "c",

@@ -8,11 +8,11 @@
 #include <limits.h>
 #include <sys/types.h>
 
-#include <kernel/cpu.h>
-#include <kernel/list.h>
-#include <kernel/mm/vm.h>
-#include <kernel/scheduler.h>
-#include <kernel/trap.h>
+#include <cpu.h>
+#include <list.h>
+#include <mm/vm.h>
+#include <scheduler.h>
+#include <trap.h>
 
 struct File;
 struct SpinLock;

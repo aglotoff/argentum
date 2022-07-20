@@ -1,10 +1,10 @@
 #include <string.h>
 
-#include <kernel/cprintf.h>
-#include <kernel/sync.h>
-#include <kernel/types.h>
+#include <cprintf.h>
+#include <sync.h>
+#include <types.h>
 
-#include <kernel/mm/page.h>
+#include <mm/page.h>
 
 /** The kernel uses this array to keep track of physical pages. */
 struct Page *pages;

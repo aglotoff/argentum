@@ -2,16 +2,16 @@
 #include <errno.h>
 #include <stdint.h>
 
-#include <kernel/cprintf.h>
-#include <kernel/cpu.h>
-#include <kernel/drivers/gic.h>
-#include <kernel/fs/buf.h>
-#include <kernel/mm/memlayout.h>
-#include <kernel/scheduler.h>
-#include <kernel/sync.h>
-#include <kernel/trap.h>
+#include <cprintf.h>
+#include <cpu.h>
+#include <drivers/gic.h>
+#include <fs/buf.h>
+#include <mm/memlayout.h>
+#include <scheduler.h>
+#include <sync.h>
+#include <trap.h>
 
-#include <kernel/drivers/sd.h>
+#include <drivers/sd.h>
 
 /*
  * ----------------------------------------------------------------------------

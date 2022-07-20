@@ -1,12 +1,12 @@
 #include <assert.h>
 
-#include <kernel/cprintf.h>
-#include <kernel/drivers/sd.h>
-#include <kernel/list.h>
-#include <kernel/mm/kobject.h>
-#include <kernel/sync.h>
+#include <cprintf.h>
+#include <drivers/sd.h>
+#include <list.h>
+#include <mm/kobject.h>
+#include <sync.h>
 
-#include <kernel/fs/buf.h>
+#include <fs/buf.h>
 
 struct KObjectPool *buf_pool;
 

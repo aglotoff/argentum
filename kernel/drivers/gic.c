@@ -1,11 +1,11 @@
 #include <stdint.h>
 
-#include <kernel/armv7.h>
-#include <kernel/mm/memlayout.h>
-#include <kernel/mm/vm.h>
-#include <kernel/trap.h>
+#include <armv7.h>
+#include <mm/memlayout.h>
+#include <mm/vm.h>
+#include <trap.h>
 
-#include <kernel/drivers/gic.h>
+#include <drivers/gic.h>
 
 #define GICC_BASE     0x1F000100    // Interrupt interface memory base address
 #define PTIMER_BASE   0x1F000600    // Private timer memory base address

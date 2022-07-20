@@ -5,14 +5,14 @@
 #include <string.h>
 #include <sys/stat.h>
 
-#include <kernel/cprintf.h>
-#include <kernel/drivers/console.h>
-#include <kernel/drivers/rtc.h>
-#include <kernel/fs/buf.h>
-#include <kernel/fs/ext2.h>
-#include <kernel/fs/fs.h>
-#include <kernel/process.h>
-#include <kernel/types.h>
+#include <cprintf.h>
+#include <drivers/console.h>
+#include <drivers/rtc.h>
+#include <fs/buf.h>
+#include <fs/ext2.h>
+#include <fs/fs.h>
+#include <process.h>
+#include <types.h>
 
 static unsigned ext2_inode_block_map(struct Inode *, unsigned);
 

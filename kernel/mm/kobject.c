@@ -2,12 +2,12 @@
 #include <errno.h>
 #include <string.h>
 
-#include <kernel/cprintf.h>
-#include <kernel/types.h>
-#include <kernel/mm/page.h>
-#include <kernel/sync.h>
+#include <cprintf.h>
+#include <types.h>
+#include <mm/page.h>
+#include <sync.h>
 
-#include <kernel/mm/kobject.h>
+#include <mm/kobject.h>
 
 // static int                 kobject_pool_grow(struct KObjectPool *);
 static unsigned            kobject_pool_estimate(size_t, unsigned, int,

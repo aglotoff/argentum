@@ -1,15 +1,15 @@
 #include <stdint.h>
 #include <string.h>
 
-#include <kernel/cpu.h>
-#include <kernel/cprintf.h>
-#include <kernel/drivers/gic.h>
-#include <kernel/mm/memlayout.h>
-#include <kernel/mm/page.h>
-#include <kernel/trap.h>
-#include <kernel/types.h>
+#include <cpu.h>
+#include <cprintf.h>
+#include <drivers/gic.h>
+#include <mm/memlayout.h>
+#include <mm/page.h>
+#include <trap.h>
+#include <types.h>
 
-#include <kernel/drivers/eth.h>
+#include <drivers/eth.h>
 
 #define ETH_BASE            0x4E000000
 

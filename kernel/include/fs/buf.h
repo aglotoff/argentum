@@ -14,8 +14,8 @@
 #include <stdint.h>
 #include <sys/types.h>
 
-#include <kernel/list.h>
-#include <kernel/sync.h>
+#include <list.h>
+#include <sync.h>
 
 #define BLOCK_SIZE      1024        ///< Size of a single filesystem block
 

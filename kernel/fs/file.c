@@ -4,13 +4,13 @@
 #include <string.h>
 #include <sys/stat.h>
 
-#include <kernel/cprintf.h>
-#include <kernel/fs/ext2.h>
-#include <kernel/fs/fs.h>
-#include <kernel/mm/kobject.h>
-#include <kernel/sync.h>
+#include <cprintf.h>
+#include <fs/ext2.h>
+#include <fs/fs.h>
+#include <mm/kobject.h>
+#include <sync.h>
 
-#include <kernel/fs/file.h>
+#include <fs/file.h>
 
 static struct SpinLock file_lock;
 static struct KObjectPool *file_pool;

@@ -8,9 +8,9 @@
 #include <stddef.h>
 #include <sys/types.h>
 
-#include <kernel/mm/mmu.h>
-#include <kernel/elf.h>
-#include <kernel/list.h>
+#include <mm/mmu.h>
+#include <elf.h>
+#include <list.h>
 
 struct Inode;
 struct Page;

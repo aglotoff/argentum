@@ -5,8 +5,8 @@
 #error "This is a kernel header; user programs should not #include it"
 #endif
 
-#include <kernel/list.h>
-#include <kernel/sync.h>
+#include <list.h>
+#include <sync.h>
 
 /**
  * Object pool descriptor.

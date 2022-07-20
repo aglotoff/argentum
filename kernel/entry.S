@@ -1,5 +1,5 @@
-#include <kernel/armv7.h>
-#include <kernel/mm/memlayout.h>
+#include <armv7.h>
+#include <mm/memlayout.h>
 
 #define RELOC(x)  ((x) - KERNEL_BASE)
 

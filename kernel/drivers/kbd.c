@@ -3,13 +3,13 @@
 
 #include <stdint.h>
 
-#include <kernel/drivers/console.h>
-#include <kernel/drivers/gic.h>
-#include <kernel/mm/memlayout.h>
-#include <kernel/mm/vm.h>
-#include <kernel/trap.h>
+#include <drivers/console.h>
+#include <drivers/gic.h>
+#include <mm/memlayout.h>
+#include <mm/vm.h>
+#include <trap.h>
 
-#include <kernel/drivers/kbd.h>
+#include <drivers/kbd.h>
 
 // PBX-A9 has two KMIs: KMI0 is used for the keyboard and KMI1 is used for the
 // mouse.

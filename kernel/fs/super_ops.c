@@ -1,9 +1,9 @@
 #include <assert.h>
 #include <string.h>
 
-#include <kernel/fs/buf.h>
-#include <kernel/fs/ext2.h>
-#include <kernel/fs/fs.h>
+#include <fs/buf.h>
+#include <fs/ext2.h>
+#include <fs/fs.h>
 
 static uint32_t
 ext2_get_inode_block(struct Inode *ip, uint32_t *idx)

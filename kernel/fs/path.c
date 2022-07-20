@@ -5,13 +5,13 @@
 #include <string.h>
 #include <sys/stat.h>
 
-#include <kernel/cprintf.h>
-#include <kernel/fs/ext2.h>
-#include <kernel/mm/kobject.h>
-#include <kernel/process.h>
-#include <kernel/types.h>
+#include <cprintf.h>
+#include <fs/ext2.h>
+#include <mm/kobject.h>
+#include <process.h>
+#include <types.h>
 
-#include <kernel/fs/fs.h>
+#include <fs/fs.h>
 
 static size_t
 fs_path_skip(const char *path, char *name, char **next)

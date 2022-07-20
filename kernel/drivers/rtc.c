@@ -1,11 +1,11 @@
 #include <stdint.h>
 #include <string.h>
 
-#include <kernel/mm/memlayout.h>
-#include <kernel/mm/vm.h>
-#include <kernel/sync.h>
+#include <mm/memlayout.h>
+#include <mm/vm.h>
+#include <sync.h>
 
-#include <kernel/drivers/rtc.h>
+#include <drivers/rtc.h>
 
 /*
  * ----------------------------------------------------------------------------

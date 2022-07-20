@@ -14,8 +14,8 @@
 #include <assert.h>
 #include <stddef.h>
 
-#include <kernel/list.h>
-#include <kernel/mm/memlayout.h>
+#include <list.h>
+#include <mm/memlayout.h>
 
 struct KObjectSlab;
 

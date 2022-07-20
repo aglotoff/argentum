@@ -5,8 +5,8 @@
 #error "This is a kernel header; user programs should not #include it"
 #endif
 
-#include <kernel/list.h>
-#include <kernel/types.h>
+#include <list.h>
+#include <types.h>
 
 #define HASH_DECLARE(name, n)  struct ListLink name[n]
 

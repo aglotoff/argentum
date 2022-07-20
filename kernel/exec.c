@@ -2,14 +2,14 @@
 #include <string.h>
 #include <sys/stat.h>
 
-#include <kernel/cprintf.h>
-#include <kernel/elf.h>
-#include <kernel/fs/fs.h>
-#include <kernel/mm/memlayout.h>
-#include <kernel/mm/page.h>
-#include <kernel/mm/vm.h>
-#include <kernel/process.h>
-#include <kernel/types.h>
+#include <cprintf.h>
+#include <elf.h>
+#include <fs/fs.h>
+#include <mm/memlayout.h>
+#include <mm/page.h>
+#include <mm/vm.h>
+#include <process.h>
+#include <types.h>
 
 static int
 copy_args(struct VM *vm, char *const args[], uintptr_t limit, char **sp)

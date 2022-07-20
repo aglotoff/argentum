@@ -4,14 +4,14 @@
 #include <stdint.h>
 #include <string.h>
 
-#include <kernel/drivers/console.h>
+#include <drivers/console.h>
 
-#include <kernel/mm/memlayout.h>
-#include <kernel/mm/page.h>
-#include <kernel/mm/vm.h>
-#include <kernel/types.h>
+#include <mm/memlayout.h>
+#include <mm/page.h>
+#include <mm/vm.h>
+#include <types.h>
 
-#include <kernel/drivers/lcd.h>
+#include <drivers/lcd.h>
 
 // LCD base memory address
 #define LCD_BASE          0x10020000      

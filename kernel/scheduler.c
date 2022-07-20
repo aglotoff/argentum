@@ -1,15 +1,15 @@
 #include <assert.h>
 #include <string.h>
 
-#include <kernel/armv7.h>
-#include <kernel/cprintf.h>
-#include <kernel/cpu.h>
-#include <kernel/list.h>
-#include <kernel/mm/kobject.h>
-#include <kernel/mm/vm.h>
-#include <kernel/process.h>
-#include <kernel/sync.h>
-#include <kernel/scheduler.h>
+#include <armv7.h>
+#include <cprintf.h>
+#include <cpu.h>
+#include <list.h>
+#include <mm/kobject.h>
+#include <mm/vm.h>
+#include <process.h>
+#include <sync.h>
+#include <scheduler.h>
 
 static struct KObjectPool *task_pool;
 

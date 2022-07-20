@@ -8,9 +8,9 @@
 #include <stdint.h>
 #include <sys/types.h>
 
-#include <kernel/elf.h>
-#include <kernel/list.h>
-#include <kernel/sync.h>
+#include <elf.h>
+#include <list.h>
+#include <sync.h>
 
 #define INODE_CACHE_SIZE  32
 

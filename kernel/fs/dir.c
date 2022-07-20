@@ -5,11 +5,11 @@
 #include <string.h>
 #include <sys/stat.h>
 
-#include <kernel/cprintf.h>
-#include <kernel/fs/buf.h>
-#include <kernel/fs/ext2.h>
-#include <kernel/fs/fs.h>
-#include <kernel/types.h>
+#include <cprintf.h>
+#include <fs/buf.h>
+#include <fs/ext2.h>
+#include <fs/fs.h>
+#include <types.h>
 
 #define DE_NAME_OFFSET    offsetof(struct Ext2DirEntry, name)
 

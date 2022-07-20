@@ -1,11 +1,11 @@
 {
   "configurations": [
     {
-      "name": "OSDev-PBX-A9",
+      "name": "Codename Argentum",
       "defines": [
         "__KERNEL__"
       ],
-      "includePath": ["./include"],
+      "includePath": ["./include", "./kernel/include"],
       "intelliSenseMode": "linux-gcc-x64",
       "compilerPath": "/usr/bin/arm-none-eabi-gcc",
       "cStandard": "gnu11",

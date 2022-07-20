@@ -2,13 +2,13 @@
 
 #include <stdint.h>
 
-#include <kernel/drivers/console.h>
-#include <kernel/drivers/gic.h>
-#include <kernel/mm/memlayout.h>
-#include <kernel/mm/vm.h>
-#include <kernel/trap.h>
+#include <drivers/console.h>
+#include <drivers/gic.h>
+#include <mm/memlayout.h>
+#include <mm/vm.h>
+#include <trap.h>
 
-#include <kernel/drivers/uart.h>
+#include <drivers/uart.h>
 
 // UART0 memory base address
 #define UART0             0x10009000    

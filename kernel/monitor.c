@@ -1,15 +1,15 @@
 #include <string.h>
 
-#include <kernel/armv7.h>
-#include <kernel/drivers/console.h>
-#include <kernel/cprintf.h>
-#include <kernel/kdebug.h>
-#include <kernel/mm/kobject.h>
-#include <kernel/mm/memlayout.h>
-#include <kernel/trap.h>
-#include <kernel/types.h>
+#include <armv7.h>
+#include <drivers/console.h>
+#include <cprintf.h>
+#include <kdebug.h>
+#include <mm/kobject.h>
+#include <mm/memlayout.h>
+#include <trap.h>
+#include <types.h>
 
-#include <kernel/monitor.h>
+#include <monitor.h>
 
 static char *read_cmd(void);
 static int exec_cmd(char *s, struct TrapFrame *tf);

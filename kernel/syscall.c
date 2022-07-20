@@ -7,17 +7,17 @@
 #include <sys/stat.h>
 #include <sys/utsname.h>
 
-#include <kernel/cprintf.h>
-#include <kernel/cpu.h>
-#include <kernel/drivers/rtc.h>
-#include <kernel/fs/file.h>
-#include <kernel/fs/fs.h>
-#include <kernel/mm/vm.h>
-#include <kernel/process.h>
-#include <kernel/types.h>
-#include <kernel/cprintf.h>
+#include <cprintf.h>
+#include <cpu.h>
+#include <drivers/rtc.h>
+#include <fs/file.h>
+#include <fs/fs.h>
+#include <mm/vm.h>
+#include <process.h>
+#include <types.h>
+#include <cprintf.h>
 
-#include <kernel/syscall.h>
+#include <sys.h>
 
 static int     sys_get_num(void);
 static int32_t sys_get_arg(int);

@@ -1,13 +1,13 @@
 #include <stdint.h>
 
-#include <kernel/armv7.h>
-#include <kernel/drivers/kbd.h>
-#include <kernel/drivers/lcd.h>
-#include <kernel/drivers/uart.h>
-#include <kernel/scheduler.h>
-#include <kernel/sync.h>
+#include <armv7.h>
+#include <drivers/kbd.h>
+#include <drivers/lcd.h>
+#include <drivers/uart.h>
+#include <scheduler.h>
+#include <sync.h>
 
-#include <kernel/drivers/console.h>
+#include <drivers/console.h>
 
 #define CONSOLE_BUF_SIZE  256
 

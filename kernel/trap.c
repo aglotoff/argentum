@@ -2,22 +2,22 @@
 #include <stddef.h>
 #include <string.h>
 
-#include <kernel/armv7.h>
-#include <kernel/cprintf.h>
-#include <kernel/cpu.h>
-#include <kernel/drivers/console.h>
-#include <kernel/drivers/eth.h>
-#include <kernel/drivers/gic.h>
-#include <kernel/drivers/kbd.h>
-#include <kernel/drivers/sd.h>
-#include <kernel/drivers/uart.h>
-#include <kernel/mm/page.h>
-#include <kernel/mm/vm.h>
-#include <kernel/process.h>
-#include <kernel/syscall.h>
-#include <kernel/types.h>
+#include <armv7.h>
+#include <cprintf.h>
+#include <cpu.h>
+#include <drivers/console.h>
+#include <drivers/eth.h>
+#include <drivers/gic.h>
+#include <drivers/kbd.h>
+#include <drivers/sd.h>
+#include <drivers/uart.h>
+#include <mm/page.h>
+#include <mm/vm.h>
+#include <process.h>
+#include <sys.h>
+#include <types.h>
 
-#include <kernel/trap.h>
+#include <trap.h>
 
 static void trap_handle_abort(struct TrapFrame *);
 static void trap_irq_dispatch(void);

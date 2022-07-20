@@ -2,9 +2,9 @@
 #include <errno.h>
 #include <string.h>
 
-#include <kernel/fs/buf.h>
-#include <kernel/fs/ext2.h>
-#include <kernel/fs/fs.h>
+#include <fs/buf.h>
+#include <fs/ext2.h>
+#include <fs/fs.h>
 
 // Block descriptors begin at block 2
 #define GD_BLOCKS_BASE  2

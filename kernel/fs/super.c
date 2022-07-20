@@ -5,12 +5,12 @@
 #include <string.h>
 #include <sys/stat.h>
 
-#include <kernel/cprintf.h>
-#include <kernel/fs/buf.h>
-#include <kernel/fs/fs.h>
-#include <kernel/types.h>
+#include <cprintf.h>
+#include <fs/buf.h>
+#include <fs/fs.h>
+#include <types.h>
 
-#include <kernel/fs/ext2.h>
+#include <fs/ext2.h>
 
 /*
  * ----------------------------------------------------------------------------

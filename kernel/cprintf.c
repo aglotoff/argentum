@@ -1,10 +1,10 @@
 #include <stdio.h>
 
-#include <kernel/drivers/console.h>
-#include <kernel/monitor.h>
-#include <kernel/sync.h>
+#include <drivers/console.h>
+#include <monitor.h>
+#include <sync.h>
 
-#include <kernel/cprintf.h>
+#include <cprintf.h>
 
 static struct SpinLock lock = SPIN_INITIALIZER("cprintf");
 static int locking = 1;
