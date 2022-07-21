@@ -93,30 +93,33 @@ mp_main(void)
   scheduler_start();   
 }
 
-// Initial translation table
-__attribute__((__aligned__(TRTAB_SIZE))) tte_t
-entry_trtab[NTTENTRIES] = {
-  // Identity mapping for the first 1MB of physical memory (enough to load
-  // the entry section):
-  [0x000] =                (0x000000 | TTE_TYPE_SECT | TTE_SECT_AP(AP_PRIV_RW)),
+#define MAKE_L1_SECTION(pa, ap) \
+  ((pa) | L1_DESC_TYPE_SECT | L1_DESC_SECT_AP(ap))
 
-  // Higher-half mapping for the first 16MB of physical memory (enough to 
-  // initialize the page allocator data structures, setup the master
+// Initial translation table
+__attribute__((__aligned__(L1_TABLE_SIZE))) l1_desc_t
+entry_trtab[L1_NR_ENTRIES] = {
+  // Identity mapping for the first 1MB of physical memory (just enough to
+  // load the entry point code):
+  [0x0]                       = MAKE_L1_SECTION(0x000000, AP_PRIV_RW),
+
+  // Higher-half mapping for the first 16MB of physical memory (should be
+  // enough to initialize the page allocator data structures, setup the master
   // translation table and allocate the LCD framebuffer):
-  [TTX(KERNEL_BASE)+0x0] = (0x000000 | TTE_TYPE_SECT | TTE_SECT_AP(AP_PRIV_RW)),
-  [TTX(KERNEL_BASE)+0x1] = (0x100000 | TTE_TYPE_SECT | TTE_SECT_AP(AP_PRIV_RW)),
-  [TTX(KERNEL_BASE)+0x2] = (0x200000 | TTE_TYPE_SECT | TTE_SECT_AP(AP_PRIV_RW)),
-  [TTX(KERNEL_BASE)+0x3] = (0x300000 | TTE_TYPE_SECT | TTE_SECT_AP(AP_PRIV_RW)),
-  [TTX(KERNEL_BASE)+0x4] = (0x400000 | TTE_TYPE_SECT | TTE_SECT_AP(AP_PRIV_RW)),
-  [TTX(KERNEL_BASE)+0x5] = (0x500000 | TTE_TYPE_SECT | TTE_SECT_AP(AP_PRIV_RW)),
-  [TTX(KERNEL_BASE)+0x6] = (0x600000 | TTE_TYPE_SECT | TTE_SECT_AP(AP_PRIV_RW)),
-  [TTX(KERNEL_BASE)+0x7] = (0x700000 | TTE_TYPE_SECT | TTE_SECT_AP(AP_PRIV_RW)),
-  [TTX(KERNEL_BASE)+0x8] = (0x800000 | TTE_TYPE_SECT | TTE_SECT_AP(AP_PRIV_RW)),
-  [TTX(KERNEL_BASE)+0x9] = (0x900000 | TTE_TYPE_SECT | TTE_SECT_AP(AP_PRIV_RW)),
-  [TTX(KERNEL_BASE)+0xA] = (0xA00000 | TTE_TYPE_SECT | TTE_SECT_AP(AP_PRIV_RW)),
-  [TTX(KERNEL_BASE)+0xB] = (0xB00000 | TTE_TYPE_SECT | TTE_SECT_AP(AP_PRIV_RW)),
-  [TTX(KERNEL_BASE)+0xC] = (0xC00000 | TTE_TYPE_SECT | TTE_SECT_AP(AP_PRIV_RW)),
-  [TTX(KERNEL_BASE)+0xD] = (0xD00000 | TTE_TYPE_SECT | TTE_SECT_AP(AP_PRIV_RW)),
-  [TTX(KERNEL_BASE)+0xE] = (0xE00000 | TTE_TYPE_SECT | TTE_SECT_AP(AP_PRIV_RW)),
-  [TTX(KERNEL_BASE)+0xF] = (0xF00000 | TTE_TYPE_SECT | TTE_SECT_AP(AP_PRIV_RW)),
+  [L1_IDX(KERNEL_BASE) + 0x0] = MAKE_L1_SECTION(0x000000, AP_PRIV_RW),
+  [L1_IDX(KERNEL_BASE) + 0x1] = MAKE_L1_SECTION(0x100000, AP_PRIV_RW),
+  [L1_IDX(KERNEL_BASE) + 0x2] = MAKE_L1_SECTION(0x200000, AP_PRIV_RW),
+  [L1_IDX(KERNEL_BASE) + 0x3] = MAKE_L1_SECTION(0x300000, AP_PRIV_RW),
+  [L1_IDX(KERNEL_BASE) + 0x4] = MAKE_L1_SECTION(0x400000, AP_PRIV_RW),
+  [L1_IDX(KERNEL_BASE) + 0x5] = MAKE_L1_SECTION(0x500000, AP_PRIV_RW),
+  [L1_IDX(KERNEL_BASE) + 0x6] = MAKE_L1_SECTION(0x600000, AP_PRIV_RW),
+  [L1_IDX(KERNEL_BASE) + 0x7] = MAKE_L1_SECTION(0x700000, AP_PRIV_RW),
+  [L1_IDX(KERNEL_BASE) + 0x8] = MAKE_L1_SECTION(0x800000, AP_PRIV_RW),
+  [L1_IDX(KERNEL_BASE) + 0x9] = MAKE_L1_SECTION(0x900000, AP_PRIV_RW),
+  [L1_IDX(KERNEL_BASE) + 0xA] = MAKE_L1_SECTION(0xA00000, AP_PRIV_RW),
+  [L1_IDX(KERNEL_BASE) + 0xB] = MAKE_L1_SECTION(0xB00000, AP_PRIV_RW),
+  [L1_IDX(KERNEL_BASE) + 0xC] = MAKE_L1_SECTION(0xC00000, AP_PRIV_RW),
+  [L1_IDX(KERNEL_BASE) + 0xD] = MAKE_L1_SECTION(0xD00000, AP_PRIV_RW),
+  [L1_IDX(KERNEL_BASE) + 0xE] = MAKE_L1_SECTION(0xE00000, AP_PRIV_RW),
+  [L1_IDX(KERNEL_BASE) + 0xF] = MAKE_L1_SECTION(0xF00000, AP_PRIV_RW),
 };

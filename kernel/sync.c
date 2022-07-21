@@ -132,7 +132,7 @@ spin_save_caller_pcs(struct SpinLock *lock)
   uint32_t *fp;
   int i;
 
-  fp = (uint32_t *) read_fp();
+  fp = (uint32_t *) r11_get();
 
   for (i = 0; (fp != NULL) && (i < NCALLERPCS); i++) {
     lock->pcs[i] = fp[-1];

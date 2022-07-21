@@ -8,7 +8,7 @@
 #include <stddef.h>
 #include <sys/types.h>
 
-#include <mm/mmu.h>
+#include <armv7.h>
 #include <elf.h>
 #include <list.h>
 
@@ -30,14 +30,14 @@ struct VMArea {
 };
 
 struct VM {
-  tte_t          *trtab;
+  l1_desc_t          *trtab;
   struct ListLink areas;
 };
 
 static inline int
-vm_pte_get_flags(pte_t *pte)
+vm_L2_DESC_get_flags(l2_desc_t *pte)
 {
-  return *(pte + (NPTENTRIES * 2));
+  return *(pte + (L2_NR_ENTRIES * 2));
 }
 
 void         vm_init(void);
@@ -50,9 +50,9 @@ struct VM   *vm_create(void);
 void         vm_destroy(struct VM *);
 struct VM   *vm_clone(struct VM *);
 
-struct Page *vm_lookup_page(tte_t *, const void *, pte_t **);
-int          vm_insert_page(tte_t *, struct Page *, void *, unsigned);
-void         vm_remove_page(tte_t *, void *);
+struct Page *vm_lookup_page(l1_desc_t *, const void *, l2_desc_t **);
+int          vm_insert_page(l1_desc_t *, struct Page *, void *, unsigned);
+void         vm_remove_page(l1_desc_t *, void *);
 
 int          vm_user_copy_out(struct VM *, void *, const void *, size_t);
 int          vm_user_copy_in(struct VM *, void *, const void *, size_t);

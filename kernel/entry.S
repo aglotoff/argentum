@@ -44,28 +44,30 @@ _start:
 
   .globl  entry
 entry:
-  ldr  r0, =(0xF << 20)
-  mcr  p15, 0, r0, c1, c0, 2
+  // Set access rights to CP10 and CP11 (the FPU coprocessors)
+  ldr   r0, =(CP15_CPACR_CPN(10, CPAC_FULL) | CP15_CPACR_CPN(11, CPAC_FULL))
+  mcr   CP15_CPACR(r0)
 
-  mov  r3, #0x40000000 
-  vmsr fpexc, r3
+  // Enable the FPU
+  mov   r3, #FPEXC_EN 
+  vmsr  fpexc, r3
 
   // Load the physical address of the initial translation table
   ldr   r2, =RELOC(entry_trtab)
-  mcr   p15, 0, r2, c2, c0, 0
+  mcr   CP15_TTBR0(r2)
 
   // Assign domain access
-  ldr   r2, =DACR_D(0, DA_CLIENT)
-  mcr   p15, 0, r2, c3, c0, 0
+  ldr   r2, =CP15_DACR_DN(0, DA_CLIENT)
+  mcr   CP15_DACR(r2)
 
   // Enable MMU, cache, and high exception vectors
-  mrc   p15, 0, r2, c1, c0, 0
-  ldr   r1, =(SCTLR_M | SCTLR_C | SCTLR_I | SCTLR_V)
+  mrc   CP15_SCTLR(r2)
+  ldr   r1, =(CP15_SCTLR_M | CP15_SCTLR_C | CP15_SCTLR_I | CP15_SCTLR_V)
   orr   r2, r2, r1
-  mcr   p15, 0, r2, c1, c0, 0
+  mcr   CP15_SCTLR(r2)
 
   // Get the current processor ID
-  mrc   p15, 0, r0, c0, c0, 5
+  mrc   CP15_MPIDR(r0)
   and   r0, r0, #3
 
   // Set the kernel exception stack pointer for this CPU

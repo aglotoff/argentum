@@ -62,12 +62,12 @@ trap_handle_abort(struct TrapFrame *tf)
   uint32_t address, status;
   struct Page *fault_page, *page;
   struct Process *process;
-  pte_t *pte;
+  l2_desc_t *pte;
 
   // Read the contents of the corresponsing Fault Address Register (FAR) and 
   // the Fault Status Register (FSR).
-  address = tf->trapno == T_DABT ? read_dfar() : read_ifar();
-  status  = tf->trapno == T_DABT ? read_dfsr() : read_ifsr();
+  address = tf->trapno == T_DABT ? cp15_dfar_get() : cp15_ifar_get();
+  status  = tf->trapno == T_DABT ? cp15_ifsr_get() : cp15_ifsr_get();
 
   // If abort happened in kernel mode, print the trap frame and call panic()
   if ((tf->psr & PSR_M_MASK) != PSR_M_USR) {
@@ -94,7 +94,7 @@ trap_handle_abort(struct TrapFrame *tf)
   } else {
     int prot;
 
-    prot = vm_pte_get_flags(pte);
+    prot = vm_L2_DESC_get_flags(pte);
     if ((prot & VM_COW) && ((page = page_alloc_one(0)) != NULL)) {
       memcpy(page2kva(page), page2kva(fault_page), PAGE_SIZE);
 

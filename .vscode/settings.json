@@ -37,6 +37,7 @@
         "errno.h": "c",
         "scheduler.h": "c",
         "rtc.h": "c",
-        "dirent.h": "c"
+        "dirent.h": "c",
+        "typeinfo": "c"
     }
 }

@@ -25,7 +25,7 @@ struct Cpu cpus[NCPU];
 unsigned
 cpu_id(void)
 {
-  return read_mpidr() & 3;
+  return cp15_mpidr_get() & 3;
 }
 
 /**
@@ -38,7 +38,7 @@ my_cpu(void)
 {
   uint32_t psr;
 
-  psr = read_cpsr();
+  psr = cpsr_get();
   if (!(psr & PSR_I) || !(psr & PSR_F))
     panic("interruptible");
 
@@ -74,13 +74,13 @@ my_task(void)
 void
 irq_disable(void)
 {
-  write_cpsr(read_cpsr() | PSR_I | PSR_F);
+  cpsr_set(cpsr_get() | PSR_I | PSR_F);
 }
 
 void
 irq_enable(void)
 {
-  write_cpsr(read_cpsr() & ~(PSR_I | PSR_F));
+  cpsr_set(cpsr_get() & ~(PSR_I | PSR_F));
 }
 
 /**
@@ -93,8 +93,8 @@ irq_save(void)
 {
   uint32_t psr;
 
-  psr = read_cpsr();
-  write_cpsr(psr | PSR_I | PSR_F);
+  psr = cpsr_get();
+  cpsr_set(psr | PSR_I | PSR_F);
 
   if (my_cpu()->irq_save_count++ == 0)
     my_cpu()->irq_flags = ~psr & (PSR_I | PSR_F);
@@ -108,7 +108,7 @@ irq_restore(void)
 {
   uint32_t psr;
 
-  psr = read_cpsr();
+  psr = cpsr_get();
   if (!(psr & PSR_I) || !(psr & PSR_F))
     panic("interruptible");
 
@@ -116,5 +116,5 @@ irq_restore(void)
     panic("interruptible");
 
   if (my_cpu()->irq_save_count == 0)
-    write_cpsr(psr & ~my_cpu()->irq_flags);
+    cpsr_set(psr & ~my_cpu()->irq_flags);
 }

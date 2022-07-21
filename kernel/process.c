@@ -13,7 +13,6 @@
 #include <fs/fs.h>
 #include <hash.h>
 #include <mm/kobject.h>
-#include <mm/mmu.h>
 #include <mm/page.h>
 #include <mm/vm.h>
 #include <monitor.h>

@@ -205,7 +205,7 @@ mon_backtrace(int argc, char **argv, struct TrapFrame *tf)
   // The code needs to be compiled with the -mapcs-frame and
   // -fno-omit-frame-pointer flags
 
-  fp = (uint32_t *) (tf ? tf->r11 : read_fp());
+  fp = (uint32_t *) (tf ? tf->r11 : r11_get());
   for ( ; fp != NULL; fp = (uint32_t *) fp[-3]) {
     debug_info_pc(fp[-1], &info);
 

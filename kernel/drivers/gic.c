@@ -126,7 +126,7 @@ ptimer_init(void)
   ptimer[PTLOAD] = PERIPHCLK / ((PRESCALER + 1) * TICK_RATE) - 1;
   ptimer[PTCTRL] = (PRESCALER << 8) | PTCTRL_AUTO | PTCTRL_IRQEN | PTCTRL_EN;
 
-  gic_enable(IRQ_PTIMER, read_mpidr() & 0x3);
+  gic_enable(IRQ_PTIMER, cp15_mpidr_get() & 0x3);
 }
 
 /**
