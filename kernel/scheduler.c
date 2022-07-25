@@ -6,7 +6,7 @@
 #include <cpu.h>
 #include <list.h>
 #include <mm/kobject.h>
-#include <mm/vm.h>
+#include <mm/mmu.h>
 #include <process.h>
 #include <sync.h>
 #include <scheduler.h>
@@ -56,12 +56,12 @@ scheduler_start(void)
       my_cpu()->task = next;
 
       if (next->process != NULL)
-        vm_switch_user(next->process->vm);
+        mmu_switch_user(next->process->vm->trtab);
 
       context_switch(&my_cpu()->scheduler, next->context);
 
       if (next->process != NULL)
-        vm_switch_kernel();
+        mmu_switch_kernel();
     }
 
     // Mark that no process is running on this CPU.

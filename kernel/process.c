@@ -141,8 +141,8 @@ process_load_binary(struct Process *proc, const void *binary)
   ph = (Elf32_Phdr *) ((uint8_t *) elf + elf->phoff);
   eph = ph + elf->phnum;
 
-  proc->heap  = 0;
-  proc->stack = USTACK_TOP - USTACK_SIZE;
+  proc->vm->heap  = 0;
+  proc->vm->stack = USTACK_TOP - USTACK_SIZE;
 
   for ( ; ph < eph; ph++) {
     if (ph->type != PT_LOAD)
@@ -159,10 +159,10 @@ process_load_binary(struct Process *proc, const void *binary)
                          (uint8_t *) elf + ph->offset, ph->filesz)) < 0)
       return r;
 
-    proc->heap = MAX(proc->heap, ph->vaddr + ph->memsz);
+    proc->vm->heap = MAX(proc->vm->heap, ph->vaddr + ph->memsz);
   }
 
-  if ((r = vm_user_alloc(proc->vm, (void *) (proc->stack), USTACK_SIZE,
+  if ((r = vm_user_alloc(proc->vm, (void *) (proc->vm->stack), USTACK_SIZE,
                            VM_READ | VM_WRITE | VM_USER) < 0))
     return r;
 
@@ -321,11 +321,11 @@ process_copy(void)
     return -ENOMEM;
   }
 
-  child->heap  = current->heap;
-  child->stack = current->stack;
-  child->parent = current;
-  *child->tf    = *current->tf;
-  child->tf->r0 = 0;
+  child->vm->heap  = current->vm->heap;
+  child->vm->stack = current->vm->stack;
+  child->parent    = current;
+  *child->tf       = *current->tf;
+  child->tf->r0    = 0;
 
   for (fd = 0; fd < OPEN_MAX; fd++) {
     child->files[fd] = current->files[fd] ? file_dup(current->files[fd]) : NULL;
@@ -452,11 +452,11 @@ process_grow(ptrdiff_t increment)
   struct Process *current = my_process();
   uintptr_t o, n;
 
-  o = ROUND_UP(current->heap, sizeof(uintptr_t));
+  o = ROUND_UP(current->vm->heap, sizeof(uintptr_t));
   n = ROUND_UP(o + increment, sizeof(uintptr_t));
 
   if (increment > 0) {
-    if ((n < o) || (n > (current->stack + PAGE_SIZE)))
+    if ((n < o) || (n > (current->vm->stack + PAGE_SIZE)))
       // Overflow
       return (void *) -1;
     if (vm_user_alloc(current->vm, (void *) ROUND_UP(o, PAGE_SIZE),
@@ -471,7 +471,7 @@ process_grow(ptrdiff_t increment)
                           ROUND_UP(o, PAGE_SIZE) - ROUND_UP(n, PAGE_SIZE));
   }
 
-  current->heap = n;
+  current->vm->heap = n;
 
   return (void *) o;
 }

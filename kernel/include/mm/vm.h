@@ -30,29 +30,17 @@ struct VMArea {
 };
 
 struct VM {
-  l1_desc_t          *trtab;
+  l1_desc_t      *trtab;
+  uintptr_t       heap;            ///< Heap end virtual address
+  uintptr_t       stack;           ///< Stack bottom virtual address
   struct ListLink areas;
 };
 
-static inline int
-vm_L2_DESC_get_flags(l2_desc_t *pte)
-{
-  return *(pte + (L2_NR_ENTRIES * 2));
-}
-
 void         vm_init(void);
-void         vm_init_percpu(void);
-
-void         vm_switch_kernel(void);
-void         vm_switch_user(struct VM *);
 
 struct VM   *vm_create(void);
 void         vm_destroy(struct VM *);
 struct VM   *vm_clone(struct VM *);
-
-struct Page *vm_lookup_page(l1_desc_t *, const void *, l2_desc_t **);
-int          vm_insert_page(l1_desc_t *, struct Page *, void *, unsigned);
-void         vm_remove_page(l1_desc_t *, void *);
 
 int          vm_user_copy_out(struct VM *, void *, const void *, size_t);
 int          vm_user_copy_in(struct VM *, void *, const void *, size_t);
@@ -63,5 +51,7 @@ int          vm_user_load(struct VM *, void *, struct Inode *, size_t, off_t);
 
 int          vm_user_alloc(struct VM *, void *, size_t, int);
 void         vm_user_dealloc(struct VM *, void *, size_t);
+
+int          vm_handle_fault(struct VM *vm, uintptr_t);
 
 #endif  // !__KERNEL_MM_VM_H__

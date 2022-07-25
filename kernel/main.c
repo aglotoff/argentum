@@ -15,6 +15,7 @@
 #include <fs/file.h>
 #include <mm/kobject.h>
 #include <mm/memlayout.h>
+#include <mm/mmu.h>
 #include <mm/page.h>
 #include <mm/vm.h>
 #include <process.h>
@@ -44,8 +45,7 @@ main(void)
 {
   // Setup the memory mappings first
   page_init_low();      // Physical page allocator (lower memory)
-  kobject_pool_init();  // Object allocator
-  vm_init();            // Kernel virtual memory
+  mmu_init();           // Memory management unit
 
   // Now we can initialize the console and print messages
   gic_init();           // Interrupt controller
@@ -53,7 +53,9 @@ main(void)
 
   // Perform the rest of initialization
   page_init_high();     // Physical page allocator (higher memory)
-  
+  kobject_pool_init();  // Object allocator
+  vm_init();            // Virtual memory manager
+
   ptimer_init();        // Private timer
   rtc_init();           // Real-time clock
   sd_init();            // MultiMedia Card Interface
@@ -77,7 +79,7 @@ void
 mp_enter(void)
 {
   // Per-CPU initialization
-  vm_init_percpu();     // Load the kernel translation table
+  mmu_init_percpu();     // Load the kernel translation table
   gic_init();           // Interrupt controller
   ptimer_init();        // Private timer
 

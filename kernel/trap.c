@@ -60,9 +60,10 @@ static void
 trap_handle_abort(struct TrapFrame *tf)
 {
   uint32_t address, status;
-  struct Page *fault_page, *page;
   struct Process *process;
-  l2_desc_t *pte;
+
+  process = my_process();
+  assert(process != NULL);
 
   // Read the contents of the corresponsing Fault Address Register (FAR) and 
   // the Fault Status Register (FSR).
@@ -75,36 +76,8 @@ trap_handle_abort(struct TrapFrame *tf)
     panic("kernel fault va %p status %#x", address, status);
   }
 
-  process = my_process();
-  assert(process != NULL);
-
-  fault_page = vm_lookup_page(process->vm->trtab, (void *) address, &pte);
-
-  if (fault_page == NULL) {
-    if ((address < process->stack) &&
-        (address >= (process->stack - PAGE_SIZE)) &&
-        (process->heap < (process->stack - PAGE_SIZE))) {
-      // Expand stack
-      if (vm_user_alloc(process->vm, (void *) (process->stack - PAGE_SIZE),
-          PAGE_SIZE, VM_WRITE | VM_USER) == 0) {
-        process->stack -= PAGE_SIZE;
-        return;
-      }
-    }
-  } else {
-    int prot;
-
-    prot = vm_L2_DESC_get_flags(pte);
-    if ((prot & VM_COW) && ((page = page_alloc_one(0)) != NULL)) {
-      memcpy(page2kva(page), page2kva(fault_page), PAGE_SIZE);
-
-      prot &= ~VM_COW;
-      prot |= VM_WRITE;
-
-      if (vm_insert_page(process->vm->trtab, page, (void *) address, prot) == 0)
-        return;
-    }
-  }
+  if (vm_handle_fault(process->vm, address) == 0)
+    return;
 
   // Abort happened in user mode.
   cprintf("user fault va %p status %#x\n", address, status);

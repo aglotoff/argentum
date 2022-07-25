@@ -28,6 +28,7 @@ KERNEL_SRCFILES :=	\
 	kernel/fs/path.c \
 	kernel/fs/super.c \
 	kernel/fs/super_ops.c \
+	kernel/mm/mmu.c \
 	kernel/mm/page.c \
 	kernel/mm/kobject.c \
 	kernel/mm/vm.c \

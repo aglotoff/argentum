@@ -6,6 +6,7 @@
 #include <elf.h>
 #include <fs/fs.h>
 #include <mm/memlayout.h>
+#include <mm/mmu.h>
 #include <mm/page.h>
 #include <mm/vm.h>
 #include <process.h>
@@ -148,12 +149,12 @@ process_exec(const char *path, char *const argv[], char *const envp[])
 
   proc = my_process();
 
-  vm_switch_user(vm);
+  mmu_switch_user(vm->trtab);
   vm_destroy(proc->vm);
 
-  proc->vm    = vm;
-  proc->heap  = heap;
-  proc->stack = ustack;
+  proc->vm        = vm;
+  proc->vm->heap  = heap;
+  proc->vm->stack = ustack;
 
   // Stack must be aligned to an 8-byte boundary in order for variadic args
   // to properly work!

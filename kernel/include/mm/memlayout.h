@@ -42,6 +42,7 @@
 #ifndef __ASSEMBLER__
 
 #include <assert.h>
+#include <stdint.h>
 
 /** Integer type wide enough to represent a physical address. */
 typedef unsigned long   physaddr_t;

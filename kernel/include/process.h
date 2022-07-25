@@ -30,8 +30,6 @@ struct Process {
   struct ListLink    pid_link;        ///< Link into the PID hash table
 
   struct VM         *vm;              ///< Process' address space
-  uintptr_t          heap;            ///< Heap end virtual address
-  uintptr_t          stack;           ///< Stack bottom virtual address
 
   struct Process    *parent;          ///< Link to the parent process
   struct ListLink    wait_queue;      ///< Queue to sleep waiting for children
