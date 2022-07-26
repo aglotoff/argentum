@@ -430,14 +430,8 @@ static void
 process_pop_tf(struct TrapFrame *tf)
 {
   asm volatile(
-    // Setup the stack pointer
     "mov     sp, %0\n"
-
-    // This is the same code as at the end of trap_user:
-    "ldr     lr, [sp], #16\n"
-    "msr     spsr, lr\n"
-    "ldmdb   sp, {sp,lr}^\n"
-    "ldmia   sp!, {r0-r12,pc}^\n"
+    "b       trap_user_exit\n"
     :
     : "r" (tf)
     : "memory"

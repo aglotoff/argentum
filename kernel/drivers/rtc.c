@@ -132,8 +132,6 @@ rtc_fill_date(struct tm *tm)
  *
  */
 
-#define SB_CON0       0x10002000    // SBCon0 memory base address
-
 #define SCL           (1U << 0)     // Clock line
 #define SDA           (1U << 1)     // Data line
 

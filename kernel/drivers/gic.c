@@ -7,10 +7,6 @@
 
 #include <drivers/gic.h>
 
-#define GICC_BASE     0x1F000100    // Interrupt interface memory base address
-#define PTIMER_BASE   0x1F000600    // Private timer memory base address
-#define GICD_BASE     0x1F001000    // Distributor memory base address
-
 static volatile uint32_t *gicc, *gicd, *ptimer;
 
 // Interrupt distributor registers, divided by 4 for use as uint32_t[] indices

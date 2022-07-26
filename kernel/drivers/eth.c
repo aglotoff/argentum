@@ -11,8 +11,6 @@
 
 #include <drivers/eth.h>
 
-#define ETH_BASE            0x4E000000
-
 // RX an TX FIFO ports, divided by 4 for use as uint32_t[] indices
 #define RX_DATA_FIFO_PORT   (0x00 / 4)
 #define TX_DATA_FIFO_PORT   (0x20 / 4)

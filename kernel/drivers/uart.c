@@ -10,9 +10,6 @@
 
 #include <drivers/uart.h>
 
-// UART0 memory base address
-#define UART0             0x10009000    
-
 // UART registers, divided by 4 for use as uint32_t[] indicies
 #define UARTDR            (0x000 / 4)   // Data Register
 #define UARTECR           (0x004 / 4)   // Error Clear Register

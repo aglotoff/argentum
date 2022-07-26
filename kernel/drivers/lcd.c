@@ -13,9 +13,6 @@
 
 #include <drivers/lcd.h>
 
-// LCD base memory address
-#define LCD_BASE          0x10020000      
-
 // LCD registers, shifted right by 2 bits for use as uint32_t[] 
 #define LCD_TIMING0       (0x000 / 4)     // Horizontal Axis Panel Control
 #define LCD_TIMING1       (0x004 / 4)     // Vertical Axis Panel Control

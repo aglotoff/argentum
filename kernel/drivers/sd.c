@@ -236,9 +236,6 @@ sd_intr(void)
  *
  */
 
-// MCI base address
-#define MMCI_BASE         0x10005000
-
 // MCI registers, divided by 4 for use as uint32_t[] indices
 #define MMCI_POWER        (0x000 / 4)   // Power control
   #define MMCI_POWER_ON         (3 << 0)    // Power-on

@@ -36,8 +36,15 @@
 #define USTACK_TOP      KERNEL_BASE
 #define USTACK_SIZE     (PAGE_SIZE * 4)
 
-#define MMIO_LIMIT      VECTORS_BASE
-#define MMIO_BASE       (MMIO_LIMIT - 16 * 1024 * 1024)
+#define SB_CON0       0x10002000    ///< SBCon0 memory base address
+#define MMCI_BASE     0x10005000    ///< MCI base address
+#define KMI0_BASE     0x10006000  
+#define UART0         0x10009000   
+#define LCD_BASE      0x10020000    ///< LCD base memory address
+#define GICC_BASE     0x1F000100    ///< Interrupt interface
+#define PTIMER_BASE   0x1F000600    ///< Private timer
+#define GICD_BASE     0x1F001000    ///< Distributor
+#define ETH_BASE      0x4E000000
 
 #ifndef __ASSEMBLER__
 

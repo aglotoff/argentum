@@ -12,8 +12,7 @@
 #include <drivers/kbd.h>
 
 // PBX-A9 has two KMIs: KMI0 is used for the keyboard and KMI1 is used for the
-// mouse.
-#define KMI0_BASE         0x10006000        
+// mouse.      
 
 // KMI registers, shifted right by 2 bits for use as uint32_t[] indices
 #define KMICR             (0x000 / 4)   // Control register

@@ -119,6 +119,8 @@ trap_kernel:
  * ----------------------------------------------------------------------------
  */
 
+.globl trap_user, trap_user_exit
+
 trap_user:
   // Switch to SVC mode
   mrs     lr, cpsr
@@ -145,6 +147,7 @@ trap_user_common:
   mov     r0, sp
   bl      trap
 
+trap_user_exit:
   // Restore the user state using the contents of the trap frame
   ldr     lr, [sp], #16     // PSR -> LR; skip trapno, SP_usr, and LR_usr
   msr     spsr, lr          // restore SPSR
