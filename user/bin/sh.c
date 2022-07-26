@@ -339,7 +339,7 @@ cmd_parse_exec(char *s, char **ep)
   struct Cmd *ret;
   int argc;
 
-  if ((cmd = malloc(sizeof(struct Cmd))) == NULL) {
+  if ((cmd = malloc(sizeof(struct ExecCmd))) == NULL) {
     perror("malloc");
     return NULL;
   }

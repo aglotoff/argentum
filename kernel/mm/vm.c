@@ -14,7 +14,7 @@
 #include <mm/vm.h>
 
 static struct KObjectPool *vm_pool;
-// static struct KObjectPool *vm_area_pool;
+static struct KObjectPool *vm_area_pool;
 
 static struct Page *vm_page_lookup(l1_desc_t *, const void *, l2_desc_t **);
 static int          vm_page_insert(l1_desc_t *, struct Page *, void *, unsigned);
@@ -97,7 +97,7 @@ vm_page_remove(l1_desc_t *trtab, void *va)
  */
 
 int
-vm_user_alloc(struct VM *vm, void *va, size_t n, int prot)
+vm_range_alloc(struct VM *vm, void *va, size_t n, int prot)
 {
   struct Page *page;
   uint8_t *a, *start, *end;
@@ -107,17 +107,17 @@ vm_user_alloc(struct VM *vm, void *va, size_t n, int prot)
   end   = ROUND_UP((uint8_t *) va + n, PAGE_SIZE);
 
   if ((start > end) || (end > (uint8_t *) KERNEL_BASE))
-    panic("invalid range [%p,%p)", start, end);
+    return -EINVAL;
 
   for (a = start; a < end; a += PAGE_SIZE) {
     if ((page = page_alloc_one(PAGE_ALLOC_ZERO)) == NULL) {
-      vm_user_dealloc(vm, start, a - start);
+      vm_range_free(vm, start, a - start);
       return -ENOMEM;
     }
 
     if ((r = (vm_page_insert(vm->trtab, page, a, prot)) != 0)) {
       page_free_one(page);
-      vm_user_dealloc(vm, start, a - start);
+      vm_range_free(vm, start, a - start);
       return r;
     }
   }
@@ -126,7 +126,7 @@ vm_user_alloc(struct VM *vm, void *va, size_t n, int prot)
 }
 
 void
-vm_user_dealloc(struct VM *vm, void *va, size_t n)
+vm_range_free(struct VM *vm, void *va, size_t n)
 {
   uint8_t *a, *end;
 
@@ -138,6 +138,50 @@ vm_user_dealloc(struct VM *vm, void *va, size_t n)
 
   for ( ; a < end; a += PAGE_SIZE)
     vm_page_remove(vm->trtab, a);
+}
+
+int
+vm_range_clone(struct VM *src, struct VM *dst, void *va, size_t n)
+{
+  struct Page *src_page, *dst_page;
+  l2_desc_t *pte;
+  uint8_t *a, *end;
+  int r;
+
+  a   = ROUND_DOWN((uint8_t *) va, PAGE_SIZE);
+  end = ROUND_UP((uint8_t *) va + n, PAGE_SIZE);
+
+  for ( ; a < end; a += PAGE_SIZE) {
+    src_page = vm_page_lookup(src->trtab, a, &pte);
+
+    if (src_page != NULL) {
+      unsigned perm;
+
+      perm = mmu_pte_get_flags(pte);
+
+      if ((perm & VM_WRITE) || (perm & VM_COW)) {
+        perm &= ~VM_WRITE;
+        perm |= VM_COW;
+
+        if ((r = vm_page_insert(src->trtab, src_page, a, perm)) < 0)
+          return r;
+        if ((r = vm_page_insert(dst->trtab, src_page, a, perm)) < 0)
+          return r;
+      } else {
+        if ((dst_page = page_alloc_one(0)) == NULL)
+          return -ENOMEM;
+
+        if ((r = vm_page_insert(dst->trtab, dst_page, va, perm)) < 0) {
+          page_free_one(dst_page);
+          return r;
+        }
+
+        memcpy(page2kva(dst_page), page2kva(src_page), PAGE_SIZE);
+      }
+    }
+  }
+
+  return 0;
 }
 
 /*
@@ -336,8 +380,13 @@ vm_create(void)
 void
 vm_destroy(struct VM *vm)
 {
-  vm_user_dealloc(vm, (void *) 0, ROUND_UP(vm->heap, PAGE_SIZE));
-  vm_user_dealloc(vm, (void *) vm->stack, KERNEL_BASE - vm->stack);
+  struct VMArea *area;
+  
+  while (!list_empty(&vm->areas)) {
+    area = LIST_CONTAINER(vm->areas.next, struct VMArea, link);
+    vm_range_free(vm, (void *) area->start, area->length);
+    list_remove(&area->link);
+  }
 
   mmu_pgtab_destroy(vm->trtab);
 
@@ -348,51 +397,30 @@ struct VM   *
 vm_clone(struct VM *vm)
 {
   struct VM *new_vm;
-  struct Page *src_page, *dst_page;
-  uint8_t *va;
-  l2_desc_t *pte;
+  struct ListLink *l;
+  struct VMArea *area, *new_area;
 
   if ((new_vm = vm_create()) == NULL)
     return NULL;
 
-  va = (uint8_t *) 0;
+  LIST_FOREACH(&vm->areas, l) {
+    area = LIST_CONTAINER(l, struct VMArea, link);
 
-  while (va < (uint8_t *) KERNEL_BASE) {
-    src_page = vm_page_lookup(vm->trtab, va, &pte);
-
-    if (src_page != NULL) {
-      unsigned perm;
-
-      perm = mmu_pte_get_flags(pte);
-
-      if ((perm & VM_WRITE) || (perm & VM_COW)) {
-        perm &= ~VM_WRITE;
-        perm |= VM_COW;
-
-        if (vm_page_insert(vm->trtab, src_page, va, perm) < 0)
-          panic("Cannot change page permissions");
-
-        if (vm_page_insert(new_vm->trtab, src_page, va, perm) < 0) {
-          vm_destroy(new_vm);
-          return NULL;
-        }
-      } else {
-        if ((dst_page = page_alloc_one(0)) == NULL) {
-          vm_destroy(new_vm);
-          return NULL;
-        }
-
-        if (vm_page_insert(new_vm->trtab, dst_page, va, perm) < 0) {
-          page_free_one(dst_page);
-          vm_destroy(new_vm);
-          return NULL;
-        }
-
-        memcpy(page2kva(dst_page), page2kva(src_page), PAGE_SIZE);
-      }
+    new_area = (struct VMArea *) kobject_alloc(vm_area_pool);
+    if (new_area == NULL) {
+      vm_destroy(new_vm);
+      return NULL;
     }
 
-    va += PAGE_SIZE;
+    new_area->start  = area->start;
+    new_area->length = area->length;
+    new_area->flags  = area->flags;
+    list_add_front(&new_vm->areas, &new_area->link);
+
+    if (vm_range_clone(vm, new_vm, (void *) area->start, area->length) < 0) {
+      vm_destroy(new_vm);
+      return NULL;
+    }
   }
 
   return new_vm;
@@ -402,6 +430,7 @@ void
 vm_init(void)
 {
   vm_pool = kobject_pool_create("vm_pool", sizeof(struct VM), 0);
+  vm_area_pool = kobject_pool_create("vm_area_pool", sizeof(struct VMArea), 0);
 }
 
 int
@@ -409,34 +438,109 @@ vm_handle_fault(struct VM *vm, uintptr_t va)
 {
   struct Page *fault_page, *page;
   l2_desc_t *pte;
+  int prot;
 
   fault_page = vm_page_lookup(vm->trtab, (void *) va, &pte);
+  prot = mmu_pte_get_flags(pte);
 
-  if (fault_page == NULL) {
-    if ((va < vm->stack) &&
-        (va >= (vm->stack - PAGE_SIZE)) &&
-        (vm->heap < (vm->stack - PAGE_SIZE))) {
-      // Expand stack
-      if (vm_user_alloc(vm, (void *) (vm->stack - PAGE_SIZE),
-          PAGE_SIZE, VM_WRITE | VM_USER) == 0) {
-        vm->stack -= PAGE_SIZE;
-        return 0;
-      }
-    }
-  } else {
-    int prot;
+  if ((prot & VM_COW) && ((page = page_alloc_one(0)) != NULL)) {
+    memcpy(page2kva(page), page2kva(fault_page), PAGE_SIZE);
 
-    prot = mmu_pte_get_flags(pte);
-    if ((prot & VM_COW) && ((page = page_alloc_one(0)) != NULL)) {
-      memcpy(page2kva(page), page2kva(fault_page), PAGE_SIZE);
+    prot &= ~VM_COW;
+    prot |= VM_WRITE;
 
-      prot &= ~VM_COW;
-      prot |= VM_WRITE;
-
-      if (vm_page_insert(vm->trtab, page, (void *) va, prot) == 0)
-        return 0;
-    }
+    if (vm_page_insert(vm->trtab, page, (void *) va, prot) == 0)
+      return 0;
   }
 
   return -EFAULT;
 }
+
+void *
+vm_mmap(struct VM *vm, void *addr, size_t n, int flags)
+{
+  uintptr_t va;
+  struct ListLink *l;
+  struct VMArea *area, *prev, *next;
+  int r;
+
+  va = (addr == NULL) ? PAGE_SIZE : ROUND_UP((uintptr_t) addr, PAGE_SIZE);
+  n  = ROUND_UP(n, PAGE_SIZE);
+
+  if ((va >= KERNEL_BASE) || ((va + n) > KERNEL_BASE) || ((va + n) <= va))
+    return (void *) -EINVAL;
+  
+  // Find Vm area to insert before
+  for (l = vm->areas.next; l != &vm->areas; l = l->next) {
+    area = LIST_CONTAINER(l, struct VMArea, link);
+
+    // Can insert before
+    if ((va + n) <= area->start)
+      break;
+
+    if (va < (area->start + area->length))
+      va = area->start + area->length;
+  }
+
+  if ((va + n) > KERNEL_BASE)
+    return (void *) -ENOMEM;
+
+  if ((r = vm_range_alloc(vm, (void *) va, n, flags)) < 0) {
+    vm_range_free(vm, (void *) va, n);
+    return (void *) r;
+  }
+
+  // Can merge with previous?
+  prev = NULL;
+  if (l->prev != &vm->areas) {
+    prev = LIST_CONTAINER(l->prev, struct VMArea, link);
+    if (((prev->start + prev->length) != va) || (prev->flags != flags))
+      prev = NULL;
+  }
+
+  // Can merge with next?
+  next = NULL;
+  if (l != &vm->areas) {
+    next = LIST_CONTAINER(l, struct VMArea, link);
+    if ((next->start != (va + n)) || (next->flags != flags))
+      next = NULL;
+  }
+
+  if ((prev != NULL) && (next != NULL)) {
+    prev->length += next->length + n;
+
+    list_remove(&next->link);
+    kobject_free(vm_area_pool, next);
+  } else if (prev != NULL) {
+    prev->length += n;
+  } else if (next != NULL) {
+    next->start = va;
+  } else {
+    area = (struct VMArea *) kobject_alloc(vm_area_pool);
+    if (area == NULL) {
+      vm_range_free(vm, (void *) va, n);
+      return (void *) -ENOMEM;
+    }
+
+    area->start  = va;
+    area->length = n;
+    area->flags  = flags;
+
+    list_add_back(l, &area->link);
+  }
+
+  return (void *) va;
+}
+
+// void
+// vm_print_areas(struct VM *vm)
+// {
+//   struct ListLink *l;
+//   struct VMArea *area;
+  
+//   cprintf("vm:\n");
+//   LIST_FOREACH(&vm->areas, l) {
+//     area = LIST_CONTAINER(l, struct VMArea, link);
+//     cprintf("  [%x-%x)\n", area->start, area->start + area->length);
+//   }
+// }

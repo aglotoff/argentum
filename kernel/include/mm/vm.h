@@ -31,8 +31,6 @@ struct VMArea {
 
 struct VM {
   l1_desc_t      *trtab;
-  uintptr_t       heap;            ///< Heap end virtual address
-  uintptr_t       stack;           ///< Stack bottom virtual address
   struct ListLink areas;
 };
 
@@ -49,9 +47,12 @@ int          vm_user_check_str(struct VM *, const char *, unsigned);
 
 int          vm_user_load(struct VM *, void *, struct Inode *, size_t, off_t);
 
-int          vm_user_alloc(struct VM *, void *, size_t, int);
-void         vm_user_dealloc(struct VM *, void *, size_t);
+int          vm_range_alloc(struct VM *, void *, size_t, int);
+void         vm_range_free(struct VM *, void *, size_t);
 
-int          vm_handle_fault(struct VM *vm, uintptr_t);
+int          vm_handle_fault(struct VM *, uintptr_t);
+
+// void         vm_print_areas(struct VM *);
+void        *vm_mmap(struct VM *, void *, size_t, int);
 
 #endif  // !__KERNEL_MM_VM_H__

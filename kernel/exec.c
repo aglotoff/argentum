@@ -64,6 +64,7 @@ process_exec(const char *path, char *const argv[], char *const envp[])
   uintptr_t heap, ustack;
   char *usp, *uargv, *uenvp;
   int r, argc;
+  void *a;
 
   if ((r = fs_name_lookup(path, &ip)) < 0)
     return r;
@@ -117,9 +118,17 @@ process_exec(const char *path, char *const argv[], char *const envp[])
       goto out2;
     }
 
-    if ((r = vm_user_alloc(vm, (void *) ph.vaddr, ph.memsz,
-                             VM_READ | VM_WRITE | VM_EXEC | VM_USER) < 0))
+    a = vm_mmap(vm, (void *) ph.vaddr, ph.memsz,
+                VM_READ | VM_WRITE | VM_EXEC | VM_USER);
+    if ((int) a < 0) {
+      r = (int) a;
       goto out2;
+    }
+
+    if ((void *) ph.vaddr != a) {
+      r = -EINVAL;
+      goto out2;
+    }
 
     if ((r = vm_user_load(vm, (void *) ph.vaddr, ip, ph.filesz, ph.offset)) < 0)
       goto out2;
@@ -128,7 +137,7 @@ process_exec(const char *path, char *const argv[], char *const envp[])
   }
 
   // Allocate user stack.
-  if ((r = vm_user_alloc(vm, (void *) ustack, USTACK_SIZE,
+  if ((r = (int) vm_mmap(vm, (void *) ustack, USTACK_SIZE,
                            VM_READ | VM_WRITE | VM_USER)) < 0)
     return r;
 
@@ -153,8 +162,6 @@ process_exec(const char *path, char *const argv[], char *const envp[])
   vm_destroy(proc->vm);
 
   proc->vm        = vm;
-  proc->vm->heap  = heap;
-  proc->vm->stack = ustack;
 
   // Stack must be aligned to an 8-byte boundary in order for variadic args
   // to properly work!

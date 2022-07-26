@@ -133,6 +133,7 @@ process_load_binary(struct Process *proc, const void *binary)
   Elf32_Ehdr *elf;
   Elf32_Phdr *ph, *eph;
   int r;
+  void *a;
 
   elf = (Elf32_Ehdr *) binary;
   if (memcmp(elf->ident, "\x7f""ELF", 4) != 0)
@@ -141,9 +142,6 @@ process_load_binary(struct Process *proc, const void *binary)
   ph = (Elf32_Phdr *) ((uint8_t *) elf + elf->phoff);
   eph = ph + elf->phnum;
 
-  proc->vm->heap  = 0;
-  proc->vm->stack = USTACK_TOP - USTACK_SIZE;
-
   for ( ; ph < eph; ph++) {
     if (ph->type != PT_LOAD)
       continue;
@@ -151,18 +149,20 @@ process_load_binary(struct Process *proc, const void *binary)
     if (ph->filesz > ph->memsz)
       return -EINVAL;
     
-    if ((r = vm_user_alloc(proc->vm, (void *) ph->vaddr, ph->memsz,
-                             VM_READ | VM_WRITE | VM_EXEC | VM_USER) < 0))
-      return r;
+    a = vm_mmap(proc->vm, (void *) ph->vaddr, ph->memsz,
+                VM_READ | VM_WRITE | VM_EXEC | VM_USER);
+    if ((int) a < 0)
+      return (int) a;
+
+    if ((void *) ph->vaddr != a)
+      return -EINVAL;
 
     if ((r = vm_user_copy_out(proc->vm, (void *) ph->vaddr,
                          (uint8_t *) elf + ph->offset, ph->filesz)) < 0)
       return r;
-
-    proc->vm->heap = MAX(proc->vm->heap, ph->vaddr + ph->memsz);
   }
 
-  if ((r = vm_user_alloc(proc->vm, (void *) (proc->vm->stack), USTACK_SIZE,
+  if ((r = (int) vm_mmap(proc->vm, (void *) (USTACK_TOP - USTACK_SIZE), USTACK_SIZE,
                            VM_READ | VM_WRITE | VM_USER) < 0))
     return r;
 
@@ -321,8 +321,6 @@ process_copy(void)
     return -ENOMEM;
   }
 
-  child->vm->heap  = current->vm->heap;
-  child->vm->stack = current->vm->stack;
   child->parent    = current;
   *child->tf       = *current->tf;
   child->tf->r0    = 0;
@@ -450,28 +448,6 @@ void *
 process_grow(ptrdiff_t increment)
 {
   struct Process *current = my_process();
-  uintptr_t o, n;
 
-  o = ROUND_UP(current->vm->heap, sizeof(uintptr_t));
-  n = ROUND_UP(o + increment, sizeof(uintptr_t));
-
-  if (increment > 0) {
-    if ((n < o) || (n > (current->vm->stack + PAGE_SIZE)))
-      // Overflow
-      return (void *) -1;
-    if (vm_user_alloc(current->vm, (void *) ROUND_UP(o, PAGE_SIZE),
-                        ROUND_UP(n, PAGE_SIZE) - ROUND_UP(o, PAGE_SIZE),
-                        VM_READ | VM_WRITE | VM_USER) != 0)
-      return (void *) -1;
-  } else if (increment < 0) {
-    if (n > o)
-      // Overflow
-      return (void *) -1;
-    vm_user_dealloc(current->vm, (void *) ROUND_UP(n, PAGE_SIZE),
-                          ROUND_UP(o, PAGE_SIZE) - ROUND_UP(n, PAGE_SIZE));
-  }
-
-  current->vm->heap = n;
-
-  return (void *) o;
+  return vm_mmap(current->vm, (void *) 0, increment, VM_READ | VM_WRITE | VM_USER);
 }
