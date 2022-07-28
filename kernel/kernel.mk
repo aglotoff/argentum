@@ -36,6 +36,7 @@ KERNEL_SRCFILES :=	\
 	kernel/cprintf.c \
 	kernel/cpu.c \
 	kernel/entry.S \
+	kernel/entry_trtab.c \
 	kernel/exec.c \
 	kernel/kdebug.c \
 	kernel/monitor.c \

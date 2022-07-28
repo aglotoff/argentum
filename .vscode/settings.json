@@ -41,6 +41,7 @@
         "typeinfo": "c",
         "list.h": "c",
         "kthread.h": "c",
-        "mmu.h": "c"
+        "mmu.h": "c",
+        "memlayout.h": "c"
     }
 }
