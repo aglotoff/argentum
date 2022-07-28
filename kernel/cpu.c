@@ -10,7 +10,7 @@
  * ----------------------------------------------------------------------------
  * 
  * The caller must disable interrupts while accessing the per-CPU data, since a
- * timer IRQ may cause the current task to be moved to another processor, and
+ * timer IRQ may cause the current thread to be moved to another processor, and
  * the pointer to the CPU struct will no longer be valid.
  *
  */
@@ -45,16 +45,16 @@ my_cpu(void)
   return &cpus[cpu_id()];
 }
 
-struct Task *
-my_task(void)
+struct KThread *
+my_thread(void)
 {
-  struct Task *task;
+  struct KThread *thread;
 
   irq_save();
-  task = my_cpu()->task;
+  thread = my_cpu()->thread;
   irq_restore();
 
-  return task;
+  return thread;
 }
 
 

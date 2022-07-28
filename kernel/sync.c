@@ -16,7 +16,7 @@
  * ----------------------------------------------------------------------------
  * 
  * Spinlocks provide mutual exclusion, ensuring only one CPU at a time can hold
- * the lock. A task trying to acquire the lock waits in a loop repeatedly
+ * the lock. A thread trying to acquire the lock waits in a loop repeatedly
  * testing the lock until it becomes available.
  *
  * Spinlocks are used if the holding time is short or if the data to be
@@ -166,10 +166,10 @@ spin_print_caller_pcs(struct SpinLock *lock)
  * Mutexes
  * ----------------------------------------------------------------------------
  * 
- * Mutex is a sleeping lock, i.e. when a task tries to acquire a mutex that
+ * Mutex is a sleeping lock, i.e. when a thread tries to acquire a mutex that
  * is locked, it is put to sleep until the mutex becomes available.
  *
- * Mutexes are used if the holding time is long or if the task needs to sleep
+ * Mutexes are used if the holding time is long or if the thread needs to sleep
  * while holding the lock.
  *
  */
@@ -185,7 +185,7 @@ mutex_init(struct Mutex *mutex, const char *name)
 {
   spin_init(&mutex->lock, name);
   list_init(&mutex->queue);
-  mutex->task = NULL;
+  mutex->thread = NULL;
   mutex->name = name;
 }
 
@@ -200,10 +200,10 @@ mutex_lock(struct Mutex *mutex)
   spin_lock(&mutex->lock);
 
   // Sleep until the mutex becomes available.
-  while (mutex->task != NULL)
-    task_sleep(&mutex->queue, &mutex->lock);
+  while (mutex->thread != NULL)
+    kthread_sleep(&mutex->queue, &mutex->lock);
 
-  mutex->task = my_task();
+  mutex->thread = my_thread();
 
   spin_unlock(&mutex->lock);
 }
@@ -221,26 +221,26 @@ mutex_unlock(struct Mutex *mutex)
   
   spin_lock(&mutex->lock);
 
-  mutex->task = NULL;
-  task_wakeup(&mutex->queue);
+  mutex->thread = NULL;
+  kthread_wakeup(&mutex->queue);
 
   spin_unlock(&mutex->lock);
 }
 
 /**
- * Check whether the current task is holding the mutex.
+ * Check whether the current thread is holding the mutex.
  *
  * @param lock A pointer to the mutex.
- * @return 1 if the current task is holding the mutex, 0 otherwise.
+ * @return 1 if the current thread is holding the mutex, 0 otherwise.
  */
 int
 mutex_holding(struct Mutex *mutex)
 {
-  struct Task *task;
+  struct KThread *thread;
 
   spin_lock(&mutex->lock);
-  task = mutex->task;
+  thread = mutex->thread;
   spin_unlock(&mutex->lock);
 
-  return (task != NULL) && (task == my_task());
+  return (thread != NULL) && (thread == my_thread());
 }

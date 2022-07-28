@@ -6,14 +6,14 @@
 #endif
 
 struct Context;
-struct Task;
+struct KThread;
 
 /**
  * Per-CPU state.
  */
 struct Cpu {
   struct Context *scheduler;      ///< Saved scheduler context
-  struct Task  *task;         ///< The currently running task   
+  struct KThread  *thread;         ///< The currently running thread   
   int             irq_save_count; ///< Depth of irq_save() nesting
   int             irq_flags;      ///< Were interupts enabled before IRQ save?
 };
@@ -27,7 +27,7 @@ extern struct Cpu cpus[];
 
 unsigned     cpu_id(void);
 struct Cpu  *my_cpu(void);
-struct Task *my_task(void);
+struct KThread *my_thread(void);
 
 void         irq_disable(void);
 void         irq_enable(void);

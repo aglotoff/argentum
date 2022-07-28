@@ -128,8 +128,8 @@ trap_irq_dispatch(void)
   // Re-enable the IRQ
   gic_enable(irq, cpu_id());
 
-  if (resched && (my_task() != NULL))
-    task_yield();
+  if (resched && (my_thread() != NULL))
+    kthread_yield();
 }
 
 static const char *

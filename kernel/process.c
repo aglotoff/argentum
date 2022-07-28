@@ -85,8 +85,8 @@ process_alloc(void)
   sp -= sizeof *process->tf;
   process->tf = (struct TrapFrame *) sp;
 
-  // Setup new context to start executing at task_run.
-  if ((process->task = task_create(process, process_run, sp)) == NULL)
+  // Setup new context to start executing at thread_run.
+  if ((process->thread = kthread_create(process, process_run, sp)) == NULL)
     goto fail2;
 
   process->parent = NULL;
@@ -197,7 +197,7 @@ process_create(const void *binary, struct Process **pstore)
   proc->gid   = 0;
   proc->cmask = 0;
 
-  task_enqueue(proc->task);
+  kthread_enqueue(proc->thread);
 
   if (pstore != NULL)
     *pstore = proc;
@@ -220,16 +220,6 @@ fail1:
 void
 process_free(struct Process *process)
 {
-  struct Page *kstack_page;
-
-  // Destroy the task descriptor
-  task_destroy(process->task);
-
-  // Free the kernel stack
-  kstack_page = kva2page(process->kstack);
-  kstack_page->ref_count--;
-  page_free_one(kstack_page);
-
   // Remove the pid hash link
   spin_lock(&pid_hash.lock);
   HASH_REMOVE(&process->pid_link);
@@ -295,16 +285,18 @@ process_destroy(int status)
 
   // Wake up the init process to cleanup zombie children
   if (has_zombies)
-    task_wakeup(&init_process->wait_queue);
+    kthread_wakeup(&init_process->wait_queue);
 
   current->zombie = 1;
   current->exit_code = status;
 
   // Wakeup the parent process
   if (current->parent)
-    task_wakeup(&current->parent->wait_queue);
+    kthread_wakeup(&current->parent->wait_queue);
 
-  task_sleep(&current->wait_queue, &process_lock);
+  spin_unlock(&process_lock);
+
+  kthread_destroy(current->thread);
 }
 
 pid_t
@@ -338,7 +330,7 @@ process_copy(void)
   list_add_back(&current->children, &child->sibling);
   spin_unlock(&process_lock);
 
-  task_enqueue(child->task);
+  kthread_enqueue(child->thread);
 
   return child->pid;
 }
@@ -396,7 +388,7 @@ process_wait(pid_t pid, int *stat_loc, int options)
       break;
     }
 
-    task_sleep(&current->wait_queue, &process_lock);
+    kthread_sleep(&current->wait_queue, &process_lock);
   }
 
   spin_unlock(&process_lock);

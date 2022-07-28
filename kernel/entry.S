@@ -123,7 +123,7 @@ ap_wait:
  * Per-CPU kernel stacks
  * ----------------------------------------------------------------------------
  *
- * Each CPU has its own scheduler task and thus needs a separate supervisor
+ * Each CPU has its own scheduler thread and thus needs a separate supervisor
  * mode stack.
  *
  */

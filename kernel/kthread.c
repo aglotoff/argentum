@@ -7,11 +7,12 @@
 #include <list.h>
 #include <mm/kobject.h>
 #include <mm/mmu.h>
+#include <mm/page.h>
 #include <process.h>
 #include <sync.h>
-#include <scheduler.h>
+#include <kthread.h>
 
-static struct KObjectPool *task_pool;
+static struct KObjectPool *thread_pool;
 
 // Run queue
 static struct {
@@ -21,14 +22,29 @@ static struct {
 
 static void scheduler_yield(void);
 
+void
+kthread_free(struct KThread *thread)
+{
+  if (thread->process != NULL) {
+    struct Page *kstack_page;
+
+    // Free the kernel stack
+    kstack_page = kva2page(thread->process->kstack);
+    kstack_page->ref_count--;
+    page_free_one(kstack_page);
+  }
+
+  kobject_free(thread_pool, thread);
+}
+
 void context_switch(struct Context **, struct Context *);
 
 void
 scheduler_init(void)
 {
-  task_pool = kobject_pool_create("task_pool", sizeof(struct Task), 0);
-  if (task_pool == NULL)
-    panic("cannot allocate task pool");
+  thread_pool = kobject_pool_create("thread_pool", sizeof(struct KThread), 0);
+  if (thread_pool == NULL)
+    panic("cannot allocate thread pool");
 
   list_init(&sched.run_queue);
   spin_init(&sched.lock, "sched");
@@ -38,7 +54,7 @@ void
 scheduler_start(void)
 {
   struct ListLink *link;
-  struct Task *next;
+  struct KThread *next;
 
   for (;;) {
     irq_enable();
@@ -49,11 +65,11 @@ scheduler_start(void)
       link = sched.run_queue.next;
       list_remove(link);
 
-      next = LIST_CONTAINER(link, struct Task, link);
-      assert(next->state == TASK_RUNNABLE);
+      next = LIST_CONTAINER(link, struct KThread, link);
+      assert(next->state == KTHREAD_RUNNABLE);
 
-      next->state = TASK_RUNNING;
-      my_cpu()->task = next;
+      next->state = KTHREAD_RUNNING;
+      my_cpu()->thread = next;
 
       if (next->process != NULL)
         mmu_switch_user(next->process->vm->trtab);
@@ -62,10 +78,13 @@ scheduler_start(void)
 
       if (next->process != NULL)
         mmu_switch_kernel();
+
+      if (next->state == KTHREAD_DESTROYED)
+        kthread_free(next);
     }
 
     // Mark that no process is running on this CPU.
-    my_cpu()->task = NULL;
+    my_cpu()->thread = NULL;
 
     spin_unlock(&sched.lock);
 
@@ -79,46 +98,49 @@ scheduler_yield(void)
   int irq_flags;
 
   irq_flags = my_cpu()->irq_flags;
-  context_switch(&my_task()->context, my_cpu()->scheduler);
+  context_switch(&my_thread()->context, my_cpu()->scheduler);
   my_cpu()->irq_flags = irq_flags;
 }
 
-struct Task *
-task_create(struct Process *process, void (*entry)(void), uint8_t *stack)
+struct KThread *
+kthread_create(struct Process *process, void (*entry)(void), uint8_t *stack)
 {
-  struct Task *task;
+  struct KThread *thread;
 
-  if ((task = (struct Task *) kobject_alloc(task_pool)) == NULL)
+  if ((thread = (struct KThread *) kobject_alloc(thread_pool)) == NULL)
     return NULL;
 
-  stack -= sizeof *task->context;
-  task->context = (struct Context *) stack;
-  memset(task->context, 0, sizeof *task->context);
-  task->context->lr = (uint32_t) task_run;
-  task->entry = entry;
+  stack -= sizeof *thread->context;
+  thread->context = (struct Context *) stack;
+  memset(thread->context, 0, sizeof *thread->context);
+  thread->context->lr = (uint32_t) kthread_run;
+  thread->entry = entry;
 
-  task->process = process;
+  thread->process = process;
 
-  return task;
+  return thread;
 }
 
 void
-task_destroy(struct Task *task)
+kthread_destroy(struct KThread *thread)
 {
-  if (task == my_task())
-    panic("a task cannot destroy itself");
+  spin_lock(&sched.lock);
 
-  kobject_free(task_pool, task);
+  thread->state = KTHREAD_DESTROYED;
+
+  scheduler_yield();
+
+  panic("should not return");
 }
 
 void
-task_yield(void)
+kthread_yield(void)
 {
-  struct Task *current = my_task();
+  struct KThread *current = my_thread();
   
   spin_lock(&sched.lock);
 
-  current->state = TASK_RUNNABLE;
+  current->state = KTHREAD_RUNNABLE;
   list_add_back(&sched.run_queue, &current->link);
 
   // Return into the scheduler loop
@@ -129,21 +151,21 @@ task_yield(void)
 
 // A process' very first scheduling by scheduler() will switch here.
 void
-task_run(void)
+kthread_run(void)
 {
   // Still holding the process table lock.
   spin_unlock(&sched.lock);
 
-  my_task()->entry();
+  my_thread()->entry();
 }
 
 /**
  * 
  */
 void
-task_sleep(struct ListLink *wait_queue, struct SpinLock *lock)
+kthread_sleep(struct ListLink *wait_queue, struct SpinLock *lock)
 {
-  struct Task *current = my_task();
+  struct KThread *current = my_thread();
 
   if (lock != &sched.lock) {
     spin_lock(&sched.lock);
@@ -152,7 +174,7 @@ task_sleep(struct ListLink *wait_queue, struct SpinLock *lock)
 
   list_add_back(wait_queue, &current->link);
 
-  current->state = TASK_NOT_RUNNABLE;
+  current->state = KTHREAD_NOT_RUNNABLE;
 
   scheduler_yield();
 
@@ -163,11 +185,11 @@ task_sleep(struct ListLink *wait_queue, struct SpinLock *lock)
 }
 
 void
-task_enqueue(struct Task *th)
+kthread_enqueue(struct KThread *th)
 {
   spin_lock(&sched.lock);
 
-  th->state = TASK_RUNNABLE;
+  th->state = KTHREAD_RUNNABLE;
   list_add_back(&sched.run_queue, &th->link);
 
   spin_unlock(&sched.lock);
@@ -179,10 +201,10 @@ task_enqueue(struct Task *th)
  * @param wait_queue Pointer to the head of the wait queue.
  */
 void
-task_wakeup(struct ListLink *wait_queue)
+kthread_wakeup(struct ListLink *wait_queue)
 {
   struct ListLink *l;
-  struct Task *t;
+  struct KThread *t;
 
   spin_lock(&sched.lock);
 
@@ -190,9 +212,9 @@ task_wakeup(struct ListLink *wait_queue)
     l = wait_queue->next;
     list_remove(l);
 
-    t = LIST_CONTAINER(l, struct Task, link);
+    t = LIST_CONTAINER(l, struct KThread, link);
 
-    t->state = TASK_RUNNABLE;
+    t->state = KTHREAD_RUNNABLE;
     list_add_back(&sched.run_queue, &t->link);
   }
 

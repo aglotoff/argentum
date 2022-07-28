@@ -7,7 +7,7 @@
 #include <drivers/gic.h>
 #include <fs/buf.h>
 #include <mm/memlayout.h>
-#include <scheduler.h>
+#include <kthread.h>
 #include <sync.h>
 #include <trap.h>
 
@@ -172,7 +172,7 @@ sd_request(struct Buf *buf)
 
   // Wait for the R/W operation to finish
   while ((buf->flags & (BUF_DIRTY | BUF_VALID)) != BUF_VALID)
-    task_sleep(&buf->wait_queue, &sd_queue.lock);
+    kthread_sleep(&buf->wait_queue, &sd_queue.lock);
 
   spin_unlock(&sd_queue.lock);
 }
@@ -222,7 +222,7 @@ sd_intr(void)
 
   spin_unlock(&sd_queue.lock);
 
-  task_wakeup(&buf->wait_queue);
+  kthread_wakeup(&buf->wait_queue);
 }
 
 

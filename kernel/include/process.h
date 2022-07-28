@@ -11,7 +11,7 @@
 #include <cpu.h>
 #include <list.h>
 #include <mm/vm.h>
-#include <scheduler.h>
+#include <kthread.h>
 #include <trap.h>
 
 struct File;
@@ -22,7 +22,7 @@ struct Inode;
  * Process descriptor.
  */
 struct Process {
-  struct Task       *task;            ///< Scheduler state
+  struct KThread    *thread;          ///< Thread associated with this process
   uint8_t           *kstack;          ///< Bottom of the kernel-mode stack
   struct TrapFrame  *tf;              ///< Current trap frame
 
@@ -48,8 +48,8 @@ struct Process {
 static inline struct Process *
 my_process(void)
 {
-  struct Task *task = my_task();
-  return task != NULL ? task->process : NULL;
+  struct KThread *thread = my_thread();
+  return thread != NULL ? thread->process : NULL;
 }
 
 void  process_init(void);

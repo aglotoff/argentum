@@ -4,7 +4,7 @@
 #include <drivers/kbd.h>
 #include <drivers/lcd.h>
 #include <drivers/uart.h>
-#include <scheduler.h>
+#include <kthread.h>
 #include <sync.h>
 
 #include <drivers/console.h>
@@ -79,7 +79,7 @@ console_intr(int (*getc)(void))
           (c == '\n') ||
           (c == C('D')) ||
           (input.wpos == input.rpos + CONSOLE_BUF_SIZE))
-        task_wakeup(&input.queue);
+        kthread_wakeup(&input.queue);
       break;
     }
   }
@@ -117,7 +117,7 @@ console_read(void *buf, size_t nbytes)
 
   while (i < nbytes) {
     while (input.rpos == input.wpos)
-      task_sleep(&input.queue, &input.lock);
+      kthread_sleep(&input.queue, &input.lock);
 
     c = input.buf[input.rpos++ % CONSOLE_BUF_SIZE];
 
