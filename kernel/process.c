@@ -5,7 +5,7 @@
 #include <sys/stat.h>
 #include <sys/wait.h>
 
-#include <armv7.h>
+#include <armv7/regs.h>
 #include <cpu.h>
 #include <cprintf.h>
 #include <elf.h>

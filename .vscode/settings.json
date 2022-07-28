@@ -38,6 +38,9 @@
         "scheduler.h": "c",
         "rtc.h": "c",
         "dirent.h": "c",
-        "typeinfo": "c"
+        "typeinfo": "c",
+        "list.h": "c",
+        "kthread.h": "c",
+        "mmu.h": "c"
     }
 }

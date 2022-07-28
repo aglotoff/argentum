@@ -1,6 +1,5 @@
 #include <stdint.h>
 
-#include <armv7.h>
 #include <drivers/kbd.h>
 #include <drivers/lcd.h>
 #include <drivers/uart.h>

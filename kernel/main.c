@@ -3,7 +3,7 @@
 #include <stdint.h>
 #include <sys/utsname.h>
 
-#include <armv7.h>
+#include <armv7/mmu.h>
 #include <cprintf.h>
 #include <cpu.h>
 #include <drivers/console.h>

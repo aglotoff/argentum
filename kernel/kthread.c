@@ -1,7 +1,6 @@
 #include <assert.h>
 #include <string.h>
 
-#include <armv7.h>
 #include <cprintf.h>
 #include <cpu.h>
 #include <list.h>
@@ -88,7 +87,7 @@ scheduler_start(void)
 
     spin_unlock(&sched.lock);
 
-    wfi();
+    asm volatile("wfi");
   }
 }
 

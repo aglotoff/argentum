@@ -1,6 +1,6 @@
 #include <stdint.h>
 
-#include <armv7.h>
+#include <armv7/regs.h>
 #include <mm/memlayout.h>
 #include <mm/vm.h>
 #include <trap.h>

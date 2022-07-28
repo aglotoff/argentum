@@ -2,7 +2,7 @@
 #include <stddef.h>
 #include <string.h>
 
-#include <armv7.h>
+#include <armv7/regs.h>
 #include <cprintf.h>
 #include <cpu.h>
 #include <drivers/console.h>
@@ -30,7 +30,7 @@ trap(struct TrapFrame *tf)
   // Halt if some other CPU already has called panic().
   if (panicstr) {
     for (;;) {
-      wfi();
+      asm volatile("wfi");
     }
   }
 

@@ -1,6 +1,6 @@
 #include <string.h>
 
-#include <armv7.h>
+#include <armv7/regs.h>
 #include <drivers/console.h>
 #include <cprintf.h>
 #include <kdebug.h>

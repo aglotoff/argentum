@@ -1,7 +1,8 @@
 #ifndef __KERNEL_MMU_H__
 #define __KERNEL_MMU_H__
 
-#include <armv7.h>
+#include <armv7/mmu.h>
+#include <armv7/regs.h>
 #include <mm/memlayout.h>
 
 l1_desc_t   *mmu_pgtab_create(void);
