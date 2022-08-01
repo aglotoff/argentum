@@ -68,7 +68,7 @@ page_init_low(void)
   spin_init(&pages_lock, "pages_lock");
 
   // TODO: detect the actual amount of physical memory!
-  npages = PHYS_TOP / PAGE_SIZE;
+  npages = PHYS_LIMIT / PAGE_SIZE;
 
   // Allocate the 'pages' array.
   pages = (struct Page *) boot_alloc(npages * sizeof(struct Page));
@@ -82,8 +82,8 @@ page_init_low(void)
   }
 
   // Place pages mapped by 'entry_trtab' to the free list.
-  page_free_region(0, KERNEL_LOAD);
-  page_free_region(PADDR(boot_alloc(0)), PHYS_ENTRY_TOP);
+  page_free_region(0, PHYS_KERNEL_LOAD);
+  page_free_region(PA2KVA(boot_alloc(0)), PHYS_ENTRY_LIMIT);
 
   pages_inited = 1;
 }
@@ -94,7 +94,7 @@ page_init_low(void)
 void
 page_init_high(void)
 {
-  page_free_region(PHYS_ENTRY_TOP, PHYS_TOP);
+  page_free_region(PHYS_ENTRY_LIMIT, PHYS_LIMIT);
 }
 
 /*
@@ -133,7 +133,7 @@ boot_alloc(size_t n)
     n = ROUND_UP(n, sizeof(uintptr_t));
     nextptr += n;
 
-    if (PADDR(nextptr) > PHYS_ENTRY_TOP)
+    if (PA2KVA(nextptr) > PHYS_ENTRY_LIMIT)
       panic("out of memory");
 
     memset(ret, 0, n);

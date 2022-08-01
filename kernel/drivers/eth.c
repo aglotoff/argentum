@@ -185,7 +185,7 @@ eth_init(void)
 {
   uint32_t mac_addr_lo, mac_addr_hi, mac_cr;
 
-  eth = (volatile uint32_t *) KADDR(ETH_BASE);
+  eth = (volatile uint32_t *) KVA2PA(PHYS_ETH);
 
   // Write BYTE_TEST to wake chip up in case it is in sleep mode.
   eth[BYTE_TEST] = 0;

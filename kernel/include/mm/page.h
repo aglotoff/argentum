@@ -53,7 +53,7 @@ page2pa(struct Page *p)
 static inline void *
 page2kva(struct Page *p)
 {
-  return KADDR(page2pa(p));
+  return KVA2PA(page2pa(p));
 }
 
 /**
@@ -78,7 +78,7 @@ pa2page(physaddr_t pa)
 static inline struct Page *
 kva2page(void *va)
 {
-  return pa2page(PADDR(va));
+  return pa2page(PA2KVA(va));
 }
 
 /** The maximum page allocation order. */

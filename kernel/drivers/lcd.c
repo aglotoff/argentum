@@ -112,7 +112,7 @@ lcd_init(void)
   page->ref_count++;
   frame_buf = (uint16_t *) page2kva(page);
 
-  lcd = (volatile uint32_t *) KADDR(LCD_BASE);
+  lcd = (volatile uint32_t *) KVA2PA(PHYS_LCD);
 
   // Display resolution: VGA (640x480) on VGA.
   lcd[LCD_TIMING0] = 0x3F1F3F9C;
@@ -120,7 +120,7 @@ lcd_init(void)
   lcd[LCD_TIMING2] = 0x067F1800;
 
   // Frame buffer physical base address.
-  lcd[LCD_UPBASE] = PADDR(frame_buf);
+  lcd[LCD_UPBASE] = PA2KVA(frame_buf);
 
   // Enable LCD, 16 bpp.
   lcd[LCD_CONTROL] = LCD_EN | LCD_BPP16 | LCD_PWR;

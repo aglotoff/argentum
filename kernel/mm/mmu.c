@@ -28,18 +28,18 @@ mmu_init(void)
 
   kern_trtab = (l1_desc_t *) page2kva(page);
 
-  // Map all physical memory at KERNEL_BASE
+  // Map all physical memory at VIRT_KERNEL_BASE
   // Permissions: kernel RW, user NONE
-  mmu_map_static(kern_trtab, KERNEL_BASE, 0, PHYS_TOP, VM_READ | VM_WRITE);
+  mmu_map_static(kern_trtab, VIRT_KERNEL_BASE, 0, PHYS_LIMIT, VM_READ | VM_WRITE);
 
   // Map all devices 
-  mmu_map_static(kern_trtab, KERNEL_BASE + PHYS_TOP, PHYS_TOP,
-              VECTORS_BASE - KERNEL_BASE - PHYS_TOP,
+  mmu_map_static(kern_trtab, VIRT_KERNEL_BASE + PHYS_LIMIT, PHYS_LIMIT,
+              VIRT_VECTOR_BASE - VIRT_KERNEL_BASE - PHYS_LIMIT,
               VM_READ | VM_WRITE | VM_NOCACHE);
 
-  // Map exception vectors at VECTORS_BASE
+  // Map exception vectors at VIRT_VECTOR_BASE
   // Permissions: kernel R, user NONE
-  mmu_map_static(kern_trtab, VECTORS_BASE, (uint32_t) _start, PAGE_SIZE, VM_READ);
+  mmu_map_static(kern_trtab, VIRT_VECTOR_BASE, (uint32_t) _start, PAGE_SIZE, VM_READ);
 
   mmu_init_percpu();
 }
@@ -49,8 +49,8 @@ mmu_init_percpu(void)
 {
   // Switch from the minimal entry translation table to the full translation
   // table.
-  cp15_ttbr0_set(PADDR(kern_trtab));
-  cp15_ttbr1_set(PADDR(kern_trtab));
+  cp15_ttbr0_set(PA2KVA(kern_trtab));
+  cp15_ttbr1_set(PA2KVA(kern_trtab));
 
   // Size of the TTBR0 translation table is 8KB.
   cp15_ttbcr_set(1);
@@ -139,7 +139,7 @@ mmu_pte_get(l1_desc_t *trtab, uintptr_t va, int alloc)
     panic("not a page table");
   }
 
-  pgtab = KADDR(L1_DESC_TABLE_BASE(*tte));
+  pgtab = KVA2PA(L1_DESC_TABLE_BASE(*tte));
   return &pgtab[L2_IDX(va)];
 }
 
@@ -164,7 +164,7 @@ mmu_pgtab_destroy(l1_desc_t *pgtab)
   unsigned i;
   unsigned j;
   
-  for (i = 0; i < L1_IDX(KERNEL_BASE); i += 2) {
+  for (i = 0; i < L1_IDX(VIRT_KERNEL_BASE); i += 2) {
     if (!pgtab[i])
       continue;
 
@@ -243,7 +243,7 @@ mmu_map_static(l1_desc_t *trtab, uintptr_t va, uint32_t pa, size_t n, int prot)
 void
 mmu_switch_kernel(void)
 {
-  cp15_ttbr0_set(PADDR(kern_trtab));
+  cp15_ttbr0_set(PA2KVA(kern_trtab));
   cp15_tlbiall();
 }
 
@@ -255,6 +255,6 @@ mmu_switch_kernel(void)
 void
 mmu_switch_user(l1_desc_t *trtab)
 {
-  cp15_ttbr0_set(PADDR(trtab));
+  cp15_ttbr0_set(PA2KVA(trtab));
   cp15_tlbiall();
 }

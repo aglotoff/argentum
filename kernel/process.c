@@ -162,14 +162,14 @@ process_load_binary(struct Process *proc, const void *binary)
       return r;
   }
 
-  if ((r = (int) vm_mmap(proc->vm, (void *) (USTACK_TOP - USTACK_SIZE), USTACK_SIZE,
+  if ((r = (int) vm_mmap(proc->vm, (void *) (VIRT_USTACK_TOP - USTACK_SIZE), USTACK_SIZE,
                            VM_READ | VM_WRITE | VM_USER) < 0))
     return r;
 
   proc->tf->r0  = 0;                   // argc
   proc->tf->r1  = 0;                   // argv
   proc->tf->r2  = 0;                   // environ
-  proc->tf->sp  = USTACK_TOP;          // stack pointer
+  proc->tf->sp  = VIRT_USTACK_TOP;          // stack pointer
   proc->tf->psr = PSR_M_USR | PSR_F;   // user mode, interrupts enabled
   proc->tf->pc  = elf->entry;          // process entry point
 

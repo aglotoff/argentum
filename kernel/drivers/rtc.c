@@ -154,7 +154,7 @@ static volatile uint32_t *sb;
 static void
 sb_init(void)
 {
-  sb = (volatile uint32_t *) KADDR(SB_CON0);
+  sb = (volatile uint32_t *) KVA2PA(PHYS_CON0);
 
   sb[SB_CONTROLS] = SCL;
   sb[SB_CONTROLS] = SDA;

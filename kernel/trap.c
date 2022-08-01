@@ -105,7 +105,7 @@ trap_irq_dispatch(void)
     ptimer_intr();
     resched = 1;
     break;
-  case IRQ_UART0:
+  case IRQ_PHYS_UART0:
     uart_intr();
     break;
   case IRQ_KMI0:

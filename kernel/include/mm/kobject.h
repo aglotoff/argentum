@@ -1,9 +1,11 @@
 #ifndef __KERNEL_MM_KOBJECT_H__
 #define __KERNEL_MM_KOBJECT_H__
 
-#ifndef __KERNEL__
-#error "This is a kernel header; user programs should not #include it"
-#endif
+/**
+ * @file kernel/include/mm/kobject.h
+ * 
+ * Kernel Object Allocator.
+ */
 
 #include <list.h>
 #include <sync.h>
@@ -12,15 +14,16 @@
  * Object pool descriptor.
  */
 struct KObjectPool {
+  struct SpinLock   lock;             ///< Spinlock protecting the pool
+
   struct ListLink   slabs_used;       ///< Slabs with all objects in use
   struct ListLink   slabs_partial;    ///< Slabs that have free objects
   struct ListLink   slabs_free;       ///< Slabs with all objects free
-  struct SpinLock   lock;             ///< Spinlock protecting the pool
 
   int               flags;            ///< Flags
   size_t            obj_size;         ///< Size of each object
   unsigned          obj_num;          ///< The number of objects per slab
-  unsigned          page_order;       ///< log2 of the slab size in pages
+  unsigned          page_order;       ///< log2 of pages per slab
 
   size_t            color_offset;     ///< The number of different color lines
   size_t            color_align;      ///< Object alignment in the slab

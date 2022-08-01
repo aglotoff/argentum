@@ -310,7 +310,7 @@ mmci_intr_enable(void)
 static int
 mmci_init(void)
 {
-  mmci = (volatile uint32_t *) KADDR(MMCI_BASE);
+  mmci = (volatile uint32_t *) KVA2PA(PHYS_MMCI);
 
   // Power on, 3.6 volts, rod control
   mmci[MMCI_POWER] = MMCI_POWER_ON | (0xF << 2) | MMCI_POWER_ROD;

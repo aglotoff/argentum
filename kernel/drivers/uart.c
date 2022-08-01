@@ -39,7 +39,7 @@ static volatile uint32_t *uart;
 void
 uart_init(void)
 {
-  uart = (volatile uint32_t *) KADDR(UART0);
+  uart = (volatile uint32_t *) KVA2PA(PHYS_UART0);
 
   // Clear all errors.
   uart[UARTECR] = 0;
@@ -59,7 +59,7 @@ uart_init(void)
 
   // Enable interupts.
   uart[UARTIMSC] |= UARTIMSC_RXIM;
-  gic_enable(IRQ_UART0, 0);
+  gic_enable(IRQ_PHYS_UART0, 0);
 }
 
 /**

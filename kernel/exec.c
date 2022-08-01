@@ -40,7 +40,7 @@ copy_args(struct VM *vm, char *const args[], uintptr_t limit, char **sp)
   n = (i + 1) * sizeof(char *);
   p -= ROUND_UP(n, sizeof(uint32_t));
   
-  if (p < (char *) (USTACK_TOP - USTACK_SIZE))
+  if (p < (char *) (VIRT_USTACK_TOP - USTACK_SIZE))
     return -E2BIG;
 
   if ((r = vm_user_copy_out(vm, p, oargs, n)) < 0)
@@ -98,7 +98,7 @@ process_exec(const char *path, char *const argv[], char *const envp[])
   }
 
   heap   = 0;
-  ustack = USTACK_TOP - USTACK_SIZE;
+  ustack = VIRT_USTACK_TOP - USTACK_SIZE;
 
   off = elf.phoff;
   while ((size_t) off < elf.phoff + elf.phnum * sizeof(ph)) {
@@ -113,7 +113,7 @@ process_exec(const char *path, char *const argv[], char *const envp[])
       goto out2;
     }
 
-    if ((ph.vaddr >= KERNEL_BASE) || (ph.vaddr + ph.memsz > KERNEL_BASE)) {
+    if ((ph.vaddr >= VIRT_KERNEL_BASE) || (ph.vaddr + ph.memsz > VIRT_KERNEL_BASE)) {
       r = -EINVAL;
       goto out2;
     }
@@ -142,7 +142,7 @@ process_exec(const char *path, char *const argv[], char *const envp[])
     return r;
 
   // Copy args and environment.
-  usp = (char *) USTACK_TOP;
+  usp = (char *) VIRT_USTACK_TOP;
   if ((r = copy_args(vm, argv, ustack, &usp)) < 0)
     goto out2;
 

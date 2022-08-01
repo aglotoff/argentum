@@ -1,8 +1,6 @@
 #include <armv7/regs.h>
 #include <mm/memlayout.h>
 
-#define RELOC(x)  ((x) - KERNEL_BASE)
-
 .section .entry, "a"
 
 /*
@@ -53,7 +51,7 @@ entry:
   vmsr  fpexc, r3
 
   // Load the physical address of the initial translation table
-  ldr   r2, =RELOC(entry_trtab)
+  ldr   r2, =KVA2PA(entry_trtab)
   mcr   CP15_TTBR0(r2)
 
   // Assign domain access

@@ -33,7 +33,7 @@ static volatile uint32_t *kmi0;
 void
 kbd_init(void)
 {
-  kmi0 = (volatile uint32_t *) KADDR(KMI0_BASE);
+  kmi0 = (volatile uint32_t *) KVA2PA(PHYS_KMI0);
 
   // Select scan code set 1
   kmi_write(kmi0, 0xF0);

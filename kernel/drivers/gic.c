@@ -37,9 +37,9 @@ static volatile uint32_t *gicc, *gicd, *ptimer;
 void
 gic_init(void)
 { 
-  gicc   = (volatile uint32_t *) KADDR(GICC_BASE);
-  gicd   = (volatile uint32_t *) KADDR(GICD_BASE);
-  ptimer = (volatile uint32_t *) KADDR(PTIMER_BASE);
+  gicc   = (volatile uint32_t *) KVA2PA(PHYS_GICC);
+  gicd   = (volatile uint32_t *) KVA2PA(PHYS_GICD);
+  ptimer = (volatile uint32_t *) KVA2PA(PHYS_PTIMER);
 
   // Enable local PIC.
   gicc[ICCICR] = ICCICR_EN;

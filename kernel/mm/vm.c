@@ -31,7 +31,7 @@ vm_page_lookup(l1_desc_t *trtab, const void *va, l2_desc_t **pte_store)
 {
   l2_desc_t *pte;
 
-  if ((uintptr_t) va >= KERNEL_BASE)
+  if ((uintptr_t) va >= VIRT_KERNEL_BASE)
     panic("bad va: %p", va);
 
   pte = mmu_pte_get(trtab, (uintptr_t ) va, 0);
@@ -50,7 +50,7 @@ vm_page_insert(l1_desc_t *trtab, struct Page *page, void *va, unsigned perm)
 {
   l2_desc_t *pte;
 
-  if ((uintptr_t) va >= KERNEL_BASE)
+  if ((uintptr_t) va >= VIRT_KERNEL_BASE)
     panic("bad va: %p", va);
 
 
@@ -77,7 +77,7 @@ vm_page_remove(l1_desc_t *trtab, void *va)
   struct Page *page;
   l2_desc_t *pte;
 
-  if ((uintptr_t) va >= KERNEL_BASE)
+  if ((uintptr_t) va >= VIRT_KERNEL_BASE)
     panic("bad va: %p", va);
 
   if ((page = vm_page_lookup(trtab, va, &pte)) == NULL)
@@ -106,7 +106,7 @@ vm_range_alloc(struct VM *vm, void *va, size_t n, int prot)
   start = ROUND_DOWN((uint8_t *) va, PAGE_SIZE);
   end   = ROUND_UP((uint8_t *) va + n, PAGE_SIZE);
 
-  if ((start > end) || (end > (uint8_t *) KERNEL_BASE))
+  if ((start > end) || (end > (uint8_t *) VIRT_KERNEL_BASE))
     return -EINVAL;
 
   for (a = start; a < end; a += PAGE_SIZE) {
@@ -133,7 +133,7 @@ vm_range_free(struct VM *vm, void *va, size_t n)
   a   = ROUND_DOWN((uint8_t *) va, PAGE_SIZE);
   end = ROUND_UP((uint8_t *) va + n, PAGE_SIZE);
 
-  if ((a > end) || (end > (uint8_t *) KERNEL_BASE))
+  if ((a > end) || (end > (uint8_t *) VIRT_KERNEL_BASE))
     panic("invalid range [%p,%p)", a, end);
 
   for ( ; a < end; a += PAGE_SIZE)
@@ -262,7 +262,7 @@ vm_user_check_buf(struct VM *vm, const void *va, size_t n, unsigned perm)
   p   = ROUND_DOWN((const char *) va, PAGE_SIZE);
   end = ROUND_UP((const char *) va + n, PAGE_SIZE);
 
-  if ((p >= (char *) KERNEL_BASE) || (end > (char *) KERNEL_BASE))
+  if ((p >= (char *) VIRT_KERNEL_BASE) || (end > (char *) VIRT_KERNEL_BASE))
     return -EFAULT;
 
   while (p != end) {
@@ -306,9 +306,9 @@ vm_user_check_str(struct VM *vm, const char *s, unsigned perm)
   unsigned off;
   l2_desc_t *pte;
 
-  assert(KERNEL_BASE % PAGE_SIZE == 0);
+  assert(VIRT_KERNEL_BASE % PAGE_SIZE == 0);
 
-  while (s < (char *) KERNEL_BASE) {
+  while (s < (char *) VIRT_KERNEL_BASE) {
     page = vm_page_lookup(vm->trtab, s, &pte);
     if ((page == NULL) || ((mmu_pte_get_flags(pte) & perm) != perm))
       return -EFAULT;
@@ -467,7 +467,7 @@ vm_mmap(struct VM *vm, void *addr, size_t n, int flags)
   va = (addr == NULL) ? PAGE_SIZE : ROUND_UP((uintptr_t) addr, PAGE_SIZE);
   n  = ROUND_UP(n, PAGE_SIZE);
 
-  if ((va >= KERNEL_BASE) || ((va + n) > KERNEL_BASE) || ((va + n) <= va))
+  if ((va >= VIRT_KERNEL_BASE) || ((va + n) > VIRT_KERNEL_BASE) || ((va + n) <= va))
     return (void *) -EINVAL;
   
   // Find Vm area to insert before
@@ -482,7 +482,7 @@ vm_mmap(struct VM *vm, void *addr, size_t n, int flags)
       va = area->start + area->length;
   }
 
-  if ((va + n) > KERNEL_BASE)
+  if ((va + n) > VIRT_KERNEL_BASE)
     return (void *) -ENOMEM;
 
   if ((r = vm_range_alloc(vm, (void *) va, n, flags)) < 0) {

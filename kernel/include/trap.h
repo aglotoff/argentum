@@ -17,7 +17,7 @@
 
 // IRQ numbers
 #define IRQ_PTIMER  29
-#define IRQ_UART0   44
+#define IRQ_PHYS_UART0   44
 #define IRQ_MCIA    49
 #define IRQ_MCIB    50
 #define IRQ_KMI0    52
