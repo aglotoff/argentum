@@ -1,14 +1,10 @@
 #ifndef __KERNEL_MM_PAGE_H__
 #define __KERNEL_MM_PAGE_H__
 
-#ifndef __KERNEL__
-#error "This is a kernel header; user programs should not #include it"
-#endif
-
 /**
- * @file kernel/page.h
+ * @file kernel/include/page.h
  * 
- * Page allocator.
+ * Physical page allocator.
  */
 
 #include <assert.h>
@@ -23,13 +19,13 @@ struct KObjectSlab;
  * Physical page block info.
  */
 struct Page {
-  struct ListLink     link;         ///< Linked list node
+  struct ListLink     link;         ///< Link into the free list
   int                 ref_count;    ///< Reference counter
-  struct KObjectSlab *slab;         ///< The slab this page belongs to
+  struct KObjectSlab *slab;         ///< The slab this page block belongs to
 };
 
 extern struct Page *pages;
-extern unsigned npages;
+extern unsigned pages_length;
 
 /**
  * Given a page info structure, return the starting physical address.
@@ -40,7 +36,9 @@ extern unsigned npages;
 static inline physaddr_t
 page2pa(struct Page *p)
 {
-  assert((p >= pages) && (p < &pages[npages]));
+  if ((p < pages) || (p >= &pages[pages_length]))
+    panic("invalid page index %u", (p - pages));
+
   return (p - pages) << PAGE_SHIFT;
 }
 
@@ -65,7 +63,9 @@ page2kva(struct Page *p)
 static inline struct Page *
 pa2page(physaddr_t pa)
 {
-  assert((pa >> PAGE_SHIFT) < npages);
+  if ((pa >> PAGE_SHIFT) >= pages_length)
+    panic("invalid page index %u", pa >> PAGE_SHIFT);
+
   return &pages[pa >> PAGE_SHIFT];
 }
 
@@ -89,12 +89,32 @@ kva2page(void *va)
 
 void         page_init_low(void);
 void         page_init_high(void);
-
-struct Page *page_alloc_one(int);
 struct Page *page_alloc_block(unsigned, int);
-
-void         page_free_one(struct Page *);
 void         page_free_block(struct Page *, unsigned);
 void         page_free_region(physaddr_t, physaddr_t);
+
+/**
+ * Allocate a single page.
+ * 
+ * @param flags Allocation flags.
+ *
+ * @return Address of a page info structure or NULL if out of memory.
+ */
+static inline struct Page *
+page_alloc_one(int flags)
+{
+  return page_alloc_block(0, flags);
+}
+
+/**
+ * Free a single page.
+ * 
+ * @param page Pointer to the page structure corresponding to the block.
+ */
+static inline void
+page_free_one(struct Page *page)
+{
+  page_free_block(page, 0);
+}
 
 #endif  // !__KERNEL_MM_PAGE_H__

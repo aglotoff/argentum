@@ -9,7 +9,7 @@ __attribute__((__aligned__(L1_TABLE_SIZE))) l1_desc_t
 entry_trtab[L1_NR_ENTRIES] = {
   // Identity mapping for the first 1MB of physical memory (just enough to
   // load the entry point code):
-  [0x0]                       = MAKE_L1_SECTION(0x000000, AP_PRIV_RW),
+  [0x0]                            = MAKE_L1_SECTION(0x000000, AP_PRIV_RW),
 
   // Higher-half mapping for the first 16MB of physical memory (should be
   // enough to initialize the page allocator data structures, setup the master

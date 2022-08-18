@@ -9,9 +9,10 @@
 /** The kernel uses this array to keep track of physical pages. */
 struct Page *pages;
 
-/** The total number of physical pages in memory. */
-unsigned npages;
+/** The maximum number of available physical pages. */
+unsigned pages_length;
 
+//
 // Page allocator implements the binary buddy algorithm.
 //
 // All physical memory is represented as a collection of blocks where each block
@@ -30,31 +31,25 @@ unsigned npages;
 static struct {
   struct ListLink link;
   uint32_t       *bitmap;
-} free_pages[PAGE_ORDER_MAX + 1];
+} free_list[PAGE_ORDER_MAX + 1];
 
 static int pages_inited = 0;
-static struct SpinLock pages_lock;
+static struct SpinLock page_lock;
 
-static void             page_mark_free(struct Page *, unsigned);
-static void             page_mark_used(struct Page *, unsigned);
-static int              page_is_free(struct Page *, unsigned);
-static struct Page *page_split(struct Page *, unsigned, unsigned);
+static void        *boot_alloc(size_t);
+static struct Page *page_buddy(struct Page *, unsigned);
+static void         page_list_add(struct Page *, unsigned);
+static void         page_list_remove(struct Page *, unsigned);
+static int          page_list_contains(struct Page *, unsigned);
 
-void        *boot_alloc(size_t);
-
-/*
- * ----------------------------------------------------------------------------
- * Initializing the page allocator
- * ----------------------------------------------------------------------------
- * 
- * Initialization happens in two phases:
- * 
- * 1. main() calls page_init_low() while still using the initial translation
- *    table to place just the pages mapped by entry_trtab on the free list.
- * 2. main() calls page_init_high() after installing the full kernel
- *    translation table to place the rest of the pages on the free list.
- *
- */
+//
+// Initialization happens in two phases:
+// 
+// 1. main() calls page_init_low() while still using the initial translation
+//    table to place just the pages mapped by entry_trtab on the free list.
+// 2. main() calls page_init_high() after installing the full kernel
+//    translation table to place the rest of the pages on the free list.
+//
 
 /**
  * Begin the page allocator initialization.
@@ -65,20 +60,20 @@ page_init_low(void)
   unsigned i;
   size_t bitmap_len;
 
-  spin_init(&pages_lock, "pages_lock");
+  spin_init(&page_lock, "page_lock");
 
   // TODO: detect the actual amount of physical memory!
-  npages = PHYS_LIMIT / PAGE_SIZE;
+  pages_length = PHYS_LIMIT / PAGE_SIZE;
 
   // Allocate the 'pages' array.
-  pages = (struct Page *) boot_alloc(npages * sizeof(struct Page));
+  pages = (struct Page *) boot_alloc(pages_length * sizeof(struct Page));
 
   // Initialize the free page lists.
   for (i = 0; i <= PAGE_ORDER_MAX; i++) {
-    list_init(&free_pages[i].link);
+    list_init(&free_list[i].link);
 
-    bitmap_len = ROUND_UP(npages / (1U << i), 8);
-    free_pages[i].bitmap = (uint32_t *) boot_alloc(bitmap_len);
+    bitmap_len = ROUND_UP(pages_length / (1U << i), 8);
+    free_list[i].bitmap = (uint32_t *) boot_alloc(bitmap_len);
   }
 
   // Place pages mapped by 'entry_trtab' to the free list.
@@ -97,43 +92,42 @@ page_init_high(void)
   page_free_region(PHYS_ENTRY_LIMIT, PHYS_LIMIT);
 }
 
-/*
- * ----------------------------------------------------------------------------
- * Boot-time memory allocator
- * ----------------------------------------------------------------------------
+/**
+ * Boot-time memory allocator.
  * 
  * Simple memory allocator used only during the initialization of free page
  * block management structures.
- *
+ * 
+ * @param n The number of bytes to allocate.
+ * 
+ * @return Pointer to the allocated block of memory.
  */
-
-void *
+static void *
 boot_alloc(size_t n)
 {
   // First address after the kernel loaded from ELF file.
   extern uint8_t _end[];
-
   // Virtual address of the next byte of free memory.
-  static uint8_t *nextptr = NULL;
+  static uint8_t *next_free = NULL;
 
-  uint8_t *ret;
+  void *ret;
 
   if (pages_inited)
     panic("called after the page allocator is already initialized");
 
-  // If this is the first time the allocator is invoked, initialize nextptr.
-  if (nextptr == NULL)
-    nextptr = ROUND_UP((uint8_t *) _end, sizeof(uintptr_t));
+  // If this is the first time the allocator is invoked, initialize next_free.
+  if (next_free == NULL)
+    next_free = ROUND_UP((uint8_t *) _end, sizeof(uintptr_t));
 
-  ret = nextptr;
+  ret = next_free;
 
   // Allocate a chunk large enough to hold 'n' bytes and initialize it to 0.
-  // Make sure nextptr is kept properly aligned.
+  // Make sure next_free is kept properly aligned.
   if (n != 0) {
     n = ROUND_UP(n, sizeof(uintptr_t));
-    nextptr += n;
+    next_free += n;
 
-    if (PA2KVA(nextptr) > PHYS_ENTRY_LIMIT)
+    if (PA2KVA(next_free) > PHYS_ENTRY_LIMIT)
       panic("out of memory");
 
     memset(ret, 0, n);
@@ -142,149 +136,84 @@ boot_alloc(size_t n)
   return ret;
 }
 
-/*
- * ----------------------------------------------------------------------------
- * Allocating pages
- * ----------------------------------------------------------------------------
- */
-
 /**
- * Allocate a single page.
- * 
- * @param flags Allocation flags.
- *
- * @return Address of a page info structure or NULL if out of memory.
- */
-struct Page *
-page_alloc_one(int flags)
-{
-  return page_alloc_block(0, flags);
-}
-
-/**
- * Allocate a block of '2^order' pages.
+ * Allocate a block of the given order.
  * 
  * @param order The allocation order.
- * @param flags The set of allocation flags.
+ * @param flags Allocation flags.
  *
- * @return Address of a page info structure or NULL if out of memory.
+ * @return Pointer to a page structure or NULL if out of memory.
  */
 struct Page *
 page_alloc_block(unsigned order, int flags)
 {
-  struct ListLink *link;
   struct Page *page;
   unsigned curr_order;
 
-  spin_lock(&pages_lock);
+  spin_lock(&page_lock);
 
-  for (curr_order = order; curr_order <= PAGE_ORDER_MAX; curr_order++) {
-    if (list_empty(&free_pages[curr_order].link))
-      continue;
+  for (curr_order = order; curr_order <= PAGE_ORDER_MAX; curr_order++)
+    if (!list_empty(&free_list[curr_order].link))
+      break;
 
-    // If there is a free page block at cur_order, allocate it.
-    link = free_pages[curr_order].link.next;
-    page = LIST_CONTAINER(link, struct Page, link);
-    page_mark_used(page, curr_order);
-
-    page = page_split(page, curr_order, order);
-
-    assert(page->ref_count == 0);
-    assert(!page_is_free(page, order));
-
-    spin_unlock(&pages_lock);
-
-    if (flags & PAGE_ALLOC_ZERO) {
-      memset(page2kva(page), 0, PAGE_SIZE << order);
-    }
-
-    return page;
+  if (curr_order > PAGE_ORDER_MAX) {
+    spin_unlock(&page_lock);
+    return NULL;
   }
 
-  spin_unlock(&pages_lock);
+  page = LIST_CONTAINER(free_list[curr_order].link.next, struct Page, link);
 
-  return NULL;
-}
+  page_list_remove(page, curr_order);
 
-// Split page block of order 'high' until a page block of order 'low' is
-// available.
-static struct Page *
-page_split(struct Page *page, unsigned high, unsigned low)
-{
-  unsigned block_order, block_size;
-
-  block_size  = (1U << high);
-  block_order = high;
-
-  assert((page - pages) % block_size == 0);
-  assert(!page_is_free(page, high));
-
-  while (block_order > low) {
-    block_size >>= 1;
-    block_order--;
-
-    page_mark_free(page, block_order);
-
-    page += block_size;
+  // Split
+  while (curr_order > order) {
+    curr_order--;
+    page_list_add(page, curr_order);
+    page += (1U << curr_order);
   }
+
+  assert(page->ref_count == 0);
+  assert(!page_list_contains(page, order));
+
+  spin_unlock(&page_lock);
+
+  if (flags & PAGE_ALLOC_ZERO)
+    memset(page2kva(page), 0, PAGE_SIZE << order);
 
   return page;
 }
 
-/*
- * ----------------------------------------------------------------------------
- * Free pages
- * ----------------------------------------------------------------------------
- */
-
 /**
- * Free a single page.
+ * Free a block of pages.
  * 
- * @param page Address of the page info structure to be freed.
- */
-void
-page_free_one(struct Page *page)
-{
-  page_free_block(page, 0);
-}
-
-/**
- * Free a block of 2^order pages.
- * 
- * @param page  Address of the page info structure to be freed.
+ * @param page  Pointer to the page structure corresponding to the block.
  * @param order The order of the page block.
  */
 void
 page_free_block(struct Page *page, unsigned order)
 {
   struct Page *buddy;
-  unsigned curr_order, pgnum, mask;
 
   if (page->ref_count != 0)
-    panic("ref_count is not zero");
+    panic("page->ref_count != 0 (%u)", page->ref_count);
 
-  pgnum = page - pages;
-  mask = (1U << order);
+  spin_lock(&page_lock);
 
-  assert(pgnum % mask == 0);
+  for ( ; order < PAGE_ORDER_MAX; order++) {
+    buddy = page_buddy(page, order);
 
-  spin_lock(&pages_lock);
-
-  for (curr_order = order; curr_order < PAGE_ORDER_MAX; curr_order++) {
-    buddy = &pages[pgnum ^ mask];
-
-    if (!page_is_free(buddy, curr_order))
+    if (!page_list_contains(buddy, order))
       break;
 
-    page_mark_used(buddy, curr_order);
-
-    pgnum &= ~mask;
-    mask <<= 1;
+    // Combine with buddy
+    page_list_remove(buddy, order);
+    if (buddy < page)
+      page = buddy;
   }
 
-  page_mark_free(&pages[pgnum], curr_order);
-  
-  spin_unlock(&pages_lock);
+  page_list_add(page, order);
+
+  spin_unlock(&page_lock);
 }
 
 /**
@@ -296,78 +225,108 @@ page_free_block(struct Page *page, unsigned order)
 void
 page_free_region(physaddr_t start, physaddr_t end)
 {
-  unsigned block_order, block_size, curr_pfn, last_pfn; 
+  unsigned blk_order, blk_length;
+  unsigned page_idx, last_page_idx; 
 
-  curr_pfn = (start + PAGE_SIZE - 1) / PAGE_SIZE;
-  last_pfn = (end / PAGE_SIZE);
+  page_idx = (start + PAGE_SIZE - 1) / PAGE_SIZE;
+  last_page_idx = (end / PAGE_SIZE);
 
-  while (curr_pfn < last_pfn) {
-    block_order = PAGE_ORDER_MAX;
-    block_size  = (1U << block_order);
+  while (page_idx < last_page_idx) {
+    blk_order  = PAGE_ORDER_MAX;
+    blk_length = (1U << blk_order);
 
-    // Determine the maximum order for this page frame number.
-    while (block_order > 0) {
-      if (!(curr_pfn & (block_size - 1)) && (curr_pfn + block_size <= last_pfn))
+    // Determine the maximum order for this page index.
+    while (blk_order > 0) {
+      if (!(page_idx & (blk_length - 1)) &&
+          (page_idx + blk_length <= last_page_idx))
         break;
 
-      block_size >>= 1;
-      block_order--;
+      blk_length >>= 1;
+      blk_order--;
     }
 
-    page_free_block(&pages[curr_pfn], block_order);
+    page_free_block(&pages[page_idx], blk_order);
 
-    curr_pfn += block_size;
+    page_idx += blk_length;
   }
 }
 
-/*
- * ----------------------------------------------------------------------------
- * Free list manipulation
- * ----------------------------------------------------------------------------
+/**
+ * Get buddy of a page block.
+ * 
+ * @param page  Pointer to the page structure corresponding to the block.
+ * @param order The page block order.
+ * 
+ * @return Pointer to the page structure of the buddy block.
  */
+static struct Page *
+page_buddy(struct Page *page, unsigned order)
+{
+  return &pages[(page - pages) ^ (1U << order)];
+}
 
-// Check whether the page block 'p' of the given 'order' is free.
+#define BITS_PER_WORD     (sizeof(uint32_t) * 8)
+#define BITMAP_OFFSET(n)  ((n) / BITS_PER_WORD)
+#define BITMAP_SHIFT(n)   ((n) % BITS_PER_WORD)
+#define BITMAP_MASK(n)    (1U << BITMAP_SHIFT(n))
+
+/**
+ * Check whether a page block is available.
+ * 
+ * @param page  Pointer to the page structure corresponding to the block.
+ * @param order The order of the page block.
+ * 
+ * @return A non-zero value if the page block is available, zero otherwise.
+ */
 static int
-page_is_free(struct Page *p, unsigned order)
+page_list_contains(struct Page *page, unsigned order)
 {
-  unsigned blockno;
+  unsigned idx;
 
-  blockno = (p - pages) / (1U << order);
-  return free_pages[order].bitmap[blockno / 32] & (1U << (blockno % 32));
+  idx = (page - pages) / (1U << order);
+  return free_list[order].bitmap[BITMAP_OFFSET(idx)] & BITMAP_MASK(idx);
 }
 
-// Add the page block 'p' to the free list for 'order' and set the corresponding
-// bit.
+/**
+ * Add page block to the free list of corresponding size.
+ *
+ * @param page  Pointer to the page structure corresponding to the block.
+ * @param order The block order.
+ */
 static void
-page_mark_free(struct Page *p, unsigned order)
+page_list_add(struct Page *page, unsigned order)
 {
-  unsigned pageno, blockno;
+  unsigned block_idx, map_idx;
 
-  pageno = p - pages;
+  block_idx = page - pages;
 
-  assert((pageno % (1U << order)) == 0);
-  assert(!page_is_free(p, order));
+  assert((block_idx % (1U << order)) == 0);
+  assert(!page_list_contains(page, order));
 
-  list_add_front(&free_pages[order].link, &p->link);
+  list_add_front(&free_list[order].link, &page->link);
 
-  blockno = pageno / (1 << order);
-  free_pages[order].bitmap[blockno / 32] |= (1U << (blockno % 32));
+  map_idx = block_idx / (1 << order);
+  free_list[order].bitmap[BITMAP_OFFSET(map_idx)] |= BITMAP_MASK(map_idx);
 }
 
-// Remove the page block 'p' from the free list for 'order' and clear the
-// corresponding bit.
+/**
+ * Remove page block from the containing free list.
+ * 
+ * @param page  Pointer to the page structure corresponding to the block.
+ * @param order The block order.
+ */
 static void
-page_mark_used(struct Page *p, unsigned order)
+page_list_remove(struct Page *page, unsigned order)
 {
-  unsigned pageno, blockno;
+  unsigned block_idx, map_idx;
 
-  pageno = p - pages;
+  block_idx = page - pages;
 
-  assert((pageno % (1U << order)) == 0);
-  assert(page_is_free(p, order));
+  assert((block_idx % (1U << order)) == 0);
+  assert(page_list_contains(page, order));
 
-  list_remove(&p->link);
+  list_remove(&page->link);
 
-  blockno = pageno / (1U << order);
-  free_pages[order].bitmap[blockno / 32] &= ~(1U << (blockno % 32));
+  map_idx = block_idx / (1U << order);
+  free_list[order].bitmap[BITMAP_OFFSET(map_idx)] &= ~BITMAP_MASK(map_idx);
 }
