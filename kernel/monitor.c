@@ -4,7 +4,7 @@
 #include <drivers/console.h>
 #include <cprintf.h>
 #include <kdebug.h>
-#include <mm/kobject.h>
+#include <mm/kmem.h>
 #include <mm/memlayout.h>
 #include <trap.h>
 #include <types.h>
@@ -90,7 +90,7 @@ static struct Command commands[] = {
   { "help", "Print this list of commands", mon_help },
   { "kerninfo", "Print this list of commands", mon_kerninfo },
   { "backtrace", "Display a list of function call frames", mon_backtrace },
-  { "poolinfo", "Display the list of object pools", mon_poolinfo },
+  { "kmeminfo", "Display the list of object caches", mon_kmeminfo },
 };
 
 #define MAXARGS 16
@@ -217,13 +217,11 @@ mon_backtrace(int argc, char **argv, struct TrapFrame *tf)
 }
 
 int
-mon_poolinfo(int argc, char **argv, struct TrapFrame *tf)
+mon_kmeminfo(int argc, char **argv, struct TrapFrame *tf)
 {
   (void) argc;
   (void) argv;
   (void) tf;
-
-  kobject_pool_info();
 
   return 0;
 }

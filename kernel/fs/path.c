@@ -7,7 +7,7 @@
 
 #include <cprintf.h>
 #include <fs/ext2.h>
-#include <mm/kobject.h>
+#include <mm/kmem.h>
 #include <process.h>
 #include <types.h>
 

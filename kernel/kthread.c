@@ -4,14 +4,14 @@
 #include <cprintf.h>
 #include <cpu.h>
 #include <list.h>
-#include <mm/kobject.h>
+#include <mm/kmem.h>
 #include <mm/mmu.h>
 #include <mm/page.h>
 #include <process.h>
 #include <sync.h>
 #include <kthread.h>
 
-static struct KObjectPool *thread_pool;
+static struct KMemCache *thread_cache;
 
 // Run queue
 static struct {
@@ -33,7 +33,7 @@ kthread_free(struct KThread *thread)
     page_free_one(kstack_page);
   }
 
-  kobject_free(thread_pool, thread);
+  kmem_free(thread_cache, thread);
 }
 
 void context_switch(struct Context **, struct Context *);
@@ -41,9 +41,9 @@ void context_switch(struct Context **, struct Context *);
 void
 scheduler_init(void)
 {
-  thread_pool = kobject_pool_create("thread_pool", sizeof(struct KThread), 0);
-  if (thread_pool == NULL)
-    panic("cannot allocate thread pool");
+  thread_cache = kmem_cache_create("thread_cache", sizeof(struct KThread), 0, NULL, NULL);
+  if (thread_cache == NULL)
+    panic("cannot allocate thread cache");
 
   list_init(&sched.run_queue);
   spin_init(&sched.lock, "sched");
@@ -106,7 +106,7 @@ kthread_create(struct Process *process, void (*entry)(void), uint8_t *stack)
 {
   struct KThread *thread;
 
-  if ((thread = (struct KThread *) kobject_alloc(thread_pool)) == NULL)
+  if ((thread = (struct KThread *) kmem_alloc(thread_cache)) == NULL)
     return NULL;
 
   stack -= sizeof *thread->context;

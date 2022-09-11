@@ -12,7 +12,7 @@
 #include <drivers/sd.h>
 #include <fs/buf.h>
 #include <fs/file.h>
-#include <mm/kobject.h>
+#include <mm/kmem.h>
 #include <mm/mmu.h>
 #include <mm/page.h>
 #include <mm/vm.h>
@@ -51,7 +51,7 @@ main(void)
 
   // Complete the memory manager initialization
   page_init_high();     // Physical page allocator (higher memory)
-  kobject_pool_init();  // Object allocator
+  kmem_init();  // Object allocator
   vm_init();            // Virtual memory manager
 
   // Initialize the rest of device drivers

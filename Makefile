@@ -66,7 +66,7 @@ $(OBJ)/fs.img: $(USER_APPS)
 	$(V)rm -rf $@.d
 
 ifndef CPUS
-  CPUS := 2
+  CPUS := 3
 endif
 
 QEMUOPTS := -M realview-pbx-a9 -m 256 -smp $(CPUS)

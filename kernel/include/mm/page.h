@@ -13,7 +13,7 @@
 #include <list.h>
 #include <mm/memlayout.h>
 
-struct KObjectSlab;
+struct KMemSlab;
 
 /**
  * Physical page block info.
@@ -21,7 +21,7 @@ struct KObjectSlab;
 struct Page {
   struct ListLink     link;         ///< Link into the free list
   int                 ref_count;    ///< Reference counter
-  struct KObjectSlab *slab;         ///< The slab this page block belongs to
+  struct KMemSlab *slab;         ///< The slab this page block belongs to
 };
 
 extern struct Page *pages;

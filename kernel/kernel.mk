@@ -30,7 +30,7 @@ KERNEL_SRCFILES :=	\
 	kernel/fs/super_ops.c \
 	kernel/mm/mmu.c \
 	kernel/mm/page.c \
-	kernel/mm/kobject.c \
+	kernel/mm/kmem.c \
 	kernel/mm/vm.c \
 	kernel/context.S \
 	kernel/cprintf.c \

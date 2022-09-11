@@ -7,19 +7,19 @@
 #include <cprintf.h>
 #include <fs/ext2.h>
 #include <fs/fs.h>
-#include <mm/kobject.h>
+#include <mm/kmem.h>
 #include <sync.h>
 
 #include <fs/file.h>
 
 static struct SpinLock file_lock;
-static struct KObjectPool *file_pool;
+static struct KMemCache *file_cache;
 
 void
 file_init(void)
 {
-  if (!(file_pool = kobject_pool_create("file_pool", sizeof(struct File), 0)))
-    panic("Cannot allocate file pool");
+  if (!(file_cache = kmem_cache_create("file_cache", sizeof(struct File), 0, NULL, NULL)))
+    panic("Cannot allocate file cache");
 
   spin_init(&file_lock, "file_lock");
 }
@@ -31,7 +31,7 @@ file_open(const char *path, int oflag, mode_t mode, struct File **fstore)
   int r;
 
   // TODO: ENFILE
-  if ((f = (struct File *) kobject_alloc(file_pool)) == NULL)
+  if ((f = (struct File *) kmem_alloc(file_cache)) == NULL)
     return -ENOMEM;
   
   f->type      = 0;
@@ -117,7 +117,7 @@ file_open(const char *path, int oflag, mode_t mode, struct File **fstore)
 fail2:
   fs_inode_unlock_put(ip);
 fail1:
-  kobject_free(file_pool, f);
+  kmem_free(file_cache, f);
   return r;
 }
 
@@ -159,7 +159,7 @@ file_close(struct File *f)
       panic("Invalid type");
   }
 
-  kobject_free(file_pool, f);
+  kmem_free(file_cache, f);
 }
 
 ssize_t

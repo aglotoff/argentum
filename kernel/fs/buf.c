@@ -3,12 +3,12 @@
 #include <cprintf.h>
 #include <drivers/sd.h>
 #include <list.h>
-#include <mm/kobject.h>
+#include <mm/kmem.h>
 #include <sync.h>
 
 #include <fs/buf.h>
 
-struct KObjectPool *buf_pool;
+struct KMemCache *buf_desc_cache;
 
 // Maximum size of the buffer cache
 #define BUF_CACHE_MAX_SIZE   32
@@ -19,15 +19,27 @@ static struct {
   struct SpinLock lock;
 } buf_cache;
 
+static void
+buf_ctor(void *ptr, size_t size)
+{
+  struct Buf *buf = (struct Buf *) ptr;
+
+  buf->block_size = BLOCK_SIZE;
+  list_init(&buf->wait_queue);
+  mutex_init(&buf->mutex, "buf");
+
+  (void) size;
+}
+
 /**
  * Initialize the buffer cache.
  */
 void
 buf_init(void)
 {
-  buf_pool = kobject_pool_create("buf_pool", sizeof(struct Buf), 0);
-  if (buf_pool == NULL)
-    panic("cannot allocate buf_pool");
+  buf_desc_cache = kmem_cache_create("buf_desc_cache", sizeof(struct Buf), 0, buf_ctor, NULL);
+  if (buf_desc_cache == NULL)
+    panic("cannot allocate buf_desc_cache");
 
   spin_init(&buf_cache.lock, "buf_cache");
   list_init(&buf_cache.head);
@@ -41,17 +53,14 @@ buf_alloc(void)
   assert(spin_holding(&buf_cache.lock));
   assert(buf_cache.size < BUF_CACHE_MAX_SIZE);
 
-  if ((buf = (struct Buf *) kobject_alloc(buf_pool)) == NULL)
+  if ((buf = (struct Buf *) kmem_alloc(buf_desc_cache)) == NULL)
     return NULL;
 
   buf->block_no   = 0;
   buf->dev        = 0;
   buf->flags      = 0;
   buf->ref_count  = 0;
-  buf->block_size = BLOCK_SIZE;
-  list_init(&buf->wait_queue);
-  mutex_init(&buf->mutex, "buf");
-
+  
   list_add_front(&buf_cache.head, &buf->cache_link);
   buf_cache.size++;
 

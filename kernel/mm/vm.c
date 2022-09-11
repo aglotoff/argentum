@@ -6,15 +6,15 @@
 #include <drivers/console.h>
 #include <fs/fs.h>
 #include <types.h>
-#include <mm/kobject.h>
+#include <mm/kmem.h>
 #include <mm/mmu.h>
 #include <mm/page.h>
 #include <process.h>
 
 #include <mm/vm.h>
 
-static struct KObjectPool *vm_pool;
-static struct KObjectPool *vm_area_pool;
+static struct KMemCache *vmcache;
+static struct KMemCache *vm_areacache;
 
 static struct Page *vm_page_lookup(l1_desc_t *, const void *, l2_desc_t **);
 static int          vm_page_insert(l1_desc_t *, struct Page *, void *, unsigned);
@@ -364,11 +364,11 @@ vm_create(void)
 {
   struct VM *vm;
 
-  if ((vm = (struct VM *) kobject_alloc(vm_pool)) == NULL)
+  if ((vm = (struct VM *) kmem_alloc(vmcache)) == NULL)
     return NULL;
 
   if ((vm->trtab = mmu_pgtab_create()) == NULL) {
-    kobject_free(vm_pool, vm);
+    kmem_free(vmcache, vm);
     return NULL;
   }
 
@@ -390,7 +390,7 @@ vm_destroy(struct VM *vm)
 
   mmu_pgtab_destroy(vm->trtab);
 
-  kobject_free(vm_pool, vm);
+  kmem_free(vmcache, vm);
 }
 
 struct VM   *
@@ -406,7 +406,7 @@ vm_clone(struct VM *vm)
   LIST_FOREACH(&vm->areas, l) {
     area = LIST_CONTAINER(l, struct VMArea, link);
 
-    new_area = (struct VMArea *) kobject_alloc(vm_area_pool);
+    new_area = (struct VMArea *) kmem_alloc(vm_areacache);
     if (new_area == NULL) {
       vm_destroy(new_vm);
       return NULL;
@@ -429,8 +429,8 @@ vm_clone(struct VM *vm)
 void
 vm_init(void)
 {
-  vm_pool = kobject_pool_create("vm_pool", sizeof(struct VM), 0);
-  vm_area_pool = kobject_pool_create("vm_area_pool", sizeof(struct VMArea), 0);
+  vmcache = kmem_cache_create("vmcache", sizeof(struct VM), 0, NULL, NULL);
+  vm_areacache = kmem_cache_create("vm_areacache", sizeof(struct VMArea), 0, NULL, NULL);
 }
 
 int
@@ -510,13 +510,13 @@ vm_mmap(struct VM *vm, void *addr, size_t n, int flags)
     prev->length += next->length + n;
 
     list_remove(&next->link);
-    kobject_free(vm_area_pool, next);
+    kmem_free(vm_areacache, next);
   } else if (prev != NULL) {
     prev->length += n;
   } else if (next != NULL) {
     next->start = va;
   } else {
-    area = (struct VMArea *) kobject_alloc(vm_area_pool);
+    area = (struct VMArea *) kmem_alloc(vm_areacache);
     if (area == NULL) {
       vm_range_free(vm, (void *) va, n);
       return (void *) -ENOMEM;

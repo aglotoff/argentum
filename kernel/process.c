@@ -12,7 +12,7 @@
 #include <fs/file.h>
 #include <fs/fs.h>
 #include <hash.h>
-#include <mm/kobject.h>
+#include <mm/kmem.h>
 #include <mm/page.h>
 #include <mm/vm.h>
 #include <monitor.h>
@@ -21,8 +21,8 @@
 
 #include <process.h>
 
-// Process Object Pool
-struct KObjectPool * process_pool;
+// Process Object cache
+struct KMemCache * process_cache;
 
 // Size of PID hash table
 #define NBUCKET   256
@@ -41,14 +41,25 @@ static void process_pop_tf(struct TrapFrame *);
 
 static struct Process *init_process;
 
+static void
+process_ctor(void *buf, size_t size)
+{
+  struct Process *proc = (struct Process *) buf;
+
+  list_init(&proc->wait_queue);
+  list_init(&proc->children);
+
+  (void) size;
+}
+
 void
 process_init(void)
 {
   extern uint8_t _binary_obj_user_init_start[];
 
-  process_pool = kobject_pool_create("process_pool", sizeof(struct Process), 0);
-  if (process_pool == NULL)
-    panic("cannot allocate process_pool");
+  process_cache = kmem_cache_create("process_cache", sizeof(struct Process), 0, process_ctor, NULL);
+  if (process_cache == NULL)
+    panic("cannot allocate process_cache");
 
   HASH_INIT(pid_hash.table);
   spin_init(&pid_hash.lock, "pid_hash");
@@ -70,7 +81,7 @@ process_alloc(void)
   struct Process *process;
   uint8_t *sp;
 
-  process = (struct Process *) kobject_alloc(process_pool);
+  process = (struct Process *) kmem_alloc(process_cache);
 
   // Allocate per-process kernel stack
   if ((page = page_alloc_one(0)) == NULL)
@@ -91,8 +102,6 @@ process_alloc(void)
 
   process->parent = NULL;
   process->zombie = 0;
-  list_init(&process->wait_queue);
-  list_init(&process->children);
   process->sibling.next = NULL;
   process->sibling.prev = NULL;
 
@@ -114,7 +123,7 @@ fail2:
   page->ref_count--;
   page_free_one(page);
 fail1:
-  kobject_free(process_pool, process);
+  kmem_free(process_cache, process);
   return NULL;
 }
 
@@ -225,8 +234,8 @@ process_free(struct Process *process)
   HASH_REMOVE(&process->pid_link);
   spin_unlock(&pid_hash.lock);
 
-  // Return the process descriptor to the pool
-  kobject_free(process_pool, process);
+  // Return the process descriptor to the cache
+  kmem_free(process_cache, process);
 }
 
 struct Process *

@@ -33,6 +33,6 @@ int mon_kerninfo(int, char **, struct TrapFrame *);
  */
 int mon_backtrace(int, char **, struct TrapFrame *);
 
-int mon_poolinfo(int, char **, struct TrapFrame *);
+int mon_kmeminfo(int, char **, struct TrapFrame *);
 
 #endif  // !KERNEL_MONITOR_H

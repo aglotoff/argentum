@@ -24,7 +24,7 @@
         "fs.h": "c",
         "cprintf.h": "c",
         "console.h": "c",
-        "kobject.h": "c",
+        "kmem.h": "c",
         "kdebug.h": "c",
         "gic.h": "c",
         "types.h": "c",
