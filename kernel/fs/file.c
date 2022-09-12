@@ -112,8 +112,6 @@ file_open(const char *path, int oflag, mode_t mode, struct File **fstore)
 
   return 0;
 
-
-  
 fail2:
   fs_inode_unlock_put(ip);
 fail1:

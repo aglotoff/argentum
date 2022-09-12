@@ -5,16 +5,17 @@
 #include <stddef.h>
 
 /** A structure containing information about a file. */
-typedef struct {
-  int _Mode;
-  int _Fildes;
+typedef struct _File {
+  int mode;       // Mode bits
+  int fd;         // File descriptor
 } FILE;
 
-#define _MODE_READ    (1 << 0)  // Open for reading
-#define _MODE_WRITE   (1 << 1)  // Open for writing
-#define _MODE_APPEND  (1 << 2)  // Append
-#define _MODE_CREAT   (1 << 3)  // Create file
-#define _MODE_TRUNC   (1 << 4)  // Truncate to zero length
+#define _MODE_READ        (1 << 0)  // Open for reading
+#define _MODE_WRITE       (1 << 1)  // Open for writing
+#define _MODE_APPEND      (1 << 2)  // Append
+#define _MODE_CREAT       (1 << 3)  // Create file
+#define _MODE_TRUNC       (1 << 4)  // Truncate to zero length
+#define _MODE_ALLOC_FILE  (1 << 5)  // Free file on close
 
 /** The number of streams that can be open simultaneously. */
 #define FOPEN_MAX   32
@@ -32,8 +33,12 @@ extern FILE *__files[];
 extern "C" {
 #endif
 
+void  __ffree(FILE *);
+int   __fopen(FILE *, const char *, const char *);
+int   __fclose(FILE *);
 FILE *fopen(const char *, const char *);
 int   fclose(FILE *);
+FILE *freopen(const char *, const char *, FILE *);
 
 int   remove(const char *);
 

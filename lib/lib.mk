@@ -64,10 +64,14 @@ LIB_SRCFILES += \
 	lib/setjmp/setjmp.S
 
 LIB_SRCFILES += \
+  lib/stdio/__fclose.c \
+	lib/stdio/__ffree.c \
 	lib/stdio/__files.c \
+	lib/stdio/__fopen.c \
   lib/stdio/__printf.c \
 	lib/stdio/fclose.c \
 	lib/stdio/fopen.c \
+	lib/stdio/freopen.c \
 	lib/stdio/perror.c \
 	lib/stdio/printf.c \
 	lib/stdio/putchar.c \

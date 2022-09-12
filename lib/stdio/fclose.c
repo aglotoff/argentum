@@ -5,16 +5,17 @@
 int
 fclose(FILE *stream)
 {
-  if (stream->_Mode == 0) {
+  if (stream->mode == 0) {
     errno = EBADF;
     return -1;
   }
 
-  // TODO: flush stream
+  if (__fclose(stream) != 0)
+    return -1;
 
-  // TODO: deallocate buffers
+  stream->mode = 0;
 
-  stream->_Mode = 0;
+  __ffree(stream);
 
-  return close(stream->_Fildes);
+  return 0;
 }
