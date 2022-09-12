@@ -8,7 +8,7 @@
 #include <fs/ext2.h>
 #include <fs/fs.h>
 #include <mm/kmem.h>
-#include <sync.h>
+#include <spin.h>
 
 #include <fs/file.h>
 

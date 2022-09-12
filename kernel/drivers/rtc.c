@@ -3,7 +3,7 @@
 
 #include <mm/memlayout.h>
 #include <mm/vm.h>
-#include <sync.h>
+#include <spin.h>
 
 #include <drivers/rtc.h>
 

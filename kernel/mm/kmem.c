@@ -5,7 +5,6 @@
 #include <cprintf.h>
 #include <types.h>
 #include <mm/page.h>
-#include <sync.h>
 
 #include <mm/kmem.h>
 

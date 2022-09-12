@@ -1,7 +1,7 @@
 #include <string.h>
 
 #include <cprintf.h>
-#include <sync.h>
+#include <spin.h>
 #include <types.h>
 
 #include <mm/page.h>

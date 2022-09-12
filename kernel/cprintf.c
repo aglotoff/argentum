@@ -2,7 +2,7 @@
 
 #include <drivers/console.h>
 #include <monitor.h>
-#include <sync.h>
+#include <spin.h>
 
 #include <cprintf.h>
 

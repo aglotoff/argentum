@@ -40,9 +40,10 @@ KERNEL_SRCFILES :=	\
 	kernel/exec.c \
 	kernel/kdebug.c \
 	kernel/monitor.c \
+	kernel/mutex.c \
 	kernel/process.c \
 	kernel/kthread.c \
-	kernel/sync.c \
+	kernel/spin.c \
 	kernel/syscall.c \
 	kernel/trapentry.S \
 	kernel/trap.c \

@@ -8,7 +8,7 @@
  */
 
 #include <list.h>
-#include <sync.h>
+#include <spin.h>
 
 #define KMEM_CACHE_NAME_MAX   64
 

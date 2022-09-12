@@ -4,7 +4,7 @@
 #include <drivers/sd.h>
 #include <list.h>
 #include <mm/kmem.h>
-#include <sync.h>
+#include <spin.h>
 
 #include <fs/buf.h>
 

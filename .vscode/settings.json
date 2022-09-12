@@ -42,6 +42,7 @@
         "list.h": "c",
         "kthread.h": "c",
         "mmu.h": "c",
-        "memlayout.h": "c"
+        "memlayout.h": "c",
+        "spin.h": "c"
     }
 }

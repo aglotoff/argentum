@@ -4,7 +4,7 @@
 #include <drivers/lcd.h>
 #include <drivers/uart.h>
 #include <kthread.h>
-#include <sync.h>
+#include <spin.h>
 
 #include <drivers/console.h>
 

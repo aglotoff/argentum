@@ -10,7 +10,7 @@
 
 #include <elf.h>
 #include <list.h>
-#include <sync.h>
+#include <mutex.h>
 
 #define INODE_CACHE_SIZE  32
 

@@ -16,7 +16,7 @@
 #include <mm/page.h>
 #include <mm/vm.h>
 #include <monitor.h>
-#include <sync.h>
+#include <spin.h>
 #include <trap.h>
 
 #include <process.h>

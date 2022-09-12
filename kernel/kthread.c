@@ -8,7 +8,7 @@
 #include <mm/mmu.h>
 #include <mm/page.h>
 #include <process.h>
-#include <sync.h>
+#include <spin.h>
 #include <kthread.h>
 
 static struct KMemCache *thread_cache;

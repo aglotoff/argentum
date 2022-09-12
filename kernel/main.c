@@ -17,7 +17,6 @@
 #include <mm/page.h>
 #include <mm/vm.h>
 #include <process.h>
-#include <sync.h>
 
 static void mp_main(void);
 

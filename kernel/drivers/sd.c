@@ -8,7 +8,7 @@
 #include <fs/buf.h>
 #include <mm/memlayout.h>
 #include <kthread.h>
-#include <sync.h>
+#include <spin.h>
 #include <trap.h>
 
 #include <drivers/sd.h>

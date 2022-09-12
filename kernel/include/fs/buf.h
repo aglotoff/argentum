@@ -15,7 +15,7 @@
 #include <sys/types.h>
 
 #include <list.h>
-#include <sync.h>
+#include <mutex.h>
 
 #define BLOCK_SIZE      1024        ///< Size of a single filesystem block
 
