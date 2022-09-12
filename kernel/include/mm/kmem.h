@@ -10,6 +10,8 @@
 #include <list.h>
 #include <sync.h>
 
+#define KMEM_CACHE_NAME_MAX   64
+
 /**
  * Object cache descriptor.
  */
@@ -29,10 +31,13 @@ struct KMemCache {
   /** Page block order for each slab. */
   unsigned          slab_page_order;
 
+  /** Single of a single buffer. */
+  size_t            buf_size;
+  /** Buffer alignment alignment. */
+  size_t            buf_align;
+
   /** Single of a single object. */
   size_t            obj_size;
-  /** Object alignment. */
-  size_t            obj_align;
   /** Function to construct objects in the cache. */
   void            (*obj_ctor)(void *, size_t);
   /** Function to undo object construction. */
@@ -47,13 +52,7 @@ struct KMemCache {
   struct ListLink   link;
 
   /** Human-readable cache name (for debugging purposes). */
-  const char       *name;
-
-  int flags;
-};
-
-enum {
-  KMEM_CACHE_OFFSLAB = (1 << 0),    ///< Keep descriptors off-slab
+  char              name[KMEM_CACHE_NAME_MAX + 1];
 };
 
 struct KMemBufCtl {
@@ -64,9 +63,13 @@ struct KMemBufCtl {
  * Object slab descriptor.
  */
 struct KMemSlab {
-  struct ListLink    link;        
-  void              *buf;       
-  struct KMemBufCtl *free;         
+  /** Linkage in the cache. */
+  struct ListLink    link;
+  /** Address of the first buffer in the slab. */
+  void              *buf;
+  /** List of free buffers. */
+  struct KMemBufCtl *free;  
+  /** Reference count for allocated buffers. */       
   unsigned           in_use;
 };
 

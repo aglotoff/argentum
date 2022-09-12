@@ -9,11 +9,31 @@
 
 #include <mm/kmem.h>
 
-// static int           kmem_cache_grow(struct KMemCache *);
-static unsigned         kmem_cache_estimate(size_t, unsigned, int, size_t *);
-static struct KMemSlab *kmem_slab_alloc(struct KMemCache *);
+static int              kmem_cache_init(struct KMemCache *,
+                                        const char *,
+                                        size_t,
+                                        size_t,
+                                        void (*)(void *, size_t),
+                                        void (*)(void *, size_t));
+
+static struct KMemSlab *kmem_slab_create(struct KMemCache *);
 static void             kmem_slab_destroy(struct KMemCache *,
                                           struct KMemSlab *);
+
+static void            *kmem_bufctl_to_object(struct KMemCache *,
+                                              struct KMemBufCtl *);
+static void            *kmem_object_to_bufctl(struct KMemCache *, void *);
+
+static void             kmem_slab_init_objects(struct KMemCache *,
+                                               struct KMemSlab *);
+static void             kmem_slab_destroy_objects(struct KMemCache *,
+                                                  struct KMemSlab *);
+
+static void            *kmem_alloc_one(struct KMemCache *,
+                                       struct KMemSlab *);
+static void             kmem_free_one(struct KMemCache *,
+                                      struct KMemSlab *,
+                                      void *);                            
 
 // Linked list of all object caches.
 static struct {
@@ -25,26 +45,68 @@ static struct {
 };
 
 // cache for cache descriptors.
-static struct KMemCache cache_cache = {
-  .slabs_empty   = LIST_INITIALIZER(cache_cache.slabs_empty),
-  .slabs_partial = LIST_INITIALIZER(cache_cache.slabs_partial),
-  .slabs_full    = LIST_INITIALIZER(cache_cache.slabs_full),
-  .lock          = SPIN_INITIALIZER("cache_cache"),
-  .obj_size      = sizeof(struct KMemCache),
-  .obj_align     = sizeof(uintptr_t),
-  .name          = "cache_cache",
-};
+static struct KMemCache cache_cache;
 
-// Cache for off-slab slab descriptors.
-static struct KMemCache slab_cache = {
-  .slabs_empty   = LIST_INITIALIZER(slab_cache.slabs_empty),
-  .slabs_partial = LIST_INITIALIZER(slab_cache.slabs_partial),
-  .slabs_full    = LIST_INITIALIZER(slab_cache.slabs_full),
-  .lock          = SPIN_INITIALIZER("slab_cache"),
-  .obj_size      = sizeof(struct KMemSlab),
-  .obj_align     = sizeof(uintptr_t),
-  .name          = "slab_cache",
-};
+static int
+kmem_cache_init(struct KMemCache *cache,
+                const char *name,
+                size_t size,
+                size_t align,
+                void (*ctor)(void *, size_t),
+                void (*dtor)(void *, size_t))
+{
+  size_t wastage, buf_size;
+  unsigned slab_page_order, slab_capacity;
+
+  if (size < align)
+    return -EINVAL;
+  if ((PAGE_SIZE % align) != 0)
+    return -EINVAL;
+
+  align = align ? ROUND_UP(align, sizeof(uintptr_t)) : sizeof(uintptr_t);
+
+  buf_size = ROUND_UP(size + sizeof(struct KMemBufCtl), align);
+
+  // Calculate the optimal slab capacity trying to limit internal fragmentation
+  // to 12.5% (1/8).
+  // TODO: off-slab data structures
+  for (slab_page_order = 0; ; slab_page_order++) {
+    if (slab_page_order > PAGE_ORDER_MAX)
+      return -EINVAL;
+
+    wastage = (PAGE_SIZE << slab_page_order) - sizeof(struct KMemSlab);
+    slab_capacity = wastage / buf_size;
+    wastage -= slab_capacity * buf_size;
+
+    if ((wastage * 8) <= (PAGE_SIZE << slab_page_order))
+      break;
+  }
+
+  spin_init(&cache->lock, name);
+
+  list_init(&cache->slabs_empty);
+  list_init(&cache->slabs_partial);
+  list_init(&cache->slabs_full);
+
+  cache->slab_capacity   = slab_capacity;
+  cache->slab_page_order = slab_page_order;
+  cache->buf_size        = buf_size;
+  cache->buf_align       = align;
+  cache->obj_size        = size;
+  cache->obj_ctor        = ctor;
+  cache->obj_dtor        = dtor;
+  cache->color_max       = wastage;
+  cache->color_next      = 0;
+
+  spin_lock(&cache_list.lock);
+  list_add_back(&cache_list.head, &cache->link);
+  spin_unlock(&cache_list.lock);
+
+  strncpy(cache->name, name, KMEM_CACHE_NAME_MAX);
+  cache->name[KMEM_CACHE_NAME_MAX] = '\0';
+
+  return 0;
+}
 
 /**
  * @brief Create object cache.
@@ -53,94 +115,30 @@ static struct KMemCache slab_cache = {
  * boundary.
  * 
  * @param name     Identifies the cache for statistics and debugging.
- * @param obj_size The size of each object in bytes.
+ * @param size     The size of each object in bytes.
  * @param align    The alignment of each object (or 0 if no special alignment)
  *                 is required).
  *
  * @return Pointer to the cache descriptor or NULL if out of memory.
  */
 struct KMemCache *
-kmem_cache_create(const char *name, size_t obj_size, size_t align,
-                  void (*ctor)(void *, size_t), void (*dtor)(void *, size_t))
+kmem_cache_create(const char *name,
+                  size_t size,
+                  size_t align,
+                  void (*ctor)(void *, size_t),
+                  void (*dtor)(void *, size_t))
 {
   struct KMemCache *cache;
-  size_t wastage;
-  unsigned page_order, slab_capacity;
-  int flags;
-
+  
   if ((cache = kmem_alloc(&cache_cache)) == NULL)
     return NULL;
 
-  // Force word size alignment
-  align    = align ? ROUND_UP(align, sizeof(uintptr_t)) : sizeof(uintptr_t);
-  obj_size = ROUND_UP(obj_size, align);
-
-  // For objects larger that 1/8 of a page, keep descriptors off slab.
-  // flags = (obj_size >= (PAGE_SIZE / 8)) ? KMEM_CACHE_OFFSLAB : 0;
-  flags = 0;
-
-  // Estimate slab size
-  for (page_order = 0; ; page_order++) {
-    if (page_order > PAGE_ORDER_MAX) {
-      kmem_free(&cache_cache, cache);
-      return NULL;
-    }
-
-    // Try to limit internal fragmentation to 12.5% (1/8).
-    slab_capacity = kmem_cache_estimate(obj_size, page_order, flags, &wastage);
-    if ((wastage * 8) <= (PAGE_SIZE << page_order))
-      break;
+  if (kmem_cache_init(cache, name, size, align, ctor, dtor) != 0) {
+    kmem_free(&cache_cache, cache);
+    return NULL;
   }
-
-  list_init(&cache->slabs_empty);
-  list_init(&cache->slabs_partial);
-  list_init(&cache->slabs_full);
-
-  cache->flags           = flags;
-  cache->obj_size        = obj_size;
-  cache->slab_capacity   = slab_capacity;
-  cache->slab_page_order = page_order;
-  cache->obj_ctor        = ctor;
-  cache->obj_dtor        = dtor;
-  cache->obj_align       = align;
-  cache->color_max       = wastage;
-  cache->color_next      = 0;
-
-  spin_init(&cache->lock, name);
-  cache->name         = name;
-
-  spin_lock(&cache_list.lock);
-  list_add_back(&cache_list.head, &cache->link);
-  spin_unlock(&cache_list.lock);
 
   return cache;
-}
-
-//
-// Calculate the number of objects that would fit into a slab of size
-// 2^page_order pages and how much space would be left over.
-//
-static unsigned
-kmem_cache_estimate(size_t obj_size,
-                      unsigned page_order,
-                      int flags,
-                      size_t *left_over)
-{
-  size_t wastage;
-  unsigned slab_capacity;
-
-  wastage = (PAGE_SIZE << page_order);
-  if (!(flags & KMEM_CACHE_OFFSLAB))
-    wastage -= sizeof(struct KMemSlab);
-
-  slab_capacity = wastage / (obj_size + sizeof(struct KMemBufCtl));
-
-  if (left_over) {
-    wastage -= slab_capacity * (obj_size + sizeof(struct KMemBufCtl));
-    *left_over = wastage;
-  }
-
-  return slab_capacity;
 }
 
 /**
@@ -162,7 +160,7 @@ kmem_cache_destroy(struct KMemCache *cache)
     return -EBUSY;
   }
 
-  while(!list_empty(&cache->slabs_full)) {
+  while (!list_empty(&cache->slabs_full)) {
     slab = LIST_CONTAINER(cache->slabs_full.next, struct KMemSlab, link);
     list_remove(&slab->link);
     kmem_slab_destroy(cache, slab);
@@ -179,64 +177,85 @@ kmem_cache_destroy(struct KMemCache *cache)
   return 0;
 }
 
-/*
- * ----------------------------------------------------------------------------
- * Slab management
- * ----------------------------------------------------------------------------
- */
-
-static struct KMemSlab *
-kmem_slab_alloc(struct KMemCache *cache)
+static void *
+kmem_bufctl_to_object(struct KMemCache *cache, struct KMemBufCtl *bufctl)
 {
-  struct KMemSlab *slab;
-  struct Page *page;
-  struct KMemBufCtl *curr, **prevp;
-  unsigned num;
-  uint8_t *buf, *p;
+  // TODO: off-slab data structures
+  return (uint8_t *) (bufctl + 1) - cache->buf_size;
+}
+
+static void *
+kmem_object_to_bufctl(struct KMemCache *cache, void *obj)
+{
+  // TODO: off-slab data structures
+  return (struct KMemBufCtl *) ((uint8_t *) obj + cache->buf_size) - 1;
+}
+
+static void
+kmem_slab_init_objects(struct KMemCache *cache, struct KMemSlab *slab)
+{
+  struct KMemBufCtl *bufctl, **prev_bufctl;
+  uint8_t *p;
+  unsigned i;
 
   assert(spin_holding(&cache->lock));
 
-  // Allocate page block for the slab.
+  prev_bufctl = &slab->free;
+  for (i = 0, p = slab->buf;
+       i < cache->slab_capacity;
+       i++, p += cache->buf_size) {
+    // Place the bufctl structure at the end of the buffer.
+    bufctl = kmem_object_to_bufctl(cache, p);
+
+    bufctl->next = NULL;
+    *prev_bufctl = bufctl;
+    prev_bufctl  = &bufctl->next;
+
+    if (cache->obj_ctor != NULL)
+      cache->obj_ctor(p, cache->obj_size);
+  }
+}
+
+static void
+kmem_slab_destroy_objects(struct KMemCache *cache, struct KMemSlab *slab)
+{
+  struct KMemBufCtl *bufctl;
+
+  if (cache->obj_dtor == NULL)
+    return;
+  
+  for (bufctl = slab->free; bufctl != NULL; bufctl = bufctl->next)
+    cache->obj_dtor(kmem_bufctl_to_object(cache, bufctl), cache->obj_size);
+}
+
+static struct KMemSlab *
+kmem_slab_create(struct KMemCache *cache)
+{
+  struct KMemSlab *slab;
+  struct Page *page;
+  uint8_t *buf;
+
+  assert(spin_holding(&cache->lock));
+
   if ((page = page_alloc_block(cache->slab_page_order, 0)) == NULL)
     return NULL;
 
   buf = (uint8_t *) page2kva(page);
-
-  if (cache->flags & KMEM_CACHE_OFFSLAB) {
-    // If slab descriptors are kept off pages, allocate one from the slab cache.
-    if ((slab = (struct KMemSlab *) kmem_alloc(&slab_cache)) == NULL) {
-      page_free_block(page, cache->slab_page_order);
-      return NULL;
-    }
-  } else {
-    // Otherwise, store the slab descriptor at the end of the page frame.
-    slab = (struct KMemSlab *) (buf + (PAGE_SIZE << cache->slab_page_order)) - 1;
-  }
-
   page->ref_count++;
+
+  // Place slab data at the end of the page block.
+  // TODO: off-slab data structures
+  slab = (struct KMemSlab *) (buf + (PAGE_SIZE << cache->slab_page_order)) - 1;
+  
+  slab->buf    = buf + cache->color_next;
+  slab->in_use = 0;
+
+  kmem_slab_init_objects(cache, slab);
+
   page->slab = slab;
 
-  slab->in_use = 0;
-  slab->buf = buf;
-
-  // Initialize all objects.
-  p = buf + cache->color_next;
-  prevp = &slab->free;
-  for (num = 0; num < cache->slab_capacity; num++) {
-    if (cache->obj_ctor != NULL)
-      cache->obj_ctor((struct KMemBufCtl *) p, cache->obj_size);
-
-    curr = (struct KMemBufCtl *) (p + cache->obj_size);
-    curr->next = NULL;
-
-    *prevp = curr;
-    prevp = &curr->next;
-
-    p = (uint8_t *) (curr + 1);
-  }
-
-  // Calculate color offset for the next slab.
-  cache->color_next += cache->obj_align;
+  // Calculate the next color offset.
+  cache->color_next += cache->buf_align;
   if (cache->color_next > cache->color_max)
     cache->color_next = 0;
 
@@ -247,127 +266,114 @@ static void
 kmem_slab_destroy(struct KMemCache *cache, struct KMemSlab *slab)
 {
   struct Page *page;
-  struct KMemBufCtl *p;
   
   assert(spin_holding(&cache->lock));
   assert(slab->in_use == 0);
 
-  if (cache->obj_dtor != NULL) {
-    for (p = slab->free; p != NULL; p = p->next) {
-      cache->obj_dtor((uint8_t *) p - cache->obj_size, cache->obj_size);
-    }
-  }
+  kmem_slab_destroy_objects(cache, slab);
 
-  // Free the pages been used for the slab.
+  // TODO: off-slab data structures
   page = kva2page(slab->buf);
   page->ref_count--;
   page_free_block(page, cache->slab_page_order);
-
-  // If slab descriptor was kept off page, return it to the slab cache.
-  if (cache->flags & KMEM_CACHE_OFFSLAB)
-    kmem_free(&slab_cache, slab);
 }
 
-/*
- * ----------------------------------------------------------------------------
- * Object allocation
- * ----------------------------------------------------------------------------
- */
-
-void *
-kmem_alloc(struct KMemCache *cache)
+static void *
+kmem_alloc_one(struct KMemCache *cache, struct KMemSlab *slab)
 {
-  struct ListLink *list;
-  struct KMemSlab *slab;
-  struct KMemBufCtl *obj;
-  
-  spin_lock(&cache->lock);
-
-  if (!list_empty(&cache->slabs_partial)) {
-    list = &cache->slabs_partial;
-  } else {
-    list = &cache->slabs_full;
-
-    if (list_empty(list)) {
-      if ((slab = kmem_slab_alloc(cache)) == NULL) {
-        spin_unlock(&cache->lock);
-        return NULL;
-      }
-
-      list_add_back(list, &slab->link);
-    }
-  }
-
-  slab = LIST_CONTAINER(list->next, struct KMemSlab, link);
+  struct KMemBufCtl *bufctl;
 
   assert(slab->in_use < cache->slab_capacity);
   assert(slab->free != NULL);
 
-  if (++slab->in_use == cache->slab_capacity) {
+  bufctl     = slab->free;
+  slab->free = bufctl->next;
+  slab->in_use++;
+
+  if (slab->in_use == cache->slab_capacity) {
+    assert(slab->free == NULL);
+
     list_remove(&slab->link);
     list_add_back(&cache->slabs_empty, &slab->link);
   }
 
-  obj = slab->free;
-  slab->free = obj->next;
+  return kmem_bufctl_to_object(cache, bufctl);
+}
+
+static void
+kmem_free_one(struct KMemCache *cache, struct KMemSlab *slab, void *obj)
+{
+  struct KMemBufCtl *bufctl;
+  
+  assert(slab->in_use < cache->slab_capacity);
+
+  bufctl = kmem_object_to_bufctl(cache, obj);
+
+  bufctl->next = slab->free;
+  slab->free   = bufctl;
+  slab->in_use--;
+
+  if (slab->in_use == 0) {
+    list_remove(&slab->link);
+    list_add_front(&cache->slabs_full, &slab->link);
+  } else if (slab->in_use == cache->slab_capacity - 1) {
+    list_remove(&slab->link);
+    list_add_front(&cache->slabs_partial, &slab->link);
+  }
+}
+
+void *
+kmem_alloc(struct KMemCache *cache)
+{
+  struct KMemSlab *slab;
+  void *obj;
+  
+  spin_lock(&cache->lock);
+
+  if (!list_empty(&cache->slabs_partial)) {
+    slab = LIST_CONTAINER(cache->slabs_partial.next, struct KMemSlab, link);
+  } else {
+    if (!list_empty(&cache->slabs_full)) {
+      slab = LIST_CONTAINER(cache->slabs_full.next, struct KMemSlab, link);
+      list_remove(&slab->link);
+    } else if ((slab = kmem_slab_create(cache)) == NULL) {
+      spin_unlock(&cache->lock);
+      return NULL;
+    }
+
+    list_add_back(&cache->slabs_partial, &slab->link);
+  } 
+
+  obj = kmem_alloc_one(cache, slab);
 
   spin_unlock(&cache->lock);
 
-  return (uint8_t *) obj - cache->obj_size;
+  return obj;
 }
-
-/*
- * ----------------------------------------------------------------------------
- * Object freeing
- * ----------------------------------------------------------------------------
- */
 
 void
 kmem_free(struct KMemCache *cache, void *obj)
 {
-  struct Page *slab_page;
+  struct Page *page;
   struct KMemSlab *slab;
-  struct KMemBufCtl *node;
-
-  slab_page = kva2page(ROUND_DOWN(obj, PAGE_SIZE << cache->slab_page_order));
-  slab = slab_page->slab;
 
   spin_lock(&cache->lock);
 
-  node = (struct KMemBufCtl *) ((uint8_t *) obj + cache->obj_size);
-  node->next = slab->free;
-  slab->free = node;
+  page = kva2page(ROUND_DOWN(obj, PAGE_SIZE << cache->slab_page_order));
+  slab = page->slab;
 
-  if (--slab->in_use > 0) {
-    list_remove(&slab->link);
-    list_add_front(&cache->slabs_partial, &slab->link);
-  } else if (slab->in_use == 0) {
-    list_remove(&slab->link);
-    list_add_front(&cache->slabs_full, &slab->link);
-  }
+  kmem_free_one(cache, slab, obj);
 
   spin_unlock(&cache->lock);
 }
 
-/*
- * ----------------------------------------------------------------------------
- * Initializing the object allocator
- * ----------------------------------------------------------------------------
- */
-
 void
 kmem_init(void)
 {
-  cache_cache.slab_capacity = kmem_cache_estimate(cache_cache.obj_size,
-                                            cache_cache.slab_page_order, 
-                                            cache_cache.flags,
-                                            &cache_cache.color_max);
-  list_add_back(&cache_list.head, &cache_cache.link);
-
-  slab_cache.slab_capacity = kmem_cache_estimate(slab_cache.obj_size,
-                                            slab_cache.slab_page_order, 
-                                            slab_cache.flags,
-                                            &slab_cache.color_max);
-  list_add_back(&cache_list.head, &slab_cache.link);
+  kmem_cache_init(&cache_cache,
+                  "cache_cache",
+                  sizeof(struct KMemCache),
+                  0,
+                  NULL,
+                  NULL);
 }
-
