@@ -28,7 +28,7 @@ extern int errno;
 #define EIO           14    ///< Input/output error
 #define EISDIR        15    ///< Is a directory
 #define EMFILE        16    ///< Too many open files
-#define EMLINK        17    ///< To many links
+#define EMLINK        17    ///< Too many links
 #define ENAMETOOLONG  18    ///< Filename too long
 #define ENFILE        19    ///< Too many open files in system
 #define ENODEV        20    ///< No such device

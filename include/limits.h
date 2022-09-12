@@ -25,7 +25,7 @@
 #define ARG_MAX             4096
 #define ATEXIT_MAX          32
 #define CHILD_MAX           6
-#define LINK_MAX            8
+#define LINK_MAX            32767
 #define MAX_CANON           255
 #define MAX_INPUT           255
 #define NAME_MAX            255

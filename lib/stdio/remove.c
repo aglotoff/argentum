@@ -17,8 +17,5 @@ remove(const char *path)
   if ((r = stat(path, &st)) < 0)
     return r;
   
-  if (S_ISDIR(st.st_mode))
-    return rmdir(path);
-
-  return unlink(path);
+  return S_ISDIR(st.st_mode) ? rmdir(path) : unlink(path);
 }
