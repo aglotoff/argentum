@@ -44,6 +44,7 @@
         "mmu.h": "c",
         "memlayout.h": "c",
         "spin.h": "c",
-        "stdlib.h": "c"
+        "stdlib.h": "c",
+        "pl011.h": "c"
     }
 }

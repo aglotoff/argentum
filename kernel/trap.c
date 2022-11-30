@@ -10,7 +10,7 @@
 #include <drivers/gic.h>
 #include <drivers/kbd.h>
 #include <drivers/sd.h>
-#include <drivers/uart.h>
+#include <drivers/pl011.h>
 #include <mm/page.h>
 #include <mm/vm.h>
 #include <process.h>
@@ -106,7 +106,7 @@ trap_irq_dispatch(void)
     resched = 1;
     break;
   case IRQ_PHYS_UART0:
-    uart_intr();
+    console_uart_intr();
     break;
   case IRQ_KMI0:
     kbd_intr();

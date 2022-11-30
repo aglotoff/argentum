@@ -54,7 +54,7 @@ The C Library code is heavily based on the following reference implementation:
 * SD card - `kernel/sd.c`
   * [Physical Layer Simplified Specification](https://www.sdcard.org/downloads/pls/pdf/?p=Part1_Physical_Layer_Simplified_Specification_Ver1.10.jpg&f=Part1_Physical_Layer_Simplified_Specification_Ver1.10.pdf&e=EN_P1110)
   * [ARM PrimeCell Multimedia Card Interface (PL180) Technical Reference Manual](https://developer.arm.com/documentation/ddi0172/a)
-* UART - `kernel/uart.c`
+* UART - `kernel/pl011.c`
   * [PrimeCell UART (PL011) Technical Reference Manual](https://developer.arm.com/documentation/ddi0183/g/)
 * Ethernet - `kernel/eth.c`
   * [LAN9118 Datasheet](http://ww1.microchip.com/downloads/en/DeviceDoc/00002266B.pdf)

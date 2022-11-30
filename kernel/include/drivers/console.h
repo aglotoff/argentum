@@ -43,6 +43,7 @@ void    console_init(void);
 void    console_putc(char);
 void    console_intr(int (*)(void));
 int     console_getc(void);
+void    console_uart_intr(void);
 
 ssize_t console_read(void *, size_t);
 ssize_t console_write(const void *, size_t);

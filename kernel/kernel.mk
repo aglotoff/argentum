@@ -13,7 +13,7 @@ KERNEL_SRCFILES :=	\
 	kernel/drivers/eth.c \
 	kernel/drivers/kbd.c \
 	kernel/drivers/lcd.c \
-	kernel/drivers/uart.c \
+	kernel/drivers/pl011.c \
 	kernel/drivers/console.c \
 	kernel/drivers/gic.c \
 	kernel/drivers/rtc.c \

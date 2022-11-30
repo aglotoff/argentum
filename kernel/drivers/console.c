@@ -2,9 +2,13 @@
 
 #include <drivers/kbd.h>
 #include <drivers/lcd.h>
-#include <drivers/uart.h>
+#include <drivers/pl011.h>
 #include <kthread.h>
 #include <spin.h>
+#include <mm/memlayout.h>
+#include <mm/vm.h>
+#include <drivers/gic.h>
+#include <trap.h>
 
 #include <drivers/console.h>
 
@@ -17,6 +21,10 @@ static struct {
   struct SpinLock lock;
   struct ListLink queue;
 } input;
+
+static void uart_init(void);
+static int  uart_getc(void);
+static void uart_putc(char);
 
 /**
  * Initialize the console devices.
@@ -84,6 +92,12 @@ console_intr(int (*getc)(void))
   }
 
   spin_unlock(&input.lock);
+}
+
+void
+console_uart_intr(void)
+{
+  console_intr(uart_getc);
 }
 
 /**
@@ -327,4 +341,36 @@ console_parse_esc(char c)
 		esc_state = 0;
     break;
 	}
+}
+
+/*
+ * ----------------------------------------------------------------------------
+ * UART I/O
+ * ----------------------------------------------------------------------------
+ * 
+ * We use UART0 as serial debug console.
+ *
+ */
+
+#define UART_CLOCK        24000000U     // UART clock rate, in Hz
+#define UART_BAUD_RATE    115200        // Required baud rate
+
+static struct Pl011 uart0;
+
+static void uart_init(void)
+{
+  pl011_init(&uart0, KVA2PA(PHYS_UART0), UART_CLOCK, UART_BAUD_RATE);
+  gic_enable(IRQ_PHYS_UART0, 0);
+}
+
+static int
+uart_getc(void)
+{
+  return pl011_getc(&uart0);
+}
+
+static void
+uart_putc(char c)
+{
+  pl011_putc(&uart0, c);
 }

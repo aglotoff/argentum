@@ -2,13 +2,7 @@
 
 #include <stdint.h>
 
-#include <drivers/console.h>
-#include <drivers/gic.h>
-#include <mm/memlayout.h>
-#include <mm/vm.h>
-#include <trap.h>
-
-#include <drivers/uart.h>
+#include <drivers/pl011.h>
 
 // UART registers, divided by 4 for use as uint32_t[] indicies
 #define UARTDR            (0x000 / 4)   // Data Register
@@ -28,79 +22,80 @@
 #define UARTIMSC          (0x038 / 4)   // Interrupt Mask Set/Clear Register
 #define   UARTIMSC_RXIM     (1U << 4)   //   Receive interrupt mask
 
-#define UART_CLK          24000000U     // UART clock rate, in Hz
-#define BITRATE           115200        // Required baud rate
-
-static volatile uint32_t *uart;
-
 /**
  * Initialize the UART driver.
+ * 
+ * @param pl011 Pointer to the driver instance.
+ * @param base Memory base address.
+ * @param uart_clock Reference clock frequency.
+ * @param baud_rate Required baud rate.
  */
-void
-uart_init(void)
+int
+pl011_init(struct Pl011 *pl011,
+           void *base,
+           unsigned long uart_clock,
+           unsigned long baud_rate)
 {
-  uart = (volatile uint32_t *) KVA2PA(PHYS_UART0);
+  pl011->base = (volatile uint32_t *) base;
 
-  // Clear all errors.
-  uart[UARTECR] = 0;
-
-  // Disable UART.
-  uart[UARTCR] = 0;
+  // Disable UART during initialization.
+  pl011->base[UARTCR] &= ~UARTCR_UARTEN;
 
   // Set the baud rate.
-  uart[UARTIBRD] = (UART_CLK / (16 * BITRATE)) & 0xFF;
-  uart[UARTFBRD] = ((UART_CLK * 4 / BITRATE) >> 6) & 0x3F;
+  pl011->base[UARTIBRD] = (uart_clock / (16 * baud_rate)) & 0xFFFF;
+  pl011->base[UARTFBRD] = ((uart_clock * 4 / baud_rate) >> 6) & 0x3F;
 
-  // Enable FIFO, 8 data bits, 1 stop bit, parity off.
-  uart[UARTLCR] = UARTLCR_FEN | UARTLCR_WLEN8;
+  // Enable FIFO, 8 data bits, one stop bit, parity off.
+  pl011->base[UARTLCR] = UARTLCR_FEN | UARTLCR_WLEN8;
+
+  // Clear any pending errors.
+  pl011->base[UARTECR] = 0;
 
   // Enable UART, transfer & receive.
-  uart[UARTCR] = UARTCR_UARTEN | UARTCR_TXE | UARTCR_RXE;
+  pl011->base[UARTCR] = UARTCR_UARTEN | UARTCR_TXE | UARTCR_RXE;
 
   // Enable interupts.
-  uart[UARTIMSC] |= UARTIMSC_RXIM;
-  gic_enable(IRQ_PHYS_UART0, 0);
+  pl011->base[UARTIMSC] |= UARTIMSC_RXIM;
+
+  return 0;
 }
 
 /**
  * Output character to the UART device.
  * 
+ * @param pl011 Pointer to the driver instance.
  * @param c The character to be printed.
  */
 void
-uart_putc(char c)
+pl011_putc(struct Pl011 *pl011, char c)
 {
+  // Prepend '\r' to '\n'
   if (c == '\n')
-    uart_putc('\r');
+    pl011_putc(pl011, '\r');
   
   // Wait until FIFO is ready to transmit.
-  while (uart[UARTFR] & UARTFR_TXFF)
+  while (pl011->base[UARTFR] & UARTFR_TXFF)
     ;
 
-  uart[UARTDR] = c;
+  pl011->base[UARTDR] = c;
 }
 
 /**
- * Handle interrupt from the UART device.
+ * Receive character from the UART device.
  * 
- * Get data and store it into the console buffer.
+ * @param pl011 Pointer to the driver instance.
+ * @return The next iput character or -1 if there is none.
  */
-void
-uart_intr(void)
-{
-  console_intr(uart_getc);
-}
-
 int
-uart_getc(void)
+pl011_getc(struct Pl011 *pl011)
 {
   int c;
   
   // Check whether the receive FIFO is empty.
-  if (uart[UARTFR] & UARTFR_RXFE)
+  if (pl011->base[UARTFR] & UARTFR_RXFE)
     return -1;
 
-  c = uart[UARTDR] & 0xFF;
+  c = pl011->base[UARTDR] & 0xFF;
 
   switch (c) {
   case '\r':
