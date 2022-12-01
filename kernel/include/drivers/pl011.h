@@ -11,6 +11,8 @@
  * PrimeCell UART (PL011) driver.
  */
 
+#include <stdint.h>
+
 /**
  * PL011 Driver instance.
  */

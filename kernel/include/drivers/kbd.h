@@ -8,7 +8,7 @@
 /**
  * @file kernel/kbd.h
  * 
- * Keyboard input code.
+ * PS/2 Keyboard driver.
  */
 
 /** Key code for Ctrl+x */

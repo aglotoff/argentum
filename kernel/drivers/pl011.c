@@ -1,7 +1,5 @@
 // See the PrimeCell UART (PL011) Technical Reference Manual
 
-#include <stdint.h>
-
 #include <drivers/pl011.h>
 
 // UART registers, divided by 4 for use as uint32_t[] indicies
@@ -81,7 +79,7 @@ pl011_putc(struct Pl011 *pl011, char c)
 }
 
 /**
- * Receive character from the UART device.
+ * Read character from the UART device.
  * 
  * @param pl011 Pointer to the driver instance.
  * @return The next iput character or -1 if there is none.
