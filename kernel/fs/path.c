@@ -5,13 +5,12 @@
 #include <string.h>
 #include <sys/stat.h>
 
-#include <cprintf.h>
-#include <fs/ext2.h>
-#include <mm/kmem.h>
-#include <process.h>
-#include <types.h>
-
-#include <fs/fs.h>
+#include <argentum/cprintf.h>
+#include <argentum/fs/ext2.h>
+#include <argentum/fs/fs.h>
+#include <argentum/mm/kmem.h>
+#include <argentum/process.h>
+#include <argentum/types.h>
 
 static size_t
 fs_path_skip(const char *path, char *name, char **next)

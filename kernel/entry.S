@@ -1,5 +1,5 @@
-#include <armv7/regs.h>
-#include <mm/memlayout.h>
+#include <argentum/armv7/regs.h>
+#include <argentum/mm/memlayout.h>
 
 .section .entry, "a"
 

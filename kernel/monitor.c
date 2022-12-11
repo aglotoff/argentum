@@ -1,15 +1,14 @@
 #include <string.h>
 
-#include <armv7/regs.h>
-#include <drivers/console.h>
-#include <cprintf.h>
-#include <kdebug.h>
-#include <mm/kmem.h>
-#include <mm/memlayout.h>
-#include <trap.h>
-#include <types.h>
-
-#include <monitor.h>
+#include <argentum/armv7/regs.h>
+#include <argentum/drivers/console.h>
+#include <argentum/cprintf.h>
+#include <argentum/kdebug.h>
+#include <argentum/mm/kmem.h>
+#include <argentum/mm/memlayout.h>
+#include <argentum/monitor.h>
+#include <argentum/trap.h>
+#include <argentum/types.h>
 
 static char *read_cmd(void);
 static int exec_cmd(char *s, struct TrapFrame *tf);

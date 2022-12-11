@@ -2,13 +2,14 @@
 #define __KERNEL_DRIVERS_CONSOLE_PL111_H__
 
 /**
- * @file kernel/drivers/console/pl011.h
+ * @file kernel/drivers/console/pl111.h
  * 
  * PrimeCell Color LCD Controller (PL111) driver.
  */
 
 #include <stdint.h>
-#include <mm/memlayout.h>
+
+#include <argentum/mm/memlayout.h>
 
 /**
  * PL111 Driver instance.

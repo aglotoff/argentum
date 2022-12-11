@@ -1,5 +1,5 @@
-#include <armv7/mmu.h>
-#include <mm/memlayout.h>
+#include <argentum/armv7/mmu.h>
+#include <argentum/mm/memlayout.h>
 
 #define MAKE_L1_SECTION(pa, ap) \
   ((pa) | L1_DESC_TYPE_SECT | L1_DESC_SECT_AP(ap))

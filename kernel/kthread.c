@@ -1,15 +1,15 @@
 #include <assert.h>
 #include <string.h>
 
-#include <cprintf.h>
-#include <cpu.h>
-#include <list.h>
-#include <mm/kmem.h>
-#include <mm/mmu.h>
-#include <mm/page.h>
-#include <process.h>
-#include <spin.h>
-#include <kthread.h>
+#include <argentum/cprintf.h>
+#include <argentum/cpu.h>
+#include <argentum/kthread.h>
+#include <argentum/list.h>
+#include <argentum/mm/kmem.h>
+#include <argentum/mm/mmu.h>
+#include <argentum/mm/page.h>
+#include <argentum/process.h>
+#include <argentum/spin.h>
 
 static struct KMemCache *thread_cache;
 

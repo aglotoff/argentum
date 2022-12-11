@@ -2,11 +2,10 @@
 #include <errno.h>
 #include <string.h>
 
-#include <cprintf.h>
-#include <types.h>
-#include <mm/page.h>
-
-#include <mm/kmem.h>
+#include <argentum/cprintf.h>
+#include <argentum/types.h>
+#include <argentum/mm/kmem.h>
+#include <argentum/mm/page.h>
 
 static int              kmem_cache_init(struct KMemCache *,
                                         const char *,

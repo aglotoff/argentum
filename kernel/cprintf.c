@@ -1,10 +1,9 @@
 #include <stdio.h>
 
-#include <drivers/console.h>
-#include <monitor.h>
-#include <spin.h>
-
-#include <cprintf.h>
+#include <argentum/cprintf.h>
+#include <argentum/drivers/console.h>
+#include <argentum/monitor.h>
+#include <argentum/spin.h>
 
 static struct SpinLock lock = SPIN_INITIALIZER("cprintf");
 static int locking = 1;

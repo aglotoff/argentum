@@ -1,11 +1,10 @@
 #include <stdint.h>
 
-#include <armv7/regs.h>
-#include <mm/memlayout.h>
-#include <mm/vm.h>
-#include <trap.h>
-
-#include <drivers/gic.h>
+#include <argentum/armv7/regs.h>
+#include <argentum/drivers/gic.h>
+#include <argentum/mm/memlayout.h>
+#include <argentum/mm/vm.h>
+#include <argentum/trap.h>
 
 static volatile uint32_t *gicc, *gicd, *ptimer;
 

@@ -1,12 +1,8 @@
-#ifndef __KERNEL_DRIVERS_KBD_H__
-#define __KERNEL_DRIVERS_KBD_H__
-
-#ifndef __KERNEL__
-#error "This is a kernel header; user programs should not #include it"
-#endif
+#ifndef __KERNEL_DRIVERS_CONSOLE_KBD_H__
+#define __KERNEL_DRIVERS_CONSOLE_KBD_H__
 
 /**
- * @file kernel/kbd.h
+ * @file kernel/drivers/console/kbd.h
  * 
  * PS/2 Keyboard driver.
  */
@@ -18,4 +14,4 @@ void kbd_init(void);
 void kbd_interrupt(void);
 int  kbd_getc(void);
 
-#endif  // !__KERNEL_DRIVERS_KBD_H__
+#endif  // !__KERNEL_DRIVERS_CONSOLE_KBD_H__

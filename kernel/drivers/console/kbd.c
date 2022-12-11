@@ -1,10 +1,10 @@
 #include <stdint.h>
 
-#include <drivers/console.h>
-#include <drivers/gic.h>
-#include <mm/memlayout.h>
-#include <mm/vm.h>
-#include <trap.h>
+#include <argentum/drivers/console.h>
+#include <argentum/drivers/gic.h>
+#include <argentum/mm/memlayout.h>
+#include <argentum/mm/vm.h>
+#include <argentum/trap.h>
 
 #include "kbd.h"
 #include "pl050.h"

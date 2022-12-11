@@ -2,10 +2,10 @@
 #include <errno.h>
 #include <string.h>
 
-#include <drivers/rtc.h>
-#include <fs/buf.h>
-#include <fs/ext2.h>
-#include <fs/fs.h>
+#include <argentum/drivers/rtc.h>
+#include <argentum/fs/buf.h>
+#include <argentum/fs/ext2.h>
+#include <argentum/fs/fs.h>
 
 // Try to allocate an inode from the block group descriptor pointed to by `gd`.
 // If there is a free inode, mark it as used and store its number into the

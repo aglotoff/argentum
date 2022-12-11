@@ -48,6 +48,13 @@
         "pl011.h": "c",
         "serial.h": "c",
         "pl111.h": "c",
-        "kbd.h": "c"
+        "kbd.h": "c",
+        "page.h": "c",
+        "mutex.h": "c",
+        "process.h": "c",
+        "cpu.h": "c",
+        "trap.h": "c",
+        "hash.h": "c",
+        "monitor.h": "c"
     }
 }

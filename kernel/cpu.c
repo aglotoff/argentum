@@ -1,8 +1,7 @@
 #include <assert.h>
 
-#include <armv7/regs.h>
-
-#include <cpu.h>
+#include <argentum/armv7/regs.h>
+#include <argentum/cpu.h>
 
 /*
  * ----------------------------------------------------------------------------

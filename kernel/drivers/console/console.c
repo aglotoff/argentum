@@ -1,12 +1,12 @@
 #include <stdint.h>
 
-#include <kthread.h>
-#include <spin.h>
-#include <mm/memlayout.h>
-#include <mm/vm.h>
-#include <drivers/console.h>
-#include <drivers/gic.h>
-#include <trap.h>
+#include <argentum/kthread.h>
+#include <argentum/spin.h>
+#include <argentum/mm/memlayout.h>
+#include <argentum/mm/vm.h>
+#include <argentum/drivers/console.h>
+#include <argentum/drivers/gic.h>
+#include <argentum/trap.h>
 
 #include "kbd.h"
 #include "display.h"

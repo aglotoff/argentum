@@ -1,11 +1,10 @@
 #include <stdint.h>
 #include <string.h>
 
-#include <mm/memlayout.h>
-#include <mm/vm.h>
-#include <spin.h>
-
-#include <drivers/rtc.h>
+#include <argentum/drivers/rtc.h>
+#include <argentum/mm/memlayout.h>
+#include <argentum/mm/vm.h>
+#include <argentum/spin.h>
 
 /*
  * ----------------------------------------------------------------------------

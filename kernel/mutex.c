@@ -2,13 +2,12 @@
 #include <stddef.h>
 #include <string.h>
 
-#include <armv7/regs.h>
-#include <cprintf.h>
-#include <cpu.h>
-#include <kdebug.h>
-#include <process.h>
-
-#include <mutex.h>
+#include <argentum/armv7/regs.h>
+#include <argentum/cprintf.h>
+#include <argentum/cpu.h>
+#include <argentum/kdebug.h>
+#include <argentum/mutex.h>
+#include <argentum/process.h>
 
 /**
  * ----------------------------------------------------------------------------

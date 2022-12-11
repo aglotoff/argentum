@@ -1,9 +1,9 @@
 #include <assert.h>
 #include <errno.h>
 
-#include <fs/buf.h>
-#include <fs/ext2.h>
-#include <fs/fs.h>
+#include <argentum/fs/buf.h>
+#include <argentum/fs/ext2.h>
+#include <argentum/fs/fs.h>
 
 // The number of bits per bitmap block
 // TODO: what about different block sizes?

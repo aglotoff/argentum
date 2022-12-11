@@ -1,6 +1,6 @@
-#include <armv7/regs.h>
-#include <mm/memlayout.h>
-#include <trap.h>
+#include <argentum/armv7/regs.h>
+#include <argentum/mm/memlayout.h>
+#include <argentum/trap.h>
 
 .section .text
 

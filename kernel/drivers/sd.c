@@ -2,16 +2,15 @@
 #include <errno.h>
 #include <stdint.h>
 
-#include <cprintf.h>
-#include <cpu.h>
-#include <drivers/gic.h>
-#include <fs/buf.h>
-#include <mm/memlayout.h>
-#include <kthread.h>
-#include <spin.h>
-#include <trap.h>
-
-#include <drivers/sd.h>
+#include <argentum/cprintf.h>
+#include <argentum/cpu.h>
+#include <argentum/drivers/gic.h>
+#include <argentum/drivers/sd.h>
+#include <argentum/fs/buf.h>
+#include <argentum/mm/memlayout.h>
+#include <argentum/kthread.h>
+#include <argentum/spin.h>
+#include <argentum/trap.h>
 
 /*
  * ----------------------------------------------------------------------------

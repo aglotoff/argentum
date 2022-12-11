@@ -7,17 +7,15 @@
 #include <sys/stat.h>
 #include <sys/utsname.h>
 
-#include <cprintf.h>
-#include <cpu.h>
-#include <drivers/rtc.h>
-#include <fs/file.h>
-#include <fs/fs.h>
-#include <mm/vm.h>
-#include <process.h>
-#include <types.h>
-#include <cprintf.h>
-
-#include <sys.h>
+#include <argentum/cprintf.h>
+#include <argentum/cpu.h>
+#include <argentum/drivers/rtc.h>
+#include <argentum/fs/file.h>
+#include <argentum/fs/fs.h>
+#include <argentum/mm/vm.h>
+#include <argentum/process.h>
+#include <argentum/sys.h>
+#include <argentum/types.h>
 
 static int     sys_get_num(void);
 static int32_t sys_get_arg(int);

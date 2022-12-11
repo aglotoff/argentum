@@ -3,7 +3,7 @@
     {
       "name": "Codename Argentum",
       "defines": [
-        "__KERNEL__"
+        "__AG_KERNEL__"
       ],
       "includePath": ["./include", "./kernel/include"],
       "intelliSenseMode": "linux-gcc-x64",

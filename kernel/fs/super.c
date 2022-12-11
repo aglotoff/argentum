@@ -5,12 +5,11 @@
 #include <string.h>
 #include <sys/stat.h>
 
-#include <cprintf.h>
-#include <fs/buf.h>
-#include <fs/fs.h>
-#include <types.h>
-
-#include <fs/ext2.h>
+#include <argentum/cprintf.h>
+#include <argentum/fs/buf.h>
+#include <argentum/fs/ext2.h>
+#include <argentum/fs/fs.h>
+#include <argentum/types.h>
 
 /*
  * ----------------------------------------------------------------------------

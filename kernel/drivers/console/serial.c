@@ -1,7 +1,7 @@
-#include <drivers/console.h>
-#include <drivers/gic.h>
-#include <mm/memlayout.h>
-#include <trap.h>
+#include <argentum/drivers/console.h>
+#include <argentum/drivers/gic.h>
+#include <argentum/mm/memlayout.h>
+#include <argentum/trap.h>
 
 #include "pl011.h"
 #include "serial.h"

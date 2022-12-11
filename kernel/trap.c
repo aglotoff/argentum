@@ -2,19 +2,19 @@
 #include <stddef.h>
 #include <string.h>
 
-#include <armv7/regs.h>
-#include <cprintf.h>
-#include <cpu.h>
-#include <drivers/console.h>
-#include <drivers/eth.h>
-#include <drivers/gic.h>
-#include <drivers/sd.h>
-#include <mm/page.h>
-#include <mm/vm.h>
-#include <process.h>
-#include <sys.h>
-#include <trap.h>
-#include <types.h>
+#include <argentum/armv7/regs.h>
+#include <argentum/cprintf.h>
+#include <argentum/cpu.h>
+#include <argentum/drivers/console.h>
+#include <argentum/drivers/eth.h>
+#include <argentum/drivers/gic.h>
+#include <argentum/drivers/sd.h>
+#include <argentum/mm/page.h>
+#include <argentum/mm/vm.h>
+#include <argentum/process.h>
+#include <argentum/sys.h>
+#include <argentum/trap.h>
+#include <argentum/types.h>
 
 #include "drivers/console/kbd.h"
 #include "drivers/console/serial.h"

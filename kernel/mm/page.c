@@ -1,10 +1,9 @@
 #include <string.h>
 
-#include <cprintf.h>
-#include <spin.h>
-#include <types.h>
-
-#include <mm/page.h>
+#include <argentum/cprintf.h>
+#include <argentum/mm/page.h>
+#include <argentum/spin.h>
+#include <argentum/types.h>
 
 /** The kernel uses this array to keep track of physical pages. */
 struct Page *pages;
