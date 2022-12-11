@@ -1,12 +1,8 @@
-#ifndef __KERNEL_DRIVERS_PL050_H__
-#define __KERNEL_DRIVERS_PL050_H__
-
-#ifndef __KERNEL__
-#error "This is a kernel header; user programs should not #include it"
-#endif
+#ifndef __KERNEL_DRIVERS_CONSOLE_PL050_H__
+#define __KERNEL_DRIVERS_CONSOLE_PL050_H__
 
 /**
- * @file kernel/pl050.h
+ * @file kernel/drivers/console/pl050.h
  * 
  * PrimeCell PS2 Keyboard/Mouse Interface (PL050) driver.
  */
@@ -24,4 +20,4 @@ int  pl050_init(struct Pl050 *, void *);
 void pl050_putc(struct Pl050 *, char);
 int  pl050_getc(struct Pl050 *);
 
-#endif  // !__KERNEL_DRIVERS_PL050_H__
+#endif  // !__KERNEL_DRIVERS_CONSOLE_PL050_H__

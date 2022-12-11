@@ -10,12 +10,14 @@ ifdef PROCESS_NAME
 endif
 
 KERNEL_SRCFILES :=	\
+	kernel/drivers/console/kbd.c \
+	kernel/drivers/console/display.c \
+	kernel/drivers/console/pl011.c \
+	kernel/drivers/console/pl050.c \
+	kernel/drivers/console/pl111.c \
+	kernel/drivers/console/console.c \
+	kernel/drivers/console/serial.c \
 	kernel/drivers/eth.c \
-	kernel/drivers/kbd.c \
-	kernel/drivers/lcd.c \
-	kernel/drivers/pl011.c \
-	kernel/drivers/pl050.c \
-	kernel/drivers/console.c \
 	kernel/drivers/gic.c \
 	kernel/drivers/rtc.c \
 	kernel/drivers/sd.c \

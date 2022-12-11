@@ -78,7 +78,7 @@ page_init_low(void)
 
   // Place pages mapped by 'entry_trtab' to the free list.
   page_free_region(0, PHYS_KERNEL_LOAD);
-  page_free_region(PA2KVA(boot_alloc(0)), PHYS_ENTRY_LIMIT);
+  page_free_region(KVA2PA(boot_alloc(0)), PHYS_ENTRY_LIMIT);
 
   pages_inited = 1;
 }
@@ -127,7 +127,7 @@ boot_alloc(size_t n)
     n = ROUND_UP(n, sizeof(uintptr_t));
     next_free += n;
 
-    if (PA2KVA(next_free) > PHYS_ENTRY_LIMIT)
+    if (KVA2PA(next_free) > PHYS_ENTRY_LIMIT)
       panic("out of memory");
 
     memset(ret, 0, n);

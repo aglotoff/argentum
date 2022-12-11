@@ -173,12 +173,12 @@ mon_kerninfo(int argc, char **argv, struct TrapFrame *tf)
 
   cprintf("Special kernel symbols:\n");
   cprintf("  start  %p (virt)  %p (phys)\n", _start, _start);
-  cprintf("  etext  %p (virt)  %p (phys)\n", _etext, PA2KVA(_etext));
-  cprintf("  edata  %p (virt)  %p (phys)\n", _edata, PA2KVA(_edata));
-  cprintf("  end    %p (virt)  %p (phys)\n", _end,   PA2KVA(_end));
+  cprintf("  etext  %p (virt)  %p (phys)\n", _etext, KVA2PA(_etext));
+  cprintf("  edata  %p (virt)  %p (phys)\n", _edata, KVA2PA(_edata));
+  cprintf("  end    %p (virt)  %p (phys)\n", _end,   KVA2PA(_end));
 
   cprintf("Kernel executable memory footprint: %dKB\n",
-          (PA2KVA(_end) - (uintptr_t) _start + 1023) / 1024);
+          (KVA2PA(_end) - (uintptr_t) _start + 1023) / 1024);
 
   return 0;
 }

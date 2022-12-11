@@ -49,8 +49,8 @@ mmu_init_percpu(void)
 {
   // Switch from the minimal entry translation table to the full translation
   // table.
-  cp15_ttbr0_set(PA2KVA(kern_trtab));
-  cp15_ttbr1_set(PA2KVA(kern_trtab));
+  cp15_ttbr0_set(KVA2PA(kern_trtab));
+  cp15_ttbr1_set(KVA2PA(kern_trtab));
 
   // Size of the TTBR0 translation table is 8KB.
   cp15_ttbcr_set(1);
@@ -139,7 +139,7 @@ mmu_pte_get(l1_desc_t *trtab, uintptr_t va, int alloc)
     panic("not a page table");
   }
 
-  pgtab = KVA2PA(L1_DESC_TABLE_BASE(*tte));
+  pgtab = PA2KVA(L1_DESC_TABLE_BASE(*tte));
   return &pgtab[L2_IDX(va)];
 }
 
@@ -243,7 +243,7 @@ mmu_map_static(l1_desc_t *trtab, uintptr_t va, uint32_t pa, size_t n, int prot)
 void
 mmu_switch_kernel(void)
 {
-  cp15_ttbr0_set(PA2KVA(kern_trtab));
+  cp15_ttbr0_set(KVA2PA(kern_trtab));
   cp15_tlbiall();
 }
 
@@ -255,6 +255,6 @@ mmu_switch_kernel(void)
 void
 mmu_switch_user(l1_desc_t *trtab)
 {
-  cp15_ttbr0_set(PA2KVA(trtab));
+  cp15_ttbr0_set(KVA2PA(trtab));
   cp15_tlbiall();
 }

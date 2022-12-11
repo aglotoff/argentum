@@ -8,16 +8,16 @@
 #include <drivers/console.h>
 #include <drivers/eth.h>
 #include <drivers/gic.h>
-#include <drivers/kbd.h>
 #include <drivers/sd.h>
-#include <drivers/pl011.h>
 #include <mm/page.h>
 #include <mm/vm.h>
 #include <process.h>
 #include <sys.h>
+#include <trap.h>
 #include <types.h>
 
-#include <trap.h>
+#include "drivers/console/kbd.h"
+#include "drivers/console/serial.h"
 
 static void trap_handle_abort(struct TrapFrame *);
 static void trap_irq_dispatch(void);
@@ -106,10 +106,10 @@ trap_irq_dispatch(void)
     resched = 1;
     break;
   case IRQ_PHYS_UART0:
-    console_uart_intr();
+    serial_interrupt();
     break;
   case IRQ_KMI0:
-    kbd_intr();
+    kbd_interrupt();
     break;
   case IRQ_MCIA:
     sd_intr();

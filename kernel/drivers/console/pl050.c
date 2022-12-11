@@ -1,7 +1,7 @@
 // See ARM PrimeCell PS2 Keyboard/Mouse Interface (PL050) Technical Reference
 // Manual.
 
-#include <drivers/pl050.h>
+#include "pl050.h"
 
 // KMI registers, shifted right by 2 bits for use as uint32_t[] indices
 #define KMICR             (0x000 / 4)   // Control register
@@ -14,7 +14,7 @@
 /**
  * Initialize the KMI driver.
  *
- * @param pl011 Pointer to the driver instance.
+ * @param pl050 Pointer to the driver instance.
  * @param base Memory base address.
  */
 int
@@ -31,7 +31,7 @@ pl050_init(struct Pl050 *pl050, void *base)
 /**
  * Output character to the KMI device.
  * 
- * @param pl011 Pointer to the driver instance.
+ * @param pl050 Pointer to the driver instance.
  * @param c The character to be printed.
  */
 void
@@ -47,7 +47,7 @@ pl050_putc(struct Pl050 *pl050, char c)
 /**
  * Read character from the KMI device.
  * 
- * @param pl011 Pointer to the driver instance.
+ * @param pl050 Pointer to the driver instance.
  * @return The next iput character or -1 if there is none.
  */
 int

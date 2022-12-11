@@ -45,6 +45,9 @@
         "memlayout.h": "c",
         "spin.h": "c",
         "stdlib.h": "c",
-        "pl011.h": "c"
+        "pl011.h": "c",
+        "serial.h": "c",
+        "pl111.h": "c",
+        "kbd.h": "c"
     }
 }

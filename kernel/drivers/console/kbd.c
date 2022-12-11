@@ -2,12 +2,12 @@
 
 #include <drivers/console.h>
 #include <drivers/gic.h>
-#include <drivers/pl050.h>
 #include <mm/memlayout.h>
 #include <mm/vm.h>
 #include <trap.h>
 
-#include <drivers/kbd.h>
+#include "kbd.h"
+#include "pl050.h"
 
 // PBX-A9 has two KMIs: KMI0 is used for the keyboard and KMI1 is used for the
 // mouse.
@@ -19,7 +19,7 @@ static struct Pl050 kmi0;
 void
 kbd_init(void)
 {
-  pl050_init(&kmi0, KVA2PA(PHYS_KMI0));
+  pl050_init(&kmi0, PA2KVA(PHYS_KMI0));
 
   // 0xF0 (Set Scan Code Set)
   pl050_putc(&kmi0, 0xF0);
@@ -35,9 +35,9 @@ kbd_init(void)
  * Get data and store it into the console buffer.
  */
 void
-kbd_intr(void)
+kbd_interrupt(void)
 {
-  console_intr(kbd_getc);
+  console_interrupt(kbd_getc);
 }
 
 // Keymap column indicies for different states

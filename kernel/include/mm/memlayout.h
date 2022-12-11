@@ -59,10 +59,10 @@
 typedef unsigned long   physaddr_t;
 
 static inline physaddr_t
-__pa2kva(const char *file, int line, void *kva)
+__kva2pa(const char *file, int line, void *kva)
 {
   if ((uintptr_t) kva < VIRT_KERNEL_BASE)
-    __panic(file, line, "PA2KVA called with invalid kva %08lx", kva);
+    __panic(file, line, "KVA2PA called with invalid kva %08lx", kva);
   return (physaddr_t) kva - VIRT_KERNEL_BASE;
 }
 
@@ -76,10 +76,10 @@ __pa2kva(const char *file, int line, void *kva)
 #define PA2KVA(va) __pa2kva(__FILE__, __LINE__, va)
 
 static inline void *
-__kva2pa(const char *file, int line, physaddr_t pa)
+__pa2kva(const char *file, int line, physaddr_t pa)
 {
   if (pa >= VIRT_KERNEL_BASE)
-    __panic(file, line, "KVA2PA called with invalid pa %08lx", pa);
+    __panic(file, line, "PA2KVA called with invalid pa %08lx", pa);
   return (void *) (pa + VIRT_KERNEL_BASE);
 }
 

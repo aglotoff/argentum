@@ -36,7 +36,7 @@ typedef struct {
   uint32_t      type;               ///< Segment type
   uint32_t      offset;             ///< Segment offset
   uint32_t      vaddr;              ///< Segment virtual address
-  uint32_t      PA2KVA;              ///< Segment physical address
+  uint32_t      paddr;             ///< Segment physical address
   uint32_t      filesz;             ///< Segment file image size
   uint32_t      memsz;              ///< Segment memory image size
   uint32_t      flags;              ///< Segment flags

@@ -1,6 +1,6 @@
 // See the PrimeCell UART (PL011) Technical Reference Manual
 
-#include <drivers/pl011.h>
+#include "pl011.h"
 
 // UART registers, divided by 4 for use as uint32_t[] indicies
 #define UARTDR            (0x000 / 4)   // Data Register
@@ -23,7 +23,7 @@
 /**
  * Initialize the UART driver.
  * 
- * @param pl011 Pointer to the driver instance.
+ * @param pl011 Pointer to the UART driver instance.
  * @param base Memory base address.
  * @param uart_clock Reference clock frequency.
  * @param baud_rate Required baud rate.
@@ -59,48 +59,33 @@ pl011_init(struct Pl011 *pl011,
 }
 
 /**
- * Output character to the UART device.
+ * Write a data character to the UART device.
  * 
- * @param pl011 Pointer to the driver instance.
- * @param c The character to be printed.
+ * @param pl011 Pointer to the UART driver instance.
+ * @param data The character to be transmitted.
  */
 void
-pl011_putc(struct Pl011 *pl011, char c)
-{
-  // Prepend '\r' to '\n'
-  if (c == '\n')
-    pl011_putc(pl011, '\r');
-  
+pl011_write(struct Pl011 *pl011, char data)
+{ 
   // Wait until FIFO is ready to transmit.
   while (pl011->base[UARTFR] & UARTFR_TXFF)
     ;
 
-  pl011->base[UARTDR] = c;
+  pl011->base[UARTDR] = data;
 }
 
 /**
- * Read character from the UART device.
+ * Read a data character from the UART device.
  * 
- * @param pl011 Pointer to the driver instance.
- * @return The next iput character or -1 if there is none.
+ * @param pl011 Pointer to the UART driver instance.
+ * @return The received data character or -1 if no data available.
  */
 int
-pl011_getc(struct Pl011 *pl011)
-{
-  int c;
-  
+pl011_read(struct Pl011 *pl011)
+{ 
   // Check whether the receive FIFO is empty.
   if (pl011->base[UARTFR] & UARTFR_RXFE)
     return -1;
 
-  c = pl011->base[UARTDR] & 0xFF;
-
-  switch (c) {
-  case '\r':
-    return '\n';
-  case '\x7f':
-    return '\b';
-  default:
-    return c;
-  }
+  return pl011->base[UARTDR] & 0xFF;
 }
