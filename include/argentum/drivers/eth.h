@@ -14,7 +14,6 @@
 #include <stddef.h>
 
 void eth_init(void);
-void eth_intr(void);
 void eth_write(const void *, size_t);
 
 #endif  // !__INCLUDE_ARGENTUM_DRIVERS_ETH_H__

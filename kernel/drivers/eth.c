@@ -7,7 +7,7 @@
 #include <argentum/drivers/gic.h>
 #include <argentum/mm/memlayout.h>
 #include <argentum/mm/page.h>
-#include <argentum/trap.h>
+#include <argentum/irq.h>
 #include <argentum/types.h>
 
 // RX an TX FIFO ports, divided by 4 for use as uint32_t[] indices
@@ -101,6 +101,8 @@ static volatile uint32_t *eth;
 #define   MAC_MII_ACC_WNR     (1 << 1)
 #define MAC_MII_DATA        7
 #define MAC_FLOW            8
+
+static int eth_irq(void);
 
 // Read from a MAC register
 uint32_t
@@ -235,7 +237,8 @@ eth_init(void)
 
   // Enable interrupts
   eth[INT_EN] |= RSFL_INT;
-  gic_enable(IRQ_ETH, 0);
+
+  irq_attach(IRQ_ETH, eth_irq, 0);
 }
 
 static void
@@ -285,8 +288,8 @@ eth_rx(void)
   }
 }
 
-void
-eth_intr(void)
+static int
+eth_irq(void)
 {
   uint32_t status;
 
@@ -310,6 +313,8 @@ eth_intr(void)
     panic("Unexpected interupt %x", status & ~(RSFL_INT));
 
   irq_restore();
+
+  return 0;
 }
 
 void

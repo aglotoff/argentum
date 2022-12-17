@@ -3,6 +3,7 @@
 
 #include <argentum/cprintf.h>
 #include <argentum/cpu.h>
+#include <argentum/irq.h>
 #include <argentum/kthread.h>
 #include <argentum/list.h>
 #include <argentum/mm/kmem.h>

@@ -11,7 +11,6 @@
 #define C(x) ((x) - '@')
 
 void kbd_init(void);
-void kbd_interrupt(void);
 int  kbd_getc(void);
 
 #endif  // !__KERNEL_DRIVERS_CONSOLE_KBD_H__

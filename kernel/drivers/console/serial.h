@@ -2,7 +2,6 @@
 #define __KERNEL_DRIVERS_CONSOLE_SERIAL_H__
 
 void serial_init(void);
-void serial_interrupt(void);
 int  serial_getc(void);
 void serial_putc(char);
 

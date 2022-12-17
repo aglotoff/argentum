@@ -4,7 +4,7 @@
 #include <argentum/drivers/gic.h>
 #include <argentum/mm/memlayout.h>
 #include <argentum/mm/vm.h>
-#include <argentum/trap.h>
+#include <argentum/irq.h>
 
 static volatile uint32_t *gicc, *gicd, *ptimer;
 
@@ -110,6 +110,8 @@ gic_start_others(void)
 #define TICK_RATE     100U          // Desired timer events rate, in Hz
 #define PRESCALER     99U           // Prescaler value
 
+static int ptimer_irq(void);
+
 /**
  * Setup the CPU private timer to generate interrupts at the rate of 100 Hz.
  *
@@ -121,14 +123,21 @@ ptimer_init(void)
   ptimer[PTLOAD] = PERIPHCLK / ((PRESCALER + 1) * TICK_RATE) - 1;
   ptimer[PTCTRL] = (PRESCALER << 8) | PTCTRL_AUTO | PTCTRL_IRQEN | PTCTRL_EN;
 
+  irq_attach(IRQ_PTIMER, ptimer_irq, cp15_mpidr_get() & 0x3);
+}
+
+void
+ptimer_init_percpu(void)
+{
   gic_enable(IRQ_PTIMER, cp15_mpidr_get() & 0x3);
 }
 
 /**
  * Clear the private timer pending interrupt.
  */
-void
-ptimer_intr(void)
+static int
+ptimer_irq(void)
 {
   ptimer[PTISR] = 1;
+  return 1;
 }

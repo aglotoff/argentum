@@ -1,7 +1,7 @@
 #include <argentum/drivers/console.h>
 #include <argentum/drivers/gic.h>
 #include <argentum/mm/memlayout.h>
-#include <argentum/trap.h>
+#include <argentum/irq.h>
 
 #include "pl011.h"
 #include "serial.h"
@@ -12,6 +12,8 @@
 // Use UART0 as serial debug console.
 static struct Pl011 uart0;
 
+static int serial_irq(void);
+
 /**
  * Initialize the serial console driver.
  */
@@ -19,7 +21,7 @@ void
 serial_init(void)
 {
   pl011_init(&uart0, PA2KVA(PHYS_UART0), UART_CLOCK, UART_BAUD_RATE);
-  gic_enable(IRQ_PHYS_UART0, 0);
+  irq_attach(IRQ_UART0, serial_irq, 0);
 }
 
 /**
@@ -48,10 +50,11 @@ serial_getc(void)
 /**
  * Handle interrupt from the serial console.
  */
-void
-serial_interrupt(void)
+static int
+serial_irq(void)
 {
   console_interrupt(serial_getc);
+  return 0;
 }
 
 /**

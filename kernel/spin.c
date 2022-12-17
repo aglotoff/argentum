@@ -5,6 +5,7 @@
 #include <argentum/armv7/regs.h>
 #include <argentum/cprintf.h>
 #include <argentum/cpu.h>
+#include <argentum/irq.h>
 #include <argentum/kdebug.h>
 #include <argentum/process.h>
 #include <argentum/spin.h>

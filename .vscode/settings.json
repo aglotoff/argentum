@@ -55,6 +55,9 @@
         "cpu.h": "c",
         "trap.h": "c",
         "hash.h": "c",
-        "monitor.h": "c"
+        "monitor.h": "c",
+        "stdint.h": "c",
+        "irq.h": "c",
+        "eth.h": "c"
     }
 }

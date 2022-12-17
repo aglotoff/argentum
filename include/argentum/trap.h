@@ -15,14 +15,6 @@
 #define T_IRQ       6         ///< IRQ (Interrupt)
 #define T_FIQ       7         ///< FIQ (Fast Interrupt)
 
-// IRQ numbers
-#define IRQ_PTIMER  29
-#define IRQ_PHYS_UART0   44
-#define IRQ_MCIA    49
-#define IRQ_MCIB    50
-#define IRQ_KMI0    52
-#define IRQ_ETH     60
-
 #ifndef __ASSEMBLER__
 
 #include <stdint.h>

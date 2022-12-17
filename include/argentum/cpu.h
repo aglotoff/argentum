@@ -29,9 +29,4 @@ unsigned     cpu_id(void);
 struct Cpu  *my_cpu(void);
 struct KThread *my_thread(void);
 
-void         irq_disable(void);
-void         irq_enable(void);
-void         irq_save(void);
-void         irq_restore(void);
-
 #endif  // !__INCLUDE_ARGENTUM_CPU_H__

@@ -41,6 +41,7 @@ KERNEL_SRCFILES :=	\
 	kernel/entry.S \
 	kernel/entry_trtab.c \
 	kernel/exec.c \
+	kernel/irq.c \
 	kernel/kdebug.c \
 	kernel/monitor.c \
 	kernel/mutex.c \

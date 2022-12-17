@@ -10,7 +10,7 @@
 #include <argentum/mm/memlayout.h>
 #include <argentum/kthread.h>
 #include <argentum/spin.h>
-#include <argentum/trap.h>
+#include <argentum/irq.h>
 
 /*
  * ----------------------------------------------------------------------------
@@ -69,6 +69,8 @@ static struct {
   struct SpinLock lock;
 } sd_queue;
 
+static int sd_irq(void);
+
 /**
  * Initialize the SD card driver.
  */
@@ -110,7 +112,7 @@ sd_init(void)
 
   // Enable interrupts
   mmci_intr_enable();
-  gic_enable(IRQ_MCIA, 0);
+  irq_attach(IRQ_MCIA, sd_irq, 0);
 
   // Initialize the buffer queue
   list_init(&sd_queue.head);
@@ -180,8 +182,8 @@ sd_request(struct Buf *buf)
  * Handle the SD card interrupt. Complete the current data transfer operation
  * and wake up the corresponding process.
  */ 
-void
-sd_intr(void)
+static int
+sd_irq(void)
 {
   struct ListLink *link;
   struct Buf *buf, *next_buf;
@@ -222,6 +224,8 @@ sd_intr(void)
   spin_unlock(&sd_queue.lock);
 
   kthread_wakeup(&buf->wait_queue);
+
+  return 0;
 }
 
 

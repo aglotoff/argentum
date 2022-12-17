@@ -1,26 +1,14 @@
-#include <assert.h>
-#include <stddef.h>
-#include <string.h>
-
 #include <argentum/armv7/regs.h>
 #include <argentum/cprintf.h>
-#include <argentum/cpu.h>
-#include <argentum/drivers/console.h>
-#include <argentum/drivers/eth.h>
-#include <argentum/drivers/gic.h>
-#include <argentum/drivers/sd.h>
 #include <argentum/mm/page.h>
 #include <argentum/mm/vm.h>
 #include <argentum/process.h>
 #include <argentum/sys.h>
 #include <argentum/trap.h>
 #include <argentum/types.h>
-
-#include "drivers/console/kbd.h"
-#include "drivers/console/serial.h"
+#include <argentum/irq.h>
 
 static void trap_handle_abort(struct TrapFrame *);
-static void trap_irq_dispatch(void);
 
 void
 trap(struct TrapFrame *tf)
@@ -44,7 +32,7 @@ trap(struct TrapFrame *tf)
     tf->r0 = sys_dispatch();
     break;
   case T_IRQ:
-    trap_irq_dispatch();
+    irq_dispatch();
     break;
   default:
     // Either the user process misbehaved or the kernel has a bug.
@@ -82,54 +70,6 @@ trap_handle_abort(struct TrapFrame *tf)
   // Abort happened in user mode.
   cprintf("user fault va %p status %#x\n", address, status);
   process_destroy(-1);
-}
-
-static void
-trap_irq_dispatch(void)
-{
-  int irq, resched;
-
-  // Get the IRQ number and temporarily disable it
-  irq = gic_intid();
-  gic_disable(irq);
-  gic_eoi(irq);
-
-  // Enable nested IRQs
-  irq_enable();
-
-  resched = 0;
-
-  // Process the IRQ
-  switch (irq & 0xFFFFFF) {
-  case IRQ_PTIMER:
-    ptimer_intr();
-    resched = 1;
-    break;
-  case IRQ_PHYS_UART0:
-    serial_interrupt();
-    break;
-  case IRQ_KMI0:
-    kbd_interrupt();
-    break;
-  case IRQ_MCIA:
-    sd_intr();
-    break;
-  case IRQ_ETH:
-    eth_intr();
-    break;
-  default:
-    cprintf("Unexpected IRQ %d from CPU %d\n", irq, cpu_id());
-    break;
-  }
-
-  // Disable nested IRQs
-  irq_disable();
-
-  // Re-enable the IRQ
-  gic_enable(irq, cpu_id());
-
-  if (resched && (my_thread() != NULL))
-    kthread_yield();
 }
 
 static const char *

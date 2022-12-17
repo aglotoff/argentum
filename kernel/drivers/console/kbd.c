@@ -4,7 +4,7 @@
 #include <argentum/drivers/gic.h>
 #include <argentum/mm/memlayout.h>
 #include <argentum/mm/vm.h>
-#include <argentum/trap.h>
+#include <argentum/irq.h>
 
 #include "kbd.h"
 #include "pl050.h"
@@ -12,6 +12,8 @@
 // PBX-A9 has two KMIs: KMI0 is used for the keyboard and KMI1 is used for the
 // mouse.
 static struct Pl050 kmi0;    
+
+static int kbd_irq(void);
 
 /**
  * Initialize the keyboard driver.
@@ -25,8 +27,7 @@ kbd_init(void)
   pl050_putc(&kmi0, 0xF0);
   pl050_putc(&kmi0, 1);
 
-  // Enable interrupts.
-  gic_enable(IRQ_KMI0, 0);
+  irq_attach(IRQ_KMI0, kbd_irq, 0);
 }
 
 /**
@@ -34,10 +35,11 @@ kbd_init(void)
  * 
  * Get data and store it into the console buffer.
  */
-void
-kbd_interrupt(void)
+static int
+kbd_irq(void)
 {
   console_interrupt(kbd_getc);
+  return 0;
 }
 
 // Keymap column indicies for different states

@@ -82,7 +82,7 @@ mp_enter(void)
   // Per-CPU initialization
   mmu_init_percpu();    // Load the kernel page table
   gic_init();           // Interrupt controller
-  ptimer_init();        // Private timer
+  ptimer_init_percpu();        // Private timer
 
   mp_main();
 }
