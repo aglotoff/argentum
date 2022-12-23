@@ -87,7 +87,7 @@ endif
 KERNEL_BINFILES := $(patsubst %, $(OBJ)/%, $(KERNEL_BINFILES))
 
 # Embed the VGA font to print characters on LCD
-KERNEL_BINFILES += kernel/drivers/vga_font.psf
+KERNEL_BINFILES += kernel/drivers/console/vga_font.psf
 
 $(OBJ)/kernel/%.o: kernel/%.c $(OBJ)/.vars.KERNEL_CFLAGS
 	@echo "+ CC [KERNEL] $<"

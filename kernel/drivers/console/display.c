@@ -106,7 +106,7 @@ static void display_echo(char);
 int
 display_init(void)
 {
-  extern uint8_t _binary_kernel_drivers_vga_font_psf_start[];
+  extern uint8_t _binary_kernel_drivers_console_vga_font_psf_start[];
 
   struct Page *page;
   unsigned i;
@@ -128,7 +128,7 @@ display_init(void)
   fb_base   = (uint16_t *) page2kva(page);
   page->ref_count++;
 
-  display_load_font(_binary_kernel_drivers_vga_font_psf_start);
+  display_load_font(_binary_kernel_drivers_console_vga_font_psf_start);
 
   pl111_init(&lcd, PA2KVA(PHYS_LCD), page2pa(page), PL111_RES_VGA);
 
