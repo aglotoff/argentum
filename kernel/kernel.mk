@@ -20,9 +20,10 @@ KERNEL_SRCFILES :=	\
 	kernel/drivers/rtc/ds1338.c \
 	kernel/drivers/rtc/sbcon.c \
 	kernel/drivers/rtc/rtc.c \
+	kernel/drivers/sd/pl180.c \
+	kernel/drivers/sd/sd.c \
 	kernel/drivers/eth.c \
 	kernel/drivers/gic.c \
-	kernel/drivers/sd.c \
 	kernel/fs/bitmap.c \
 	kernel/fs/block_alloc.c \
 	kernel/fs/buf.c \
