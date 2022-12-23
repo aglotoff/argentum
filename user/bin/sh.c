@@ -5,6 +5,7 @@
 #include <string.h>
 #include <sys/stat.h>
 #include <sys/wait.h>
+#include <time.h>
 #include <unistd.h>
 
 struct Cmd;
@@ -88,8 +89,12 @@ main(void)
   struct ExecCmd *ecmd;
   pid_t pid;
   int status;
+  time_t t;
 
   umask(S_IWGRP | S_IWOTH);
+
+  t = time(NULL);
+  printf("%s\n", asctime(gmtime(&t)));
 
   if (getcwd(cwd, sizeof(cwd)) == NULL) {
     perror("getcwd");

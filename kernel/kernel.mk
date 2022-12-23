@@ -17,9 +17,11 @@ KERNEL_SRCFILES :=	\
 	kernel/drivers/console/pl111.c \
 	kernel/drivers/console/console.c \
 	kernel/drivers/console/serial.c \
+	kernel/drivers/rtc/ds1338.c \
+	kernel/drivers/rtc/sbcon.c \
+	kernel/drivers/rtc/rtc.c \
 	kernel/drivers/eth.c \
 	kernel/drivers/gic.c \
-	kernel/drivers/rtc.c \
 	kernel/drivers/sd.c \
 	kernel/fs/bitmap.c \
 	kernel/fs/block_alloc.c \
