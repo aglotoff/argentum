@@ -4,7 +4,6 @@
 #include <argentum/cpu.h>
 #include <argentum/cprintf.h>
 #include <argentum/drivers/eth.h>
-#include <argentum/drivers/gic.h>
 #include <argentum/mm/memlayout.h>
 #include <argentum/mm/page.h>
 #include <argentum/irq.h>

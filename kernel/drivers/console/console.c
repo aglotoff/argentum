@@ -5,7 +5,6 @@
 #include <argentum/mm/memlayout.h>
 #include <argentum/mm/vm.h>
 #include <argentum/drivers/console.h>
-#include <argentum/drivers/gic.h>
 #include <argentum/trap.h>
 
 #include "kbd.h"

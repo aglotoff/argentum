@@ -23,7 +23,7 @@ KERNEL_SRCFILES :=	\
 	kernel/drivers/sd/pl180.c \
 	kernel/drivers/sd/sd.c \
 	kernel/drivers/eth.c \
-	kernel/drivers/gic.c \
+	kernel/gic.c \
 	kernel/fs/bitmap.c \
 	kernel/fs/block_alloc.c \
 	kernel/fs/buf.c \
@@ -49,6 +49,7 @@ KERNEL_SRCFILES :=	\
 	kernel/monitor.c \
 	kernel/mutex.c \
 	kernel/process.c \
+	kernel/ptimer.c \
 	kernel/kthread.c \
 	kernel/spin.c \
 	kernel/syscall.c \

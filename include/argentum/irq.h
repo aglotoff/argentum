@@ -10,6 +10,8 @@
 #define IRQ_ETH       60
 #define IRQ_MAX       64
 
+void         irq_init(void);
+void         irq_init_percpu(void);
 void         irq_disable(void);
 void         irq_enable(void);
 void         irq_save(void);

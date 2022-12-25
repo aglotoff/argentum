@@ -7,11 +7,11 @@
 #include <argentum/cpu.h>
 #include <argentum/drivers/console.h>
 // #include <argentum/drivers/eth.h>
-#include <argentum/drivers/gic.h>
 #include <argentum/drivers/rtc.h>
 #include <argentum/drivers/sd.h>
 #include <argentum/fs/buf.h>
 #include <argentum/fs/file.h>
+#include <argentum/irq.h>
 #include <argentum/mm/kmem.h>
 #include <argentum/mm/mmu.h>
 #include <argentum/mm/page.h>
@@ -45,19 +45,18 @@ main(void)
   mmu_init();           // Memory management unit and kernel mappings
 
   // Now we can initialize the console to print messages during initialization
-  gic_init();           // Interrupt controller
+  irq_init();           // Interrupt controller
   console_init();       // Console driver
 
   // Complete the memory manager initialization
   page_init_high();     // Physical page allocator (higher memory)
-  kmem_init();  // Object allocator
+  kmem_init();          // Object allocator
   vm_init();            // Virtual memory manager
 
-  // Initialize the rest of device drivers
-  ptimer_init();        // Private timer
+  // Initialize the device drivers
   rtc_init();           // Real-time clock
   sd_init();            // MultiMedia Card
-  // eth_init();           // Ethernet
+  // eth_init();        // Ethernet
 
   // Initialize the remaining kernel services
   buf_init();           // Buffer cache
@@ -81,8 +80,7 @@ mp_enter(void)
 {
   // Per-CPU initialization
   mmu_init_percpu();    // Load the kernel page table
-  gic_init();           // Interrupt controller
-  ptimer_init_percpu();        // Private timer
+  irq_init_percpu();
 
   mp_main();
 }

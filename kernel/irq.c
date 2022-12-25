@@ -5,8 +5,40 @@
 #include <argentum/process.h>
 #include <argentum/armv7/regs.h>
 #include <argentum/irq.h>
-#include <argentum/drivers/gic.h>
 #include <argentum/cprintf.h>
+#include <argentum/mm/memlayout.h>
+#include <argentum/mm/vm.h>
+
+#include "gic.h"
+#include "ptimer.h"
+
+static struct Gic gic;
+static struct PTimer ptimer;
+
+static int
+ptimer_irq(void)
+{
+  ptimer_eoi(&ptimer);
+  return 1;
+}
+
+void
+irq_init(void)
+{
+  gic_init(&gic, PA2KVA(PHYS_GICC), PA2KVA(PHYS_GICD));
+  ptimer_init(&ptimer, PA2KVA(PHYS_PTIMER));
+
+  irq_attach(IRQ_PTIMER, ptimer_irq, cp15_mpidr_get() & 0x3);
+}
+
+void
+irq_init_percpu(void)
+{
+  gic_init_percpu(&gic);
+  ptimer_init_percpu(&ptimer);
+
+  gic_enable(&gic, IRQ_PTIMER, cp15_mpidr_get() & 0x3);
+}
 
 void
 irq_disable(void)
@@ -75,7 +107,7 @@ irq_attach(int irq, int (*handler)(void), int cpu)
     return -EINVAL;
 
   irq_handlers[irq] = handler;
-  gic_enable(irq, cpu);
+  gic_enable(&gic, irq, cpu);
 
   return 0;
 }
@@ -86,9 +118,9 @@ irq_dispatch(void)
   int irq, resched;
 
   // Get the IRQ number and temporarily disable it
-  irq = gic_intid();
-  gic_disable(irq);
-  gic_eoi(irq);
+  irq = gic_intid(&gic);
+  gic_disable(&gic, irq);
+  gic_eoi(&gic, irq);
 
   // Enable nested IRQs
   irq_enable();
@@ -104,7 +136,7 @@ irq_dispatch(void)
   irq_disable();
 
   // Re-enable the IRQ
-  gic_enable(irq, cpu_id());
+  gic_enable(&gic, irq, cpu_id());
 
   if (resched && (my_thread() != NULL))
     kthread_yield();

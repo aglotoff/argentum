@@ -1,5 +1,4 @@
 #include <argentum/drivers/console.h>
-#include <argentum/drivers/gic.h>
 #include <argentum/mm/memlayout.h>
 #include <argentum/irq.h>
 
