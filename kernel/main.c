@@ -8,7 +8,6 @@
 #include <argentum/drivers/console.h>
 // #include <argentum/drivers/eth.h>
 #include <argentum/drivers/rtc.h>
-#include <argentum/drivers/sd.h>
 #include <argentum/fs/buf.h>
 #include <argentum/fs/file.h>
 #include <argentum/irq.h>
@@ -17,6 +16,7 @@
 #include <argentum/mm/page.h>
 #include <argentum/mm/vm.h>
 #include <argentum/process.h>
+#include <argentum/sd.h>
 
 static void mp_main(void);
 

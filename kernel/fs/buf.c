@@ -1,7 +1,7 @@
 #include <assert.h>
 
 #include <argentum/cprintf.h>
-#include <argentum/drivers/sd.h>
+#include <argentum/sd.h>
 #include <argentum/fs/buf.h>
 #include <argentum/list.h>
 #include <argentum/mm/kmem.h>
