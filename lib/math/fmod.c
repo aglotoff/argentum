@@ -3,6 +3,10 @@
 #include <math.h>
 #include <stdint.h>
 
+//
+// Code adapted from "The Standard C Library" by P.J. Plauger.
+//
+
 /**
  * Return the floating-point remainder of the division of 'x' by 'y'.
  * 
@@ -14,15 +18,11 @@
 double
 fmod(double x, double y)
 {
-  // ----------------------------------------------------------
-  // Code adapted from "The Standard C Library" by P.J. Plauger
-  // ----------------------------------------------------------
-
   double t;
   int xtype, ytype, xexp, yexp, neg, n;
 
-  xtype = __dclassify(&x);
-  ytype = __dclassify(&y);
+  xtype = __math_classify_double(&x);
+  ytype = __math_classify_double(&y);
 
   if (xtype == FP_NAN) {
     errno = EDOM;
@@ -52,20 +52,20 @@ fmod(double x, double y)
   
   t = y;
   n = 0;
-  __dunscale(&t, &yexp);
+  __math_unscale_double(&t, &yexp);
 
   // Repeatedly subtract |y| from |x| until the remainder is smaller than |y|.
   while (n >= 0) {
     // First, compare the exponents of |x| and |y| to determine whether or
     // not further subtraction might be possible.
     t = x;
-    if ((__dunscale(&t, &xexp) == FP_ZERO) || ((n = xexp - yexp) < 0))
+    if ((__math_unscale_double(&t, &xexp) == FP_ZERO) || ((n = xexp - yexp) < 0))
       break;
 
     // Try to subtract |y| * 2^n.
     for ( ; n >= 0; n--) {
       t = y;
-      __dscale(&t, n);
+      __math_scale_double(&t, n);
       if (t <= x) {
         x -= t;
         break;

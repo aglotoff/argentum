@@ -2,6 +2,13 @@
 #include <math.h>
 #include <stdint.h>
 
+//
+// Code adapted from "The Standard C Library" by P.J. Plauger.
+//
+// See the IEEE 754 standard to learn more about the representation of 
+// floating-point values.
+//
+
 /**
  * Truncate a double value by dropping all fraction bits less than the given
  * threshold. 
@@ -17,18 +24,15 @@
  * @retval FP_INFINITE  if the result is a positive or negative infinity
  */
 int
-__dtrunc(double *x, int texp)
+__math_trunc_double(double *x, int texp)
 {
-  // ----------------------------------------------------------
-  // Code adapted from "The Standard C Library" by P.J. Plauger
-  // ----------------------------------------------------------
-
   static int sub[] = { __D3, __D2, __D1, __D0 };
 
   uint16_t *raw;
   int exp, frac, drop_bits, drop_words;
   
-  raw  = (uint16_t *) x;
+  raw = (uint16_t *) x;
+
   exp  = (raw[__D0] & __DBL_EXP) >> __DBL_EOFF;
   frac = (raw[__D0] & __DBL_FRAC) || raw[__D1] || raw[__D2] || raw[__D3];
 

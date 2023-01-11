@@ -5,6 +5,7 @@
 // 1/ln(2)
 #define LN2_INV 1.4426950408889634074
 
+// Constants
 #define C1  0.693359375
 #define C2  -2.1219444005469058277E-4
 
@@ -31,7 +32,7 @@ exp(double x)
   }
 
   // Check for special cases
-  switch(__dclassify(&x)) {
+  switch(__math_classify_double(&x)) {
   case FP_NAN:
     return x;
   case FP_INFINITE:
@@ -45,11 +46,12 @@ exp(double x)
   
   g = (x - n * C1) - n * C2;
 
+  // R(g) = .5 + g * P(z) / (Q(z) - g * P(z)), where z = g^2
   z = g * g;
   r = ((P2 * z + P1) * z + P0) * g;
   r = 0.5 + r / (((Q2 * z + Q1) * z + Q0) - r);
 
-  __dscale(&r, ++n);
+  __math_scale_double(&r, ++n);
 
   return neg ? 1 / r : r;
 }

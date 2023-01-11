@@ -58,6 +58,7 @@
         "monitor.h": "c",
         "stdint.h": "c",
         "irq.h": "c",
-        "eth.h": "c"
+        "eth.h": "c",
+        "math.h": "c"
     }
 }

@@ -2,6 +2,10 @@
 #include <float.h>
 #include <math.h>
 
+//
+// Code adapted from "The Standard C Library" by P.J. Plauger.
+//
+
 /**
  * Break the argument into a normalized fraction in the range [0.5, 1) and
  * an integral exponent.
@@ -14,13 +18,9 @@
 double
 frexp(double num, int *exp)
 {
-  // ----------------------------------------------------------
-  // Code adapted from "The Standard C Library" by P.J. Plauger
-  // ----------------------------------------------------------
-
   int bin_exp;
 
-  switch (__dunscale(&num, &bin_exp)) {
+  switch (__math_unscale_double(&num, &bin_exp)) {
   case FP_NAN:
   case FP_INFINITE:
     errno = EDOM;

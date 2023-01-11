@@ -41,12 +41,12 @@ LIB_SRCFILES += \
 	lib/float/__fvalues.c
 
 LIB_SRCFILES += \
-	lib/math/__dclassify.c \
-	lib/math/__dnormalize.c \
-	lib/math/__dscale.c \
-	lib/math/__dtrunc.c \
-	lib/math/__dunscale.c \
-	lib/math/__log.c \
+	lib/math/__math_classify_double.c \
+	lib/math/__math_log.c \
+	lib/math/__math_normalize_double.c \
+	lib/math/__math_scale_double.c \
+	lib/math/__math_trunc_double.c \
+	lib/math/__math_unscale_double.c \
 	lib/math/ceil.c \
 	lib/math/exp.c \
 	lib/math/fabs.c \

@@ -2,8 +2,15 @@
 #include <math.h>
 #include <stdint.h>
 
+//
+// Code adapted from "The Standard C Library" by P.J. Plauger.
+//
+// See the IEEE 754 standard to learn more about the representation of 
+// floating-point values.
+//
+
 /**
- * Categorize the given floating-point value.
+ * Categorize the double value.
  * 
  * @param x Pointer to the value to be classified.
  * 
@@ -14,16 +21,13 @@
  * @retval FP_INFINITE  if x is a positive or negative infinity
  */
 int
-__dclassify(double *x)
+__math_classify_double(double *x)
 {
-  // ----------------------------------------------------------
-  // Code adapted from "The Standard C Library" by P.J. Plauger
-  // ----------------------------------------------------------
-
   uint16_t *raw;
   int exp, frac;
 
-  raw  = (uint16_t *) &x;
+  raw = (uint16_t *) &x;
+
   exp  = (raw[__D0] & __DBL_EXP) >> __DBL_EOFF;
   frac = (raw[__D0] & __DBL_FRAC) || raw[__D1] || raw[__D2] || raw[__D3];
 

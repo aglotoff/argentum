@@ -2,6 +2,10 @@
 #include <float.h>
 #include <math.h>
 
+//
+// Code adapted from "The Standard C Library" by P.J. Plauger.
+//
+
 /**
  * Compute the absolute value of the argument.
  * 
@@ -11,11 +15,7 @@
 double
 fabs(double x)
 {
-  // ----------------------------------------------------------
-  // Code adapted from "The Standard C Library" by P.J. Plauger
-  // ----------------------------------------------------------
-
-  switch (__dclassify(&x)) {
+  switch (__math_classify_double(&x)) {
   case FP_INFINITE:
     errno = ERANGE;
     return __dbl.inf.d;

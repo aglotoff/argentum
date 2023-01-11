@@ -2,6 +2,10 @@
 #include <float.h>
 #include <math.h>
 
+//
+// Code adapted from "The Standard C Library" by P.J. Plauger.
+//
+
 /**
  * Decompose the argument into integral and fraction parts, each of which has
  * the same sign as the argument.
@@ -14,13 +18,9 @@
 double
 modf(double x, double *iptr)
 {
-  // ----------------------------------------------------------
-  // Code adapted from "The Standard C Library" by P.J. Plauger
-  // ----------------------------------------------------------
-
   *iptr = x;
 
-  switch (__dtrunc(iptr, 0)) {
+  switch (__math_trunc_double(iptr, 0)) {
   case FP_NAN:
     errno = EDOM;
     return x;

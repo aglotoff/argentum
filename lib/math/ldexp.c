@@ -2,6 +2,10 @@
 #include <float.h>
 #include <math.h>
 
+//
+// Code adapted from "The Standard C Library" by P.J. Plauger.
+//
+
 /**
  * Compute the quantity 'x * 2**exp'.
  * 
@@ -13,13 +17,9 @@
 double
 ldexp(double x, int exp)
 {
-  // ----------------------------------------------------------
-  // Code adapted from "The Standard C Library" by P.J. Plauger
-  // ----------------------------------------------------------
-
   int t;
   
-  switch (__dclassify(&x)) {
+  switch (__math_classify_double(&x)) {
   case FP_NAN:
     errno = EDOM;
     break;
@@ -29,7 +29,7 @@ ldexp(double x, int exp)
   case FP_ZERO:
     break;
   default:
-    if (((t = __dscale(&x, exp)) == FP_NAN) || (t == FP_INFINITE))
+    if (((t = __math_scale_double(&x, exp)) == FP_NAN) || (t == FP_INFINITE))
       errno = ERANGE;
     break;
   }

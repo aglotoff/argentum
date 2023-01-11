@@ -2,6 +2,13 @@
 #include <math.h>
 #include <stdint.h>
 
+//
+// Code adapted from "The Standard C Library" by P.J. Plauger.
+//
+// See the IEEE 754 standard to learn more about the representation of 
+// floating-point values.
+//
+
 /**
  * Scale the given value by a power of 2.
  *
@@ -15,16 +22,13 @@
  * @retval FP_INFINITE  if the result is a positive or negative infinity
  */
 int
-__dscale(double *x, int texp)
+__math_scale_double(double *x, int texp)
 {
-  // ----------------------------------------------------------
-  // Code adapted from "The Standard C Library" by P.J. Plauger
-  // ----------------------------------------------------------
-
   uint16_t *raw;
   int exp, frac, sign;
   
-  raw  = (uint16_t *) x;
+  raw = (uint16_t *) x;
+
   exp  = (raw[__D0] & __DBL_EXP) >> __DBL_EOFF;
   frac = (raw[__D0] & __DBL_FRAC) || raw[__D1] || raw[__D2] || raw[__D3];
   
@@ -33,7 +37,7 @@ __dscale(double *x, int texp)
     return frac ? FP_NAN : FP_INFINITE;
 
   // If zero - do nothing.
-  if (exp == 0 && (exp = __dnormalize(raw)) == 0)
+  if (exp == 0 && (exp = __math_normalize_double(raw)) == 0)
     return FP_ZERO;
 
   // Adjust the exponent.
