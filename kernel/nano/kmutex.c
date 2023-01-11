@@ -6,7 +6,7 @@
 #include <argentum/cprintf.h>
 #include <argentum/cpu.h>
 #include <argentum/kdebug.h>
-#include <argentum/mutex.h>
+#include <argentum/kmutex.h>
 #include <argentum/process.h>
 
 /**
@@ -29,9 +29,8 @@
  * @param name The name of the mutex (for debugging purposes).
  */
 void
-mutex_init(struct Mutex *mutex, const char *name)
+kmutex_init(struct KMutex *mutex, const char *name)
 {
-  spin_init(&mutex->lock, name);
   list_init(&mutex->queue);
   mutex->thread = NULL;
   mutex->name = name;
@@ -43,17 +42,17 @@ mutex_init(struct Mutex *mutex, const char *name)
  * @param lock A pointer to the mutex to be acquired.
  */
 void
-mutex_lock(struct Mutex *mutex)
+kmutex_lock(struct KMutex *mutex)
 {
-  spin_lock(&mutex->lock);
+  sched_lock();
 
   // Sleep until the mutex becomes available.
   while (mutex->thread != NULL)
-    kthread_sleep(&mutex->queue, &mutex->lock);
+    kthread_sleep(&mutex->queue, KTHREAD_NOT_RUNNABLE);
 
   mutex->thread = my_thread();
 
-  spin_unlock(&mutex->lock);
+  sched_unlock();
 }
 
 /**
@@ -62,17 +61,17 @@ mutex_lock(struct Mutex *mutex)
  * @param lock A pointer to the mutex to be released.
  */
 void
-mutex_unlock(struct Mutex *mutex)
+kmutex_unlock(struct KMutex *mutex)
 {
-  if (!mutex_holding(mutex))
+  if (!kmutex_holding(mutex))
     panic("not holding");
   
-  spin_lock(&mutex->lock);
+  sched_lock();
 
   mutex->thread = NULL;
-  kthread_wakeup(&mutex->queue);
+  kthread_wakeup_all(&mutex->queue);
 
-  spin_unlock(&mutex->lock);
+  sched_unlock();
 }
 
 /**
@@ -82,13 +81,13 @@ mutex_unlock(struct Mutex *mutex)
  * @return 1 if the current thread is holding the mutex, 0 otherwise.
  */
 int
-mutex_holding(struct Mutex *mutex)
+kmutex_holding(struct KMutex *mutex)
 {
   struct KThread *thread;
 
-  spin_lock(&mutex->lock);
+  sched_lock();
   thread = mutex->thread;
-  spin_unlock(&mutex->lock);
+  sched_unlock();
 
   return (thread != NULL) && (thread == my_thread());
 }

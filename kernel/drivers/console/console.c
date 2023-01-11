@@ -1,11 +1,12 @@
 #include <stdint.h>
 
 #include <argentum/kthread.h>
-#include <argentum/spin.h>
+#include <argentum/spinlock.h>
 #include <argentum/mm/memlayout.h>
 #include <argentum/mm/vm.h>
 #include <argentum/drivers/console.h>
 #include <argentum/trap.h>
+#include <argentum/waitqueue.h>
 
 #include "kbd.h"
 #include "display.h"
@@ -14,11 +15,11 @@
 #define CONSOLE_BUF_SIZE  256
 
 static struct {
-  char            buf[CONSOLE_BUF_SIZE];
-  uint32_t        rpos;
-  uint32_t        wpos;
-  struct SpinLock lock;
-  struct ListLink queue;
+  char             buf[CONSOLE_BUF_SIZE];
+  uint32_t         rpos;
+  uint32_t         wpos;
+  struct SpinLock  lock;
+  struct WaitQueue queue;
 } input;
 
 /**
@@ -28,7 +29,7 @@ void
 console_init(void)
 {  
   spin_init(&input.lock, "input");
-  list_init(&input.queue);
+  waitqueue_init(&input.queue);
 
   serial_init();
   kbd_init();
@@ -70,11 +71,9 @@ console_interrupt(int (*getc)(void))
 
       input.buf[input.wpos++ % CONSOLE_BUF_SIZE] = c;
 
-      if ((c == '\r') ||
-          (c == '\n') ||
-          (c == C('D')) ||
+      if ((c == '\r') || (c == '\n') || (c == C('D')) ||
           (input.wpos == input.rpos + CONSOLE_BUF_SIZE))
-        kthread_wakeup(&input.queue);
+        waitqueue_wakeup_all(&input.queue);
       break;
     }
   }
@@ -108,11 +107,12 @@ console_read(void *buf, size_t nbytes)
   
   s = (char *) buf;
   i = 0;
+
   spin_lock(&input.lock);
 
   while (i < nbytes) {
     while (input.rpos == input.wpos)
-      kthread_sleep(&input.queue, &input.lock);
+      waitqueue_sleep(&input.queue, &input.lock);
 
     c = input.buf[input.rpos++ % CONSOLE_BUF_SIZE];
 

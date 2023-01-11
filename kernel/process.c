@@ -17,7 +17,7 @@
 #include <argentum/mm/vm.h>
 #include <argentum/monitor.h>
 #include <argentum/process.h>
-#include <argentum/spin.h>
+#include <argentum/spinlock.h>
 #include <argentum/trap.h>
 
 // Process Object cache
@@ -45,7 +45,7 @@ process_ctor(void *buf, size_t size)
 {
   struct Process *proc = (struct Process *) buf;
 
-  list_init(&proc->wait_queue);
+  waitqueue_init(&proc->wait_queue);
   list_init(&proc->children);
 
   (void) size;
@@ -96,7 +96,7 @@ process_alloc(void)
   process->tf = (struct TrapFrame *) sp;
 
   // Setup new context to start executing at thread_run.
-  if ((process->thread = kthread_create(process, process_run, sp)) == NULL)
+  if ((process->thread = kthread_create(process, process_run, NZERO, sp)) == NULL)
     goto fail2;
 
   process->parent = NULL;
@@ -205,7 +205,7 @@ process_create(const void *binary, struct Process **pstore)
   proc->gid   = 0;
   proc->cmask = 0;
 
-  kthread_enqueue(proc->thread);
+  kthread_resume(proc->thread);
 
   if (pstore != NULL)
     *pstore = proc;
@@ -293,14 +293,14 @@ process_destroy(int status)
 
   // Wake up the init process to cleanup zombie children
   if (has_zombies)
-    kthread_wakeup(&init_process->wait_queue);
+    waitqueue_wakeup_all(&init_process->wait_queue);
 
   current->zombie = 1;
   current->exit_code = status;
 
   // Wakeup the parent process
   if (current->parent)
-    kthread_wakeup(&current->parent->wait_queue);
+    waitqueue_wakeup_all(&current->parent->wait_queue);
 
   spin_unlock(&process_lock);
 
@@ -338,7 +338,7 @@ process_copy(void)
   list_add_back(&current->children, &child->sibling);
   spin_unlock(&process_lock);
 
-  kthread_enqueue(child->thread);
+  kthread_resume(child->thread);
 
   return child->pid;
 }
@@ -396,7 +396,7 @@ process_wait(pid_t pid, int *stat_loc, int options)
       break;
     }
 
-    kthread_sleep(&current->wait_queue, &process_lock);
+    waitqueue_sleep(&current->wait_queue, &process_lock);
   }
 
   spin_unlock(&process_lock);

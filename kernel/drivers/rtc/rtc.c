@@ -4,7 +4,7 @@
 #include <argentum/drivers/rtc.h>
 #include <argentum/mm/memlayout.h>
 #include <argentum/mm/vm.h>
-#include <argentum/spin.h>
+#include <argentum/spinlock.h>
 
 #include "ds1338.h"
 #include "sbcon.h"

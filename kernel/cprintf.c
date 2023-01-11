@@ -3,7 +3,7 @@
 #include <argentum/cprintf.h>
 #include <argentum/drivers/console.h>
 #include <argentum/monitor.h>
-#include <argentum/spin.h>
+#include <argentum/spinlock.h>
 
 static struct SpinLock lock = SPIN_INITIALIZER("cprintf");
 static int locking = 1;

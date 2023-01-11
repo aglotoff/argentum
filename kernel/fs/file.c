@@ -9,7 +9,7 @@
 #include <argentum/fs/file.h>
 #include <argentum/fs/fs.h>
 #include <argentum/mm/kmem.h>
-#include <argentum/spin.h>
+#include <argentum/spinlock.h>
 
 static struct SpinLock file_lock;
 static struct KMemCache *file_cache;

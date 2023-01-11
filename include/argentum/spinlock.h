@@ -1,5 +1,5 @@
-#ifndef __INCLUDE_ARGENTUM_SPIN_H__
-#define __INCLUDE_ARGENTUM_SPIN_H__
+#ifndef __INCLUDE_ARGENTUM_SPINLOCK_H__
+#define __INCLUDE_ARGENTUM_SPINLOCK_H__
 
 #ifndef __AG_KERNEL__
 #error "This is a kernel header; user programs should not #include it"
@@ -25,4 +25,4 @@ void spin_lock(struct SpinLock *);
 void spin_unlock(struct SpinLock *);
 int  spin_holding(struct SpinLock *);
 
-#endif  // !__INCLUDE_ARGENTUM_SPIN_H__
+#endif  // !__INCLUDE_ARGENTUM_SPINLOCK_H__

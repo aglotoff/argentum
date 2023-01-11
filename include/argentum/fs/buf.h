@@ -15,7 +15,8 @@
 #include <sys/types.h>
 
 #include <argentum/list.h>
-#include <argentum/mutex.h>
+#include <argentum/kmutex.h>
+#include <argentum/waitqueue.h>
 
 #define BLOCK_SIZE      1024        ///< Size of a single filesystem block
 
@@ -25,16 +26,16 @@
  * TODO: allow variable block sizes.
  */
 struct Buf {
-  unsigned long   block_no;         ///< Filesystem block number
-  dev_t           dev;              ///< ID of the device this block belongs to
-  int             flags;            ///< Status flags
-  int             ref_count;        ///< The number of references to the block
-  struct ListLink cache_link;       ///< Link into the buf cache
-  struct ListLink queue_link;       ///< Link into the driver queue
-  struct ListLink wait_queue;       ///< Processes waiting for the block data
-  struct Mutex    mutex;            ///< Mutex protecting the block data
-  size_t          block_size;       ///< Must be BLOCK_SIZE
-  uint8_t         data[BLOCK_SIZE]; ///< Block data
+  unsigned long    block_no;          ///< Filesystem block number
+  dev_t            dev;               ///< ID of the device this block belongs to
+  int              flags;             ///< Status flags
+  int              ref_count;         ///< The number of references to the block
+  struct ListLink  cache_link;        ///< Link into the buf cache
+  struct ListLink  queue_link;        ///< Link into the driver queue
+  struct WaitQueue wait_queue;        ///< Processes waiting for the block data
+  struct KMutex    mutex;             ///< Mutex protecting the block data
+  size_t           block_size;        ///< Must be BLOCK_SIZE
+  uint8_t          data[BLOCK_SIZE];  ///< Block data
 };
 
 // Buffer status flags

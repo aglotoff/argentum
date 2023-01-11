@@ -2,7 +2,7 @@
 
 #include <argentum/cprintf.h>
 #include <argentum/mm/page.h>
-#include <argentum/spin.h>
+#include <argentum/spinlock.h>
 #include <argentum/types.h>
 
 /** The kernel uses this array to keep track of physical pages. */

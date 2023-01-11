@@ -9,7 +9,7 @@
 #include <argentum/mm/memlayout.h>
 #include <argentum/kthread.h>
 #include <argentum/sd.h>
-#include <argentum/spin.h>
+#include <argentum/spinlock.h>
 
 #include "pl180.h"
 
@@ -113,7 +113,7 @@ sd_init(void)
 void
 sd_request(struct Buf *buf)
 {
-  if (!mutex_holding(&buf->mutex))
+  if (!kmutex_holding(&buf->mutex))
     panic("buf not locked");
   if ((buf->flags & (BUF_DIRTY | BUF_VALID)) == BUF_VALID)
     panic("nothing to do");
@@ -134,7 +134,7 @@ sd_request(struct Buf *buf)
 
   // Wait for the R/W operation to finish.
   while ((buf->flags & (BUF_DIRTY | BUF_VALID)) != BUF_VALID)
-    kthread_sleep(&buf->wait_queue, &sd_queue.lock);
+    waitqueue_sleep(&buf->wait_queue, &sd_queue.lock);
 
   spin_unlock(&sd_queue.lock);
 }
@@ -205,7 +205,7 @@ sd_irq(void)
   spin_unlock(&sd_queue.lock);
 
   // Resume the thread waiting for the buf data.
-  kthread_wakeup(&buf->wait_queue);
+  waitqueue_wakeup_all(&buf->wait_queue);
 
   return 0;
 }

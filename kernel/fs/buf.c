@@ -5,7 +5,7 @@
 #include <argentum/fs/buf.h>
 #include <argentum/list.h>
 #include <argentum/mm/kmem.h>
-#include <argentum/spin.h>
+#include <argentum/spinlock.h>
 
 struct KMemCache *buf_desc_cache;
 
@@ -24,8 +24,8 @@ buf_ctor(void *ptr, size_t size)
   struct Buf *buf = (struct Buf *) ptr;
 
   buf->block_size = BLOCK_SIZE;
-  list_init(&buf->wait_queue);
-  mutex_init(&buf->mutex, "buf");
+  waitqueue_init(&buf->wait_queue);
+  kmutex_init(&buf->mutex, "buf");
 
   (void) size;
 }
@@ -129,7 +129,7 @@ buf_read(unsigned block_no, dev_t dev)
   if ((buf = buf_get(block_no, dev)) == NULL)
     return NULL;
 
-  mutex_lock(&buf->mutex);
+  kmutex_lock(&buf->mutex);
 
   // If needed, read the block from the device.
   // TODO: check for I/O errors
@@ -151,7 +151,7 @@ buf_read(unsigned block_no, dev_t dev)
 void
 buf_write(struct Buf *buf)
 {
-  if (!mutex_holding(&buf->mutex))
+  if (!kmutex_holding(&buf->mutex))
     panic("not holding buf->mutex");
 
   // TODO: check for I/O errors
@@ -173,7 +173,7 @@ buf_release(struct Buf *buf)
   if (buf->flags & BUF_DIRTY)
     warn("buffer is dirty");
   
-  mutex_unlock(&buf->mutex);
+  kmutex_unlock(&buf->mutex);
 
   spin_lock(&buf_cache.lock);
 

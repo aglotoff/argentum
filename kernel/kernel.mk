@@ -38,6 +38,10 @@ KERNEL_SRCFILES :=	\
 	kernel/mm/page.c \
 	kernel/mm/kmem.c \
 	kernel/mm/vm.c \
+	kernel/nano/kmutex.c \
+	kernel/nano/kthread.c \
+	kernel/nano/spinlock.c \
+	kernel/nano/waitqueue.c \
 	kernel/context.S \
 	kernel/cprintf.c \
 	kernel/cpu.c \
@@ -47,11 +51,8 @@ KERNEL_SRCFILES :=	\
 	kernel/irq.c \
 	kernel/kdebug.c \
 	kernel/monitor.c \
-	kernel/mutex.c \
 	kernel/process.c \
 	kernel/ptimer.c \
-	kernel/kthread.c \
-	kernel/spin.c \
 	kernel/syscall.c \
 	kernel/trapentry.S \
 	kernel/trap.c \

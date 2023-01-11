@@ -37,7 +37,7 @@ fs_inode_cache_init(void)
   list_init(&inode_cache.head);
 
   for (ip = inode_cache.buf; ip < &inode_cache.buf[INODE_CACHE_SIZE]; ip++) {
-    mutex_init(&ip->mutex, "inode");
+    kmutex_init(&ip->mutex, "inode");
     list_init(&ip->wait_queue);
 
     list_add_back(&inode_cache.head, &ip->cache_link);
@@ -85,7 +85,7 @@ fs_inode_get(ino_t ino, dev_t dev)
 void
 fs_inode_put(struct Inode *ip)
 {   
-  mutex_lock(&ip->mutex);
+  kmutex_lock(&ip->mutex);
 
   if (ip->nlink == 0) {
     int r;
@@ -100,7 +100,7 @@ fs_inode_put(struct Inode *ip)
     }
   }
 
-  mutex_unlock(&ip->mutex);
+  kmutex_unlock(&ip->mutex);
 
   spin_lock(&inode_cache.lock);
 
@@ -126,7 +126,7 @@ fs_inode_alloc(mode_t mode, dev_t dev, ino_t parent)
 void
 fs_inode_lock(struct Inode *ip)
 {
-  mutex_lock(&ip->mutex);
+  kmutex_lock(&ip->mutex);
 
   if (ip->flags & FS_INODE_VALID)
     return;
@@ -155,7 +155,7 @@ fs_inode_dup(struct Inode *ip)
 void
 fs_inode_unlock(struct Inode *ip)
 {  
-  if (!mutex_holding(&ip->mutex))
+  if (!kmutex_holding(&ip->mutex))
     panic("not holding buf");
 
   if (!(ip->flags & FS_INODE_VALID))
@@ -166,7 +166,7 @@ fs_inode_unlock(struct Inode *ip)
     ip->flags &= ~FS_INODE_DIRTY;
   }
 
-  mutex_unlock(&ip->mutex);
+  kmutex_unlock(&ip->mutex);
 }
 
 void
@@ -336,7 +336,7 @@ fs_inode_read(struct Inode *ip, void *buf, size_t nbyte, off_t *off)
 {
   ssize_t ret;
   
-  if (!mutex_holding(&ip->mutex))
+  if (!kmutex_holding(&ip->mutex))
     panic("not holding ip->mutex");
 
   if (S_ISCHR(ip->mode) || S_ISBLK(ip->mode)) {
@@ -369,7 +369,7 @@ fs_inode_write(struct Inode *ip, const void *buf, size_t nbyte, off_t *off)
 {
   ssize_t total;
 
-  if (!mutex_holding(&ip->mutex))
+  if (!kmutex_holding(&ip->mutex))
     panic("not holding ip->mutex");
 
   if (S_ISCHR(ip->mode) || S_ISBLK(ip->mode))
@@ -396,7 +396,7 @@ fs_inode_write(struct Inode *ip, const void *buf, size_t nbyte, off_t *off)
 int
 fs_inode_stat(struct Inode *ip, struct stat *buf)
 {
-  if (!mutex_holding(&ip->mutex))
+  if (!kmutex_holding(&ip->mutex))
     panic("caller not holding ip->mutex");
 
   buf->st_mode  = ip->mode;
@@ -416,7 +416,7 @@ fs_inode_stat(struct Inode *ip, struct stat *buf)
 int
 fs_inode_trunc(struct Inode *ip)
 {
-  if (!mutex_holding(&ip->mutex))
+  if (!kmutex_holding(&ip->mutex))
     panic("not holding");
 
   if (!fs_permissions(ip, FS_PERM_WRITE))

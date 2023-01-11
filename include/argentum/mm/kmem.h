@@ -12,7 +12,7 @@
 #endif
 
 #include <argentum/list.h>
-#include <argentum/spin.h>
+#include <argentum/spinlock.h>
 
 #define KMEM_CACHE_NAME_MAX   64
 

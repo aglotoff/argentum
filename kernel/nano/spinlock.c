@@ -8,7 +8,7 @@
 #include <argentum/irq.h>
 #include <argentum/kdebug.h>
 #include <argentum/process.h>
-#include <argentum/spin.h>
+#include <argentum/spinlock.h>
 
 /**
  * ----------------------------------------------------------------------------

@@ -10,7 +10,7 @@
 
 #include <argentum/elf.h>
 #include <argentum/list.h>
-#include <argentum/mutex.h>
+#include <argentum/kmutex.h>
 
 #define INODE_CACHE_SIZE  32
 
@@ -22,7 +22,7 @@ struct Inode {
   int             flags;
   int             ref_count;
   struct ListLink cache_link;
-  struct Mutex    mutex;
+  struct KMutex    mutex;
   struct ListLink wait_queue;
   
   // FS-independent data

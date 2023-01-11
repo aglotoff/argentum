@@ -61,7 +61,7 @@ main(void)
   // Initialize the remaining kernel services
   buf_init();           // Buffer cache
   file_init();          // File table
-  scheduler_init();     // Scheduler
+  sched_init();     // Scheduler
   process_init();       // Process table
 
   // Unblock other CPUs
@@ -91,5 +91,5 @@ mp_main(void)
   cprintf("Starting CPU %d\n", cpu_id());
 
   // Enter the scheduler loop
-  scheduler_start();   
+  sched_start();   
 }
