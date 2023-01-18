@@ -99,7 +99,9 @@ LIB_SRCFILES += \
 	lib/stdlib/labs.c \
 	lib/stdlib/ldiv.c \
 	lib/stdlib/malloc.c \
+	lib/stdlib/qsort.c \
 	lib/stdlib/rand.c \
+	lib/stdlib/rand_r.c \
 	lib/stdlib/realloc.c \
 	lib/stdlib/srand.c \
 	lib/stdlib/strtol.c \

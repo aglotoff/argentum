@@ -8,5 +8,5 @@
 void
 srand(unsigned seed)
 {
-  __randseed = seed;
+  __stdlib_seed = seed;
 }

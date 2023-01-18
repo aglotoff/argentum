@@ -15,7 +15,7 @@
 #define EXIT_FAILURE  1   ///< Unsuccessful termination status
 
 /** Maximum value returned by rand(). */
-#define RAND_MAX      32767
+#define RAND_MAX      0x7fffffff
 
 #ifdef __cplusplus
 extern "C" {
@@ -38,7 +38,7 @@ typedef struct {
 } ldiv_t;
 
 // The seed for the pseudo-random sequence generator
-extern unsigned __randseed;
+extern unsigned __stdlib_seed;
 
 struct __BlkHeader {
   struct __BlkHeader *next; // Next block (if on the free list)
@@ -56,6 +56,7 @@ long                strtol(const char *, char **, int);
 unsigned long       strtoul(const char *, char **, int);
 
 int                 rand(void);
+int                 rand_r(unsigned *);
 void                srand(unsigned);
 
 void                _Exit(int);
@@ -66,6 +67,8 @@ char               *getenv(const char *);
 
 void               *bsearch(const void *, const void *, size_t, size_t,
                             int (*)(const void *, const void *));
+void                qsort(void *, size_t, size_t,
+                          int (*)(const void *, const void *));
 
 int                 abs(int);
 div_t               div(int, int);
