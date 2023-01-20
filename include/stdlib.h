@@ -11,8 +11,10 @@
 #include <limits.h>
 #include <sys/wait.h>
 
-#define EXIT_SUCCESS  0   ///< Successful termination status
-#define EXIT_FAILURE  1   ///< Unsuccessful termination status
+/** Successful termination status */
+#define EXIT_SUCCESS  0
+/** Unsuccessful termination status */
+#define EXIT_FAILURE  1
 
 /** Maximum value returned by rand(). */
 #define RAND_MAX      0x7fffffff
@@ -25,16 +27,20 @@ extern "C" {
  * Type returned by the div function.
  */
 typedef struct {
-  int quot;     ///< Quotient
-  int rem;      ///< Remainder
+  /** Quotient */
+  int quot;
+  /** Remainder */
+  int rem;
 } div_t;
 
 /**
  * Type returned by the ldiv function.
  */
 typedef struct {
-  long quot;    ///< Quotient
-  long rem;     ///< Remainder
+  /** Quotient */
+  long quot;
+  /** Remainder */
+  long rem;
 } ldiv_t;
 
 // The seed for the pseudo-random sequence generator
@@ -50,10 +56,14 @@ extern struct __BlkHeader *__alloc_free; // Start of the free list
 extern void   (*__at_funcs[])(void);
 extern size_t   __at_count;
 
+#define __STDLIB_PARSE_INT_SIGNED     (1 << 0)
+#define __STDLIB_PARSE_INT_LONGLONG   (1 << 1)
+
 int                 atoi(const char *);
 long                atol(const char *);
 long                strtol(const char *, char **, int);
 unsigned long       strtoul(const char *, char **, int);
+unsigned long long  __stdlib_parse_int(const char *, char **, int, int);
 
 int                 rand(void);
 int                 rand_r(unsigned *);
@@ -80,6 +90,8 @@ void               *calloc(size_t, size_t);
 void               *malloc(size_t);
 void                free(void *);
 void               *realloc(void *, size_t);
+
+// TODO: atof, strtod
 
 #ifdef __cplusplus
 };

@@ -83,6 +83,7 @@ LIB_SRCFILES += \
 
 LIB_SRCFILES += \
   lib/stdlib/__getmem.c \
+	lib/stdlib/__stdlib_parse_int.c \
 	lib/stdlib/_Exit.c \
 	lib/stdlib/abort.c \
 	lib/stdlib/abs.c \
