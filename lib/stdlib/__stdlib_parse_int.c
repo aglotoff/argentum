@@ -68,16 +68,20 @@ __stdlib_parse_int(const char *nptr, char **endptr, int base, int flags)
   // Check for overflow depending on the integer type
   if (!overflow) {
     if (flags & __STDLIB_PARSE_INT_LONGLONG) {
-      if (negate) {
-        overflow = (value > -(unsigned long long) LLONG_MIN);
-      } else if (!negate && (flags & __STDLIB_PARSE_INT_SIGNED)) {
-        overflow = (value > (unsigned long long) LLONG_MAX);
+      if (flags & __STDLIB_PARSE_INT_SIGNED) {
+        if (negate) {
+          overflow = (value > -(unsigned long long) LLONG_MIN);
+        } else {
+          overflow = (value > (unsigned long long) LLONG_MAX);
+        }
       }
     } else {
-      if (negate) {
-        overflow = (value > -(unsigned long long) LONG_MIN);
-      } else if (!negate && (flags & __STDLIB_PARSE_INT_SIGNED)) {
-        overflow = (value > (unsigned long long) LONG_MAX);
+      if (flags & __STDLIB_PARSE_INT_SIGNED) {
+        if (negate) {
+          overflow = (value > -(unsigned long long) LONG_MIN);
+        } else {
+          overflow = (value > (unsigned long long) LONG_MAX);
+        }
       } else {
         overflow = (value > (unsigned long long) ULONG_MAX);
       }

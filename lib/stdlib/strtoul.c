@@ -40,6 +40,5 @@
 unsigned long
 strtoul(const char *nptr, char **endptr, int base)
 {
-  return (unsigned long) __stdlib_parse_int(nptr, endptr, base,
-                                            __STDLIB_PARSE_INT_SIGNED);
+  return (unsigned long) __stdlib_parse_int(nptr, endptr, base, 0);
 }
