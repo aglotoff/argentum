@@ -59,6 +59,9 @@
         "stdint.h": "c",
         "irq.h": "c",
         "eth.h": "c",
-        "math.h": "c"
+        "math.h": "c",
+        "sbcon.h": "c",
+        "stddef.h": "c",
+        "time.h": "c"
     }
 }

@@ -9,16 +9,20 @@
 #include "ds1338.h"
 #include "sbcon.h"
 
-// PBX-A9 has two serial bus inerfaces (SBCon0 and SBCon1). SBCon0 provides
-// access to the Maxim DS1338 RTC on the baseboard.
+/*******************************************************************************
+ * Time-of-Year RTC driver.
+ * 
+ * PBX-A9 has two serial bus inerfaces (SBCon0 and SBCon1). SBCon0 provides
+ * access to the Maxim DS1338 RTC on the baseboard.
+ ******************************************************************************/
 
-// RTC device address
-#define RTC_ADDR      0xD0            
+// RTC device address on the I2C bus
+#define RTC_ADDR    0xD0            
 
 static struct SBCon sbcon0;
-static struct DS1338 toy;
+static struct DS1338 rtc;
 
-static struct SpinLock rtc_lock;
+static struct SpinLock  rtc_lock;
 
 /**
  * Initialize the RTC driver.
@@ -27,7 +31,7 @@ void
 rtc_init(void)
 {
   sbcon_init(&sbcon0, PA2KVA(PHYS_CON0));
-  ds1338_init(&toy, &sbcon0, RTC_ADDR);
+  ds1338_init(&rtc, &sbcon0, RTC_ADDR);
   spin_init(&rtc_lock, "rtc");
 }
 
@@ -37,17 +41,11 @@ rtc_init(void)
 time_t
 rtc_time(void)
 {
-  struct tm t1, t2;
+  struct tm tm;
 
   spin_lock(&rtc_lock);
-
-  // Make sure RTC doesn't modify the date while we're reading it.
-  do {
-    ds1338_get_time(&toy, &t1);
-    ds1338_get_time(&toy, &t2);
-  } while (memcmp(&t1, &t2, sizeof(struct tm)) != 0);
-
+  ds1338_get_time(&rtc, &tm);
   spin_unlock(&rtc_lock);
 
-  return mktime(&t2);
+  return mktime(&tm);
 }
