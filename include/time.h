@@ -38,6 +38,12 @@ struct timespec {
   long   tv_nsec;
 };
 
+/**
+ * A number used to convert the value returned by the clock() function into
+ * seconds.
+ */
+#define CLOCKS_PER_SEC  1000000
+
 enum {
   /** The identifier of the system-wide realtime clock */
   CLOCK_REALTIME  = 0,
@@ -46,6 +52,7 @@ enum {
 };
 
 char       *asctime(const struct tm *);
+clock_t     clock(void);
 struct tm  *gmtime(const time_t *);
 time_t      mktime(struct tm *);
 size_t      strftime(char *, size_t, const char *, const struct tm *);

@@ -1,6 +1,8 @@
 #ifndef __SYS_TYPES_H__
 #define __SYS_TYPES_H__
 
+/** Represents system times in clock ticks or CLOCKS_PER_SEC. */
+typedef long long       clock_t;
 /** Represents clock ID type in the clock and timer functions. */
 typedef int             clockid_t;
 /** Represents device IDs. */

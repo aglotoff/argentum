@@ -15,6 +15,7 @@ time(time_t *tloc)
   struct timespec t;
   int ret;
 
+  // TODO: replace by CLOCK_MONOTONIC
   ret = clock_gettime(CLOCK_REALTIME, &t);
 
   if (ret == 0 && tloc != NULL)
