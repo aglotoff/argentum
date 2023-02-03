@@ -14,7 +14,7 @@ int32_t sys_write(void);
 int32_t sys_exit(void);
 int32_t sys_getpid(void);
 int32_t sys_getppid(void);
-int32_t sys_time(void);
+int32_t sys_clock_time(void);
 int32_t sys_fork(void);
 int32_t sys_wait(void);
 int32_t sys_exec(void);

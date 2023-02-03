@@ -6,6 +6,7 @@
 #include <syscall.h>
 #include <sys/stat.h>
 #include <sys/utsname.h>
+#include <time.h>
 
 #include <argentum/cprintf.h>
 #include <argentum/cpu.h>
@@ -21,29 +22,29 @@ static int     sys_get_num(void);
 static int32_t sys_get_arg(int);
 
 static int32_t (*syscalls[])(void) = {
-  [__SYS_FORK]     = sys_fork,
-  [__SYS_EXEC]     = sys_exec,
-  [__SYS_WAIT]     = sys_wait,
-  [__SYS_EXIT]     = sys_exit,
-  [__SYS_GETPID]   = sys_getpid,
-  [__SYS_GETPPID]  = sys_getppid,
-  [__SYS_TIME]     = sys_time,
-  [__SYS_GETDENTS] = sys_getdents,
-  [__SYS_CHDIR]    = sys_chdir,
-  [__SYS_FCHDIR]   = sys_fchdir,
-  [__SYS_OPEN]     = sys_open,
-  [__SYS_UMASK]    = sys_umask,
-  [__SYS_MKNOD]    = sys_mknod,
-  [__SYS_LINK]     = sys_link,
-  [__SYS_UNLINK]   = sys_unlink,
-  [__SYS_RMDIR]    = sys_rmdir,
-  [__SYS_STAT]     = sys_stat,
-  [__SYS_CLOSE]    = sys_close,
-  [__SYS_READ]     = sys_read,
-  [__SYS_WRITE]    = sys_write,
-  [__SYS_SBRK]     = sys_sbrk,
-  [__SYS_UNAME]    = sys_uname,
-  [__SYS_CHMOD]    = sys_chmod,
+  [__SYS_FORK]       = sys_fork,
+  [__SYS_EXEC]       = sys_exec,
+  [__SYS_WAIT]       = sys_wait,
+  [__SYS_EXIT]       = sys_exit,
+  [__SYS_GETPID]     = sys_getpid,
+  [__SYS_GETPPID]    = sys_getppid,
+  [__SYS_GETDENTS]   = sys_getdents,
+  [__SYS_CHDIR]      = sys_chdir,
+  [__SYS_FCHDIR]     = sys_fchdir,
+  [__SYS_OPEN]       = sys_open,
+  [__SYS_UMASK]      = sys_umask,
+  [__SYS_MKNOD]      = sys_mknod,
+  [__SYS_LINK]       = sys_link,
+  [__SYS_UNLINK]     = sys_unlink,
+  [__SYS_RMDIR]      = sys_rmdir,
+  [__SYS_STAT]       = sys_stat,
+  [__SYS_CLOSE]      = sys_close,
+  [__SYS_READ]       = sys_read,
+  [__SYS_WRITE]      = sys_write,
+  [__SYS_SBRK]       = sys_sbrk,
+  [__SYS_UNAME]      = sys_uname,
+  [__SYS_CHMOD]      = sys_chmod,
+  [__SYS_CLOCK_TIME] = sys_clock_time,
 };
 
 int32_t
@@ -325,9 +326,25 @@ sys_getppid(void)
 }
 
 int32_t
-sys_time(void)
+sys_clock_time(void)
 {
-  return rtc_time();
+  clockid_t clock_id;
+  struct timespec *prev;
+  int r;
+  
+  if ((r = sys_arg_int(0, &clock_id)) < 0)
+    return r;
+  
+  if ((r = sys_arg_buf(1, (void **) &prev, sizeof(*prev), VM_WRITE)) < 0)
+    return r;
+
+  if (clock_id != CLOCK_REALTIME)
+    return -EINVAL;
+
+  prev->tv_sec = rtc_time();
+  prev->tv_nsec = 0;
+
+  return 0;
 }
 
 int32_t

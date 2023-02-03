@@ -1,5 +1,4 @@
 #include <stddef.h>
-#include <syscall.h>
 #include <time.h>
 
 /**
@@ -13,12 +12,13 @@
 time_t
 time(time_t *tloc)
 {
-  time_t ret;
+  struct timespec t;
+  int ret;
 
-  ret = __syscall(__SYS_TIME, 0, 0, 0);
+  ret = clock_gettime(CLOCK_REALTIME, &t);
 
-  if (tloc != NULL)
-    *tloc = ret;
+  if (ret == 0 && tloc != NULL)
+    *tloc = t.tv_sec;
 
-  return ret;
+  return ret == 0 ? t.tv_sec : -1;
 }

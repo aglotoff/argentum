@@ -12,23 +12,23 @@
 #define __SYS_ALARM       5
 #define __SYS_GETPID      6
 #define __SYS_GETPPID     7
-#define __SYS_TIME        8
-#define __SYS_GETDENTS    9
-#define __SYS_CHDIR       10
-#define __SYS_FCHDIR      11
-#define __SYS_OPEN        12
-#define __SYS_UMASK       13
-#define __SYS_LINK        14
-#define __SYS_MKNOD       15
-#define __SYS_UNLINK      16
-#define __SYS_RMDIR       17
-#define __SYS_STAT        18
-#define __SYS_CLOSE       19
-#define __SYS_READ        20
-#define __SYS_WRITE       21
-#define __SYS_SBRK        22
-#define __SYS_UNAME       23
-#define __SYS_CHMOD       24
+#define __SYS_GETDENTS    8
+#define __SYS_CHDIR       9
+#define __SYS_FCHDIR      10
+#define __SYS_OPEN        11
+#define __SYS_UMASK       12
+#define __SYS_LINK        13
+#define __SYS_MKNOD       14
+#define __SYS_UNLINK      15
+#define __SYS_RMDIR       16
+#define __SYS_STAT        17
+#define __SYS_CLOSE       18
+#define __SYS_READ        19
+#define __SYS_WRITE       20
+#define __SYS_SBRK        21
+#define __SYS_UNAME       22
+#define __SYS_CHMOD       23
+#define __SYS_CLOCK_TIME  24
 
 // Generic system call: pass system call number as an immediate operand of the
 // SVC instruction, and up to three parameters in R0, R1, R2.
