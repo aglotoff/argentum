@@ -16,5 +16,6 @@ struct DS1338 {
 
 void ds1338_init(struct DS1338 *, struct SBCon *, uint8_t);
 void ds1338_get_time(struct DS1338 *, struct tm *);
+void ds1338_set_time(struct DS1338 *, const struct tm *);
 
 #endif  // !__KERNEL_DRIVERS_RTC_DS1338_H__

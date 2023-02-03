@@ -10,20 +10,20 @@
 
 // RTC Registers
 enum {
-  DS1338_SECONDS = 0x00,
-  DS1338_MINUTES = 0x01,
-  DS1338_HOUR    = 0x02,
-  DS1338_DAY     = 0x03,
-  DS1338_DATE    = 0x04,
-  DS1338_MONTH   = 0x05,
-  DS1338_YEAR    = 0x06,
-  DS1338_CONTROL = 0x07,
+  SECONDS = 0x00,
+  MINUTES = 0x01,
+  HOUR    = 0x02,
+  DAY     = 0x03,
+  DATE    = 0x04,
+  MONTH   = 0x05,
+  YEAR    = 0x06,
+  CONTROL = 0x07,
 };
 
 // Hour register bits
 enum {
-  DS1338_HOUR_12 = (1 << 7),
-  DS1338_HOUR_PM = (1 << 6),
+  HOUR_12 = (1 << 7),
+  HOUR_PM = (1 << 6),
 };
 
 /**
@@ -46,6 +46,12 @@ bcd2bin(uint8_t value)
   return ((value >> 4) & 0xF) * 10 + (value & 0xF);
 }
 
+static uint8_t
+bin2bcd(uint8_t value)
+{
+  return ((value / 10) << 4) | (value % 10);
+}
+
 /**
  * Get current time.
  * 
@@ -65,24 +71,23 @@ ds1338_get_time(struct DS1338 *ds1338, struct tm *tm)
   uint8_t buf[7];
 
   // Read the contents of the time and calendar registers
-  sbcon_read(ds1338->i2c, ds1338->address, DS1338_SECONDS, buf, 7);
+  sbcon_read(ds1338->i2c, ds1338->address, SECONDS, buf, 7);
 
-  sec = bcd2bin(buf[DS1338_SECONDS] & 0x7F);
-  min = bcd2bin(buf[DS1338_MINUTES] & 0xFF);
+  sec = bcd2bin(buf[SECONDS] & 0x7F);
+  min = bcd2bin(buf[MINUTES] & 0xFF);
 
-  hour = buf[DS1338_HOUR];
-  if (buf[DS1338_HOUR] & DS1338_HOUR_12) {
-    hour = bcd2bin(buf[DS1338_HOUR] & 0x1F) % 12;
-    if (buf[DS1338_HOUR] & DS1338_HOUR_PM)
+  if (buf[HOUR] & HOUR_12) {
+    hour = bcd2bin(buf[HOUR] & 0x1F) % 12;
+    if (buf[HOUR] & HOUR_PM)
       hour += 12;
   } else {
-    hour = bcd2bin(buf[DS1338_HOUR] & 0x3F);
+    hour = bcd2bin(buf[HOUR] & 0x3F);
   }
 
-  mday = bcd2bin(buf[DS1338_DATE]);
-  mon  = bcd2bin(buf[DS1338_MONTH]);
-  year = bcd2bin(buf[DS1338_YEAR]);
-  wday = bcd2bin(buf[DS1338_DAY]);
+  mday = bcd2bin(buf[DATE]);
+  mon  = bcd2bin(buf[MONTH]);
+  year = bcd2bin(buf[YEAR]);
+  wday = bcd2bin(buf[DAY]);
 
   is_leap = ((year % 4 == 0) && (year % 100 != 0)) || (year % 400 == 0);
 
@@ -95,4 +100,27 @@ ds1338_get_time(struct DS1338 *ds1338, struct tm *tm)
   tm->tm_yday  = daysto[is_leap][mon - 1] + mday - 1;
   tm->tm_wday  = wday - 1;
   tm->tm_isdst = 0;
+}
+
+/**
+ * Set current time.
+ * 
+ * @param ds1338  Pointer to the RTC driver instance
+ * @param tm      Pointer to a tm structure holding the new date and time.
+ */
+void
+ds1338_set_time(struct DS1338 *ds1338, const struct tm *tm)
+{
+  uint8_t buf[7];
+
+  buf[SECONDS] = bin2bcd(tm->tm_sec);
+  buf[MINUTES] = bin2bcd(tm->tm_min);
+  buf[HOUR]    = bin2bcd(tm->tm_hour);
+  buf[DATE]    = bin2bcd(tm->tm_mday);
+  buf[MONTH]   = bin2bcd(tm->tm_mon + 1);
+  buf[YEAR]    = bin2bcd(tm->tm_year - (2000 - 1900));
+  buf[DAY]     = bin2bcd(tm->tm_wday + 1);
+
+  // Update the contents of the time and calendar registers
+  sbcon_write(ds1338->i2c, ds1338->address, SECONDS, buf, 7);
 }

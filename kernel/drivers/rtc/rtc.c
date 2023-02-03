@@ -37,9 +37,11 @@ rtc_init(void)
 
 /**
  * Get the current UTC time.
+ * 
+ * @return The current UTC time.
  */
 time_t
-rtc_time(void)
+rtc_get_time(void)
 {
   struct tm tm;
 
@@ -48,4 +50,17 @@ rtc_time(void)
   spin_unlock(&rtc_lock);
 
   return mktime(&tm);
+}
+
+/**
+ * Set the current UTC time.
+ * 
+ * @param time  New time value.
+ */
+void
+rtc_set_time(time_t time)
+{
+  spin_lock(&rtc_lock);
+  ds1338_get_time(&rtc, gmtime(&time));
+  spin_unlock(&rtc_lock);
 }

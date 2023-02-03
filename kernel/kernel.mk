@@ -74,6 +74,7 @@ KERNEL_SRCFILES += \
 	lib/string/strpbrk.c \
 	lib/string/strspn.c \
 	lib/string/strtok.c \
+	lib/time/gmtime.c \
 	lib/time/mktime.c
 
 KERNEL_OBJFILES := $(patsubst %.c, $(OBJ)/%.o, $(KERNEL_SRCFILES))

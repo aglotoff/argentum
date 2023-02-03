@@ -44,7 +44,7 @@ ext2_inode_new(uint32_t table, uint32_t inum, uint16_t mode)
   dp = (struct Ext2Inode *) &buf->data[sb.inode_size * inode_block_idx];
   memset(dp, 0, sb.inode_size);
   dp->mode  = mode;
-  dp->ctime = dp->atime = dp->mtime = rtc_time();
+  dp->ctime = dp->atime = dp->mtime = rtc_get_time();
 
   buf_write(buf);
   buf_release(buf);

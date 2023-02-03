@@ -76,7 +76,7 @@ sbcon_read(struct SBCon *i2c, uint8_t addr, uint8_t reg, void *buf, size_t n)
 {
   uint8_t *data = (uint8_t *) buf;
 
-  sbcon_start(i2c);               // Send the start sequence
+  sbcon_start(i2c);               // Generate a start condition
   sbcon_tx_byte(i2c, addr);       // Send device write address (R/W bit low)
   sbcon_tx_byte(i2c, reg);        // Send the internal device register number
 
@@ -84,9 +84,39 @@ sbcon_read(struct SBCon *i2c, uint8_t addr, uint8_t reg, void *buf, size_t n)
   sbcon_tx_byte(i2c, addr | 0x1); // Send device read address (R/W bit high)
 
   // Receive data; acknowledge all bytes except the last one
-  data = (uint8_t *) buf;
   while (n-- > 0)
     *data++ = sbcon_rx_byte(i2c, n == 0);   
+
+  // Generate a stop condition
+  sbcon_stop(i2c);
+
+  return 0;
+}
+
+/**
+ * Write to a slave device.
+ * 
+ * @param i2c   Pointer to the I2C bus driver intstance
+ * @param addr  The device address
+ * @param reg   Internal device register address
+ * @param buf   Pointer to the block of memory containing the data.
+ * @param n     The number of data bytes to write.
+ *
+ * @return 0 on success, a non-zero value on error.
+ */
+int
+sbcon_write(struct SBCon *i2c, uint8_t addr, uint8_t reg, const void *buf,
+            size_t n)
+{
+  const uint8_t *data = (const uint8_t *) buf;
+
+  sbcon_start(i2c);               // Generate a start condition
+  sbcon_tx_byte(i2c, addr);       // Send device write address (R/W bit low)
+  sbcon_tx_byte(i2c, reg);        // Send the internal device register number
+
+  // Transmit data
+  while (n-- > 0)
+    sbcon_tx_byte(i2c, *data++);
 
   // Generate a stop condition
   sbcon_stop(i2c);

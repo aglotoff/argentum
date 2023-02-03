@@ -13,5 +13,6 @@ struct SBCon {
 
 void sbcon_init(struct SBCon *, void *);
 int  sbcon_read(struct SBCon *, uint8_t, uint8_t, void *, size_t);
+int  sbcon_write(struct SBCon *, uint8_t, uint8_t, const void *, size_t);
 
 #endif  // !__KERNEL_DRIVERS_SBCON_H__

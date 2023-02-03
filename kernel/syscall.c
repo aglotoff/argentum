@@ -341,7 +341,7 @@ sys_clock_time(void)
   if (clock_id != CLOCK_REALTIME)
     return -EINVAL;
 
-  prev->tv_sec = rtc_time();
+  prev->tv_sec = rtc_get_time();
   prev->tv_nsec = 0;
 
   return 0;

@@ -356,7 +356,7 @@ fs_inode_read(struct Inode *ip, void *buf, size_t nbyte, off_t *off)
   if ((ret = ext2_inode_read(ip, buf, nbyte, *off)) < 0)
     return ret;
 
-  ip->atime = rtc_time();
+  ip->atime = rtc_get_time();
   ip->flags |= FS_INODE_DIRTY;
 
   *off += ret;
@@ -386,7 +386,7 @@ fs_inode_write(struct Inode *ip, const void *buf, size_t nbyte, off_t *off)
     if ((size_t) *off > ip->size)
       ip->size = *off;
     
-    ip->mtime = rtc_time();
+    ip->mtime = rtc_get_time();
     ip->flags |= FS_INODE_DIRTY;
   }
 
@@ -425,7 +425,7 @@ fs_inode_trunc(struct Inode *ip)
   ext2_inode_trunc(ip);
 
   ip->size = 0;
-  ip->ctime = ip->mtime = rtc_time();
+  ip->ctime = ip->mtime = rtc_get_time();
   ip->flags |= FS_INODE_DIRTY;
 
   return 0;
@@ -587,10 +587,10 @@ fs_create(const char *path, mode_t mode, dev_t dev, struct Inode **istore)
 
   // TODO: EROFS
 
-  dp->atime = dp->ctime = dp->mtime = rtc_time();
+  dp->atime = dp->ctime = dp->mtime = rtc_get_time();
   dp->flags |= FS_INODE_DIRTY;
 
-  ip->ctime = ip->mtime = rtc_time();
+  ip->ctime = ip->mtime = rtc_get_time();
   ip->flags |= FS_INODE_DIRTY;
   
   if (r == 0) {
@@ -777,11 +777,11 @@ ext2_inode_rmdir(struct Inode *dir, char *name)
     goto out2;
 
   if (--ip->nlink > 0)
-    ip->ctime = rtc_time();
+    ip->ctime = rtc_get_time();
   ip->flags |= FS_INODE_DIRTY;
 
   dir->nlink--;
-  dir->ctime = dir->mtime = rtc_time();
+  dir->ctime = dir->mtime = rtc_get_time();
   dir->flags |= FS_INODE_DIRTY;
 
 out2:
@@ -815,7 +815,7 @@ fs_link(char *path1, char *path2)
   }
 
   ip->nlink++;
-  ip->ctime = rtc_time();
+  ip->ctime = rtc_get_time();
   ip->flags |= FS_INODE_DIRTY;
 
   // TODO: EROFS
@@ -881,7 +881,7 @@ fs_unlink(const char *path)
     goto out2;
 
   if (--ip->nlink > 0)
-    ip->ctime = rtc_time();
+    ip->ctime = rtc_get_time();
   ip->flags |= FS_INODE_DIRTY;
 
 out2:
@@ -955,7 +955,7 @@ fs_chmod(struct Inode *ip, mode_t mode)
   // TODO: additional permission checks
 
   ip->mode  = mode;
-  ip->ctime = rtc_time();
+  ip->ctime = rtc_get_time();
 
   ip->flags |= FS_INODE_DIRTY;
   fs_inode_unlock(ip);
