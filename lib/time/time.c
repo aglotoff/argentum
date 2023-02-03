@@ -2,12 +2,12 @@
 #include <time.h>
 
 /**
- * Get time.
+ * Determine the current calendar time in seconds since the Epoch.
  * 
- * @param tloc Pointer to an area where the time value is stored. If NULL, no
- *             value is stored.
+ * @param timer Pointer to an area to store the time value or NULL
  *
- * @return The value of time in seconds since the Epoch.
+ * @return The current calendar time in seconds since the Epoch. The value
+ *         (time_t)-1 is returned if the calendar time is not available.
  */
 time_t
 time(time_t *tloc)
