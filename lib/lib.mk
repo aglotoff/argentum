@@ -152,6 +152,7 @@ LIB_SRCFILES += \
 	lib/time/clock_gettime.c \
 	lib/time/difftime.c \
 	lib/time/gmtime.c \
+	lib/time/localtime.c \
 	lib/time/mktime.c \
 	lib/time/strftime.c \
 	lib/time/time.c

@@ -53,11 +53,12 @@ enum {
 
 char       *asctime(const struct tm *);
 clock_t     clock(void);
+int         clock_gettime(clockid_t, struct timespec *);
 double      difftime(time_t, time_t);
 struct tm  *gmtime(const time_t *);
+struct tm  *localtime(const time_t *);
 time_t      mktime(struct tm *);
 size_t      strftime(char *, size_t, const char *, const struct tm *);
 time_t      time(time_t *);
-int         clock_gettime(clockid_t, struct timespec *);
 
 #endif  // !__TIME_H__
