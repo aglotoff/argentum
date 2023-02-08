@@ -10,6 +10,7 @@
 
 char buf[10240];
 char name[256];
+char datebuf[256];
 
 int
 main(int argc, char **argv)
@@ -74,7 +75,8 @@ main(int argc, char **argv)
              st.st_mode & S_IWOTH ? 'w' : '-',
              st.st_mode & S_IXOTH ? 'x' : '-');
       printf("%2d root root %6d", st.st_nlink, st.st_size);
-      printf(" %s", asctime(gmtime(&st.st_mtime)));
+      strftime(datebuf, 256, "%b %d %H:%M", gmtime(&st.st_mtime));
+      printf(" %s", datebuf);
       printf(" \x1b[%sm%.*s\x1b[m\n", color, dp->d_namelen, dp->d_name);
 
       p += dp->d_reclen;
