@@ -104,6 +104,7 @@ LIB_SRCFILES += \
 	lib/stdlib/rand.c \
 	lib/stdlib/rand_r.c \
 	lib/stdlib/realloc.c \
+	lib/stdlib/setenv.c \
 	lib/stdlib/srand.c \
 	lib/stdlib/strtol.c \
 	lib/stdlib/strtoul.c

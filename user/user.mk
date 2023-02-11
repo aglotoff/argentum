@@ -11,6 +11,7 @@ USER_SRCFILES += \
 	user/bin/chmod.c \
 	user/bin/date.c \
 	user/bin/echo.c \
+	user/bin/env.c \
 	user/bin/link.c \
 	user/bin/ls.c \
 	user/bin/mkdir.c \

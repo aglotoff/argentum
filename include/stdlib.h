@@ -74,6 +74,7 @@ int                 atexit(void (*)(void));
 void                abort(void);
 void                exit(int);
 char               *getenv(const char *);
+int                 setenv(const char *, const char *, int);
 
 void               *bsearch(const void *, const void *, size_t, size_t,
                             int (*)(const void *, const void *));

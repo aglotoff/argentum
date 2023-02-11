@@ -82,13 +82,65 @@ get_cmd(void)
   return buf;
 }
 
+static int
+builtin_cd(int argc, char **argv)
+{
+  if (argc < 2) {
+    printf("Usage: %s <directory>\n", argv[0]);
+    return EXIT_FAILURE;
+  }
+
+  if (chdir(argv[1]) != 0) {
+    perror(argv[1]);
+    return EXIT_FAILURE;
+  } else if (getcwd(cwd, sizeof(cwd)) == NULL) {
+    perror("getcwd");
+    return EXIT_FAILURE;
+  }
+  
+  return 0;
+}
+
+static int
+builtin_export(int argc, char **argv)
+{
+  char *p;
+  
+  if (argc < 2) {
+    printf("Usage: %s name=word\n", argv[0]);
+    return EXIT_FAILURE;
+  }
+
+  if ((p = strchr(argv[1], '=')) == NULL) {
+    printf("Usage: %s name=word\n", argv[0]);
+    return EXIT_FAILURE;
+  }
+
+  *p++ = '\0';
+  if (setenv(argv[1], p, 1) != 0) {
+    perror("setenv");
+    return EXIT_FAILURE;
+  }
+  
+  return 0;
+}
+
+struct BuiltinCmd {
+  const char  *name;
+  int        (*func)(int, char **);
+};
+
+static struct BuiltinCmd builtins[] = {
+  { "cd",     builtin_cd     },
+  { "export", builtin_export },
+};
+
+#define NBUILTINS   (sizeof(builtins) / sizeof(builtins[0]))
+
 int
 main(void)
 {
-  struct Cmd *cmd;
-  struct ExecCmd *ecmd;
-  pid_t pid;
-  int status;
+  struct Cmd *cmd; 
 
   umask(S_IWGRP | S_IWOTH);
 
@@ -96,33 +148,12 @@ main(void)
     perror("getcwd");
     exit(EXIT_FAILURE);
   }
-
+  
   for (;;) {
     if ((cmd = cmd_parse(get_cmd())) == NULL)
       continue;
 
-    ecmd = (struct ExecCmd *) cmd;
-    if ((cmd->type == CMD_EXEC) && (strcmp(ecmd->argv[0], "cd") == 0)) {
-      if (ecmd->argv[1] == NULL) {
-        printf("Usage: %s <directory>\n", ecmd->argv[0]);
-      } else {
-        if (chdir(ecmd->argv[1]) != 0) {
-          perror(ecmd->argv[1]);
-        } else if (getcwd(cwd, sizeof(cwd)) == NULL) {
-          perror("getcwd");
-          exit(EXIT_FAILURE);
-        }
-      }
-    } else {
-      if ((pid = fork()) == 0) {
-        cmd_run(cmd);
-      } else if (pid > 0) {
-        waitpid(pid, &status, 0);
-      } else {
-        perror("fork");
-      }
-    }
-
+    cmd_run(cmd);
     cmd_free(cmd);
   }
 
@@ -139,15 +170,27 @@ cmd_run(const struct Cmd * cmd)
   struct ListCmd *lcmd;
   struct BgCmd *bcmd;
   struct RedirCmd *rcmd;
+  struct BuiltinCmd *builtin;
 
   switch (cmd->type) {
   case CMD_EXEC:
     ecmd = (struct ExecCmd *) cmd;
 
-    execvp(ecmd->argv[0], ecmd->argv);
-    perror(ecmd->argv[0]);
-    exit(1);
+    for (builtin = builtins; builtin < &builtins[NBUILTINS]; builtin++)
+      if (strcmp(ecmd->argv[0], builtin->name) == 0) {
+        builtin->func(ecmd->argc, ecmd->argv);
+        return;
+      }
 
+    if ((pid = fork()) == 0) {
+      execvp(ecmd->argv[0], ecmd->argv);
+      perror(ecmd->argv[0]);
+      exit(1);
+    } else if (pid > 0) {
+      waitpid(pid, &status, 0);
+    } else {
+      perror("fork");
+    }
     break;
 
   case CMD_BG:
@@ -166,14 +209,7 @@ cmd_run(const struct Cmd * cmd)
     lcmd = (struct ListCmd *) cmd;
 
     if (lcmd->left != NULL) {
-      if ((pid = fork()) == 0) {
-        cmd_run(lcmd->left);
-      } else if (pid > 0) {
-        waitpid(pid, &status, 0);
-      } else {
-        perror("fork");
-        exit(1);
-      }
+      cmd_run(lcmd->left);
     }
 
     if (lcmd->right != NULL) {
@@ -195,8 +231,6 @@ cmd_run(const struct Cmd * cmd)
     cmd_run(rcmd->cmd);
     break;
   }
-
-  exit(0);
 }
 
 static struct Cmd *

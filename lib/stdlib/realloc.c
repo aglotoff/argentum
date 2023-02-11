@@ -2,6 +2,8 @@
 #include <string.h>
 #include <stdio.h>
 
+extern char _end[];
+
 void *
 realloc(void *ptr, size_t size)
 {
@@ -11,6 +13,13 @@ realloc(void *ptr, size_t size)
 
   if (ptr == NULL)
     return malloc(size);
+
+  if (ptr >= (void *) _end) {
+    if ((newptr = malloc(size)) == NULL)
+      return NULL;
+    memmove(newptr, ptr, size);
+    return newptr;
+  }
 
   hdr = (struct __BlkHeader *) ptr - 1;
   n = (size + sizeof(struct __BlkHeader) - 1) / sizeof(struct __BlkHeader) + 1;
