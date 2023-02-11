@@ -32,6 +32,8 @@ struct utsname utsname = {
   .machine  = "arm",
 };
 
+void nano_test(void);
+
 /**
  * Main kernel function.
  * 
@@ -62,7 +64,9 @@ main(void)
   buf_init();           // Buffer cache
   file_init();          // File table
   sched_init();     // Scheduler
-  process_init();       // Process table
+  //process_init();       // Process table
+
+  nano_test();
 
   // Unblock other CPUs
   bsp_started = 1;    
@@ -92,4 +96,37 @@ mp_main(void)
 
   // Enter the scheduler loop
   sched_start();   
+}
+
+uint8_t th1_stack[4096];
+uint8_t th2_stack[4096];
+
+static void
+th1_func(void)
+{
+  //cpu_irq_enable();
+
+  for (;;)
+    cprintf("AAAAA");
+}
+
+static void
+th2_func(void)
+{
+  //cpu_irq_enable();
+
+  for (;;)
+    cprintf("BBBBB");
+}
+
+void
+nano_test(void)
+{
+  struct KThread *th1, *th2;
+
+  th1 = kthread_create(NULL, th1_func, 0, th1_stack + 4096);
+  kthread_resume(th1);
+
+  th2 = kthread_create(NULL, th2_func, 0, th2_stack + 4096);
+  kthread_resume(th2);
 }

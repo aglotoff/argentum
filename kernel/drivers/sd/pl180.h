@@ -9,7 +9,7 @@ struct PL180 {
 };
 
 int  pl180_init(struct PL180 *, void *);
-void pl180_irq_enable(struct PL180 *);
+void pl180_cpu_irq_enable(struct PL180 *);
 int  pl180_send_cmd(struct PL180 *, uint32_t, uint32_t, int, uint32_t *);
 void pl180_begin_transfer(struct PL180 *, uint32_t, int);
 int  pl180_receive_data(struct PL180 *, void *, size_t);

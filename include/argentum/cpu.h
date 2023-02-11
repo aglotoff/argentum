@@ -13,9 +13,10 @@ struct KThread;
  */
 struct Cpu {
   struct Context *scheduler;      ///< Saved scheduler context
-  struct KThread  *thread;         ///< The currently running thread   
-  int             irq_save_count; ///< Depth of irq_save() nesting
-  int             irq_flags;      ///< Were interupts enabled before IRQ save?
+  struct KThread *thread;         ///< The currently running kernel thread
+  int             isr_nesting;    ///< ISR nesting level
+  int             irq_save_count; ///< Depth of cpu_irq_save() nesting
+  int             irq_flags;      ///< Were interrupts enabled before IRQ save?
 };
 
 /**
@@ -25,8 +26,14 @@ struct Cpu {
 
 extern struct Cpu cpus[];
 
-unsigned     cpu_id(void);
-struct Cpu  *my_cpu(void);
+struct Cpu     *my_cpu(void);
 struct KThread *my_thread(void);
+unsigned        cpu_id(void);
+void            cpu_irq_disable(void);
+void            cpu_irq_enable(void);
+void            cpu_irq_save(void);
+void            cpu_irq_restore(void);
+void            cpu_isr_enter(void);
+void            cpu_isr_exit(void);
 
 #endif  // !__INCLUDE_ARGENTUM_CPU_H__

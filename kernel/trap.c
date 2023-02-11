@@ -50,9 +50,6 @@ trap_handle_abort(struct TrapFrame *tf)
   uint32_t address, status;
   struct Process *process;
 
-  process = my_process();
-  assert(process != NULL);
-
   // Read the contents of the corresponsing Fault Address Register (FAR) and 
   // the Fault Status Register (FSR).
   address = tf->trapno == T_DABT ? cp15_dfar_get() : cp15_ifar_get();
@@ -63,6 +60,9 @@ trap_handle_abort(struct TrapFrame *tf)
     print_trapframe(tf);
     panic("kernel fault va %p status %#x", address, status);
   }
+
+  process = my_process();
+  assert(process != NULL);
 
   if (vm_handle_fault(process->vm, address) == 0)
     return;

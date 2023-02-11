@@ -54,7 +54,7 @@ static struct {
   struct SpinLock lock;
 } sd_queue;
 
-static int  sd_irq(void);
+static void sd_irq(void);
 static void sd_start_transfer(struct Buf *);
 
 /**
@@ -98,7 +98,7 @@ sd_init(void)
   spin_init(&sd_queue.lock, "sd_queue");
 
   // Enable interrupts.
-  pl180_irq_enable(&mmci);
+  pl180_cpu_irq_enable(&mmci);
   irq_attach(IRQ_MCIA, sd_irq, 0);
 
   return 0;
@@ -165,7 +165,7 @@ sd_start_transfer(struct Buf *buf)
 
 // Handle the SD card interrupt. Complete the current data transfer operation
 // and wake up the corresponding thread.
-static int
+static void
 sd_irq(void)
 {
   struct ListLink *link;
@@ -206,6 +206,4 @@ sd_irq(void)
 
   // Resume the thread waiting for the buf data.
   waitqueue_wakeup_all(&buf->wait_queue);
-
-  return 0;
 }

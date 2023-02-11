@@ -113,7 +113,7 @@ pl180_init(struct PL180 *pl180, void *base)
  * @param pl180 Pointer to the driver instance.
  */
 void
-pl180_irq_enable(struct PL180 *pl180)
+pl180_cpu_irq_enable(struct PL180 *pl180)
 {
   pl180->base[MCI_MASK0] = MCI_TX_FIFO_EMPTY | MCI_RX_DATA_AVLBL;
 }

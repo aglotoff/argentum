@@ -52,7 +52,7 @@ spin_lock(struct SpinLock *lock)
   int t1, t2;
 
   // Disable interrupts to avoid deadlock.
-  irq_save();
+  cpu_irq_save();
 
   if (spin_holding(lock)) {
     spin_print_caller_pcs(lock);
@@ -104,7 +104,7 @@ spin_unlock(struct SpinLock *lock)
     : "cc", "memory"
   );
   
-  irq_restore();
+  cpu_irq_restore();
 }
 
 /**
@@ -118,9 +118,9 @@ spin_holding(struct SpinLock *lock)
 {
   int r;
 
-  irq_save();
+  cpu_irq_save();
   r = lock->locked && (lock->cpu == my_cpu());
-  irq_restore();
+  cpu_irq_restore();
 
   return r;
 }

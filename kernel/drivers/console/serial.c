@@ -11,7 +11,7 @@
 // Use UART0 as serial debug console.
 static struct Pl011 uart0;
 
-static int serial_irq(void);
+static void serial_irq(void);
 
 /**
  * Initialize the serial console driver.
@@ -49,11 +49,10 @@ serial_getc(void)
 /**
  * Handle interrupt from the serial console.
  */
-static int
+static void
 serial_irq(void)
 {
   console_interrupt(serial_getc);
-  return 0;
 }
 
 /**

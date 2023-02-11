@@ -12,11 +12,7 @@
 
 void         irq_init(void);
 void         irq_init_percpu(void);
-void         irq_disable(void);
-void         irq_enable(void);
-void         irq_save(void);
-void         irq_restore(void);
 void         irq_dispatch(void);
-int          irq_attach(int, int (*)(void), int);
+int          irq_attach(int, void (*)(void), int);
 
 #endif  // !__INCLUDE_ARGENTUM_IRQ_H__

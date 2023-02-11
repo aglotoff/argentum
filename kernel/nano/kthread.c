@@ -85,8 +85,6 @@ sched_start(void)
 {
   struct KThread *next;
 
-  irq_enable();
-
   sched_lock();
 
   for (;;) {
@@ -114,7 +112,7 @@ sched_start(void)
 
       sched_unlock();
 
-      irq_enable();
+      cpu_irq_enable();
 
       asm volatile("wfi");
 
@@ -143,6 +141,7 @@ kthread_create(struct Process *process, void (*entry)(void), int priority, uint8
   if ((thread = (struct KThread *) kmem_alloc(thread_cache)) == NULL)
     return NULL;
 
+  thread->flags = 0;
   thread->priority = priority;
   thread->state = KTHREAD_SUSPENDED;
 
@@ -186,8 +185,10 @@ kthread_yield(void)
 void
 kthread_run(void)
 {
-  // Still holding the process table lock.
+  // Still holding the scheduler lock.
   sched_unlock();
+
+  cpu_irq_enable();
 
   my_thread()->entry();
 }

@@ -23,6 +23,10 @@ enum {
   KTHREAD_DESTROYED    = 5,
 };
 
+enum {
+  KTHREAD_RESCHEDULE = (1 << 0),
+};
+
 /**
  * Saved registers for kernel context switches (SP is saved implicitly).
  * See https://wiki.osdev.org/Calling_Conventions
@@ -52,6 +56,7 @@ struct KThread {
   struct Context   *context;        ///< Saved context
   void            (*entry)(void);   ///< Thread entry point
   struct Process   *process;        ///< The process this thread belongs to
+  int               flags;
 };
 
 void            kthread_list_add(struct KThread *);

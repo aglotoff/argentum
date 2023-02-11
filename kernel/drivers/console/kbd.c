@@ -12,7 +12,7 @@
 // mouse.
 static struct Pl050 kmi0;    
 
-static int kbd_irq(void);
+static void kbd_irq(void);
 
 /**
  * Initialize the keyboard driver.
@@ -34,11 +34,10 @@ kbd_init(void)
  * 
  * Get data and store it into the console buffer.
  */
-static int
+static void
 kbd_irq(void)
 {
   console_interrupt(kbd_getc);
-  return 0;
 }
 
 // Keymap column indicies for different states
