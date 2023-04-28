@@ -221,14 +221,21 @@ cmd_run(const struct Cmd * cmd)
   case CMD_REDIR:
     rcmd = (struct RedirCmd *) cmd;
 
-    close(rcmd->fd);
+    if ((pid = fork()) == 0) {
+      close(rcmd->fd);
 
-    if ((fd = open(rcmd->name, rcmd->oflag, 0666)) < 0) {
-      perror(rcmd->name);
-      exit(1);
+      if ((fd = open(rcmd->name, rcmd->oflag, 0666)) < 0) {
+        perror(rcmd->name);
+        exit(1);
+      }
+
+      cmd_run(rcmd->cmd);
+      exit(0);
+    } else if (pid > 0) {
+      waitpid(pid, &status, 0);
+    } else {
+      perror("fork");
     }
-
-    cmd_run(rcmd->cmd);
     break;
   }
 }
