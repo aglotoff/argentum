@@ -18,6 +18,18 @@ static struct ListLink run_queue[KTHREAD_MAX_PRIORITIES];
 
 struct SpinLock __sched_lock;
 
+struct KThread *
+kthread_current(void)
+{
+  struct KThread *thread;
+
+  cpu_irq_save();
+  thread = cpu_current()->thread;
+  cpu_irq_restore();
+
+  return thread;
+}
+
 void
 kthread_free(struct KThread *thread)
 {
@@ -51,7 +63,7 @@ sched_init(void)
 }
 
 void
-kthread_list_add(struct KThread *th)
+kthread_enqueue(struct KThread *th)
 {
   if (!sched_locked())
     panic("scheduler not locked");
@@ -94,12 +106,12 @@ sched_start(void)
       assert(next->state == KTHREAD_RUNNABLE);
 
       next->state = KTHREAD_RUNNING;
-      my_cpu()->thread = next;
+      cpu_current()->thread = next;
 
       if (next->process != NULL)
         mmu_switch_user(next->process->vm->trtab);
 
-      context_switch(&my_cpu()->scheduler, next->context);
+      context_switch(&cpu_current()->scheduler, next->context);
 
       if (next->process != NULL)
         mmu_switch_kernel();
@@ -108,7 +120,7 @@ sched_start(void)
         kthread_free(next);
     } else {
       // Mark that no process is running on this CPU.
-      my_cpu()->thread = NULL;
+      cpu_current()->thread = NULL;
 
       sched_unlock();
 
@@ -128,9 +140,9 @@ sched_yield(void)
 
   assert(sched_locked());
 
-  irq_flags = my_cpu()->irq_flags;
-  context_switch(&my_thread()->context, my_cpu()->scheduler);
-  my_cpu()->irq_flags = irq_flags;
+  irq_flags = cpu_current()->irq_flags;
+  context_switch(&kthread_current()->context, cpu_current()->scheduler);
+  cpu_current()->irq_flags = irq_flags;
 }
 
 struct KThread *
@@ -171,11 +183,11 @@ kthread_destroy(struct KThread *thread)
 void
 kthread_yield(void)
 {
-  struct KThread *current = my_thread();
+  struct KThread *current = kthread_current();
   
   sched_lock();
 
-  kthread_list_add(current);
+  kthread_enqueue(current);
   sched_yield();
 
   sched_unlock();
@@ -190,7 +202,7 @@ kthread_run(void)
 
   cpu_irq_enable();
 
-  my_thread()->entry();
+  kthread_current()->entry();
 }
 
 /**
@@ -199,7 +211,7 @@ kthread_run(void)
 void
 kthread_sleep(struct ListLink *queue, int state)
 {
-  struct KThread *current = my_thread();
+  struct KThread *current = kthread_current();
 
   if (!sched_locked())
     panic("scheduler not locked");
@@ -219,7 +231,7 @@ kthread_priority_cmp(struct KThread *t1, struct KThread *t2)
 int
 kthread_resume(struct KThread *t)
 {
-  // struct KThread *current = my_thread();
+  // struct KThread *current = kthread_current();
 
   sched_lock();
 
@@ -228,10 +240,10 @@ kthread_resume(struct KThread *t)
     return -EINVAL;
   }
 
-  kthread_list_add(t);
+  kthread_enqueue(t);
 
   // if ((current != NULL) && (kthread_priority_cmp(t, current)) > 0) {
-  //   kthread_list_add(current);
+  //   kthread_enqueue(current);
   //   sched_yield();
   // }
 
@@ -259,6 +271,6 @@ kthread_wakeup_all(struct ListLink *wait_queue)
     list_remove(l);
 
     t = LIST_CONTAINER(l, struct KThread, link);
-    kthread_list_add(t);
+    kthread_enqueue(t);
   }
 }

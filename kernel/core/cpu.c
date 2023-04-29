@@ -7,93 +7,63 @@
 #include <argentum/irq.h>
 #include <argentum/kthread.h>
 
-/*******************************************************************************
- * Per-CPU state
- * 
- * The caller must disable interrupts while accessing the per-CPU data, since a
- * timer IRQ may cause the current thread to be moved to another processor, and
- * the pointer to the CPU struct will no longer be valid.
- ******************************************************************************/
+struct Cpu _cpus[NCPU];
 
-struct Cpu cpus[NCPU];
-
-/**
- * Get the current processor ID.
- * 
- * @return The current processor ID.
- */
-unsigned
-cpu_id(void)
-{
-  return cp15_mpidr_get() & 3;
-}
+// Disable both regular and fast IRQs
+#define PSR_IRQ_MASK  (PSR_I | PSR_F)
 
 /**
  * Get the current CPU structure.
+ * 
+ * The caller must disable interrupts, otherwise the thread could switch to
+ * a different processor due to timer interrupt and the return value will be
+ * incorrect. 
  *
  * @return The pointer to the current CPU structure.
  */
 struct Cpu *
-my_cpu(void)
+cpu_current(void)
 {
-  uint32_t psr;
+  uint32_t cpsr = cpsr_get();
 
-  psr = cpsr_get();
-  if (!(psr & PSR_I) || !(psr & PSR_F))
+  if ((cpsr & PSR_IRQ_MASK) != PSR_IRQ_MASK)
     panic("interruptible");
 
-  return &cpus[cpu_id()];
+  // In case of four Cortex-A9 processors, the CPU IDs are 0x0, 0x1, 0x2, and
+  // 0x3 so we can use them as array indicies.
+  return &_cpus[cpu_id()];
 }
 
-struct KThread *
-my_thread(void)
-{
-  struct KThread *thread;
-
-  cpu_irq_save();
-  thread = my_cpu()->thread;
-  cpu_irq_restore();
-
-  return thread;
-}
-
-/*******************************************************************************
- * Interrupt control
- * 
- * cpu_irq_save() and cpu_irq_restore() are used to disable and reenable
- * interrupts on the current CPU, respectively. Their invocations are counted,
- * i.e. it takes two cpu_irq_restore() calls to undo two cpu_irq_save() calls.
- * This allows, for example, to acquire two different locks and the interrupts
- * will not be reenabled until both locks have been released.
- ******************************************************************************/
-
+/**
+ * Disable all interrupts on the local (current) processor core.
+ */
 void
 cpu_irq_disable(void)
 {
-  cpsr_set(cpsr_get() | PSR_I | PSR_F);
+  cpsr_set(cpsr_get() | PSR_IRQ_MASK);
 }
 
+/**
+ * Enable all interrupts on the local (current) processor core.
+ */
 void
 cpu_irq_enable(void)
 {
-  cpsr_set(cpsr_get() & ~(PSR_I | PSR_F));
+  cpsr_set(cpsr_get() & ~PSR_IRQ_MASK);
 }
 
 /**
  * Save the current CPU interrupt state and disable interrupts.
- *
- * Both IRQ and FIQ interrupts are being disabled.
  */
 void
 cpu_irq_save(void)
 {
-  uint32_t psr;
+  uint32_t cpsr = cpsr_get();
 
-  psr = cpsr_get();
-  cpsr_set(psr | PSR_I | PSR_F);
+  cpsr_set(cpsr | PSR_IRQ_MASK);
 
-  if (my_cpu()->irq_save_count++ == 0)
-    my_cpu()->irq_flags = ~psr & (PSR_I | PSR_F);
+  if (cpu_current()->irq_save_count++ == 0)
+    cpu_current()->irq_flags = ~cpsr & PSR_IRQ_MASK;
 }
 
 /**
@@ -102,46 +72,62 @@ cpu_irq_save(void)
 void
 cpu_irq_restore(void)
 {
-  uint32_t psr = cpsr_get();
+  uint32_t cpsr = cpsr_get();
 
-  if (!(psr & PSR_I) || !(psr & PSR_F))
+  if ((cpsr & PSR_IRQ_MASK) != PSR_IRQ_MASK)
     panic("interruptible");
 
-  if (--my_cpu()->irq_save_count < 0)
+  if (--cpu_current()->irq_save_count < 0)
     panic("interruptible");
 
-  if (my_cpu()->irq_save_count == 0)
-    cpsr_set(psr & ~my_cpu()->irq_flags);
+  if (cpu_current()->irq_save_count == 0)
+    cpsr_set(cpsr & ~cpu_current()->irq_flags);
 }
 
+/**
+ * Notify the kernel that an ISR processing has started.
+ */
 void
-cpu_isr_enter(void)
+isr_enter(void)
 {
-  uint32_t psr = cpsr_get();
+  uint32_t cpsr = cpsr_get();
 
-  if (!(psr & PSR_I) || !(psr & PSR_F))
+  if ((cpsr & PSR_IRQ_MASK) != PSR_IRQ_MASK)
     panic("interruptible");
 
-  my_cpu()->isr_nesting++;
+  cpu_current()->isr_nesting++;
 }
 
+/**
+ * Notify the kernel that an ISR processing is finished.
+ */
 void
-cpu_isr_exit(void)
+isr_exit(void)
 {
-  struct KThread *th;
+  struct Cpu *my_cpu;
 
   sched_lock();
 
-  th = my_cpu()->thread;
+  my_cpu = cpu_current();
 
-  if (my_cpu()->isr_nesting <= 0)
+  if (my_cpu->isr_nesting <= 0)
     panic("isr_nesting <= 0");
 
-  if ((--my_cpu()->isr_nesting == 0) && (th != NULL)) {
-    if (th->flags & KTHREAD_RESCHEDULE) {
-      th->flags &= ~KTHREAD_RESCHEDULE;
-      kthread_list_add(th);
-      sched_yield();
+  if (--my_cpu->isr_nesting == 0) {
+    struct KThread *my_thread = my_cpu->thread;
+
+    if (my_thread != NULL) {
+      // Before resuming the current thread, check whether it must give up the
+      // CPU due to a higher-priority thread becoming available or due to time
+      // quanta exhaustion.
+      if (my_thread->flags & KTHREAD_RESCHEDULE) {
+        my_thread->flags &= ~KTHREAD_RESCHEDULE;
+
+        kthread_enqueue(my_thread);
+        sched_yield();
+      }
+
+      // TODO: the thread could also be marked for desruction?
     }
   }
 

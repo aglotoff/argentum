@@ -106,6 +106,9 @@
 /** Domain n access permission bits */
 #define CP15_DACR_DN(n, x)  ((x) << (n * 2))
 
+/** Cortex-A9 MPCore CPU ID */
+#define CP15_MPIDR_CPU_ID   3
+
 #ifndef __ASSEMBLER__
 
 #include <stdint.h>
@@ -200,5 +203,19 @@ r11_get(void)
 }
 
 #endif  // !__ASSEMBLER__
+
+// Indices for the stack backtrace data structure represented as an array of
+// uint32_t values. See ARM Procedure Call Standard for more details
+// To generate this structure for all functions, the code needs to be compiled
+// with the -mapcs-frame and -fno-omit-frame-pointer flags
+
+/** Save code pointer (fp points here) */
+#define APCS_FRAME_PC    0
+/** Return link value */
+#define APCS_FRAME_LINK  -1
+/** Return sp value */
+#define APCS_FRAME_SP    -2
+/** Return fp value */
+#define APCS_FRAME_FP    -3
 
 #endif  // !__INCLUDE_ARGENTUM_ARMV7_REGS_H__

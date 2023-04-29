@@ -59,7 +59,8 @@ struct KThread {
   int               flags;
 };
 
-void            kthread_list_add(struct KThread *);
+struct KThread *kthread_current(void);
+void            kthread_enqueue(struct KThread *);
 struct KThread *kthread_create(struct Process *, void (*)(void), int, uint8_t *);
 void            kthread_destroy(struct KThread *);
 int             kthread_resume(struct KThread *);

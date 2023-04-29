@@ -38,12 +38,12 @@ KERNEL_SRCFILES :=	\
 	kernel/mm/page.c \
 	kernel/mm/kmem.c \
 	kernel/mm/vm.c \
-	kernel/nano/cpu.c \
-	kernel/nano/kmutex.c \
-	kernel/nano/kthread.c \
-	kernel/nano/ktimer.c \
-	kernel/nano/spinlock.c \
-	kernel/nano/waitqueue.c \
+	kernel/core/cpu.c \
+	kernel/core/kmutex.c \
+	kernel/core/kthread.c \
+	kernel/core/ktimer.c \
+	kernel/core/spinlock.c \
+	kernel/core/waitqueue.c \
 	kernel/context.S \
 	kernel/cprintf.c \
 	kernel/entry.S \

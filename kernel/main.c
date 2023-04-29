@@ -19,6 +19,7 @@
 #include <argentum/sd.h>
 
 static void mp_main(void);
+void core_test(void);
 
 // Whether the bootstrap processor has finished its initialization?
 int bsp_started;
@@ -31,8 +32,6 @@ struct utsname utsname = {
   .version  = __DATE__ " " __TIME__,
   .machine  = "arm",
 };
-
-void nano_test(void);
 
 /**
  * Main kernel function.
@@ -63,10 +62,10 @@ main(void)
   // Initialize the remaining kernel services
   buf_init();           // Buffer cache
   file_init();          // File table
-  sched_init();     // Scheduler
-  //process_init();       // Process table
+  sched_init();         // Scheduler
+  process_init();       // Process table
 
-  nano_test();
+  //core_test();
 
   // Unblock other CPUs
   bsp_started = 1;    
@@ -120,7 +119,7 @@ th2_func(void)
 }
 
 void
-nano_test(void)
+core_test(void)
 {
   struct KThread *th1, *th2;
 

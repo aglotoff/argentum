@@ -12,16 +12,12 @@ void
 waitqueue_sleep(struct WaitQueue *wq, struct SpinLock *lock)
 {
   sched_lock();
+  spin_unlock(lock);
 
-  if (lock != NULL)
-    spin_unlock(lock);
-  
   kthread_sleep(&wq->head, KTHREAD_NOT_RUNNABLE);
 
   sched_unlock();
-
-  if (lock != NULL)
-    spin_lock(lock);
+  spin_lock(lock);
 }
 
 void

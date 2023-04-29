@@ -10,22 +10,10 @@
 #include <argentum/process.h>
 #include <argentum/spinlock.h>
 
-/**
- * ----------------------------------------------------------------------------
- * Spinlocks
- * ----------------------------------------------------------------------------
- * 
- * Spinlocks provide mutual exclusion, ensuring only one CPU at a time can hold
- * the lock. A thread trying to acquire the lock waits in a loop repeatedly
- * testing the lock until it becomes available.
- *
- * Spinlocks are used if the holding time is short or if the data to be
- * protected is accessed from an interrupt handler context.
- *
- */
-
-static void spin_save_caller_pcs(struct SpinLock *);
-static void spin_print_caller_pcs(struct SpinLock *);
+static void arch_spin_lock(volatile int *);
+static void arch_spin_unlock(volatile int *);
+static void spin_pcs_save(struct SpinLock *);
+static void spin_pcs_print(struct SpinLock *);
 
 /**
  * Initialize a spinlock.
@@ -34,47 +22,33 @@ static void spin_print_caller_pcs(struct SpinLock *);
  * @param name The name of the spinlock (for debugging purposes).
  */
 void
-spin_init(struct SpinLock *lock, const char *name)
+spin_init(struct SpinLock *spin, const char *name)
 {
-  lock->locked = 0;
-  lock->cpu    = NULL;
-  lock->name   = name;
+  spin->locked = 0;
+  spin->cpu    = NULL;
+  spin->name   = name;
 }
 
 /**
- * @brief Acquire the spinlock.
+ * Acquire the spinlock.
  *
  * @param lock A pointer to the spinlock to be acquired.
  */
 void
-spin_lock(struct SpinLock *lock)
+spin_lock(struct SpinLock *spin)
 {
-  int t1, t2;
-
-  // Disable interrupts to avoid deadlock.
-  cpu_irq_save();
-
-  if (spin_holding(lock)) {
-    spin_print_caller_pcs(lock);
-    panic("CPU %d is already holding %s", cpu_id(), lock->name);
+  if (spin_holding(spin)) {
+    spin_pcs_print(spin);
+    panic("CPU %x is already holding %s", cpu_id(), spin->name);
   }
 
-  asm volatile(
-    "\tmov     %2, #1\n"        // Load the "lock acquired" value
-    "\t1:\n"
-    "\tldrex   %1, [%0]\n"      // Read the lock field
-    "\tcmp     %1, #0\n"        // Is the lock free?
-    "\tbne     1b\n"            // No - try again
-    "\tstrex   %1, %2, [%0]\n"  // Try and acquire the lock
-    "\tcmp     %1, #0\n"        // Did this succeed?
-    "\tbne     1b\n"            // No - try again
-    : "+r"(lock), "=r"(t1), "=r"(t2)
-    :
-    : "memory", "cc");
+  // Disable interrupts to avoid deadlocks
+  cpu_irq_save();
 
-  // Record information about lock acquisition for debugging purposes.
-  lock->cpu = my_cpu();
-  spin_save_caller_pcs(lock);
+  arch_spin_lock(&spin->locked);
+
+  spin->cpu = cpu_current();
+  spin_pcs_save(spin);
 }
 
 /**
@@ -83,26 +57,18 @@ spin_lock(struct SpinLock *lock)
  * @param lock A pointer to the spinlock to be released.
  */
 void
-spin_unlock(struct SpinLock *lock)
+spin_unlock(struct SpinLock *spin)
 {
-  int t;
-
-  if (!spin_holding(lock)) {
-    spin_print_caller_pcs(lock);
+  if (!spin_holding(spin)) {
+    spin_pcs_print(spin);
     panic("CPU %d cannot release %s: held by %d\n",
-          cpu_id(), lock->name, lock->cpu);
+          cpu_id(), spin->name, spin->cpu);
   }
 
-  lock->cpu = NULL;
-  lock->pcs[0] = 0;
+  spin->cpu = NULL;
+  spin->pcs[0] = 0;
 
-  asm volatile(
-    "\tmov     %1, #0\n"
-    "\tstr     %1, [%0]\n"
-    : "+r"(lock), "=r"(t)
-    :
-    : "cc", "memory"
-  );
+  arch_spin_unlock(&spin->locked);
   
   cpu_irq_restore();
 }
@@ -114,49 +80,84 @@ spin_unlock(struct SpinLock *lock)
  * @return 1 if the current CPU is holding the lock, 0 otherwise.
  */
 int
-spin_holding(struct SpinLock *lock)
+spin_holding(struct SpinLock *spin)
 {
   int r;
 
   cpu_irq_save();
-  r = lock->locked && (lock->cpu == my_cpu());
+  r = spin->locked && (spin->cpu == cpu_current());
   cpu_irq_restore();
 
   return r;
 }
 
-// Record the current stack backtrace by following the frame pointer chain.
+// ARMv7-specific code to acquire a spinlock
 static void
-spin_save_caller_pcs(struct SpinLock *lock)
+arch_spin_lock(volatile int *locked)
+{
+  int tmp1, tmp2;
+
+  asm volatile(
+    "\tmov     %2, #1\n"        // Load the "lock acquired" value
+    "\t1:\n"
+    "\tldrex   %1, [%0]\n"      // Read the lock field
+    "\tcmp     %1, #0\n"        // Is the lock free?
+    "\tbne     1b\n"            // No - try again
+    "\tstrex   %1, %2, [%0]\n"  // Try and acquire the lock
+    "\tcmp     %1, #0\n"        // Did this succeed?
+    "\tbne     1b\n"            // No - try again
+    : "+r"(locked), "=r"(tmp1), "=r"(tmp2)
+    :
+    : "memory", "cc");
+}
+
+// ARMv7-specific code to release a spinlock
+static void
+arch_spin_unlock(volatile int *locked)
+{
+  int tmp;
+
+  asm volatile(
+    "\tmov     %1, #0\n"
+    "\tstr     %1, [%0]\n"
+    : "+r"(locked), "=r"(tmp)
+    :
+    : "cc", "memory"
+  );
+}
+
+// Record the current call stack by following the frame pointer chain.
+// To properly generate stack backtrace structures, the code must be compiled
+// with the -mapcs-frame and -fno-omit-frame-pointer flags
+static void
+spin_pcs_save(struct SpinLock *spin)
 {
   uint32_t *fp;
   int i;
 
   fp = (uint32_t *) r11_get();
 
-  for (i = 0; (fp != NULL) && (i < NCALLERPCS); i++) {
-    lock->pcs[i] = fp[-1];
-    fp = (uint32_t *) fp[-3];
+  for (i = 0; (fp != NULL) && (i < SPIN_MAX_PCS); i++) {
+    spin->pcs[i] = fp[APCS_FRAME_LINK];
+    fp = (uint32_t *) fp[APCS_FRAME_FP];
   }
 
-  for ( ; i < NCALLERPCS; i++)
-    lock->pcs[i] = 0;
+  for ( ; i < SPIN_MAX_PCS; i++)
+    spin->pcs[i] = 0;
 }
 
+// Display the recorded call stack along with debugging information
 static void
-spin_print_caller_pcs(struct SpinLock *lock)
+spin_pcs_print(struct SpinLock *spin)
 {
-  struct PcDebugInfo info;
-  uintptr_t pcs[NCALLERPCS];
   int i;
 
-  for (i = 0; i < NCALLERPCS; i++)
-    pcs[i] = lock->pcs[i];
+  for (i = 0; i < SPIN_MAX_PCS && spin->pcs[i]; i++) {
+    struct PcDebugInfo info;
 
-  for (i = 0; i < NCALLERPCS && pcs[i]; i++) {
-    debug_info_pc(pcs[i], &info);
+    debug_info_pc(spin->pcs[i], &info);
     cprintf("  [%p] %s (%s at line %d)\n",
-            pcs[i],
+            spin->pcs[i],
             info.fn_name, info.file, info.line);
   }
 }

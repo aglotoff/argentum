@@ -10,19 +10,6 @@
 #include <argentum/process.h>
 
 /**
- * ----------------------------------------------------------------------------
- * Mutexes
- * ----------------------------------------------------------------------------
- * 
- * Mutex is a sleeping lock, i.e. when a thread tries to acquire a mutex that
- * is locked, it is put to sleep until the mutex becomes available.
- *
- * Mutexes are used if the holding time is long or if the thread needs to sleep
- * while holding the lock.
- *
- */
-
-/**
  * Initialize a mutex.
  * 
  * @param lock A pointer to the mutex to be initialized.
@@ -50,7 +37,7 @@ kmutex_lock(struct KMutex *mutex)
   while (mutex->thread != NULL)
     kthread_sleep(&mutex->queue, KTHREAD_NOT_RUNNABLE);
 
-  mutex->thread = my_thread();
+  mutex->thread = kthread_current();
 
   sched_unlock();
 }
@@ -89,5 +76,5 @@ kmutex_holding(struct KMutex *mutex)
   thread = mutex->thread;
   sched_unlock();
 
-  return (thread != NULL) && (thread == my_thread());
+  return (thread != NULL) && (thread == kthread_current());
 }

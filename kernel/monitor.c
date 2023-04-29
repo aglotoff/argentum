@@ -193,19 +193,8 @@ mon_backtrace(int argc, char **argv, struct TrapFrame *tf)
 
   cprintf("Stack backtrace:\n");
 
-  // Display stack backtrace by chasing the saved frame pointer values
-  //
-  // The structure is as follows:
-  // fp points here:  | save code pointer |  fp[0]
-  //                  | return link value |  fp[-1]
-  //                  | return sp value   |  fp[-2]
-  //                  | return fp value   |  fp[-3]
-  //
-  // The code needs to be compiled with the -mapcs-frame and
-  // -fno-omit-frame-pointer flags
-
   fp = (uint32_t *) (tf ? tf->r11 : r11_get());
-  for ( ; fp != NULL; fp = (uint32_t *) fp[-3]) {
+  for ( ; fp != NULL; fp = (uint32_t *) fp[APCS_FRAME_FP]) {
     debug_info_pc(fp[-1], &info);
 
     cprintf("  [%p] %s (%s at line %d)\n",

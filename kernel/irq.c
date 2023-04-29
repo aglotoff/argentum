@@ -62,7 +62,7 @@ irq_dispatch(void)
 {
   int irq;
 
-  cpu_isr_enter();
+  isr_enter();
 
   // Get the IRQ number and temporarily disable it
   irq = gic_intid(&gic);
@@ -83,5 +83,5 @@ irq_dispatch(void)
   // Re-enable the IRQ
   gic_enable(&gic, irq, cpu_id());
 
-  cpu_isr_exit();
+  isr_exit();
 }

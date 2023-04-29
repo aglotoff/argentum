@@ -7,7 +7,7 @@ static unsigned long long tick;
 static struct SpinLock tick_lock = SPIN_INITIALIZER("tick");
 
 unsigned long long
-ktimer_tick_get(void)
+ktimer_get_tick(void)
 {
   unsigned long long ret;
 
@@ -19,30 +19,34 @@ ktimer_tick_get(void)
 }
 
 void
-ktimer_tick_set(unsigned long long value)
+ktimer_set_tick(unsigned long long value)
 {
   spin_lock(&tick_lock);
   tick = value;
   spin_unlock(&tick_lock);
 }
 
+/**
+ * Notify the kernel that a timer IRQ has occured.
+ */
 void
 ktimer_tick_isr(void)
 {
-  struct KThread *th = my_thread();
+  struct KThread *current_thread = kthread_current();
 
+  // On BSP, update the dynamic tick counter
+  // TODO: update timeouts
   if (cpu_id() == 0) {
     spin_lock(&tick_lock);
     tick++;
     spin_unlock(&tick_lock);
   }
 
-  if (th != NULL) {
+  // Tell the scheduler that the current task has used up its time slice
+  // TODO: add support for more complex sheculing policies
+  if (current_thread != NULL) {
     sched_lock();
-
-    // TODO: check quantum
-    th->flags |= KTHREAD_RESCHEDULE;
-
+    current_thread->flags |= KTHREAD_RESCHEDULE;
     sched_unlock();
   }
 }
