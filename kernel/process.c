@@ -45,7 +45,7 @@ process_ctor(void *buf, size_t size)
 {
   struct Process *proc = (struct Process *) buf;
 
-  waitqueue_init(&proc->wait_queue);
+  wchan_init(&proc->wait_queue);
   list_init(&proc->children);
 
   (void) size;
@@ -293,14 +293,14 @@ process_destroy(int status)
 
   // Wake up the init process to cleanup zombie children
   if (has_zombies)
-    waitqueue_wakeup_all(&init_process->wait_queue);
+    wchan_wakeup_all(&init_process->wait_queue);
 
   current->zombie = 1;
   current->exit_code = status;
 
   // Wakeup the parent process
   if (current->parent)
-    waitqueue_wakeup_all(&current->parent->wait_queue);
+    wchan_wakeup_all(&current->parent->wait_queue);
 
   spin_unlock(&process_lock);
 
@@ -396,7 +396,7 @@ process_wait(pid_t pid, int *stat_loc, int options)
       break;
     }
 
-    waitqueue_sleep(&current->wait_queue, &process_lock);
+    wchan_sleep(&current->wait_queue, &process_lock);
   }
 
   spin_unlock(&process_lock);

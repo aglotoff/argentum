@@ -16,11 +16,12 @@ struct Process;
 #define KTHREAD_MAX_PRIORITIES  (2 * NZERO)
 
 enum {
-  KTHREAD_RUNNABLE     = 1,
-  KTHREAD_RUNNING      = 2,
-  KTHREAD_NOT_RUNNABLE = 3,
-  KTHREAD_SUSPENDED    = 4,
-  KTHREAD_DESTROYED    = 5,
+  KTHREAD_READY          = 1,
+  KTHREAD_RUNNING        = 2,
+  KTHREAD_SLEEPING_MUTEX = 3,
+  KTHREAD_SLEEPING_WCHAN = 4,
+  KTHREAD_SUSPENDED      = 5,
+  KTHREAD_DESTROYED      = 6,
 };
 
 enum {
@@ -66,7 +67,8 @@ void            kthread_destroy(struct KThread *);
 int             kthread_resume(struct KThread *);
 void            kthread_run(void);
 void            kthread_yield(void);
-void            kthread_sleep(struct ListLink *, int);
+void            kthread_sleep(struct ListLink *, int, struct SpinLock *lock);
+void            kthread_wakeup_one(struct ListLink *);
 void            kthread_wakeup_all(struct ListLink *);
 
 extern struct SpinLock __sched_lock;

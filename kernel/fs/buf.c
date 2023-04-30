@@ -24,7 +24,7 @@ buf_ctor(void *ptr, size_t size)
   struct Buf *buf = (struct Buf *) ptr;
 
   buf->block_size = BLOCK_SIZE;
-  waitqueue_init(&buf->wait_queue);
+  wchan_init(&buf->wait_queue);
   kmutex_init(&buf->mutex, "buf");
 
   (void) size;

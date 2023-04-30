@@ -134,7 +134,7 @@ sd_request(struct Buf *buf)
 
   // Wait for the R/W operation to finish.
   while ((buf->flags & (BUF_DIRTY | BUF_VALID)) != BUF_VALID)
-    waitqueue_sleep(&buf->wait_queue, &sd_queue.lock);
+    wchan_sleep(&buf->wait_queue, &sd_queue.lock);
 
   spin_unlock(&sd_queue.lock);
 }
@@ -205,5 +205,5 @@ sd_irq(void)
   spin_unlock(&sd_queue.lock);
 
   // Resume the thread waiting for the buf data.
-  waitqueue_wakeup_all(&buf->wait_queue);
+  wchan_wakeup_all(&buf->wait_queue);
 }

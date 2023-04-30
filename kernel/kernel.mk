@@ -43,7 +43,7 @@ KERNEL_SRCFILES :=	\
 	kernel/core/kthread.c \
 	kernel/core/ktimer.c \
 	kernel/core/spinlock.c \
-	kernel/core/waitqueue.c \
+	kernel/core/wchan.c \
 	kernel/context.S \
 	kernel/cprintf.c \
 	kernel/entry.S \

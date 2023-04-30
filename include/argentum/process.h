@@ -13,7 +13,7 @@
 #include <argentum/mm/vm.h>
 #include <argentum/kthread.h>
 #include <argentum/trap.h>
-#include <argentum/waitqueue.h>
+#include <argentum/wchan.h>
 
 struct File;
 struct SpinLock;
@@ -33,7 +33,7 @@ struct Process {
   struct VM         *vm;              ///< Process' address space
 
   struct Process    *parent;          ///< Link to the parent process
-  struct WaitQueue   wait_queue;      ///< Queue to sleep waiting for children
+  struct WaitChannel   wait_queue;      ///< Queue to sleep waiting for children
   struct ListLink    children;        ///< List of child processes
   struct ListLink    sibling;         ///< Link into the siblings list
   int                zombie;          ///< Whether the process is a zombie

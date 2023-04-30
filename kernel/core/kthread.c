@@ -68,7 +68,7 @@ kthread_enqueue(struct KThread *th)
   if (!sched_locked())
     panic("scheduler not locked");
 
-  th->state = KTHREAD_RUNNABLE;
+  th->state = KTHREAD_READY;
   list_add_back(&run_queue[th->priority], &th->link);
 }
 
@@ -103,7 +103,7 @@ sched_start(void)
     next = kthread_list_remove();
 
     if (next != NULL) {
-      assert(next->state == KTHREAD_RUNNABLE);
+      assert(next->state == KTHREAD_READY);
 
       next->state = KTHREAD_RUNNING;
       cpu_current()->thread = next;
@@ -209,9 +209,15 @@ kthread_run(void)
  * 
  */
 void
-kthread_sleep(struct ListLink *queue, int state)
+kthread_sleep(struct ListLink *queue, int state, struct SpinLock *lock)
 {
   struct KThread *current = kthread_current();
+
+  if (lock != &__sched_lock) {
+    sched_lock();
+    if (lock != NULL)
+      spin_unlock(lock);
+  }
 
   if (!sched_locked())
     panic("scheduler not locked");
@@ -220,6 +226,12 @@ kthread_sleep(struct ListLink *queue, int state)
   list_add_back(queue, &current->link);
 
   sched_yield();
+
+  if (lock != &__sched_lock) {
+    sched_unlock();
+    if (lock != NULL)
+      spin_lock(lock);
+  }
 }
 
 int
@@ -228,11 +240,28 @@ kthread_priority_cmp(struct KThread *t1, struct KThread *t2)
   return t2->priority - t1->priority; 
 }
 
+static void
+kthread_check_resched(struct KThread *t)
+{
+  struct Cpu *my_cpu;
+  struct KThread *my_thread;
+
+  my_cpu = cpu_current();
+  my_thread = my_cpu->thread;
+  
+  if ((my_thread != NULL) && (kthread_priority_cmp(t, my_thread) > 0)) {
+    if (my_cpu->isr_nesting > 0) {
+      my_thread->flags |= KTHREAD_RESCHEDULE;
+    } else {
+      kthread_enqueue(my_thread);
+      sched_yield();
+    }
+  }
+}
+
 int
 kthread_resume(struct KThread *t)
 {
-  // struct KThread *current = kthread_current();
-
   sched_lock();
 
   if (t->state != KTHREAD_SUSPENDED) {
@@ -241,15 +270,43 @@ kthread_resume(struct KThread *t)
   }
 
   kthread_enqueue(t);
-
-  // if ((current != NULL) && (kthread_priority_cmp(t, current)) > 0) {
-  //   kthread_enqueue(current);
-  //   sched_yield();
-  // }
+  kthread_check_resched(t);
 
   sched_unlock();
 
   return 0;
+}
+
+/**
+ * Wake up the thread with the highest priority.
+ *
+ * @param wait_queue Pointer to the head of the wait queue.
+ */
+void
+kthread_wakeup_one(struct ListLink *queue)
+{
+  struct ListLink *l;
+  struct KThread *highest;
+
+  highest = NULL;
+
+  sched_lock();
+
+  LIST_FOREACH(queue, l) {
+    struct KThread *t = LIST_CONTAINER(l, struct KThread, link);
+    
+    if ((highest == NULL) || (kthread_priority_cmp(t, highest) > 0))
+      highest = t;
+  }
+
+  if (highest != NULL) {
+    list_remove(&highest->link);
+    kthread_enqueue(highest);
+
+    kthread_check_resched(highest);
+  }
+
+  sched_unlock();
 }
 
 /**
@@ -258,19 +315,22 @@ kthread_resume(struct KThread *t)
  * @param wait_queue Pointer to the head of the wait queue.
  */
 void
-kthread_wakeup_all(struct ListLink *wait_queue)
+kthread_wakeup_all(struct ListLink *queue)
 {
-  struct ListLink *l;
-  struct KThread *t;
+  sched_lock();
 
-  if (!sched_locked())
-    panic("scheduler not locked");
+  while (!list_empty(queue)) {
+    struct ListLink *l;
+    struct KThread *t;
 
-  while (!list_empty(wait_queue)) {
-    l = wait_queue->next;
+    l = queue->next;
     list_remove(l);
 
     t = LIST_CONTAINER(l, struct KThread, link);
     kthread_enqueue(t);
+
+    kthread_check_resched(t);
   }
+
+  sched_unlock();
 }

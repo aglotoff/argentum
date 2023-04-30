@@ -1,13 +1,7 @@
 #include <assert.h>
-#include <stddef.h>
-#include <string.h>
 
-#include <argentum/armv7/regs.h>
-#include <argentum/cprintf.h>
-#include <argentum/cpu.h>
-#include <argentum/kdebug.h>
 #include <argentum/kmutex.h>
-#include <argentum/process.h>
+#include <argentum/kthread.h>
 
 /**
  * Initialize a mutex.
@@ -19,8 +13,9 @@ void
 kmutex_init(struct KMutex *mutex, const char *name)
 {
   list_init(&mutex->queue);
-  mutex->thread = NULL;
-  mutex->name = name;
+  spin_init(&mutex->lock, name);
+  mutex->owner = NULL;
+  mutex->name  = name;
 }
 
 /**
@@ -31,15 +26,17 @@ kmutex_init(struct KMutex *mutex, const char *name)
 void
 kmutex_lock(struct KMutex *mutex)
 {
-  sched_lock();
+  spin_lock(&mutex->lock);
+
+  // TODO: priority inheritance
 
   // Sleep until the mutex becomes available.
-  while (mutex->thread != NULL)
-    kthread_sleep(&mutex->queue, KTHREAD_NOT_RUNNABLE);
+  while (mutex->owner != NULL)
+    kthread_sleep(&mutex->queue, KTHREAD_SLEEPING_MUTEX, &mutex->lock);
 
-  mutex->thread = kthread_current();
+  mutex->owner = kthread_current();
 
-  sched_unlock();
+  spin_unlock(&mutex->lock);
 }
 
 /**
@@ -53,12 +50,14 @@ kmutex_unlock(struct KMutex *mutex)
   if (!kmutex_holding(mutex))
     panic("not holding");
   
-  sched_lock();
+  spin_lock(&mutex->lock);
 
-  mutex->thread = NULL;
+  // TODO: priority inheritance
+
+  mutex->owner = NULL;
   kthread_wakeup_all(&mutex->queue);
 
-  sched_unlock();
+  spin_unlock(&mutex->lock);
 }
 
 /**
@@ -70,11 +69,11 @@ kmutex_unlock(struct KMutex *mutex)
 int
 kmutex_holding(struct KMutex *mutex)
 {
-  struct KThread *thread;
+  struct KThread *owner;
 
-  sched_lock();
-  thread = mutex->thread;
-  sched_unlock();
+  spin_lock(&mutex->lock);
+  owner = mutex->owner;
+  spin_unlock(&mutex->lock);
 
-  return (thread != NULL) && (thread == kthread_current());
+  return (owner != NULL) && (owner == kthread_current());
 }

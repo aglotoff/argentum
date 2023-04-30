@@ -6,7 +6,7 @@
 #include <argentum/mm/vm.h>
 #include <argentum/drivers/console.h>
 #include <argentum/trap.h>
-#include <argentum/waitqueue.h>
+#include <argentum/wchan.h>
 
 #include "kbd.h"
 #include "display.h"
@@ -19,7 +19,7 @@ static struct {
   uint32_t         rpos;
   uint32_t         wpos;
   struct SpinLock  lock;
-  struct WaitQueue queue;
+  struct WaitChannel queue;
 } input;
 
 /**
@@ -29,7 +29,7 @@ void
 console_init(void)
 {  
   spin_init(&input.lock, "input");
-  waitqueue_init(&input.queue);
+  wchan_init(&input.queue);
 
   serial_init();
   kbd_init();
@@ -73,7 +73,7 @@ console_interrupt(int (*getc)(void))
 
       if ((c == '\r') || (c == '\n') || (c == C('D')) ||
           (input.wpos == input.rpos + CONSOLE_BUF_SIZE))
-        waitqueue_wakeup_all(&input.queue);
+        wchan_wakeup_all(&input.queue);
       break;
     }
   }
@@ -112,7 +112,7 @@ console_read(void *buf, size_t nbytes)
 
   while (i < nbytes) {
     while (input.rpos == input.wpos)
-      waitqueue_sleep(&input.queue, &input.lock);
+      wchan_sleep(&input.queue, &input.lock);
 
     c = input.buf[input.rpos++ % CONSOLE_BUF_SIZE];
 
