@@ -72,8 +72,8 @@ sys_dispatch(void)
 static int
 sys_get_num(void)
 {
-  struct Process *current = my_process();
-  // cprintf("current %p, %p\n", current, current->thread->tf);
+  struct Process *current = process_current();
+
   int *pc = (int *) (current->thread->tf->pc - 4);
   int r;
 
@@ -87,7 +87,7 @@ sys_get_num(void)
 static int32_t
 sys_get_arg(int n)
 {
-  struct Process *current = my_process();
+  struct Process *current = process_current();
 
   switch (n) {
   case 0:
@@ -102,7 +102,7 @@ sys_get_arg(int n)
     if (n < 0)
       panic("Invalid argument number: %d", n);
 
-    // TODO: grab additional parameters from the user's stack.
+    // TODO: grab additional parameters from the user stack.
     return 0;
   }
 }
@@ -164,7 +164,7 @@ sys_arg_buf(int n, void **pp, size_t len, int perm)
   void *ptr = (void *) sys_get_arg(n);
   int r;
 
-  if ((r = vm_user_check_buf(my_process()->vm, ptr, len, perm)) < 0)
+  if ((r = vm_user_check_buf(process_current()->vm, ptr, len, perm)) < 0)
     return r;
 
   *pp = ptr;
@@ -190,7 +190,7 @@ sys_arg_str(int n, const char **strp, int perm)
   char *str = (char *) sys_get_arg(n);
   int r;
 
-  if ((r = vm_user_check_str(my_process()->vm, str, perm)) < 0)
+  if ((r = vm_user_check_str(process_current()->vm, str, perm)) < 0)
     return r;
 
   *strp = str;
@@ -213,7 +213,7 @@ sys_arg_str(int n, const char **strp, int perm)
 static int
 sys_arg_fd(int n, int *fdstore, struct File **fstore)
 {
-  struct Process *current = my_process();
+  struct Process *current = process_current();
   int fd = sys_get_arg(n);
 
   if ((fd < 0) || (fd >= OPEN_MAX) || (current->files[fd] == NULL))
@@ -230,7 +230,7 @@ sys_arg_fd(int n, int *fdstore, struct File **fstore)
 static int
 sys_arg_args(int n, char ***store)
 {
-  struct Process *current = my_process();
+  struct Process *current = process_current();
   char **args;
   int i;
 
@@ -317,13 +317,13 @@ sys_exit(void)
 int32_t
 sys_getpid(void)
 {
-  return my_process()->pid;
+  return process_current()->pid;
 }
 
 int32_t
 sys_getppid(void)
 {
-  return my_process()->parent ? my_process()->parent->pid : my_process()->pid;
+  return process_current()->parent ? process_current()->parent->pid : process_current()->pid;
 }
 
 int32_t
@@ -425,7 +425,7 @@ sys_fchdir(void)
 static int
 fd_alloc(struct File *f)
 {
-  struct Process *current = my_process();
+  struct Process *current = process_current();
   int i;
 
   for (i = 0; i < OPEN_MAX; i++)
@@ -463,7 +463,7 @@ sys_open(void)
 int32_t
 sys_umask(void)
 {
-  struct Process *proc = my_process();
+  struct Process *proc = process_current();
   mode_t cmask;
   int r;
 
@@ -558,7 +558,7 @@ sys_close(void)
     return r;
 
   file_close(f);
-  my_process()->files[fd] = NULL;
+  process_current()->files[fd] = NULL;
 
   return 0;
 }

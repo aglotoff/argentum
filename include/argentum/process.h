@@ -70,7 +70,7 @@ struct Process {
 };
 
 static inline struct Process *
-my_process(void)
+process_current(void)
 {
   struct KThread *thread = kthread_current();
   return thread != NULL ? thread->process : NULL;

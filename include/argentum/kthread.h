@@ -60,38 +60,19 @@ struct KThread {
 };
 
 struct KThread *kthread_current(void);
-void            kthread_enqueue(struct KThread *);
-int             kthread_create(struct Process *, struct KThread *, void (*)(void), int, uint8_t *);
+int             kthread_init(struct Process *, struct KThread *, void (*)(void),
+                             int, uint8_t *);
 void            kthread_destroy(struct KThread *);
 int             kthread_resume(struct KThread *);
-void            kthread_run(void);
 void            kthread_yield(void);
 void            kthread_sleep(struct ListLink *, int, struct SpinLock *lock);
 void            kthread_wakeup_one(struct ListLink *);
 void            kthread_wakeup_all(struct ListLink *);
 
-extern struct SpinLock __sched_lock;
-
 void            sched_init(void);
 void            sched_start(void);
-void            sched_yield(void);
-
-static inline void
-sched_lock(void)
-{
-  spin_lock(&__sched_lock);
-}
-
-static inline void
-sched_unlock(void)
-{
-  spin_unlock(&__sched_lock);
-}
-
-static inline int
-sched_locked(void)
-{
-  return spin_holding(&__sched_lock);
-}
+void            sched_tick(void);
+void            sched_isr_enter(void);
+void            sched_isr_exit(void);
 
 #endif  // __INCLUDE_ARGENTUM_KTHREAD_H__

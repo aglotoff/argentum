@@ -41,7 +41,6 @@ KERNEL_SRCFILES :=	\
 	kernel/core/cpu.c \
 	kernel/core/kmutex.c \
 	kernel/core/kthread.c \
-	kernel/core/ktimer.c \
 	kernel/core/spinlock.c \
 	kernel/core/wchan.c \
 	kernel/context.S \

@@ -123,9 +123,9 @@ mp_main(void)
 // {
 //   struct KThread *th1, *th2;
 
-//   th1 = kthread_create(NULL, th1_func, 0, th1_stack + 4096);
+//   th1 = kthread_init(NULL, th1_func, 0, th1_stack + 4096);
 //   kthread_resume(th1);
 
-//   th2 = kthread_create(NULL, th2_func, 0, th2_stack + 4096);
+//   th2 = kthread_init(NULL, th2_func, 0, th2_stack + 4096);
 //   kthread_resume(th2);
 // }

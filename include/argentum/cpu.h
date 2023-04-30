@@ -35,9 +35,6 @@ void            cpu_irq_enable(void);
 void            cpu_irq_save(void);
 void            cpu_irq_restore(void);
 
-void            isr_enter(void);
-void            isr_exit(void);
-
 /**
  * Get the current processor ID.
  * 

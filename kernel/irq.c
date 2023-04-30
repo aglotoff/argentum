@@ -6,7 +6,6 @@
 #include <argentum/armv7/regs.h>
 #include <argentum/irq.h>
 #include <argentum/cprintf.h>
-#include <argentum/ktimer.h>
 #include <argentum/mm/memlayout.h>
 #include <argentum/mm/vm.h>
 
@@ -20,7 +19,7 @@ static void
 ptimer_irq(void)
 {
   ptimer_eoi(&ptimer);
-  ktimer_tick_isr();
+  sched_tick();
 }
 
 void
@@ -62,7 +61,7 @@ irq_dispatch(void)
 {
   int irq;
 
-  isr_enter();
+  sched_isr_enter();
 
   // Get the IRQ number and temporarily disable it
   irq = gic_intid(&gic);
@@ -83,5 +82,5 @@ irq_dispatch(void)
   // Re-enable the IRQ
   gic_enable(&gic, irq, cpu_id());
 
-  isr_exit();
+  sched_isr_exit();
 }

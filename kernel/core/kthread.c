@@ -13,22 +13,11 @@
 #include <argentum/process.h>
 #include <argentum/spinlock.h>
 
-static struct ListLink run_queue[KTHREAD_MAX_PRIORITIES];
-struct SpinLock __sched_lock;
-
-struct KThread *
-kthread_current(void)
-{
-  struct KThread *thread;
-
-  cpu_irq_save();
-  thread = cpu_current()->thread;
-  cpu_irq_restore();
-
-  return thread;
-}
-
+static void kthread_run(void);
 void context_switch(struct Context **, struct Context *);
+
+static struct ListLink run_queue[KTHREAD_MAX_PRIORITIES];
+struct SpinLock sched_lock;
 
 void
 sched_init(void)
@@ -38,13 +27,13 @@ sched_init(void)
   for (i = 0; i < KTHREAD_MAX_PRIORITIES; i++)
     list_init(&run_queue[i]);
 
-  spin_init(&__sched_lock, "sched");
+  spin_init(&sched_lock, "sched");
 }
 
-void
-kthread_enqueue(struct KThread *th)
+static void
+sched_enqueue(struct KThread *th)
 {
-  if (!sched_locked())
+  if (!spin_holding(&sched_lock))
     panic("scheduler not locked");
 
   th->state = KTHREAD_READY;
@@ -52,12 +41,12 @@ kthread_enqueue(struct KThread *th)
 }
 
 static struct KThread *
-kthread_list_remove(void)
+sched_dequeue(void)
 {
   struct ListLink *link;
   int i;
   
-  assert(sched_locked());
+  assert(spin_holding(&sched_lock));
 
   for (i = 0; i < KTHREAD_MAX_PRIORITIES; i++) {
     if (!list_empty(&run_queue[i])) {
@@ -76,10 +65,10 @@ sched_start(void)
 {
   struct KThread *next;
 
-  sched_lock();
+  spin_lock(&sched_lock);
 
   for (;;) {
-    next = kthread_list_remove();
+    next = sched_dequeue();
 
     if (next != NULL) {
       assert(next->state == KTHREAD_READY);
@@ -99,21 +88,21 @@ sched_start(void)
         mmu_switch_kernel();
 
         if (next->state == KTHREAD_DESTROYED) {
-          sched_unlock();
+          spin_unlock(&sched_lock);
           process_thread_free(next);
-          sched_lock();
+          spin_lock(&sched_lock);
         }
       }
     } else {
       
 
-      sched_unlock();
+      spin_unlock(&sched_lock);
 
       cpu_irq_enable();
 
       asm volatile("wfi");
 
-      sched_lock();
+      spin_lock(&sched_lock);
     }
   }
 }
@@ -123,15 +112,90 @@ sched_yield(void)
 {
   int irq_flags;
 
-  assert(sched_locked());
+  assert(spin_holding(&sched_lock));
 
   irq_flags = cpu_current()->irq_flags;
   context_switch(&kthread_current()->context, cpu_current()->scheduler);
   cpu_current()->irq_flags = irq_flags;
 }
 
+/**
+ * Notify the kernel that an ISR processing has started.
+ */
+void
+sched_isr_enter(void)
+{
+  cpu_current()->isr_nesting++;
+}
+
+/**
+ * Notify the kernel that an ISR processing is finished.
+ */
+void
+sched_isr_exit(void)
+{
+  struct Cpu *my_cpu;
+
+  spin_lock(&sched_lock);
+
+  my_cpu = cpu_current();
+
+  if (my_cpu->isr_nesting <= 0)
+    panic("isr_nesting <= 0");
+
+  if (--my_cpu->isr_nesting == 0) {
+    struct KThread *my_thread = my_cpu->thread;
+
+    if (my_thread != NULL) {
+      // Before resuming the current thread, check whether it must give up the
+      // CPU due to a higher-priority thread becoming available or due to time
+      // quanta exhaustion.
+      if (my_thread->flags & KTHREAD_RESCHEDULE) {
+        my_thread->flags &= ~KTHREAD_RESCHEDULE;
+
+        sched_enqueue(my_thread);
+        sched_yield();
+      }
+
+      // TODO: the thread could also be marked for desruction?
+    }
+  }
+
+  spin_unlock(&sched_lock);
+}
+
+/**
+ * Notify the kernel that a timer IRQ has occured.
+ */
+void
+sched_tick(void)
+{
+  struct KThread *current_thread = kthread_current();
+
+  // Tell the scheduler that the current task has used up its time slice
+  // TODO: add support for more complex sheculing policies
+  if (current_thread != NULL) {
+    spin_lock(&sched_lock);
+    current_thread->flags |= KTHREAD_RESCHEDULE;
+    spin_unlock(&sched_lock);
+  }
+}
+
+struct KThread *
+kthread_current(void)
+{
+  struct KThread *thread;
+
+  cpu_irq_save();
+  thread = cpu_current()->thread;
+  cpu_irq_restore();
+
+  return thread;
+}
+
 int
-kthread_create(struct Process *process, struct KThread *thread, void (*entry)(void), int priority, uint8_t *stack)
+kthread_init(struct Process *process, struct KThread *thread,
+             void (*entry)(void), int priority, uint8_t *stack)
 {
   thread->flags = 0;
   thread->priority = priority;
@@ -150,7 +214,7 @@ kthread_create(struct Process *process, struct KThread *thread, void (*entry)(vo
 void
 kthread_destroy(struct KThread *thread)
 {
-  sched_lock();
+  spin_lock(&sched_lock);
 
   thread->state = KTHREAD_DESTROYED;
 
@@ -164,20 +228,20 @@ kthread_yield(void)
 {
   struct KThread *current = kthread_current();
   
-  sched_lock();
+  spin_lock(&sched_lock);
 
-  kthread_enqueue(current);
+  sched_enqueue(current);
   sched_yield();
 
-  sched_unlock();
+  spin_unlock(&sched_lock);
 }
 
 // A process' very first scheduling by scheduler() will switch here.
-void
+static void
 kthread_run(void)
 {
   // Still holding the scheduler lock.
-  sched_unlock();
+  spin_unlock(&sched_lock);
 
   cpu_irq_enable();
 
@@ -192,13 +256,13 @@ kthread_sleep(struct ListLink *queue, int state, struct SpinLock *lock)
 {
   struct KThread *current = kthread_current();
 
-  if (lock != &__sched_lock) {
-    sched_lock();
+  if (lock != &sched_lock) {
+    spin_lock(&sched_lock);
     if (lock != NULL)
       spin_unlock(lock);
   }
 
-  if (!sched_locked())
+  if (!spin_holding(&sched_lock))
     panic("scheduler not locked");
 
   current->state = state;
@@ -206,8 +270,8 @@ kthread_sleep(struct ListLink *queue, int state, struct SpinLock *lock)
 
   sched_yield();
 
-  if (lock != &__sched_lock) {
-    sched_unlock();
+  if (lock != &sched_lock) {
+    spin_unlock(&sched_lock);
     if (lock != NULL)
       spin_lock(lock);
   }
@@ -232,7 +296,7 @@ kthread_check_resched(struct KThread *t)
     if (my_cpu->isr_nesting > 0) {
       my_thread->flags |= KTHREAD_RESCHEDULE;
     } else {
-      kthread_enqueue(my_thread);
+      sched_enqueue(my_thread);
       sched_yield();
     }
   }
@@ -241,17 +305,17 @@ kthread_check_resched(struct KThread *t)
 int
 kthread_resume(struct KThread *t)
 {
-  sched_lock();
+  spin_lock(&sched_lock);
 
   if (t->state != KTHREAD_SUSPENDED) {
-    sched_unlock();
+    spin_unlock(&sched_lock);
     return -EINVAL;
   }
 
-  kthread_enqueue(t);
+  sched_enqueue(t);
   kthread_check_resched(t);
 
-  sched_unlock();
+  spin_unlock(&sched_lock);
 
   return 0;
 }
@@ -269,7 +333,7 @@ kthread_wakeup_one(struct ListLink *queue)
 
   highest = NULL;
 
-  sched_lock();
+  spin_lock(&sched_lock);
 
   LIST_FOREACH(queue, l) {
     struct KThread *t = LIST_CONTAINER(l, struct KThread, link);
@@ -280,12 +344,12 @@ kthread_wakeup_one(struct ListLink *queue)
 
   if (highest != NULL) {
     list_remove(&highest->link);
-    kthread_enqueue(highest);
+    sched_enqueue(highest);
 
     kthread_check_resched(highest);
   }
 
-  sched_unlock();
+  spin_unlock(&sched_lock);
 }
 
 /**
@@ -296,7 +360,7 @@ kthread_wakeup_one(struct ListLink *queue)
 void
 kthread_wakeup_all(struct ListLink *queue)
 {
-  sched_lock();
+  spin_lock(&sched_lock);
 
   while (!list_empty(queue)) {
     struct ListLink *l;
@@ -306,10 +370,10 @@ kthread_wakeup_all(struct ListLink *queue)
     list_remove(l);
 
     t = LIST_CONTAINER(l, struct KThread, link);
-    kthread_enqueue(t);
+    sched_enqueue(t);
 
     kthread_check_resched(t);
   }
 
-  sched_unlock();
+  spin_unlock(&sched_lock);
 }

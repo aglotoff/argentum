@@ -156,7 +156,7 @@ process_exec(const char *path, char *const argv[], char *const envp[])
 
   fs_inode_unlock_put(ip);
 
-  proc = my_process();
+  proc = process_current();
 
   mmu_switch_user(vm->trtab);
   vm_destroy(proc->vm);

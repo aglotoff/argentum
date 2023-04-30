@@ -101,12 +101,13 @@ process_alloc(void)
 
   sp = process->thread->kstack + PAGE_SIZE;
 
-  // Leave room for Trapframe.
+  // Leave room for the trapframe
   sp -= sizeof *process->thread->tf;
+  // The user-mode trapframe will always be on the same stack address
   process->thread->tf = (struct TrapFrame *) sp;
 
   // Setup new context to start executing at thread_run.
-  if (kthread_create(process, &thread->kernel_thread, process_run, NZERO, sp) != 0)
+  if (kthread_init(process, &thread->kernel_thread, process_run, NZERO, sp) != 0)
     goto fail3;
 
   process->parent = NULL;
@@ -287,7 +288,7 @@ void
 process_destroy(int status)
 {
   struct ListLink *l;
-  struct Process *child, *current = my_process();
+  struct Process *child, *current = process_current();
   int fd, has_zombies;
 
   vm_destroy(current->vm);
@@ -336,7 +337,7 @@ process_destroy(int status)
 pid_t
 process_copy(void)
 {
-  struct Process *child, *current = my_process();
+  struct Process *child, *current = process_current();
   int fd;
 
   if ((child = process_alloc()) == NULL)
@@ -372,7 +373,7 @@ process_copy(void)
 pid_t
 process_wait(pid_t pid, int *stat_loc, int options)
 {
-  struct Process *p, *current = my_process();
+  struct Process *p, *current = process_current();
   struct ListLink *l;
   int r, found;
 
@@ -435,7 +436,7 @@ process_run(void)
 {
   static int first;
 
-  struct Process *proc = my_process();
+  struct Process *proc = process_current();
 
   if (!first) {
     first = 1;
@@ -467,7 +468,7 @@ process_pop_tf(struct TrapFrame *tf)
 void *
 process_grow(ptrdiff_t increment)
 {
-  struct Process *current = my_process();
+  struct Process *current = process_current();
 
   return vm_mmap(current->vm, (void *) 0, increment, VM_READ | VM_WRITE | VM_USER);
 }

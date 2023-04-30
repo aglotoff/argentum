@@ -10,10 +10,16 @@
 
 static void trap_handle_abort(struct TrapFrame *);
 
+/**
+ * Common entry point for all traps, including system calls. The TrapFrame
+ * structure is built on the stack in trapentry.S
+ */
 void
 trap(struct TrapFrame *tf)
 {
   extern char *panicstr;
+
+  struct Process *my_process = process_current();
 
   // Halt if some other CPU already has called panic().
   if (panicstr) {
@@ -22,6 +28,11 @@ trap(struct TrapFrame *tf)
     }
   }
 
+  // User-mode trap frame address should never change, there's logic in the
+  // kernel that relies on this!
+  if (((tf->psr & PSR_M_MASK) == PSR_M_USR) && (my_process->thread->tf != tf))
+    panic("user-mode trap frame address unexpectedly changed");
+
   // Dispatch based on what type of trap occured.
   switch (tf->trapno) {
   case T_DABT:
@@ -29,7 +40,6 @@ trap(struct TrapFrame *tf)
     trap_handle_abort(tf);
     break;
   case T_SWI:
-    // cprintf("incoming %p\n", tf);
     tf->r0 = sys_dispatch();
     break;
   case T_IRQ:
@@ -45,6 +55,7 @@ trap(struct TrapFrame *tf)
   }
 }
 
+// Handle data or prefetch abort
 static void
 trap_handle_abort(struct TrapFrame *tf)
 {
@@ -56,27 +67,29 @@ trap_handle_abort(struct TrapFrame *tf)
   address = tf->trapno == T_DABT ? cp15_dfar_get() : cp15_ifar_get();
   status  = tf->trapno == T_DABT ? cp15_ifsr_get() : cp15_ifsr_get();
 
-  // If abort happened in kernel mode, print the trap frame and call panic()
+  // If abort happened in kernel mode, print the trap frame and panic
   if ((tf->psr & PSR_M_MASK) != PSR_M_USR) {
     print_trapframe(tf);
     panic("kernel fault va %p status %#x", address, status);
   }
 
-  process = my_process();
+  process = process_current();
   assert(process != NULL);
 
+  // Try to handle VM fault first (it may be caused by copy-on-write pages)
   if (vm_handle_fault(process->vm, address) == 0)
     return;
 
-  // Abort happened in user mode.
+  // If unsuccessfull, kill the process
   cprintf("user fault va %p status %#x\n", address, status);
   process_destroy(-1);
 }
 
+// Returns a human-readable name for the given trap number
 static const char *
-trap_name(unsigned trapno)
+get_trap_name(unsigned trapno)
 {
-  static const char *const excnames[] = {
+  static const char *const known_traps[] = {
     "Reset",
     "Undefined Instruction",
     "Supervisor Call",
@@ -88,10 +101,15 @@ trap_name(unsigned trapno)
   };
 
   if (trapno <= T_FIQ)
-    return excnames[trapno];
+    return known_traps[trapno];
   return "(unknown trap)";
 }
 
+/**
+ * Display the contents of the given trap frame in a nice format.
+ * 
+ * @param tf Base address of the trap frame structure to be printed.
+ */
 void
 print_trapframe(struct TrapFrame *tf)
 {
@@ -113,7 +131,7 @@ print_trapframe(struct TrapFrame *tf)
           tf->psr & PSR_I ? "F," : "",
           tf->psr & PSR_I ? "T," : "",
           modes[tf->psr & PSR_M_MASK] ? modes[tf->psr & PSR_M_MASK] : "");
-  cprintf("  trap %p    [%s]\n", tf->trapno, trap_name(tf->trapno));
+  cprintf("  trap %p    [%s]\n", tf->trapno, get_trap_name(tf->trapno));
   cprintf("  sp   %p    lr   %p\n", tf->sp,  tf->lr);
   cprintf("  r0   %p    r1   %p\n", tf->r0,  tf->r1);
   cprintf("  r2   %p    r3   %p\n", tf->r2,  tf->r3);

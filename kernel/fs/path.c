@@ -57,7 +57,7 @@ fs_path_lookup(const char *path, char *name, int parent, struct Inode **istore)
 
   // For absolute paths, begin search from the root directory.
   // For relative paths, begin search from the current working directory.
-  ip = *path == '/' ? fs_inode_get(2, 0) : fs_inode_dup(my_process()->cwd);
+  ip = *path == '/' ? fs_inode_get(2, 0) : fs_inode_dup(process_current()->cwd);
 
   while ((namelen = fs_path_skip(path, name, (char **) &path)) > 0) {
     // TODO: _POSIX_NO_TRUNC

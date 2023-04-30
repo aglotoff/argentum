@@ -442,7 +442,7 @@ ext2_create(struct Inode *dirp, char *name, mode_t mode, struct Inode **istore)
 
   fs_inode_lock(ip);
 
-  ip->uid = my_process()->uid;
+  ip->uid = process_current()->uid;
   ip->gid = dirp->gid;
 
   if ((r = ext2_inode_link(dirp, name, ip)))
@@ -571,7 +571,7 @@ fs_create(const char *path, mode_t mode, dev_t dev, struct Inode **istore)
     goto out;
   }
 
-  mode &= ~my_process()->cmask;
+  mode &= ~process_current()->cmask;
 
   switch (mode & S_IFMT) {
   case S_IFDIR:
@@ -908,7 +908,7 @@ fs_rmdir(const char *path)
 int
 fs_permissions(struct Inode *inode, mode_t mode)
 {
-  struct Process *proc = my_process();
+  struct Process *proc = process_current();
 
   if (proc->uid == inode->uid)
     mode <<= 6;
@@ -921,7 +921,7 @@ fs_permissions(struct Inode *inode, mode_t mode)
 int
 fs_chdir(struct Inode *ip)
 {
-  struct Process *current = my_process();
+  struct Process *current = process_current();
 
   fs_inode_lock(ip);
 
@@ -941,7 +941,7 @@ fs_chdir(struct Inode *ip)
 int
 fs_chmod(struct Inode *ip, mode_t mode)
 {
-  struct Process *current = my_process();
+  struct Process *current = process_current();
 
   // TODO: check mode
   
