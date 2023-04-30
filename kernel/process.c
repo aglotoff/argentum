@@ -20,8 +20,8 @@
 #include <argentum/spinlock.h>
 #include <argentum/trap.h>
 
-// Process Object cache
-struct KMemCache * process_cache;
+struct KMemCache *process_cache;
+struct KMemCache *thread_cache;
 
 // Size of PID hash table
 #define NBUCKET   256
@@ -59,6 +59,9 @@ process_init(void)
   process_cache = kmem_cache_create("process_cache", sizeof(struct Process), 0, process_ctor, NULL);
   if (process_cache == NULL)
     panic("cannot allocate process_cache");
+  thread_cache = kmem_cache_create("thread_cache", sizeof(struct ProcessThread), 0, NULL, NULL);
+  if (thread_cache == NULL)
+    panic("cannot allocate thread cache");
 
   HASH_INIT(pid_hash.table);
   spin_init(&pid_hash.lock, "pid_hash");
@@ -78,31 +81,38 @@ process_alloc(void)
 
   struct Page *page;
   struct Process *process;
+  struct ProcessThread *thread;
   uint8_t *sp;
 
-  process = (struct Process *) kmem_alloc(process_cache);
+  if ((process = (struct Process *) kmem_alloc(process_cache)) == NULL)
+    return NULL;
+  
+  if ((thread = (struct ProcessThread *) kmem_alloc(thread_cache)) == NULL)
+    goto fail1;
+
+  process->thread = thread;
 
   // Allocate per-process kernel stack
   if ((page = page_alloc_one(0)) == NULL)
-    goto fail1;
+    goto fail2;
 
-  process->kstack = (uint8_t *) page2kva(page);
+  process->thread->kstack = (uint8_t *) page2kva(page);
   page->ref_count++;
 
-  sp = process->kstack + PAGE_SIZE;
+  sp = process->thread->kstack + PAGE_SIZE;
 
   // Leave room for Trapframe.
-  sp -= sizeof *process->tf;
-  process->tf = (struct TrapFrame *) sp;
+  sp -= sizeof *process->thread->tf;
+  process->thread->tf = (struct TrapFrame *) sp;
 
   // Setup new context to start executing at thread_run.
-  if ((process->thread = kthread_create(process, process_run, NZERO, sp)) == NULL)
-    goto fail2;
+  if (kthread_create(process, &thread->kernel_thread, process_run, NZERO, sp) != 0)
+    goto fail3;
 
   process->parent = NULL;
   process->zombie = 0;
-  process->sibling.next = NULL;
-  process->sibling.prev = NULL;
+  process->sibling_link.next = NULL;
+  process->sibling_link.prev = NULL;
 
   spin_lock(&pid_hash.lock);
 
@@ -118,9 +128,11 @@ process_alloc(void)
 
   return process;
 
-fail2:
+fail3:
   page->ref_count--;
   page_free_one(page);
+fail2:
+  kmem_free(thread_cache, thread);
 fail1:
   kmem_free(process_cache, process);
   return NULL;
@@ -174,12 +186,12 @@ process_load_binary(struct Process *proc, const void *binary)
                            VM_READ | VM_WRITE | VM_USER) < 0))
     return r;
 
-  proc->tf->r0  = 0;                   // argc
-  proc->tf->r1  = 0;                   // argv
-  proc->tf->r2  = 0;                   // environ
-  proc->tf->sp  = VIRT_USTACK_TOP;          // stack pointer
-  proc->tf->psr = PSR_M_USR | PSR_F;   // user mode, interrupts enabled
-  proc->tf->pc  = elf->entry;          // process entry point
+  proc->thread->tf->r0  = 0;                   // argc
+  proc->thread->tf->r1  = 0;                   // argv
+  proc->thread->tf->r2  = 0;                   // environ
+  proc->thread->tf->sp  = VIRT_USTACK_TOP;          // stack pointer
+  proc->thread->tf->psr = PSR_M_USR | PSR_F;   // user mode, interrupts enabled
+  proc->thread->tf->pc  = elf->entry;          // process entry point
 
   return 0;
 }
@@ -205,7 +217,7 @@ process_create(const void *binary, struct Process **pstore)
   proc->gid   = 0;
   proc->cmask = 0;
 
-  kthread_resume(proc->thread);
+  kthread_resume(&proc->thread->kernel_thread);
 
   if (pstore != NULL)
     *pstore = proc;
@@ -218,6 +230,20 @@ fail2:
   process_free(proc);
 fail1:
   return r;
+}
+
+void
+process_thread_free(struct KThread *kernel_thread)
+{
+  struct ProcessThread *thread = (struct ProcessThread *) kernel_thread;
+  struct Page *kstack_page;
+
+  // Free the kernel stack
+  kstack_page = kva2page(thread->kstack);
+  kstack_page->ref_count--;
+  page_free_one(kstack_page);
+
+  kmem_free(thread_cache, thread);
 }
 
 /**
@@ -282,7 +308,7 @@ process_destroy(int status)
     l = current->children.next;
     list_remove(l);
 
-    child = LIST_CONTAINER(l, struct Process, sibling);
+    child = LIST_CONTAINER(l, struct Process, sibling_link);
     child->parent = init_process;
     list_add_back(&init_process->children, l);
 
@@ -304,7 +330,7 @@ process_destroy(int status)
 
   spin_unlock(&process_lock);
 
-  kthread_destroy(current->thread);
+  kthread_destroy(&current->thread->kernel_thread);
 }
 
 pid_t
@@ -322,8 +348,8 @@ process_copy(void)
   }
 
   child->parent    = current;
-  *child->tf       = *current->tf;
-  child->tf->r0    = 0;
+  *child->thread->tf       = *current->thread->tf;
+  child->thread->tf->r0    = 0;
 
   for (fd = 0; fd < OPEN_MAX; fd++) {
     child->files[fd] = current->files[fd] ? file_dup(current->files[fd]) : NULL;
@@ -335,10 +361,10 @@ process_copy(void)
   child->cwd   = fs_inode_dup(current->cwd);
 
   spin_lock(&process_lock);
-  list_add_back(&current->children, &child->sibling);
+  list_add_back(&current->children, &child->sibling_link);
   spin_unlock(&process_lock);
 
-  kthread_resume(child->thread);
+  kthread_resume(&child->thread->kernel_thread);
 
   return child->pid;
 }
@@ -359,7 +385,7 @@ process_wait(pid_t pid, int *stat_loc, int options)
     found = 0;
 
     LIST_FOREACH(&current->children, l) {
-      p = LIST_CONTAINER(l, struct Process, sibling);
+      p = LIST_CONTAINER(l, struct Process, sibling_link);
 
       // Check whether the current child satisifies the criteria.
       if ((pid > 0) && (p->pid != pid)) {
@@ -375,7 +401,7 @@ process_wait(pid_t pid, int *stat_loc, int options)
       found = p->pid;
 
       if (p->zombie) {
-        list_remove(&p->sibling);
+        list_remove(&p->sibling_link);
 
         spin_unlock(&process_lock);
 
@@ -421,7 +447,7 @@ process_run(void)
   }
 
   // "Return" to the user space.
-  process_pop_tf(proc->tf);
+  process_pop_tf(proc->thread->tf);
 }
 
 // Load the user-mode registers from the trap frame.

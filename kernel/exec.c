@@ -167,11 +167,11 @@ process_exec(const char *path, char *const argv[], char *const envp[])
   // to properly work!
   usp = ROUND_DOWN(usp, 8);
 
-  proc->tf->r0 = argc;                // arg #0: argc
-  proc->tf->r1 = (uint32_t) uargv;    // arg #1: argv
-  proc->tf->r2 = (uint32_t) uenvp;    // arg #2: environ
-  proc->tf->sp = (uint32_t) usp;      // stack pointer
-  proc->tf->pc = elf.entry;           // process entry point
+  proc->thread->tf->r0 = argc;                // arg #0: argc
+  proc->thread->tf->r1 = (uint32_t) uargv;    // arg #1: argv
+  proc->thread->tf->r2 = (uint32_t) uenvp;    // arg #2: environ
+  proc->thread->tf->sp = (uint32_t) usp;      // stack pointer
+  proc->thread->tf->pc = elf.entry;           // process entry point
 
   return argc;
 

@@ -29,6 +29,7 @@ trap(struct TrapFrame *tf)
     trap_handle_abort(tf);
     break;
   case T_SWI:
+    // cprintf("incoming %p\n", tf);
     tf->r0 = sys_dispatch();
     break;
   case T_IRQ:

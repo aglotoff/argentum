@@ -19,31 +19,54 @@ struct File;
 struct SpinLock;
 struct Inode;
 
+struct ProcessThread {
+  /** Kernel thread associated with this process thread */
+  struct KThread        kernel_thread;
+  /** Bottom of the kernel-mode thread stack */
+  uint8_t              *kstack;
+  /** Address of the current trap frame on the stack */
+  struct TrapFrame     *tf;
+};
+
 /**
  * Process descriptor.
  */
 struct Process {
-  struct KThread    *thread;          ///< Thread associated with this process
-  uint8_t           *kstack;          ///< Bottom of the kernel-mode stack
-  struct TrapFrame  *tf;              ///< Current trap frame
+  /** Unique process identifier */
+  pid_t                 pid;
+  /** Link into the PID hash table */
+  struct ListLink       pid_link;
 
-  pid_t              pid;             ///< Process identifier
-  struct ListLink    pid_link;        ///< Link into the PID hash table
+  /** The process' address space */
+  struct VM            *vm;
 
-  struct VM         *vm;              ///< Process' address space
+  /** Main process thread */
+  struct ProcessThread *thread;
+  
+  /** The parent process */
+  struct Process       *parent;
+  /** List of child processes */
+  struct ListLink       children;
+  /** Link into the siblings list */
+  struct ListLink       sibling_link;
 
-  struct Process    *parent;          ///< Link to the parent process
-  struct WaitChannel   wait_queue;      ///< Queue to sleep waiting for children
-  struct ListLink    children;        ///< List of child processes
-  struct ListLink    sibling;         ///< Link into the siblings list
-  int                zombie;          ///< Whether the process is a zombie
-  int                exit_code;       ///< Exit code
+  /** Queue to sleep waiting for children */
+  struct WaitChannel    wait_queue;
+  /** Whether the process is a zombie */
+  int                   zombie;
+  /** Exit code */
+  int                   exit_code;
 
-  uid_t              uid;             ///< User ID
-  gid_t              gid;             ///< Group ID
-  mode_t             cmask;           ///< File mode creation mask
-  struct File       *files[OPEN_MAX]; ///< Open file descriptors
-  struct Inode      *cwd;             ///< Current working directory
+  /** User ID */
+  uid_t                 uid;
+  /** Group ID */
+  gid_t                 gid;
+  /** File mode creation mask */
+  mode_t                cmask;
+  /** Open file descriptors */
+  struct File          *files[OPEN_MAX];
+  /** Current working directory */
+  struct Inode         *cwd;
 };
 
 static inline struct Process *
@@ -61,5 +84,6 @@ pid_t process_copy(void);
 pid_t process_wait(pid_t, int *, int);
 int   process_exec(const char *, char *const[], char *const[]);
 void *process_grow(ptrdiff_t);
+void  process_thread_free(struct KThread *);
 
 #endif  // __INCLUDE_ARGENTUM_PROCESS_H__

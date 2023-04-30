@@ -53,7 +53,6 @@ struct KThread {
   struct ListLink   link;           ///< Link into the containing list
   int               state;          ///< Thread state
   int               priority;       ///< Thread priority
-  uint8_t          *kstack;         ///< Bottom of the kernel-mode stack
   struct Context   *context;        ///< Saved context
   void            (*entry)(void);   ///< Thread entry point
   struct Process   *process;        ///< The process this thread belongs to
@@ -62,7 +61,7 @@ struct KThread {
 
 struct KThread *kthread_current(void);
 void            kthread_enqueue(struct KThread *);
-struct KThread *kthread_create(struct Process *, void (*)(void), int, uint8_t *);
+int             kthread_create(struct Process *, struct KThread *, void (*)(void), int, uint8_t *);
 void            kthread_destroy(struct KThread *);
 int             kthread_resume(struct KThread *);
 void            kthread_run(void);

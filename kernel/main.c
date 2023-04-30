@@ -97,35 +97,35 @@ mp_main(void)
   sched_start();   
 }
 
-uint8_t th1_stack[4096];
-uint8_t th2_stack[4096];
+// uint8_t th1_stack[4096];
+// uint8_t th2_stack[4096];
 
-static void
-th1_func(void)
-{
-  //cpu_irq_enable();
+// static void
+// th1_func(void)
+// {
+//   //cpu_irq_enable();
 
-  for (;;)
-    cprintf("AAAAA");
-}
+//   for (;;)
+//     cprintf("AAAAA");
+// }
 
-static void
-th2_func(void)
-{
-  //cpu_irq_enable();
+// static void
+// th2_func(void)
+// {
+//   //cpu_irq_enable();
 
-  for (;;)
-    cprintf("BBBBB");
-}
+//   for (;;)
+//     cprintf("BBBBB");
+// }
 
-void
-core_test(void)
-{
-  struct KThread *th1, *th2;
+// void
+// core_test(void)
+// {
+//   struct KThread *th1, *th2;
 
-  th1 = kthread_create(NULL, th1_func, 0, th1_stack + 4096);
-  kthread_resume(th1);
+//   th1 = kthread_create(NULL, th1_func, 0, th1_stack + 4096);
+//   kthread_resume(th1);
 
-  th2 = kthread_create(NULL, th2_func, 0, th2_stack + 4096);
-  kthread_resume(th2);
-}
+//   th2 = kthread_create(NULL, th2_func, 0, th2_stack + 4096);
+//   kthread_resume(th2);
+// }

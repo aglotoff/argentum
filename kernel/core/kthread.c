@@ -13,9 +13,7 @@
 #include <argentum/process.h>
 #include <argentum/spinlock.h>
 
-static struct KMemCache *thread_cache;
 static struct ListLink run_queue[KTHREAD_MAX_PRIORITIES];
-
 struct SpinLock __sched_lock;
 
 struct KThread *
@@ -30,31 +28,12 @@ kthread_current(void)
   return thread;
 }
 
-void
-kthread_free(struct KThread *thread)
-{
-  if (thread->process != NULL) {
-    struct Page *kstack_page;
-
-    // Free the kernel stack
-    kstack_page = kva2page(thread->process->kstack);
-    kstack_page->ref_count--;
-    page_free_one(kstack_page);
-  }
-
-  kmem_free(thread_cache, thread);
-}
-
 void context_switch(struct Context **, struct Context *);
 
 void
 sched_init(void)
 {
   int i;
-
-  thread_cache = kmem_cache_create("thread_cache", sizeof(struct KThread), 0, NULL, NULL);
-  if (thread_cache == NULL)
-    panic("cannot allocate thread cache");
 
   for (i = 0; i < KTHREAD_MAX_PRIORITIES; i++)
     list_init(&run_queue[i]);
@@ -113,14 +92,20 @@ sched_start(void)
 
       context_switch(&cpu_current()->scheduler, next->context);
 
-      if (next->process != NULL)
-        mmu_switch_kernel();
-
-      if (next->state == KTHREAD_DESTROYED)
-        kthread_free(next);
-    } else {
       // Mark that no process is running on this CPU.
       cpu_current()->thread = NULL;
+
+      if (next->process != NULL) {
+        mmu_switch_kernel();
+
+        if (next->state == KTHREAD_DESTROYED) {
+          sched_unlock();
+          process_thread_free(next);
+          sched_lock();
+        }
+      }
+    } else {
+      
 
       sched_unlock();
 
@@ -145,14 +130,9 @@ sched_yield(void)
   cpu_current()->irq_flags = irq_flags;
 }
 
-struct KThread *
-kthread_create(struct Process *process, void (*entry)(void), int priority, uint8_t *stack)
+int
+kthread_create(struct Process *process, struct KThread *thread, void (*entry)(void), int priority, uint8_t *stack)
 {
-  struct KThread *thread;
-
-  if ((thread = (struct KThread *) kmem_alloc(thread_cache)) == NULL)
-    return NULL;
-
   thread->flags = 0;
   thread->priority = priority;
   thread->state = KTHREAD_SUSPENDED;
@@ -164,8 +144,7 @@ kthread_create(struct Process *process, void (*entry)(void), int priority, uint8
   thread->entry = entry;
 
   thread->process = process;
-
-  return thread;
+  return 0;
 }
 
 void

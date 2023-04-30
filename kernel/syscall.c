@@ -73,7 +73,8 @@ static int
 sys_get_num(void)
 {
   struct Process *current = my_process();
-  int *pc = (int *) (current->tf->pc - 4);
+  // cprintf("current %p, %p\n", current, current->thread->tf);
+  int *pc = (int *) (current->thread->tf->pc - 4);
   int r;
 
   if ((r = vm_user_check_buf(current->vm, pc, sizeof(int), VM_READ)) < 0)
@@ -90,13 +91,13 @@ sys_get_arg(int n)
 
   switch (n) {
   case 0:
-    return current->tf->r0;
+    return current->thread->tf->r0;
   case 1:
-    return current->tf->r1;
+    return current->thread->tf->r1;
   case 2:
-    return current->tf->r2;
+    return current->thread->tf->r2;
   case 3:
-    return current->tf->r3;
+    return current->thread->tf->r3;
   default:
     if (n < 0)
       panic("Invalid argument number: %d", n);
