@@ -6,7 +6,6 @@
 #include <argentum/cpu.h>
 #include <argentum/irq.h>
 #include <argentum/kthread.h>
-#include <argentum/list.h>
 #include <argentum/mm/kmem.h>
 #include <argentum/mm/mmu.h>
 #include <argentum/mm/page.h>
@@ -19,6 +18,11 @@ void context_switch(struct Context **, struct Context *);
 static struct ListLink run_queue[KTHREAD_MAX_PRIORITIES];
 struct SpinLock sched_lock;
 
+/**
+ * Initialize the scheduler data structures.
+ * 
+ * This function must be called prior to creating any kernel threads.
+ */
 void
 sched_init(void)
 {
@@ -30,6 +34,7 @@ sched_init(void)
   spin_init(&sched_lock, "sched");
 }
 
+// Add the specified task to the run queue with the corresponding priority
 static void
 sched_enqueue(struct KThread *th)
 {
@@ -40,6 +45,7 @@ sched_enqueue(struct KThread *th)
   list_add_back(&run_queue[th->priority], &th->link);
 }
 
+// Retrieve the highest-priority thread from the run queue
 static struct KThread *
 sched_dequeue(void)
 {
@@ -60,29 +66,33 @@ sched_dequeue(void)
   return NULL;
 }
 
+/**
+ * Start the scheduler main loop. This function never returns.
+ */
 void
 sched_start(void)
 {
-  struct KThread *next;
+  struct Cpu *my_cpu;
 
   spin_lock(&sched_lock);
 
+  my_cpu = cpu_current();
+
   for (;;) {
-    next = sched_dequeue();
+    struct KThread *next = sched_dequeue();
 
     if (next != NULL) {
       assert(next->state == KTHREAD_READY);
 
-      next->state = KTHREAD_RUNNING;
-      cpu_current()->thread = next;
-
       if (next->process != NULL)
         mmu_switch_user(next->process->vm->trtab);
 
-      context_switch(&cpu_current()->scheduler, next->context);
+      next->state = KTHREAD_RUNNING;
+      my_cpu->thread = next;
 
-      // Mark that no process is running on this CPU.
-      cpu_current()->thread = NULL;
+      context_switch(&my_cpu->scheduler, next->context);
+
+      my_cpu->thread = NULL;
 
       if (next->process != NULL) {
         mmu_switch_kernel();
@@ -94,12 +104,9 @@ sched_start(void)
         }
       }
     } else {
-      
-
       spin_unlock(&sched_lock);
 
       cpu_irq_enable();
-
       asm volatile("wfi");
 
       spin_lock(&sched_lock);
@@ -107,7 +114,8 @@ sched_start(void)
   }
 }
 
-void
+// Switch back from the current thread context back to the scheduler loop
+static void
 sched_yield(void)
 {
   int irq_flags;
@@ -181,6 +189,11 @@ sched_tick(void)
   }
 }
 
+/**
+ * Get the currently executing thread.
+ * 
+ * @return A pointer to the currently executing thread or NULL
+ */
 struct KThread *
 kthread_current(void)
 {
@@ -193,6 +206,19 @@ kthread_current(void)
   return thread;
 }
 
+/**
+ * Initialize the kernel thread. After successful initialization, the thread
+ * is put into suspended state and must be explicitly made runnable by a call
+ * to kthread_resume().
+ * 
+ * @param process  Pointer to a process the thread belongs to.
+ * @param thread   Pointer to the kernel thread to be initialized.
+ * @param entry    Thread entry point function.
+ * @param priority Thread priority value.
+ * @param stack    Top of the thread stack.
+ * 
+ * @return 0 on success.
+ */
 int
 kthread_init(struct Process *process, struct KThread *thread,
              void (*entry)(void), int priority, uint8_t *stack)
@@ -211,23 +237,43 @@ kthread_init(struct Process *process, struct KThread *thread,
   return 0;
 }
 
+/**
+ * Destroy the specified thread
+ */
 void
 kthread_destroy(struct KThread *thread)
 {
+  struct KThread *my_thread = kthread_current();
+
+  if (thread == NULL)
+    thread = my_thread;
+
   spin_lock(&sched_lock);
+
+  // TODO: state-specific cleanup
+  // TODO: the thread may be executing on another CPU! send IPI in this case
 
   thread->state = KTHREAD_DESTROYED;
 
-  sched_yield();
+  if (thread == my_thread) {
+    sched_yield();
+    panic("should not return");
+  }
 
-  panic("should not return");
+  spin_unlock(&sched_lock);
 }
 
+/**
+ * Relinguish the CPU allowing another thread to be run.
+ */
 void
 kthread_yield(void)
 {
   struct KThread *current = kthread_current();
   
+  if (current == NULL)
+    panic("no current thread");
+
   spin_lock(&sched_lock);
 
   sched_enqueue(current);
@@ -236,64 +282,47 @@ kthread_yield(void)
   spin_unlock(&sched_lock);
 }
 
-// A process' very first scheduling by scheduler() will switch here.
+// Execution of each thread begins here.
 static void
 kthread_run(void)
 {
-  // Still holding the scheduler lock.
+  // Still holding the scheduler lock (acquired in sched_start)
   spin_unlock(&sched_lock);
 
+  // Make sure IRQs are enabled
   cpu_irq_enable();
 
+  // Jump to the thread entry point
   kthread_current()->entry();
 }
 
-/**
- * 
- */
-void
-kthread_sleep(struct ListLink *queue, int state, struct SpinLock *lock)
-{
-  struct KThread *current = kthread_current();
-
-  if (lock != &sched_lock) {
-    spin_lock(&sched_lock);
-    if (lock != NULL)
-      spin_unlock(lock);
-  }
-
-  if (!spin_holding(&sched_lock))
-    panic("scheduler not locked");
-
-  current->state = state;
-  list_add_back(queue, &current->link);
-
-  sched_yield();
-
-  if (lock != &sched_lock) {
-    spin_unlock(&sched_lock);
-    if (lock != NULL)
-      spin_lock(lock);
-  }
-}
-
-int
+// Compare thread priorities. Note that a smaller priority value corresponds
+// to a higher priority! Returns a number less than, equal to, or greater than
+// zero if t1's priority is correspondingly less than, equal to, or greater than
+// t2's priority.
+static int
 kthread_priority_cmp(struct KThread *t1, struct KThread *t2)
 {
   return t2->priority - t1->priority; 
 }
 
+// Check whether a reschedule is required (taking into account the priority
+// of a thread most recently added to the run queue)
 static void
-kthread_check_resched(struct KThread *t)
+kthread_check_resched(struct KThread *recent)
 {
   struct Cpu *my_cpu;
   struct KThread *my_thread;
 
+  assert(spin_holding(&sched_lock));
+
   my_cpu = cpu_current();
   my_thread = my_cpu->thread;
-  
-  if ((my_thread != NULL) && (kthread_priority_cmp(t, my_thread) > 0)) {
+
+  if ((my_thread != NULL) && (kthread_priority_cmp(recent, my_thread) > 0)) {
     if (my_cpu->isr_nesting > 0) {
+      // Cannot yield inside an ISR handler, delay until the last call to
+      // sched_isr_exit()
       my_thread->flags |= KTHREAD_RESCHEDULE;
     } else {
       sched_enqueue(my_thread);
@@ -302,18 +331,24 @@ kthread_check_resched(struct KThread *t)
   }
 }
 
+/**
+ * Resume execution of a previously suspended thread (or begin execution of a
+ * newly created one).
+ * 
+ * @param thread The kernel thread to resume execution
+ */
 int
-kthread_resume(struct KThread *t)
+kthread_resume(struct KThread *thread)
 {
   spin_lock(&sched_lock);
 
-  if (t->state != KTHREAD_SUSPENDED) {
+  if (thread->state != KTHREAD_SUSPENDED) {
     spin_unlock(&sched_lock);
     return -EINVAL;
   }
 
-  sched_enqueue(t);
-  kthread_check_resched(t);
+  sched_enqueue(thread);
+  kthread_check_resched(thread);
 
   spin_unlock(&sched_lock);
 
@@ -321,9 +356,44 @@ kthread_resume(struct KThread *t)
 }
 
 /**
+ * Put the current thread into sleep.
+ *
+ * @param queue An optional queue to insert the thread into.
+ * @param state The state indicating a kind of sleep.
+ * @param lock  An optional spinlock to release while going to sleep.
+ */
+void
+kthread_sleep(struct ListLink *queue, int state, struct SpinLock *lock)
+{
+  struct KThread *current = kthread_current();
+
+  // someone may call this function while holding sched_lock?
+  if (lock != &sched_lock) {
+    spin_lock(&sched_lock);
+    if (lock != NULL)
+      spin_unlock(lock);
+  }
+
+  assert(spin_holding(&sched_lock));
+
+  if (queue != NULL)
+    list_add_back(queue, &current->link);
+
+  current->state = state;
+  sched_yield();
+
+  // someone may call this function while holding sched_lock?
+  if (lock != &sched_lock) {
+    spin_unlock(&sched_lock);
+    if (lock != NULL)
+      spin_lock(lock);
+  }
+}
+
+/**
  * Wake up the thread with the highest priority.
  *
- * @param wait_queue Pointer to the head of the wait queue.
+ * @param queue Pointer to the head of the wait queue.
  */
 void
 kthread_wakeup_one(struct ListLink *queue)
@@ -355,7 +425,7 @@ kthread_wakeup_one(struct ListLink *queue)
 /**
  * Wake up all processes sleeping on the wait queue.
  *
- * @param wait_queue Pointer to the head of the wait queue.
+ * @param queue Pointer to the head of the wait queue.
  */
 void
 kthread_wakeup_all(struct ListLink *queue)

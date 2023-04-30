@@ -331,7 +331,7 @@ process_destroy(int status)
 
   spin_unlock(&process_lock);
 
-  kthread_destroy(&current->thread->kernel_thread);
+  kthread_destroy(NULL);
 }
 
 pid_t
