@@ -5,7 +5,7 @@
 #include <argentum/cprintf.h>
 #include <argentum/cpu.h>
 #include <argentum/irq.h>
-#include <argentum/kthread.h>
+#include <argentum/task.h>
 
 struct Cpu _cpus[NCPU];
 
@@ -15,8 +15,8 @@ struct Cpu _cpus[NCPU];
 /**
  * Get the current CPU structure.
  * 
- * The caller must disable interrupts, otherwise the thread could switch to
- * a different processor due to timer interrupt and the return value will be
+ * The caller must disable interrupts, otherwise the task could switch to a
+ * different processor due to timer interrupt and the return value will be
  * incorrect. 
  *
  * @return The pointer to the current CPU structure.

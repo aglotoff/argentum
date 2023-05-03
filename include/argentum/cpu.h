@@ -8,7 +8,7 @@
 #include <argentum/armv7/regs.h>
 
 struct Context;
-struct KThread;
+struct Task;
 
 /**
  * The Argentum kernel maintains a special structure for each processor, which
@@ -16,7 +16,7 @@ struct KThread;
  */
 struct Cpu {
   struct Context *scheduler;      ///< Saved scheduler context
-  struct KThread *thread;         ///< The currently running kernel thread
+  struct Task    *task;           ///< The currently running kernel task
   int             isr_nesting;    ///< ISR nesting level
   int             irq_save_count; ///< Nesting level of cpu_irq_save() calls
   int             irq_flags;      ///< IRQ state before the first cpu_irq_save()

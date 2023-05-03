@@ -121,11 +121,11 @@ mp_main(void)
 // void
 // core_test(void)
 // {
-//   struct KThread *th1, *th2;
+//   struct Task *th1, *th2;
 
-//   th1 = kthread_init(NULL, th1_func, 0, th1_stack + 4096);
-//   kthread_resume(th1);
+//   th1 = task_init(NULL, th1_func, 0, th1_stack + 4096);
+//   task_resume(th1);
 
-//   th2 = kthread_init(NULL, th2_func, 0, th2_stack + 4096);
-//   kthread_resume(th2);
+//   th2 = task_init(NULL, th2_func, 0, th2_stack + 4096);
+//   task_resume(th2);
 // }

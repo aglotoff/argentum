@@ -20,7 +20,7 @@ context_switch:
   str     sp, [r0]
   mov     sp, r1
 
-  // Load new registers and switch to the new thread
+  // Load new registers and switch to the new task
   vldmia  sp!, {s0-s31}     // restore FPU registers
   ldr     lr, [sp], #4      // FPSCR -> LR
   vmsr    fpscr, lr         // restore FPSCR

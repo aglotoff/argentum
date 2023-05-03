@@ -11,17 +11,24 @@
 #include <argentum/cpu.h>
 #include <argentum/list.h>
 #include <argentum/mm/vm.h>
-#include <argentum/kthread.h>
+#include <argentum/task.h>
 #include <argentum/trap.h>
 #include <argentum/wchan.h>
 
 struct File;
 struct SpinLock;
 struct Inode;
+struct Process;
 
 struct ProcessThread {
-  /** Kernel thread associated with this process thread */
-  struct KThread        kernel_thread;
+  /** Kernel task associated with this process thread */
+  struct Task           task;
+  /** Tne process this thread belongs to */
+  struct Process       *process;
+  /** Unique thread identifier */
+  pid_t                 pid;
+  /** Link into the PID hash table */
+  struct ListLink       pid_link;
   /** Bottom of the kernel-mode thread stack */
   uint8_t              *kstack;
   /** Address of the current trap frame on the stack */
@@ -32,11 +39,6 @@ struct ProcessThread {
  * Process descriptor.
  */
 struct Process {
-  /** Unique process identifier */
-  pid_t                 pid;
-  /** Link into the PID hash table */
-  struct ListLink       pid_link;
-
   /** The process' address space */
   struct VM            *vm;
 
@@ -72,8 +74,8 @@ struct Process {
 static inline struct Process *
 process_current(void)
 {
-  struct KThread *thread = kthread_current();
-  return thread != NULL ? thread->process : NULL;
+  struct Task *task = task_current();
+  return task != NULL ? ((struct ProcessThread *) task)->process : NULL;
 }
 
 void  process_init(void);
@@ -84,6 +86,6 @@ pid_t process_copy(void);
 pid_t process_wait(pid_t, int *, int);
 int   process_exec(const char *, char *const[], char *const[]);
 void *process_grow(ptrdiff_t);
-void  process_thread_free(struct KThread *);
+void  process_thread_free(struct Task *);
 
 #endif  // __INCLUDE_ARGENTUM_PROCESS_H__

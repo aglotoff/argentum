@@ -317,13 +317,16 @@ sys_exit(void)
 int32_t
 sys_getpid(void)
 {
-  return process_current()->pid;
+  return process_current()->thread->pid;
 }
 
 int32_t
 sys_getppid(void)
 {
-  return process_current()->parent ? process_current()->parent->pid : process_current()->pid;
+  struct Process *current = process_current(),
+                 *parent  = current->parent;
+
+  return parent ? parent->thread->pid : current->thread->pid;
 }
 
 int32_t

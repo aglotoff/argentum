@@ -7,7 +7,7 @@
 #include <argentum/fs/buf.h>
 #include <argentum/irq.h>
 #include <argentum/mm/memlayout.h>
-#include <argentum/kthread.h>
+#include <argentum/task.h>
 #include <argentum/sd.h>
 #include <argentum/spinlock.h>
 
@@ -164,7 +164,7 @@ sd_start_transfer(struct Buf *buf)
 }
 
 // Handle the SD card interrupt. Complete the current data transfer operation
-// and wake up the corresponding thread.
+// and wake up the corresponding task.
 static void
 sd_irq(void)
 {
@@ -204,6 +204,6 @@ sd_irq(void)
 
   spin_unlock(&sd_queue.lock);
 
-  // Resume the thread waiting for the buf data.
+  // Resume the task waiting for the buf data.
   wchan_wakeup_all(&buf->wait_queue);
 }

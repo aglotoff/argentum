@@ -1,7 +1,7 @@
 #include <assert.h>
 
 #include <argentum/kmutex.h>
-#include <argentum/kthread.h>
+#include <argentum/task.h>
 
 /**
  * Initialize a mutex.
@@ -32,9 +32,9 @@ kmutex_lock(struct KMutex *mutex)
 
   // Sleep until the mutex becomes available.
   while (mutex->owner != NULL)
-    kthread_sleep(&mutex->queue, KTHREAD_SLEEPING_MUTEX, &mutex->lock);
+    task_sleep(&mutex->queue, TASK_STATE_SLEEPING_MUTEX, &mutex->lock);
 
-  mutex->owner = kthread_current();
+  mutex->owner = task_current();
 
   spin_unlock(&mutex->lock);
 }
@@ -55,25 +55,25 @@ kmutex_unlock(struct KMutex *mutex)
   // TODO: priority inheritance
 
   mutex->owner = NULL;
-  kthread_wakeup_all(&mutex->queue);
+  task_wakeup_all(&mutex->queue);
 
   spin_unlock(&mutex->lock);
 }
 
 /**
- * Check whether the current thread is holding the mutex.
+ * Check whether the current task is holding the mutex.
  *
  * @param lock A pointer to the mutex.
- * @return 1 if the current thread is holding the mutex, 0 otherwise.
+ * @return 1 if the current task is holding the mutex, 0 otherwise.
  */
 int
 kmutex_holding(struct KMutex *mutex)
 {
-  struct KThread *owner;
+  struct Task *owner;
 
   spin_lock(&mutex->lock);
   owner = mutex->owner;
   spin_unlock(&mutex->lock);
 
-  return (owner != NULL) && (owner == kthread_current());
+  return (owner != NULL) && (owner == task_current());
 }

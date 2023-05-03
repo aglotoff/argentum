@@ -10,19 +10,19 @@
 #include <argentum/list.h>
 #include <argentum/spinlock.h>
 
-struct KThread;
+struct Task;
 
 /**
- * Mutex is a sleeping lock, i.e. when a thread tries to acquire a mutex that
+ * Mutex is a sleeping lock, i.e. when a task tries to acquire a mutex that
  * is locked, it is put to sleep until the mutex becomes available.
  *
- * Mutexes are used if the holding time is long or if the thread needs to sleep
+ * Mutexes are used if the holding time is long or if the task needs to sleep
  * while holding the lock.
  */
 struct KMutex {
-  /** The thread currently holding the mutex. */
-  struct KThread   *owner;
-  /** List of threads waiting for this mutex to be released. */
+  /** The task currently holding the mutex. */
+  struct Task   *owner;
+  /** List of tasks waiting for this mutex to be released. */
   struct ListLink   queue;
   /** Spinlock protecting the mutex. */
   struct SpinLock   lock;

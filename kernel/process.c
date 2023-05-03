@@ -13,6 +13,7 @@
 #include <argentum/fs/fs.h>
 #include <argentum/hash.h>
 #include <argentum/mm/kmem.h>
+#include <argentum/mm/mmu.h>
 #include <argentum/mm/page.h>
 #include <argentum/mm/vm.h>
 #include <argentum/monitor.h>
@@ -73,6 +74,39 @@ process_init(void)
     panic("Cannot create the init process");
 }
 
+static void
+process_thread_prepare_switch(struct Task *task)
+{
+  mmu_switch_user(((struct ProcessThread *) task)->process->vm->trtab);
+}
+
+static void
+process_thread_finish_switch(struct Task *task)
+{
+  (void) task;
+  mmu_switch_kernel();
+}
+
+static void
+process_thread_destroy(struct Task *task)
+{
+  struct ProcessThread *thread = (struct ProcessThread *) task;
+  struct Page *kstack_page;
+
+  // Free the kernel stack
+  kstack_page = kva2page(thread->kstack);
+  kstack_page->ref_count--;
+  page_free_one(kstack_page);
+
+  kmem_free(thread_cache, thread);
+}
+
+static struct TaskHooks process_thread_hooks = {
+  .prepare_switch = process_thread_prepare_switch,
+  .finish_switch  = process_thread_finish_switch,
+  .destroy        = process_thread_destroy,
+};
+
 struct Process *
 process_alloc(void)
 {
@@ -90,6 +124,7 @@ process_alloc(void)
   if ((thread = (struct ProcessThread *) kmem_alloc(thread_cache)) == NULL)
     goto fail1;
 
+  thread->process = process;
   process->thread = thread;
 
   // Allocate per-process kernel stack
@@ -107,7 +142,7 @@ process_alloc(void)
   process->thread->tf = (struct TrapFrame *) sp;
 
   // Setup new context to start executing at thread_run.
-  if (kthread_init(process, &thread->kernel_thread, process_run, NZERO, sp) != 0)
+  if (task_init(&thread->task, process_run, NZERO, sp, &process_thread_hooks))
     goto fail3;
 
   process->parent = NULL;
@@ -117,10 +152,10 @@ process_alloc(void)
 
   spin_lock(&pid_hash.lock);
 
-  if ((process->pid = ++next_pid) < 0)
+  if ((thread->pid = ++next_pid) < 0)
     panic("pid overflow");
 
-  HASH_PUT(pid_hash.table, &process->pid_link, process->pid);
+  HASH_PUT(pid_hash.table, &thread->pid_link, thread->pid);
 
   spin_unlock(&pid_hash.lock);
 
@@ -218,7 +253,7 @@ process_create(const void *binary, struct Process **pstore)
   proc->gid   = 0;
   proc->cmask = 0;
 
-  kthread_resume(&proc->thread->kernel_thread);
+  task_resume(&proc->thread->task);
 
   if (pstore != NULL)
     *pstore = proc;
@@ -233,20 +268,6 @@ fail1:
   return r;
 }
 
-void
-process_thread_free(struct KThread *kernel_thread)
-{
-  struct ProcessThread *thread = (struct ProcessThread *) kernel_thread;
-  struct Page *kstack_page;
-
-  // Free the kernel stack
-  kstack_page = kva2page(thread->kstack);
-  kstack_page->ref_count--;
-  page_free_one(kstack_page);
-
-  kmem_free(thread_cache, thread);
-}
-
 /**
  * Free all resources associated with a process.
  * 
@@ -255,11 +276,6 @@ process_thread_free(struct KThread *kernel_thread)
 void
 process_free(struct Process *process)
 {
-  // Remove the pid hash link
-  spin_lock(&pid_hash.lock);
-  HASH_REMOVE(&process->pid_link);
-  spin_unlock(&pid_hash.lock);
-
   // Return the process descriptor to the cache
   kmem_free(process_cache, process);
 }
@@ -268,15 +284,15 @@ struct Process *
 pid_lookup(pid_t pid)
 {
   struct ListLink *l;
-  struct Process *proc;
+  struct ProcessThread *proc;
 
   spin_lock(&pid_hash.lock);
 
   HASH_FOREACH_ENTRY(pid_hash.table, l, pid) {
-    proc = LIST_CONTAINER(l, struct Process, pid_link);
+    proc = LIST_CONTAINER(l, struct ProcessThread, pid_link);
     if (proc->pid == pid) {
       spin_unlock(&pid_hash.lock);
-      return proc;
+      return proc->process;
     }
   }
 
@@ -290,6 +306,12 @@ process_destroy(int status)
   struct ListLink *l;
   struct Process *child, *current = process_current();
   int fd, has_zombies;
+
+  // Remove the pid hash link
+  // TODO: place this code somewhere else?
+  spin_lock(&pid_hash.lock);
+  HASH_REMOVE(&current->thread->pid_link);
+  spin_unlock(&pid_hash.lock);
 
   vm_destroy(current->vm);
 
@@ -331,7 +353,7 @@ process_destroy(int status)
 
   spin_unlock(&process_lock);
 
-  kthread_destroy(NULL);
+  task_destroy(NULL);
 }
 
 pid_t
@@ -365,9 +387,9 @@ process_copy(void)
   list_add_back(&current->children, &child->sibling_link);
   spin_unlock(&process_lock);
 
-  kthread_resume(&child->thread->kernel_thread);
+  task_resume(&child->thread->task);
 
-  return child->pid;
+  return child->thread->pid;
 }
 
 pid_t
@@ -389,7 +411,7 @@ process_wait(pid_t pid, int *stat_loc, int options)
       p = LIST_CONTAINER(l, struct Process, sibling_link);
 
       // Check whether the current child satisifies the criteria.
-      if ((pid > 0) && (p->pid != pid)) {
+      if ((pid > 0) && (p->thread->pid != pid)) {
         continue;
       } else if (pid == 0) {
         // TODO: compare the child group ID to the parent group ID
@@ -399,7 +421,7 @@ process_wait(pid_t pid, int *stat_loc, int options)
         break;
       }
 
-      found = p->pid;
+      found = p->thread->pid;
 
       if (p->zombie) {
         list_remove(&p->sibling_link);

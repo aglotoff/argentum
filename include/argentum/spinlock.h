@@ -14,7 +14,7 @@ struct Cpu;
 
 /**
  * Spinlocks provide mutual exclusion, ensuring only one CPU at a time can hold
- * the lock. A thread trying to acquire the lock waits in a loop repeatedly
+ * the lock. A task trying to acquire the lock waits in a loop repeatedly
  * testing the lock until it becomes available.
  *
  * Spinlocks are used if the holding time is short or if the data to be

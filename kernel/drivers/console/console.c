@@ -1,6 +1,6 @@
 #include <stdint.h>
 
-#include <argentum/kthread.h>
+#include <argentum/task.h>
 #include <argentum/spinlock.h>
 #include <argentum/mm/memlayout.h>
 #include <argentum/mm/vm.h>

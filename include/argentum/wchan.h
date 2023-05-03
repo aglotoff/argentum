@@ -10,11 +10,11 @@
 struct SpinLock;
 
 /**
- * Wait channel is a structure that allows threads in the kernel to wait for
+ * Wait channel is a structure that allows tasks in the kernel to wait for
  * some associated resource. 
  */
 struct WaitChannel {
-  /** List of threads waiting on the channel. */
+  /** List of tasks waiting on the channel. */
   struct ListLink head;
 };
 
