@@ -7,9 +7,10 @@
 
 #include <argentum/cprintf.h>
 #include <argentum/fs/buf.h>
-#include <argentum/fs/ext2.h>
 #include <argentum/fs/fs.h>
 #include <argentum/types.h>
+
+#include "ext2.h"
 
 #define DE_NAME_OFFSET    offsetof(struct Ext2DirEntry, name)
 

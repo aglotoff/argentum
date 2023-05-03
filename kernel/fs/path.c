@@ -6,11 +6,12 @@
 #include <sys/stat.h>
 
 #include <argentum/cprintf.h>
-#include <argentum/fs/ext2.h>
 #include <argentum/fs/fs.h>
 #include <argentum/mm/kmem.h>
 #include <argentum/process.h>
 #include <argentum/types.h>
+
+#include "ext2.h"
 
 static size_t
 fs_path_skip(const char *path, char *name, char **next)
@@ -127,5 +128,5 @@ void
 fs_init(void)
 {
   fs_inode_cache_init();
-  ext2_read_superblock();
+  ext2_mount();
 }

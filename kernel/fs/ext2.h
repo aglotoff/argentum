@@ -1,9 +1,5 @@
-#ifndef __INCLUDE_ARGENTUM_FS_EXT2_H__
-#define __INCLUDE_ARGENTUM_FS_EXT2_H__
-
-#ifndef __AG_KERNEL__
-#error "This is a kernel header; user programs should not #include it"
-#endif
+#ifndef __KERNEL_FS_EXT2_H__
+#define __KERNEL_FS_EXT2_H__
 
 #include <stdint.h>
 #include <sys/types.h>
@@ -120,26 +116,35 @@ struct Inode;
 
 int           ext2_bitmap_alloc(uint32_t, size_t, dev_t, uint32_t *);
 void          ext2_bitmap_free(uint32_t, dev_t, uint32_t);
-
 int           ext2_block_alloc(dev_t, uint32_t *, uint32_t);
 void          ext2_block_free(dev_t, uint32_t);
 void          ext2_block_zero(uint32_t, uint32_t);
-
 int           ext2_inode_alloc(mode_t, dev_t, uint32_t *, uint32_t);
 void          ext2_inode_free(dev_t, uint32_t);
 
-void          ext2_read_inode(struct Inode *);
-void          ext2_write_inode(struct Inode *);
-void          ext2_put_inode(struct Inode *);
+void          ext2_mount(void);
 
-void          ext2_read_superblock(void);
-void          ext2_inode_trunc(struct Inode *);
+void          ext2_write_inode(struct Inode *);
+void          ext2_delete_inode(struct Inode *);
+
+int           ext2_inode_create(struct Inode *, char *, mode_t,
+                                struct Inode **);
+struct Inode *ext2_inode_lookup(struct Inode *, const char *);
+int           ext2_inode_link(struct Inode *, char *, struct Inode *);
+int           ext2_inode_unlink(struct Inode *, struct Inode *);
+int           ext2_inode_mkdir(struct Inode *, char *, mode_t,
+                               struct Inode **);
+int           ext2_inode_rmdir(struct Inode *, char *);
+int           ext2_inode_mknod(struct Inode *, char *, mode_t, dev_t,
+                               struct Inode **);
+
 ssize_t       ext2_inode_read(struct Inode *, void *, size_t, off_t);
 ssize_t       ext2_inode_write(struct Inode *, const void *, size_t, off_t);
 ssize_t       ext2_dir_iterate(struct Inode *, void *, size_t, off_t *);
-struct Inode *ext2_inode_lookup(struct Inode *, const char *);
-int           ext2_inode_link(struct Inode *, char *, struct Inode *);
+
+void          ext2_read_inode(struct Inode *);
+void          ext2_inode_trunc(struct Inode *);
 ssize_t       ext2_dirent_read(struct Inode *, struct Ext2DirEntry *, off_t);
 ssize_t       ext2_dirent_write(struct Inode *, struct Ext2DirEntry *, off_t);
 
-#endif  // !__INCLUDE_ARGENTUM_FS_EXT2_H__
+#endif  // !__KERNEL_FS_EXT2_H__

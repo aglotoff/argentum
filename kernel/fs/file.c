@@ -5,11 +5,12 @@
 #include <sys/stat.h>
 
 #include <argentum/cprintf.h>
-#include <argentum/fs/ext2.h>
 #include <argentum/fs/file.h>
 #include <argentum/fs/fs.h>
 #include <argentum/mm/kmem.h>
 #include <argentum/spinlock.h>
+
+#include "ext2.h"
 
 static struct SpinLock file_lock;
 static struct KMemCache *file_cache;

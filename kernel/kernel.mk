@@ -24,16 +24,12 @@ KERNEL_SRCFILES :=	\
 	kernel/drivers/sd/sd.c \
 	kernel/drivers/eth.c \
 	kernel/gic.c \
-	kernel/fs/bitmap.c \
-	kernel/fs/block_alloc.c \
+	kernel/fs/ext2.c \
 	kernel/fs/buf.c \
 	kernel/fs/dir.c \
 	kernel/fs/file.c \
 	kernel/fs/inode.c \
-	kernel/fs/inode_alloc.c \
 	kernel/fs/path.c \
-	kernel/fs/super.c \
-	kernel/fs/super_ops.c \
 	kernel/mm/mmu.c \
 	kernel/mm/page.c \
 	kernel/mm/kmem.c \
