@@ -26,7 +26,6 @@ KERNEL_SRCFILES :=	\
 	kernel/gic.c \
 	kernel/fs/ext2.c \
 	kernel/fs/buf.c \
-	kernel/fs/dir.c \
 	kernel/fs/file.c \
 	kernel/fs/inode.c \
 	kernel/fs/path.c \

@@ -50,15 +50,15 @@ file_open(const char *path, int oflag, mode_t mode, struct File **fstore)
   // TODO: the check and the file creation should be atomic
   if ((r = fs_name_lookup(path, &ip)) < 0) {
     if ((r != -ENOENT) || !(oflag & O_CREAT))
-      goto fail1;
+      goto out1;
 
     mode &= (S_IRWXU | S_IRWXG | S_IRWXO);
     if ((r = fs_create(path, S_IFREG | mode, 0, &ip)) < 0)
-      goto fail1;
+      goto out1;
   } else {
     if ((oflag & O_CREAT) && (oflag & O_EXCL)) {
       r = -EEXISTS;
-      goto fail2;
+      goto out2;
     }
 
     fs_inode_lock(ip);
@@ -66,7 +66,7 @@ file_open(const char *path, int oflag, mode_t mode, struct File **fstore)
 
   if (S_ISDIR(ip->mode) && (oflag & O_WRONLY)) {
     r = -ENOTDIR;
-    goto fail2;
+    goto out2;
   }
 
   // TODO: O_NOCTTY
@@ -75,8 +75,8 @@ file_open(const char *path, int oflag, mode_t mode, struct File **fstore)
   // TODO: EROFS
 
   if ((oflag & O_WRONLY) && (oflag & O_TRUNC)) {
-    if ((r = fs_inode_trunc(ip)) < 0)
-      goto fail2;
+    if ((r = fs_inode_truncate(ip)) < 0)
+      goto out2;
   }
 
   f->inode = ip;
@@ -85,7 +85,7 @@ file_open(const char *path, int oflag, mode_t mode, struct File **fstore)
     // TODO: check group and other permissions
     if (!(f->inode->mode & S_IRUSR)) {
       r = -EPERM;
-      goto fail2;
+      goto out2;
     }
 
     f->readable = 1;
@@ -95,7 +95,7 @@ file_open(const char *path, int oflag, mode_t mode, struct File **fstore)
     // TODO: check group and other permissions
     if (!(f->inode->mode & S_IWUSR)) {
       r = -EPERM;
-      goto fail2;
+      goto out2;
     }
 
     f->writeable = 1;
@@ -112,9 +112,9 @@ file_open(const char *path, int oflag, mode_t mode, struct File **fstore)
 
   return 0;
 
-fail2:
+out2:
   fs_inode_unlock_put(ip);
-fail1:
+out1:
   kmem_free(file_cache, f);
   return r;
 }
@@ -199,17 +199,13 @@ file_read(struct File *f, void *buf, size_t nbytes)
 ssize_t
 file_getdents(struct File *f, void *buf, size_t nbytes)
 {
-  ssize_t ret, total;
-  char *dst;
+  int r;
 
   if (!f->readable)
     return -EBADF;
 
   if ((f->type != FD_INODE) || !S_ISDIR(f->inode->mode))
     return -ENOTDIR;
-
-  dst = (char *) buf;
-  total = 0;
 
   fs_inode_lock(f->inode);
 
@@ -220,23 +216,11 @@ file_getdents(struct File *f, void *buf, size_t nbytes)
     return -EPERM;
   }
 
-  while (nbytes > 0) {
-    if ((ret = ext2_dir_iterate(f->inode, dst, nbytes, &f->offset)) < 0) {
-      fs_inode_unlock(f->inode);
-      return ret;
-    }
-
-    if (ret == 0)
-      break;
-
-    dst    += ret;
-    total  += ret;
-    nbytes -= ret;
-  }
+  r = fs_inode_read_dir(f->inode, buf, nbytes, &f->offset);
 
   fs_inode_unlock(f->inode);
 
-  return total;
+  return r;
 }
 
 ssize_t
@@ -286,6 +270,21 @@ file_stat(struct File *fp, struct stat *buf)
   fs_inode_lock(fp->inode);
   r = fs_inode_stat(fp->inode, buf);
   fs_inode_unlock(fp->inode);
+
+  return r;
+}
+
+int
+file_chdir(struct File *file)
+{
+  int r;
+  
+  if (file->type != FD_INODE)
+    return -ENOTDIR;
+
+  fs_inode_lock(file->inode);
+  r = fs_set_pwd(file->inode);
+  fs_inode_unlock(file->inode);
 
   return r;
 }

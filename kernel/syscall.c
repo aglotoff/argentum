@@ -375,16 +375,12 @@ int32_t
 sys_chdir(void)
 {
   const char *path;
-  struct Inode *ip;
   int r;
 
   if ((r = sys_arg_str(0, &path, VM_READ)) < 0)
     return r;
   
-  if ((r = fs_name_lookup(path, &ip)) < 0)
-    return r;
-  
-  return fs_chdir(ip);
+  return fs_chdir(path);
 }
 
 int32_t
@@ -392,7 +388,6 @@ sys_chmod(void)
 {
   const char *path;
   mode_t mode;
-  struct Inode *ip;
   int r;
 
   if ((r = sys_arg_str(0, &path, VM_READ)) < 0)
@@ -400,14 +395,7 @@ sys_chmod(void)
   if ((r = sys_arg_short(1, (short *) &mode)) < 0)
     return r;
 
-  if ((r = fs_name_lookup(path, &ip)) < 0)
-    return r;
-
-  r = fs_chmod(ip, mode);
-
-  fs_inode_put(ip);
-
-  return r;
+  return fs_chmod(path, mode);
 }
 
 int32_t
@@ -419,10 +407,7 @@ sys_fchdir(void)
   if ((r = sys_arg_fd(0, NULL, &f)) < 0)
     return r;
 
-  if (f->type != FD_INODE)
-    return -ENOTDIR;
-
-  return fs_chdir(f->inode);
+  return file_chdir(f);
 }
 
 static int

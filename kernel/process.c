@@ -381,7 +381,7 @@ process_copy(void)
   child->uid   = current->uid;
   child->gid   = current->gid;
   child->cmask = current->cmask;
-  child->cwd   = fs_inode_dup(current->cwd);
+  child->cwd   = fs_inode_duplicate(current->cwd);
 
   spin_lock(&process_lock);
   list_add_back(&current->children, &child->sibling_link);

@@ -30,5 +30,6 @@ ssize_t      file_read(struct File *, void *, size_t);
 ssize_t      file_write(struct File *, const void *, size_t);
 ssize_t      file_getdents(struct File *, void *, size_t);
 int          file_stat(struct File *, struct stat *);
+int          file_chdir(struct File *);
 
 #endif  // !__INCLUDE_ARGENTUM_FS_FILE__

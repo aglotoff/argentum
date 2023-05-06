@@ -8,7 +8,7 @@
 #include <time.h>
 #include <unistd.h>
 
-char buf[10240];
+char buf[256];
 char name[256];
 char datebuf[256];
 

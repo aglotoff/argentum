@@ -34,15 +34,15 @@
  * @return 0 on success, -ENOMEM if there are no unused bits.
  */
 int
-ext2_bitmap_alloc(uint32_t bitmap, size_t n, dev_t dev, uint32_t *bstore)
+ext2_bitmap_alloc(uint32_t start, size_t n, dev_t dev, uint32_t *bstore)
 {
   uint32_t b, bi;
 
-  for (b = 0; b < n; b += BITS_PER_BLOCK) {
+  for (b = 0; b < n; b++) {
     struct Buf *buf;
     uint32_t *bmap;
 
-    if ((buf = buf_read(bitmap + b, dev)) == NULL)
+    if ((buf = buf_read(start + b, dev)) == NULL)
       panic("cannot read the bitmap block");
 
     bmap = (uint32_t *) buf->data;
@@ -56,7 +56,7 @@ ext2_bitmap_alloc(uint32_t bitmap, size_t n, dev_t dev, uint32_t *bstore)
       buf_write(buf);
       buf_release(buf);
 
-      *bstore = b + bi;
+      *bstore = (b * BITS_PER_BLOCK) + bi;
 
       return 0;
     }
@@ -132,7 +132,7 @@ ext2_block_zero(uint32_t block_no, uint32_t dev)
 // the group) into the memory location pointed to by `bstore`. Otherwise,
 // return `-ENOMEM`.
 static int
-ext2_gd_block_alloc(struct Ext2GroupDesc *gd, dev_t dev, uint32_t *bstore)
+ext2_block_group_alloc(struct Ext2GroupDesc *gd, dev_t dev, uint32_t *bstore)
 {
   if (gd->free_blocks_count == 0)
     return -ENOMEM;
@@ -163,7 +163,7 @@ int
 ext2_block_alloc(dev_t dev, uint32_t *bstore, uint32_t ino)
 {
   struct Buf *buf;
-  struct Ext2GroupDesc *gd;
+  struct Ext2GroupDesc *gdesc;
   uint32_t gds_per_block, g, gi;
   uint32_t block_no;
 
@@ -177,9 +177,9 @@ ext2_block_alloc(dev_t dev, uint32_t *bstore, uint32_t ino)
   if ((buf = buf_read(GD_BLOCKS_BASE + (g / gds_per_block), dev)) == NULL)
     panic("cannot read the group descriptor table");
 
-  gd = (struct Ext2GroupDesc *) buf->data + gi;
+  gdesc = (struct Ext2GroupDesc *) buf->data + gi;
 
-  if (ext2_gd_block_alloc(gd, dev, &block_no) == 0) {
+  if (ext2_block_group_alloc(gdesc, dev, &block_no) == 0) {
     buf_write(buf);
     buf_release(buf);
 
@@ -197,9 +197,9 @@ ext2_block_alloc(dev_t dev, uint32_t *bstore, uint32_t ino)
       panic("cannot read the group descriptor table");
 
     for (gi = 0; gi < gds_per_block; gi++) {
-      gd = (struct Ext2GroupDesc *) buf->data + gi;
+      gdesc = (struct Ext2GroupDesc *) buf->data + gi;
 
-      if (ext2_gd_block_alloc(gd, dev, &block_no) == 0) {
+      if (ext2_block_group_alloc(gdesc, dev, &block_no) == 0) {
         buf_write(buf);
         buf_release(buf);
 
@@ -254,16 +254,16 @@ ext2_block_free(dev_t dev, uint32_t bno)
  * ----------------------------------------------------------------------------
  */
 
-// Try to allocate an inode from the block group descriptor pointed to by `gd`.
+// Try to allocate an inode from the inode group descriptor pointed to by `gd`.
 // If there is a free inode, mark it as used and store its number into the
 // memory location pointed to by `istore`. Otherwise, return `-ENOMEM`.
 static int
-ext2_gd_inode_alloc(struct Ext2GroupDesc *gd, dev_t dev, uint32_t *istore)
+ext2_inode_group_alloc(struct Ext2GroupDesc *gd, dev_t dev, uint32_t *istore)
 {
   if (gd->free_inodes_count == 0)
     return -ENOMEM;
 
-  if ((ext2_bitmap_alloc(gd->inode_bitmap, sb.inodes_per_group, dev, istore)))
+  if (ext2_bitmap_alloc(gd->inode_bitmap, sb.inodes_per_group, dev, istore))
     // If free_inodes_count isn't zero, but we cannot find a free inode, the
     // filesystem is corrupted.
     panic("no free inodes");
@@ -274,7 +274,7 @@ ext2_gd_inode_alloc(struct Ext2GroupDesc *gd, dev_t dev, uint32_t *istore)
 }
 
 static int
-ext2_inode_new(uint32_t table, uint32_t inum, uint16_t mode)
+ext2_inode_init(uint32_t table, uint32_t inum, uint16_t mode)
 {
   unsigned inodes_per_block, itab_idx, inode_block_idx, inode_block;
   struct Ext2Inode *dp;
@@ -329,7 +329,7 @@ ext2_inode_alloc(mode_t mode, dev_t dev, uint32_t *istore, uint32_t parent)
 
   gd = (struct Ext2GroupDesc *) buf->data + gi;
 
-  if (ext2_gd_inode_alloc(gd, dev, &inum) == 0) {
+  if (ext2_inode_group_alloc(gd, dev, &inum) == 0) {
     uint32_t table;
 
     table = gd->inode_table;
@@ -339,7 +339,7 @@ ext2_inode_alloc(mode_t mode, dev_t dev, uint32_t *istore, uint32_t parent)
 
     inum += 1 + (g + gi) * sb.inodes_per_group;
 
-    ext2_inode_new(table, inum, mode);
+    ext2_inode_init(table, inum, mode);
 
     if (istore)
       *istore = inum;
@@ -354,7 +354,7 @@ ext2_inode_alloc(mode_t mode, dev_t dev, uint32_t *istore, uint32_t parent)
 
     for (gi = 0; gi < gds_per_block; gi++) {
       gd = (struct Ext2GroupDesc *) buf->data + gi;
-      if (ext2_gd_inode_alloc(gd, dev, &inum) == 0) {
+      if (ext2_inode_group_alloc(gd, dev, &inum) == 0) {
         uint32_t table;
 
         table = gd->inode_table;
@@ -364,7 +364,7 @@ ext2_inode_alloc(mode_t mode, dev_t dev, uint32_t *istore, uint32_t parent)
 
         inum += 1 + (g + gi) * sb.inodes_per_group;
 
-        ext2_inode_new(table, inum, mode);
+        ext2_inode_init(table, inum, mode);
 
         if (istore)
           *istore = inum;
@@ -502,8 +502,12 @@ ext2_inode_trunc(struct Inode *ip)
   ext2_block_free(ip->dev, ip->block[DIRECT_BLOCKS]);
   ip->block[DIRECT_BLOCKS] = 0;
   ip->blocks--;
-
+  
   assert(ip->blocks == 0);
+
+  ip->size = 0;
+  ip->ctime = ip->mtime = rtc_get_time();
+  ip->flags |= FS_INODE_DIRTY;
 }
 
 ssize_t
@@ -513,6 +517,12 @@ ext2_inode_read(struct Inode *ip, void *buf, size_t nbyte, off_t off)
   uint32_t bno;
   size_t total, nread;
   uint8_t *dst;
+
+  if (off > ip->size)
+    return -EINVAL;
+
+  if ((off + nbyte) > ip->size)
+    nbyte = ip->size - off;
 
   dst = (uint8_t *) buf;
   total = 0;
@@ -531,6 +541,9 @@ ext2_inode_read(struct Inode *ip, void *buf, size_t nbyte, off_t off)
     off   += nread;
   }
 
+  ip->atime = rtc_get_time();
+  ip->flags |= FS_INODE_DIRTY;
+
   return total;
 }
 
@@ -544,6 +557,7 @@ ext2_inode_write(struct Inode *ip, const void *buf, size_t nbyte, off_t off)
 
   src = (const uint8_t *) buf;
   total = 0;
+
   while (total < nbyte) {
     bno = ext2_inode_block_map(ip, off / BLOCK_SIZE);
     if ((b = buf_read(bno, ip->dev)) == NULL)
@@ -558,6 +572,14 @@ ext2_inode_write(struct Inode *ip, const void *buf, size_t nbyte, off_t off)
     total += nwrite;
     src   += nwrite;
     off   += nwrite;
+  }
+
+  if (total > 0) {
+    if (off > ip->size)
+      ip->size = off;
+
+    ip->mtime = rtc_get_time();
+    ip->flags |= FS_INODE_DIRTY;
   }
 
   return total;
@@ -591,6 +613,9 @@ ext2_create(struct Inode *dirp, char *name, mode_t mode, struct Inode **istore)
   if ((r = ext2_inode_link(dirp, name, ip)))
     panic("Cannot create link");
 
+  ip->ctime = ip->mtime = rtc_get_time();
+  ip->flags |= FS_INODE_DIRTY;
+
   *istore = ip;
 
   return 0;
@@ -611,6 +636,9 @@ ext2_inode_create(struct Inode *dirp, char *name, mode_t mode,
 
   assert(istore != NULL);
   *istore = ip;
+
+  dirp->atime = dirp->ctime = dirp->mtime = rtc_get_time();
+  dirp->flags |= FS_INODE_DIRTY;
 
   return 0;
 }
@@ -638,12 +666,14 @@ ext2_inode_mkdir(struct Inode *dirp, char *name, mode_t mode,
   // Create the ".." entry
   if (ext2_inode_link(ip, "..", dirp) < 0)
     panic("Cannot create ..");
+
   dirp->nlink++;
+  dirp->atime = dirp->ctime = dirp->mtime = rtc_get_time();
   dirp->flags |= FS_INODE_DIRTY;
 
   assert(istore != NULL);
   *istore = ip;
-  
+
   return 0;
 }
 
@@ -664,10 +694,41 @@ ext2_inode_mknod(struct Inode *dirp, char *name, mode_t mode, dev_t dev,
   assert(istore != NULL);
   *istore = ip;
 
+  dirp->atime = dirp->ctime = dirp->mtime = rtc_get_time();
+  dirp->flags |= FS_INODE_DIRTY;
+
   return 0;
 }
 
 #define DE_NAME_OFFSET    offsetof(struct Ext2DirEntry, name)
+
+ssize_t
+ext2_dirent_read(struct Inode *dir, struct Ext2DirEntry *de, off_t off)
+{
+  ssize_t ret;
+
+  ret = ext2_inode_read(dir, de, DE_NAME_OFFSET, off);
+  if (ret != DE_NAME_OFFSET)
+    panic("Cannot read directory");
+
+  ret = ext2_inode_read(dir, de->name, de->name_len, off + ret);
+  if (ret != de->name_len)
+    panic("Cannot read directory");
+
+  return 0;
+}
+
+ssize_t
+ext2_dirent_write(struct Inode *dir, struct Ext2DirEntry *de, off_t off)
+{
+  size_t ret;
+
+  ret = ext2_inode_write(dir, de, DE_NAME_OFFSET + de->name_len, off);
+  if (ret != (DE_NAME_OFFSET + de->name_len))
+    panic("Cannot read directory");
+
+  return 0;
+}
 
 struct Inode *
 ext2_inode_lookup(struct Inode *dirp, const char *name)
@@ -751,6 +812,10 @@ ext2_inode_link(struct Inode *dir, char *name, struct Inode *ip)
       // Reuse an empty entry
       new_de.rec_len = de.rec_len;
 
+      ip->ctime = rtc_get_time();
+      ip->nlink++;
+      ip->flags |= FS_INODE_DIRTY;
+
       return ext2_dirent_write(dir, &new_de, off);
     }
 
@@ -760,6 +825,10 @@ ext2_inode_link(struct Inode *dir, char *name, struct Inode *ip)
       // Found enough space
       new_de.rec_len = de.rec_len - de_len;
       de.rec_len = de_len;
+
+      ip->ctime = rtc_get_time();
+      ip->nlink++;
+      ip->flags |= FS_INODE_DIRTY;
 
       ext2_dirent_write(dir, &de, off);
       ext2_dirent_write(dir, &new_de, off + de_len);
@@ -773,7 +842,13 @@ ext2_inode_link(struct Inode *dir, char *name, struct Inode *ip)
   new_de.rec_len = BLOCK_SIZE;
   dir->size = off + BLOCK_SIZE;
 
-  return ext2_dirent_write(dir, &new_de, off);
+  ip->ctime = rtc_get_time();
+  ip->nlink++;
+  ip->flags |= FS_INODE_DIRTY;
+
+  ext2_dirent_write(dir, &new_de, off);
+
+  return 0;
 }
 
 static int
@@ -832,6 +907,10 @@ ext2_inode_unlink(struct Inode *dir, struct Inode *ip)
       ext2_dirent_write(dir, &de, prev_off);
     }
 
+    if (--ip->nlink > 0)
+      ip->ctime = rtc_get_time();
+    ip->flags |= FS_INODE_DIRTY;
+
     return 0;
   }
 
@@ -839,47 +918,21 @@ ext2_inode_unlink(struct Inode *dir, struct Inode *ip)
 }
 
 int
-ext2_inode_rmdir(struct Inode *dir, char *name)
+ext2_inode_rmdir(struct Inode *dir, struct Inode *ip)
 {
-  struct Inode *ip;
   int r;
-
-  fs_inode_lock(dir);
-
-  if ((ip = ext2_inode_lookup(dir, name)) == NULL) {
-    r = -ENOENT;
-    goto out1;
-  }
-
-  fs_inode_lock(ip);
-
-  if (!S_ISDIR(ip->mode)) {
-    r = -ENOTDIR;
-    goto out2;
-  }
-
-  if (!ext2_dir_empty(ip)) {
-    r = -ENOTEMPTY;
-    goto out2;
-  }
+  
+  if (!ext2_dir_empty(ip))
+    return -ENOTEMPTY;
 
   if ((r = ext2_inode_unlink(dir, ip)) < 0)
-    goto out2;
-
-  if (--ip->nlink > 0)
-    ip->ctime = rtc_get_time();
-  ip->flags |= FS_INODE_DIRTY;
+    return r;
 
   dir->nlink--;
   dir->ctime = dir->mtime = rtc_get_time();
   dir->flags |= FS_INODE_DIRTY;
 
-out2:
-  fs_inode_unlock_put(dir);
-out1:
-  fs_inode_unlock_put(ip);
-
-  return r;
+  return 0;
 }
 
 static uint32_t
@@ -1026,7 +1079,7 @@ ext2_delete_inode(struct Inode *ip)
 
 struct Ext2Superblock sb;
 
-void
+struct Inode *
 ext2_mount(void)
 {
   struct Buf *buf;
@@ -1043,4 +1096,26 @@ ext2_mount(void)
   cprintf("Filesystem size = %dM, inodes_count = %d, block_count = %d\n",
           sb.block_count * BLOCK_SIZE / (1024 * 1024),
           sb.inodes_count, sb.block_count);
+
+  return fs_inode_get(2, 0);
+}
+
+ssize_t
+ext2_readdir(struct Inode *dir, void *buf, FillDirFunc filldir, off_t off)
+{
+  struct Ext2DirEntry de;
+  ssize_t nread;
+
+  if (!S_ISDIR(dir->mode))
+    panic("not a directory");
+
+  if (off >= dir->size)
+    return 0;
+
+  if ((nread = ext2_dirent_read(dir, &de, off)) < 0)
+    return nread;
+
+  filldir(buf, de.name, de.name_len, off + de.rec_len, de.inode, de.file_type);
+
+  return de.rec_len;
 }

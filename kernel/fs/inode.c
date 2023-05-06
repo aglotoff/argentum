@@ -1,4 +1,5 @@
 #include <assert.h>
+#include <dirent.h>
 #include <errno.h>
 #include <fcntl.h>
 #include <limits.h>
@@ -103,6 +104,76 @@ fs_inode_put(struct Inode *ip)
   spin_unlock(&inode_cache.lock);
 }
 
+/**
+ * Increment the reference counter of the given inode.
+ * 
+ * @param ip Pointer to the inode
+ * 
+ * @return Pointer to the inode.
+ */
+struct Inode *
+fs_inode_duplicate(struct Inode *ip)
+{
+  spin_lock(&inode_cache.lock);
+  ip->ref_count++;
+  spin_unlock(&inode_cache.lock);
+
+  return ip;
+}
+
+int
+fs_inode_can_read(struct Inode *inode)
+{
+  struct Process *my_process = process_current();
+
+  if (my_process->uid == 0)
+    return 1;
+  if ((my_process->uid == inode->uid) && (inode->mode & S_IRUSR))
+    return 1;
+  if ((my_process->gid == inode->gid) && (inode->mode & S_IRGRP))
+    return 1;
+  return inode->mode & S_IROTH;
+}
+
+int
+fs_inode_can_write(struct Inode *inode)
+{
+  struct Process *my_process = process_current();
+
+  if (my_process->uid == 0)
+    return 1;
+  if ((my_process->uid == inode->uid) && (inode->mode & S_IWUSR))
+    return 1;
+  if ((my_process->gid == inode->gid) && (inode->mode & S_IWGRP))
+    return 1;
+  return inode->mode & S_IWOTH;
+}
+
+int
+fs_inode_can_execute(struct Inode *inode)
+{
+  struct Process *my_process = process_current();
+
+  if (my_process->uid == 0)
+    return inode->mode & (S_IXUSR | S_IXGRP | S_IXOTH);
+  if ((my_process->uid == inode->uid) && (inode->mode & S_IXUSR))
+    return 1;
+  if ((my_process->gid == inode->gid) && (inode->mode & S_IXGRP))
+    return 1;
+  return inode->mode & S_IXOTH;
+}
+
+static int
+fs_inode_holding(struct Inode *ip)
+{
+  return kmutex_holding(&ip->mutex);
+}
+
+/**
+ * Lock the given inode. Read the inode meta info, if necessary.
+ * 
+ * @param ip Pointer to the inode.
+ */
 void
 fs_inode_lock(struct Inode *ip)
 {
@@ -114,24 +185,9 @@ fs_inode_lock(struct Inode *ip)
   if (ip->flags & FS_INODE_DIRTY)
     panic("inode dirty");
 
-  // panic("AA");
-
   ext2_read_inode(ip);
 
-  if (!ip->mode)
-    panic("no mode");
-
   ip->flags |= FS_INODE_VALID;
-}
-
-struct Inode *
-fs_inode_dup(struct Inode *ip)
-{
-  spin_lock(&inode_cache.lock);
-  ip->ref_count++;
-  spin_unlock(&inode_cache.lock);
-
-  return ip;
 }
 
 void
@@ -141,7 +197,7 @@ fs_inode_unlock(struct Inode *ip)
     panic("not holding buf");
 
   if (!(ip->flags & FS_INODE_VALID))
-    panic("inode nt valid");
+    panic("inode not valid");
 
   if (ip->flags & FS_INODE_DIRTY) {
     ext2_write_inode(ip);
@@ -151,6 +207,11 @@ fs_inode_unlock(struct Inode *ip)
   kmutex_unlock(&ip->mutex);
 }
 
+/**
+ * Common pattern: unlock inode and then put.
+ *
+ * @param ip Pointer to the inode.
+ */
 void
 fs_inode_unlock_put(struct Inode *ip)
 {  
@@ -163,28 +224,28 @@ fs_inode_read(struct Inode *ip, void *buf, size_t nbyte, off_t *off)
 {
   ssize_t ret;
   
-  if (!kmutex_holding(&ip->mutex))
-    panic("not holding ip->mutex");
+  if (!fs_inode_holding(ip))
+    panic("not locked");
 
+  if (!fs_inode_can_read(ip))
+    return -EPERM;
+
+  // Read from the corresponding device
   if (S_ISCHR(ip->mode) || S_ISBLK(ip->mode)) {
     fs_inode_unlock(ip);
-    ret = console_read(buf, nbyte);
-    fs_inode_lock(ip);
 
+    // TODO: support other devices
+    ret = console_read(buf, nbyte);
+
+    fs_inode_lock(ip);
     return ret;
   }
 
-  if ((*off > ip->size) || ((*off + nbyte) < *off))
-    return -1;
-
-  if ((*off + nbyte) > ip->size)
-    nbyte = ip->size - *off;
+  if ((*off + nbyte) < *off)
+    return -EINVAL;
 
   if ((ret = ext2_inode_read(ip, buf, nbyte, *off)) < 0)
     return ret;
-
-  ip->atime = rtc_get_time();
-  ip->flags |= FS_INODE_DIRTY;
 
   *off += ret;
 
@@ -196,25 +257,84 @@ fs_inode_write(struct Inode *ip, const void *buf, size_t nbyte, off_t *off)
 {
   ssize_t total;
 
-  if (!kmutex_holding(&ip->mutex))
-    panic("not holding ip->mutex");
+  if (!fs_inode_holding(ip))
+    panic("not locked");
 
-  if (S_ISCHR(ip->mode) || S_ISBLK(ip->mode))
-    return console_write(buf, nbyte);
+  if (!fs_inode_can_write(ip))
+    return -EPERM;
+
+  // Write to the corresponding device
+  if (S_ISCHR(ip->mode) || S_ISBLK(ip->mode)) {
+    fs_inode_unlock(ip);
+
+    // TODO: support other devices
+    total = console_write(buf, nbyte);
+
+    fs_inode_lock(ip);
+    return total;
+  }
 
   if ((*off + nbyte) < *off)
-    return -1;
+    return -EINVAL;
 
   total = ext2_inode_write(ip, buf, nbyte, *off);
 
-  if (total > 0) {
+  if (total > 0)
     *off += total;
 
-    if ((size_t) *off > ip->size)
-      ip->size = *off;
+  return total;
+}
+
+static int
+fs_filldir(void *buf, const char *name, uint16_t name_len, off_t off,
+           ino_t ino, uint8_t type)
+{
+  struct dirent *dp = (struct dirent *) buf;
+
+  dp->d_reclen  = name_len + offsetof(struct dirent, d_name);
+  dp->d_ino     = ino;
+  dp->d_off     = off;
+  dp->d_namelen = name_len;
+  dp->d_type    = type;
+  memmove(&dp->d_name[0], name, name_len);
+
+  return dp->d_reclen;
+}
+
+ssize_t
+fs_inode_read_dir(struct Inode *ip, void *buf, size_t nbyte, off_t *off)
+{
+  char *dst = (char *) buf;
+  ssize_t total = 0;
+
+  if (!fs_inode_holding(ip))
+    panic("not locked");
+
+  if (!fs_inode_can_read(ip))
+    return -EPERM;
+
+  while (nbyte > 0) {
+    struct dirent *de = (struct dirent *) dst;
+    ssize_t nread;
+
+    if ((nread = ext2_readdir(ip, de, fs_filldir, *off)) < 0)
+      return nread;
+
+    if (nread == 0)
+      break;
     
-    ip->mtime = rtc_get_time();
-    ip->flags |= FS_INODE_DIRTY;
+    if (de->d_reclen > nbyte) {
+      if (total == 0) {
+        return -EINVAL;
+      }
+      break;
+    }
+
+    *off += nread;
+
+    dst   += de->d_reclen;
+    total += de->d_reclen;
+    nbyte -= de->d_reclen;
   }
 
   return total;
@@ -223,8 +343,10 @@ fs_inode_write(struct Inode *ip, const void *buf, size_t nbyte, off_t *off)
 int
 fs_inode_stat(struct Inode *ip, struct stat *buf)
 {
-  if (!kmutex_holding(&ip->mutex))
-    panic("caller not holding ip->mutex");
+  if (!fs_inode_holding(ip))
+    panic("not locked");
+
+  // TODO: check permissions
 
   buf->st_mode  = ip->mode;
   buf->st_ino   = ip->ino;
@@ -241,63 +363,146 @@ fs_inode_stat(struct Inode *ip, struct stat *buf)
 }
 
 int
-fs_inode_trunc(struct Inode *ip)
+fs_inode_truncate(struct Inode *inode)
 {
-  if (!kmutex_holding(&ip->mutex))
-    panic("not holding");
+  if (!fs_inode_holding(inode))
+    panic("not locked");
 
-  if (!fs_permissions(ip, FS_PERM_WRITE))
-    return -EACCESS;
+  if (!fs_inode_can_write(inode))
+    return -EPERM;
 
-  ext2_inode_trunc(ip);
-
-  ip->size = 0;
-  ip->ctime = ip->mtime = rtc_get_time();
-  ip->flags |= FS_INODE_DIRTY;
+  ext2_inode_trunc(inode);
 
   return 0;
 }
 
 int
-fs_create(const char *path, mode_t mode, dev_t dev, struct Inode **istore)
+fs_inode_create(struct Inode *dir, char *name, mode_t mode, dev_t dev,
+                struct Inode **istore)
 {
-  struct Inode *dp, *ip;
-  char name[NAME_MAX + 1];
-  int r;
+  if (!fs_inode_holding(dir))
+    panic("directory not locked");
+  
+  if (!S_ISDIR(dir->mode))
+    return -ENOTDIR;
+  if (!fs_inode_can_write(dir))
+    return -EPERM;
 
-  if ((r = fs_path_lookup(path, name, 1, &dp)) < 0)
-    return r;
-
-  fs_inode_lock(dp);
-
-  if (ext2_inode_lookup(dp, name) != NULL) {
-    r = -EEXISTS;
-    goto out;
-  }
-
-  mode &= ~process_current()->cmask;
+  if (ext2_inode_lookup(dir, name) != NULL)
+    return -EEXISTS;
 
   switch (mode & S_IFMT) {
   case S_IFDIR:
-    r = ext2_inode_mkdir(dp, name, mode, &ip);
-    break;
+    return ext2_inode_mkdir(dir, name, mode, istore);
   case S_IFREG:
-    r = ext2_inode_create(dp, name, mode, &ip);
-    break;
+    return ext2_inode_create(dir, name, mode, istore);
   default:
-    r = ext2_inode_mknod(dp, name, mode, dev, &ip);
-    break;
+    return ext2_inode_mknod(dir, name, mode, dev, istore);
   }
+}
 
-  // TODO: EROFS
-
-  dp->atime = dp->ctime = dp->mtime = rtc_get_time();
-  dp->flags |= FS_INODE_DIRTY;
-
-  ip->ctime = ip->mtime = rtc_get_time();
-  ip->flags |= FS_INODE_DIRTY;
+int
+fs_inode_link(struct Inode *inode, struct Inode *dir, char *name)
+{
+  if (!fs_inode_holding(inode))
+    panic("inode not locked");
+  if (!fs_inode_holding(dir))
+    panic("directory not locked");
   
-  if (r == 0) {
+  if (!S_ISDIR(dir->mode))
+    return -ENOTDIR;
+  if (!fs_inode_can_write(dir))
+    return -EPERM;
+  
+  // TODO: Allow links to directories?
+  if (S_ISDIR(inode->mode))
+    return -EPERM;
+  if (inode->nlink >= LINK_MAX)
+    return -EMLINK;
+
+  if (dir->dev != inode->dev)
+    return -EXDEV;
+
+  return ext2_inode_link(dir, name, inode);
+}
+
+int
+fs_inode_lookup(struct Inode *dir, const char *name, struct Inode **istore)
+{
+  struct Inode *inode;
+
+  if (!fs_inode_holding(dir))
+    panic("not locked");
+  
+  if (!S_ISDIR(dir->mode))
+    return -ENOTDIR;
+  if (!fs_inode_can_read(dir))
+    return -EPERM;
+
+  if ((inode = ext2_inode_lookup(dir, name)) == NULL)
+    return -ENOENT;
+  
+  if (istore != NULL)
+    *istore = inode;
+
+  return 0;
+}
+
+int
+fs_inode_unlink(struct Inode *dir, struct Inode *inode)
+{
+  if (!fs_inode_holding(inode))
+    panic("inode not locked");
+  if (!fs_inode_holding(dir))
+    panic("directory not locked");
+  
+  if (!S_ISDIR(dir->mode))
+    return -ENOTDIR;
+  if (!fs_inode_can_write(dir))
+    return -EPERM;
+
+  // TODO: Allow links to directories?
+  if (S_ISDIR(inode->mode))
+    return -EPERM;
+
+  return ext2_inode_unlink(dir, inode);
+}
+
+int
+fs_inode_rmdir(struct Inode *dir, struct Inode *inode)
+{
+  if (!fs_inode_holding(inode))
+    panic("inode not locked");
+  if (!fs_inode_holding(dir))
+    panic("directory not locked");
+  
+  if (!S_ISDIR(dir->mode))
+    return -ENOTDIR;
+  if (!fs_inode_can_write(dir))
+    return -EPERM;
+
+  // TODO: Allow links to directories?
+  if (S_ISDIR(inode->mode))
+    return -EPERM;
+
+  return ext2_inode_rmdir(dir, inode);
+}
+
+int
+fs_create(const char *path, mode_t mode, dev_t dev, struct Inode **istore)
+{
+  struct Inode *dir, *ip;
+  char name[NAME_MAX + 1];
+  int r;
+
+  if ((r = fs_path_lookup(path, name, 1, &dir)) < 0)
+    return r;
+
+  mode &= ~process_current()->cmask;
+
+  fs_inode_lock(dir);
+
+  if ((r = fs_inode_create(dir, name, mode, dev, &ip)) == 0) {
     if (istore == NULL) {
       fs_inode_unlock_put(ip);
     } else {
@@ -305,11 +510,14 @@ fs_create(const char *path, mode_t mode, dev_t dev, struct Inode **istore)
     }
   }
 
-out:
-  fs_inode_unlock_put(dp);
-
+  fs_inode_unlock_put(dir);
   return r;
 }
+
+// Locking order
+// fs_link: 
+// fs_unlink: first lock the directory, then lock the entry
+
 
 int
 fs_link(char *path1, char *path2)
@@ -321,53 +529,30 @@ fs_link(char *path1, char *path2)
   if ((r = fs_name_lookup(path1, &ip)) < 0)
     return r;
 
-  fs_inode_lock(ip);
-
-  if (S_ISDIR(ip->mode)) {
-    r = -EPERM;
-    goto fail2;
-  }
-
-  if (ip->nlink >= LINK_MAX) {
-    r = -EMLINK;
-    goto fail2;
-  }
-
-  ip->nlink++;
-  ip->ctime = rtc_get_time();
-  ip->flags |= FS_INODE_DIRTY;
-
-  // TODO: EROFS
-
-  fs_inode_unlock(ip);
-
   if ((r = fs_path_lookup(path2, name, 1, &dirp)) < 0)
-    goto fail1;
+    goto out1;
 
-  fs_inode_lock(dirp);
+  // TODO: check for the same node?
 
-  if (dirp->dev != ip->dev) {
-    r = -EXDEV;
-    goto fail3;
+  // Always lock inodes in a specific order to avoid deadlocks
+  if (ip < dirp) {
+    fs_inode_lock(ip);
+    fs_inode_lock(dirp);
+  } else {
+    fs_inode_lock(dirp);
+    fs_inode_lock(ip);
   }
 
-  if ((r = ext2_inode_link(dirp, name, ip)))
-    goto fail3;
+  r = fs_inode_link(ip, dirp, name);
 
-  fs_inode_unlock_put(dirp);
-  fs_inode_put(ip);
-
-  return 0;
-
-fail3:
-  fs_inode_unlock_put(dirp);
-
-  fs_inode_lock(ip);
-  ip->nlink--;
-  ip->flags |= FS_INODE_DIRTY;
-fail2:
-  fs_inode_unlock(ip);
-fail1:
+  if (ip < dirp) {
+    fs_inode_unlock_put(dirp);
+    fs_inode_unlock(ip);
+  } else {
+    fs_inode_unlock(ip);
+    fs_inode_unlock_put(dirp);
+  }
+out1:
   fs_inode_put(ip);
   return r;
 }
@@ -384,26 +569,15 @@ fs_unlink(const char *path)
 
   fs_inode_lock(dir);
 
-  if ((ip = ext2_inode_lookup(dir, name)) == NULL) {
-    r = -ENOENT;
+  if ((r = fs_inode_lookup(dir, name, &ip)) < 0)
     goto out1;
-  }
+
+  fs_inode_unlock(dir);
 
   fs_inode_lock(ip);
 
-  if (S_ISDIR(ip->mode)) {
-    r = -EPERM;
-    goto out2;
-  }
-  
-  if ((r = ext2_inode_unlink(dir, ip)) < 0)
-    goto out2;
+  r = fs_inode_unlink(dir, ip);
 
-  if (--ip->nlink > 0)
-    ip->ctime = rtc_get_time();
-  ip->flags |= FS_INODE_DIRTY;
-
-out2:
   fs_inode_unlock_put(dir);
 out1:
   fs_inode_unlock_put(ip);
@@ -414,15 +588,107 @@ out1:
 int
 fs_rmdir(const char *path)
 {
-  struct Inode *dir;
+  struct Inode *dir, *ip;
   char name[NAME_MAX + 1];
   int r;
 
   if ((r = fs_path_lookup(path, name, 1, &dir)) < 0)
+    goto out1;
+  
+  fs_inode_lock(dir);
+
+  if ((r = fs_inode_lookup(dir, name, &ip)) < 0)
+    goto out2;
+
+  fs_inode_lock(ip);
+
+  r = fs_inode_rmdir(dir, ip);
+
+  fs_inode_unlock_put(dir);
+out2:
+  fs_inode_unlock_put(ip);
+out1:
+  return r;
+}
+
+int
+fs_set_pwd(struct Inode *inode)
+{
+  struct Process *current = process_current();
+
+  fs_inode_lock(inode);
+
+  if (!S_ISDIR(inode->mode)) {
+    fs_inode_unlock(inode);
+    return -ENOTDIR;
+  }
+  if (!fs_inode_can_execute(inode)) {
+    fs_inode_unlock(inode);
+    return -EPERM;
+  }
+
+  fs_inode_unlock(inode);
+
+  fs_inode_put(current->cwd);
+  current->cwd = inode;
+
+  return 0;
+}
+
+int
+fs_chdir(const char *path)
+{
+  struct Inode *ip;
+  int r;
+
+  if ((r = fs_name_lookup(path, &ip)) < 0)
     return r;
 
-  return ext2_inode_rmdir(dir, name);
+  if ((r = fs_set_pwd(ip)) != 0)
+    fs_inode_put(ip);
+
+  return r;
 }
+
+int
+fs_inode_chmod(struct Inode *ip, mode_t mode)
+{
+  struct Process *current = process_current();
+
+  if (!fs_inode_holding(ip))
+    panic("not holding");
+
+  if ((current->uid != 0) && (ip->uid != current->uid))
+    return -EPERM;
+
+  // TODO: additional permission checks
+
+  ip->mode  = mode;
+  ip->ctime = rtc_get_time();
+  ip->flags |= FS_INODE_DIRTY;
+
+  return 0;
+}
+
+int
+fs_chmod(const char *path, mode_t mode)
+{
+  struct Inode *ip;
+  int r;
+
+  if ((r = fs_name_lookup(path, &ip)) < 0)
+    return r;
+  
+  fs_inode_lock(ip);
+
+  r = fs_inode_chmod(ip, mode);
+
+  fs_inode_unlock_put(ip);
+
+  return r;
+}
+
+
 
 int
 fs_permissions(struct Inode *inode, mode_t mode)
@@ -436,49 +702,3 @@ fs_permissions(struct Inode *inode, mode_t mode)
 
   return (inode->mode & mode) == mode;
 }
-
-int
-fs_chdir(struct Inode *ip)
-{
-  struct Process *current = process_current();
-
-  fs_inode_lock(ip);
-
-  if (!S_ISDIR(ip->mode)) {
-    fs_inode_unlock_put(ip);
-    return -ENOTDIR;
-  }
-
-  fs_inode_unlock(ip);
-
-  fs_inode_put(current->cwd);
-  current->cwd = ip;
-
-  return 0;
-}
-
-int
-fs_chmod(struct Inode *ip, mode_t mode)
-{
-  struct Process *current = process_current();
-
-  // TODO: check mode
-  
-  fs_inode_lock(ip);
-
-  if ((current->uid != 0) && (ip->uid != current->uid)) {
-    fs_inode_unlock(ip);
-    return -EPERM;
-  }
-
-  // TODO: additional permission checks
-
-  ip->mode  = mode;
-  ip->ctime = rtc_get_time();
-
-  ip->flags |= FS_INODE_DIRTY;
-  fs_inode_unlock(ip);
-
-  return 0;
-}
-

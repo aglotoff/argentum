@@ -22,10 +22,10 @@ struct Inode {
   int             flags;
   int             ref_count;
   struct ListLink cache_link;
-  struct KMutex    mutex;
+  struct KMutex   mutex;
   struct ListLink wait_queue;
-  
-  // FS-independent data
+
+  // Common fields
   mode_t          mode;
   nlink_t         nlink;
   uid_t           uid;
@@ -36,7 +36,7 @@ struct Inode {
   time_t          ctime;
   dev_t           rdev;
 
-  // Ext2-specific data
+  // Ext2-specific fields
   uint32_t        blocks;
   uint32_t        block[15];
 };
@@ -48,30 +48,36 @@ struct Inode {
 #define FS_PERM_WRITE   (1 << 1)
 #define FS_PERM_READ    (1 << 2)
 
-extern struct Inode **fs_root;
+extern struct Inode *fs_root;
 
 void          fs_init(void);
 int           fs_name_lookup(const char *, struct Inode **);
 
 struct Inode *fs_inode_get(ino_t ino, dev_t dev);
 void          fs_inode_put(struct Inode *);
-struct Inode *fs_inode_dup(struct Inode *);
+struct Inode *fs_inode_duplicate(struct Inode *);
 void          fs_inode_lock(struct Inode *);
 void          fs_inode_unlock_put(struct Inode *);
 void          fs_inode_unlock(struct Inode *);
 int           fs_path_lookup(const char *, char *, int, struct Inode **);
 ssize_t       fs_inode_read(struct Inode *, void *, size_t, off_t *);
+ssize_t       fs_inode_read_dir(struct Inode *, void *, size_t, off_t *);
 ssize_t       fs_inode_write(struct Inode *, const void *, size_t, off_t *);
 ssize_t       fs_inode_getdents(struct Inode *, void *, size_t, off_t *);
 int           fs_inode_stat(struct Inode *, struct stat *);
 int           fs_create(const char *, mode_t, dev_t, struct Inode **);
 void          fs_inode_cache_init(void);
-int           fs_inode_trunc(struct Inode *);
+int           fs_inode_truncate(struct Inode *);
+int           fs_set_pwd(struct Inode *);
+int           fs_inode_can_read(struct Inode *);
+int           fs_inode_can_write(struct Inode *);
+int           fs_inode_can_execute(struct Inode *);
+
 int           fs_unlink(const char *);
 int           fs_rmdir(const char *);
 int           fs_permissions(struct Inode *, mode_t);
 int           fs_link(char *, char *);
-int           fs_chdir(struct Inode *);
-int           fs_chmod(struct Inode *, mode_t);
+int           fs_chdir(const char *);
+int           fs_chmod(const char *path, mode_t);
 
 #endif  // !__INCLUDE_ARGENTUM_FS_FS_H__

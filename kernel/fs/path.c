@@ -13,8 +13,10 @@
 
 #include "ext2.h"
 
+struct Inode *fs_root;
+
 static size_t
-fs_path_skip(const char *path, char *name, char **next)
+fs_path_next(const char *path, char *name_buf, char **result)
 {
   const char *end;
   ptrdiff_t n;
@@ -23,32 +25,34 @@ fs_path_skip(const char *path, char *name, char **next)
   while (*path == '/')
     path++;
   
-  // This was the last element
+  // This was the last path segment
   if (*path == '\0')
     return 0;
 
-  // Find the end of the element
+  // Find the end of the path segment
   for (end = path; (*end != '\0') && (*end != '/'); end++)
     ;
 
   n = end - path;
-  strncpy(name, path, MIN(n, NAME_MAX));
-  name[n] = '\0';
+  strncpy(name_buf, path, MIN(n, NAME_MAX));
+  name_buf[n] = '\0';
 
+  // Skip trailing slashes
   while (*end == '/')
     end++;
 
-  if (next)
-    *next = (char *) end;
+  if (result)
+    *result = (char *) end;
 
   return n;
 }
 
 int
-fs_path_lookup(const char *path, char *name, int parent, struct Inode **istore)
+fs_path_lookup(const char *path, char *name_buf, int parent,
+               struct Inode **istore)
 {
-  struct Inode *ip, *next;
-  size_t namelen;
+  struct Inode *current, *next;
+  size_t name_len;
 
   if (*path == '\0')
     return -ENOENT;
@@ -58,53 +62,58 @@ fs_path_lookup(const char *path, char *name, int parent, struct Inode **istore)
 
   // For absolute paths, begin search from the root directory.
   // For relative paths, begin search from the current working directory.
-  ip = *path == '/' ? fs_inode_get(2, 0) : fs_inode_dup(process_current()->cwd);
+  current = *path == '/'
+          ? fs_inode_duplicate(fs_root)
+          : fs_inode_duplicate(process_current()->cwd);
 
-  while ((namelen = fs_path_skip(path, name, (char **) &path)) > 0) {
-    // TODO: _POSIX_NO_TRUNC
-    if (namelen > NAME_MAX) {
-      fs_inode_put(ip);
+  while ((name_len = fs_path_next(path, name_buf, (char **) &path)) > 0) {
+    if (name_len > NAME_MAX) {
+      fs_inode_put(current);
       return -ENAMETOOLONG;
     }
 
-    fs_inode_lock(ip);
+    fs_inode_lock(current);
 
-    if (!fs_permissions(ip, FS_PERM_EXEC)) {
-      fs_inode_unlock_put(ip);
+    // Check that the current inode is a directory and we have permissions to
+    // search inside
+    if (!S_ISDIR(current->mode)) {
+      fs_inode_unlock_put(current);
+      return -ENOTDIR;
+    }
+    if (!fs_inode_can_execute(current)) {
+      fs_inode_unlock_put(current);
       return -EACCESS;
     }
 
-    if (!S_ISDIR(ip->mode)) {
-      fs_inode_unlock_put(ip);
-      return -ENOTDIR;
-    }
-
+    // Found the parent node
     if (parent && (*path == '\0')) {
-      fs_inode_unlock(ip);
+      fs_inode_unlock(current);
 
-      if (istore)
-        *istore = ip;
+      if (istore != NULL)
+        *istore = current;
+
       return 0;
     }
 
-    if ((next = ext2_inode_lookup(ip, name)) == NULL) {
-      fs_inode_unlock_put(ip);
+    // Move one level down
+    next = ext2_inode_lookup(current, name_buf);
+
+    fs_inode_unlock_put(current);
+
+    if (next == NULL)
       return -ENOENT;
-    }
 
-    fs_inode_unlock_put(ip);
-
-    ip = next;
+    current = next;
   }
 
   if (parent) {
     // File exists!
-    fs_inode_put(ip);
+    fs_inode_put(current);
     return -EEXISTS;
   }
 
   if (istore)
-    *istore = ip;
+    *istore = current;
 
   return 0;
 }
@@ -112,21 +121,19 @@ fs_path_lookup(const char *path, char *name, int parent, struct Inode **istore)
 int
 fs_name_lookup(const char *path, struct Inode **ip)
 {
-  char name[NAME_MAX + 1];
+  char name_buf[NAME_MAX + 1];
 
   if (strcmp(path, "/") == 0) {
-    *ip = fs_inode_get(2, 0);
+    *ip = fs_inode_duplicate(fs_root);
     return 0;
   }
 
-  return fs_path_lookup(path, name, 0, ip);
+  return fs_path_lookup(path, name_buf, 0, ip);
 }
-
-struct Inode **fs_root;
 
 void
 fs_init(void)
 {
   fs_inode_cache_init();
-  ext2_mount();
+  fs_root = ext2_mount();
 }
