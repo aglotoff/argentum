@@ -17,15 +17,18 @@
 struct stat;
 
 struct Inode {
+  // These two fields never change
   ino_t           ino;
   dev_t           dev;
-  int             flags;
+
+  // These two fields are protected by inode_cache.lock
   int             ref_count;
   struct ListLink cache_link;
-  struct KMutex   mutex;
-  struct ListLink wait_queue;
 
-  // Common fields
+  struct KMutex   mutex;
+
+  // The following fields (as well as inode contents) are protected by the mutex
+  int             flags;
   mode_t          mode;
   nlink_t         nlink;
   uid_t           uid;
@@ -37,8 +40,10 @@ struct Inode {
   dev_t           rdev;
 
   // Ext2-specific fields
-  uint32_t        blocks;
-  uint32_t        block[15];
+  struct {
+    uint32_t        blocks;
+    uint32_t        block[15];
+  } ext2;
 };
 
 #define FS_INODE_VALID  (1 << 0)
@@ -59,7 +64,8 @@ struct Inode *fs_inode_duplicate(struct Inode *);
 void          fs_inode_lock(struct Inode *);
 void          fs_inode_unlock_put(struct Inode *);
 void          fs_inode_unlock(struct Inode *);
-int           fs_path_lookup(const char *, char *, int, struct Inode **);
+int           fs_inode_lookup(struct Inode *, const char *, struct Inode **);
+int           fs_path_lookup(const char *, char *, struct Inode **, struct Inode **);
 ssize_t       fs_inode_read(struct Inode *, void *, size_t, off_t *);
 ssize_t       fs_inode_read_dir(struct Inode *, void *, size_t, off_t *);
 ssize_t       fs_inode_write(struct Inode *, const void *, size_t, off_t *);

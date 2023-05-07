@@ -45,23 +45,27 @@ file_open(const char *path, int oflag, mode_t mode, struct File **fstore)
 
   f->type = FD_INODE;
 
-  // TODO: EINTR
-
   // TODO: the check and the file creation should be atomic
-  if ((r = fs_name_lookup(path, &ip)) < 0) {
-    if ((r != -ENOENT) || !(oflag & O_CREAT))
-      goto out1;
+  if ((r = fs_name_lookup(path, &ip)) < 0)
+    goto out1;
 
+  if (ip == NULL) {
+    if (!(oflag & O_CREAT)) {
+      r = -ENOENT;
+      goto out1;
+    }
+    
     mode &= (S_IRWXU | S_IRWXG | S_IRWXO);
+
     if ((r = fs_create(path, S_IFREG | mode, 0, &ip)) < 0)
       goto out1;
   } else {
-    if ((oflag & O_CREAT) && (oflag & O_EXCL)) {
-      r = -EEXISTS;
-      goto out2;
-    }
-
     fs_inode_lock(ip);
+
+    if ((oflag & O_CREAT) && (oflag & O_EXCL))
+      goto out2;
+
+    
   }
 
   if (S_ISDIR(ip->mode) && (oflag & O_WRONLY)) {

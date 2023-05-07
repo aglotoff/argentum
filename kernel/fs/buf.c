@@ -155,7 +155,6 @@ buf_write(struct Buf *buf)
     panic("not holding buf->mutex");
 
   // TODO: check for I/O errors
-  buf->flags |= BUF_DIRTY;
   sd_request(buf);
 }
 
@@ -168,16 +167,19 @@ void
 buf_release(struct Buf *buf)
 { 
   if (!(buf->flags & BUF_VALID))
-    warn("buffer isn't valid");
-  
-  if (buf->flags & BUF_DIRTY)
-    warn("buffer is dirty");
+    warn("buffer not valid");
+
+  if (buf->flags & BUF_DIRTY) {
+    buf_write(buf);
+
+    if (buf->flags & BUF_DIRTY) {
+      panic("buffer still dirty");
+    }
+  }
   
   kmutex_unlock(&buf->mutex);
 
   spin_lock(&buf_cache.lock);
-
-  assert(buf->ref_count > 0);
 
   if (--buf->ref_count == 0) {
     // Return the buffer to the cache.

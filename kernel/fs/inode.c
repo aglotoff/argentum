@@ -30,8 +30,6 @@ fs_inode_cache_init(void)
 
   for (ip = inode_cache.buf; ip < &inode_cache.buf[INODE_CACHE_SIZE]; ip++) {
     kmutex_init(&ip->mutex, "inode");
-    list_init(&ip->wait_queue);
-
     list_add_back(&inode_cache.head, &ip->cache_link);
   }
 }
@@ -74,51 +72,61 @@ fs_inode_get(ino_t ino, dev_t dev)
   return NULL;
 }
 
-void
-fs_inode_put(struct Inode *ip)
-{   
-  kmutex_lock(&ip->mutex);
-
-  if (ip->nlink == 0) {
-    int r;
-
-    spin_lock(&inode_cache.lock);
-    r = ip->ref_count;
-    spin_unlock(&inode_cache.lock);
-
-    if (r == 1) {
-      ext2_delete_inode(ip);
-      ip->flags = 0;
-    }
-  }
-
-  kmutex_unlock(&ip->mutex);
-
-  spin_lock(&inode_cache.lock);
-
-  if (--ip->ref_count == 0) {
-    list_remove(&ip->cache_link);
-    list_add_front(&inode_cache.head, &ip->cache_link);
-  }
-
-  spin_unlock(&inode_cache.lock);
-}
-
 /**
  * Increment the reference counter of the given inode.
  * 
- * @param ip Pointer to the inode
+ * @param inode Pointer to the inode
  * 
  * @return Pointer to the inode.
  */
 struct Inode *
-fs_inode_duplicate(struct Inode *ip)
+fs_inode_duplicate(struct Inode *inode)
 {
   spin_lock(&inode_cache.lock);
-  ip->ref_count++;
+  inode->ref_count++;
   spin_unlock(&inode_cache.lock);
 
-  return ip;
+  return inode;
+}
+
+/**
+ * Release pointer to an inode.
+ * 
+ * @param inode Pointer to the inode to be released
+ */
+void
+fs_inode_put(struct Inode *inode)
+{   
+  kmutex_lock(&inode->mutex);
+
+  if (inode->flags & FS_INODE_DIRTY)
+    panic("inode dirty");
+
+  // If the link count reaches zero, delete inode from the filesystem before
+  // returning it to the cache
+  if ((inode->flags & FS_INODE_VALID) && (inode->nlink == 0)) {
+    int ref_count;
+
+    spin_lock(&inode_cache.lock);
+    ref_count = inode->ref_count;
+    spin_unlock(&inode_cache.lock);
+
+    // If this is the last reference to this inode
+    if (ref_count == 1) {
+      ext2_delete_inode(inode);
+      inode->flags &= ~FS_INODE_VALID;
+    }
+  }
+
+  kmutex_unlock(&inode->mutex);
+
+  // Return the inode to the cache
+  spin_lock(&inode_cache.lock);
+  if (--inode->ref_count == 0) {
+    list_remove(&inode->cache_link);
+    list_add_front(&inode_cache.head, &inode->cache_link);
+  }
+  spin_unlock(&inode_cache.lock);
 }
 
 int
@@ -193,9 +201,6 @@ fs_inode_lock(struct Inode *ip)
 void
 fs_inode_unlock(struct Inode *ip)
 {  
-  if (!kmutex_holding(&ip->mutex))
-    panic("not holding buf");
-
   if (!(ip->flags & FS_INODE_VALID))
     panic("inode not valid");
 
@@ -439,11 +444,12 @@ fs_inode_lookup(struct Inode *dir, const char *name, struct Inode **istore)
   if (!fs_inode_can_read(dir))
     return -EPERM;
 
-  if ((inode = ext2_inode_lookup(dir, name)) == NULL)
-    return -ENOENT;
-  
+  inode = ext2_inode_lookup(dir, name);
+
   if (istore != NULL)
     *istore = inode;
+  else if (inode == NULL)
+    fs_inode_put(inode);
 
   return 0;
 }
@@ -495,7 +501,7 @@ fs_create(const char *path, mode_t mode, dev_t dev, struct Inode **istore)
   char name[NAME_MAX + 1];
   int r;
 
-  if ((r = fs_path_lookup(path, name, 1, &dir)) < 0)
+  if ((r = fs_path_lookup(path, name, NULL, &dir)) < 0)
     return r;
 
   mode &= ~process_current()->cmask;
@@ -514,10 +520,29 @@ fs_create(const char *path, mode_t mode, dev_t dev, struct Inode **istore)
   return r;
 }
 
-// Locking order
-// fs_link: 
-// fs_unlink: first lock the directory, then lock the entry
+static void
+fs_inode_lock_two(struct Inode *inode1, struct Inode *inode2)
+{
+  if (inode1 < inode2) {
+    fs_inode_lock(inode1);
+    fs_inode_lock(inode2);
+  } else {
+    fs_inode_lock(inode2);
+    fs_inode_lock(inode1);
+  }
+}
 
+static void
+fs_inode_unlock_two(struct Inode *inode1, struct Inode *inode2)
+{
+  if (inode1 < inode2) {
+    fs_inode_unlock(inode2);
+    fs_inode_unlock(inode1);
+  } else {
+    fs_inode_unlock(inode1);
+    fs_inode_unlock(inode2);
+  }
+}
 
 int
 fs_link(char *path1, char *path2)
@@ -529,29 +554,18 @@ fs_link(char *path1, char *path2)
   if ((r = fs_name_lookup(path1, &ip)) < 0)
     return r;
 
-  if ((r = fs_path_lookup(path2, name, 1, &dirp)) < 0)
+  if ((r = fs_path_lookup(path2, name, NULL, &dirp)) < 0)
     goto out1;
 
   // TODO: check for the same node?
 
   // Always lock inodes in a specific order to avoid deadlocks
-  if (ip < dirp) {
-    fs_inode_lock(ip);
-    fs_inode_lock(dirp);
-  } else {
-    fs_inode_lock(dirp);
-    fs_inode_lock(ip);
-  }
+  fs_inode_lock_two(dirp, ip);
 
   r = fs_inode_link(ip, dirp, name);
 
-  if (ip < dirp) {
-    fs_inode_unlock_put(dirp);
-    fs_inode_unlock(ip);
-  } else {
-    fs_inode_unlock(ip);
-    fs_inode_unlock_put(dirp);
-  }
+  fs_inode_unlock_two(dirp, ip);
+  fs_inode_put(dirp);
 out1:
   fs_inode_put(ip);
   return r;
@@ -564,23 +578,20 @@ fs_unlink(const char *path)
   char name[NAME_MAX + 1];
   int r;
 
-  if ((r = fs_path_lookup(path, name, 1, &dir)) < 0)
+  if ((r = fs_path_lookup(path, name, &ip, &dir)) < 0)
     return r;
 
-  fs_inode_lock(dir);
+  if (ip == NULL) {
+    fs_inode_put(dir);
+    return -ENOENT;
+  }
 
-  if ((r = fs_inode_lookup(dir, name, &ip)) < 0)
-    goto out1;
-
-  fs_inode_unlock(dir);
-
-  fs_inode_lock(ip);
-
+  fs_inode_lock_two(dir, ip);
   r = fs_inode_unlink(dir, ip);
+  fs_inode_unlock_two(dir, ip);
 
-  fs_inode_unlock_put(dir);
-out1:
-  fs_inode_unlock_put(ip);
+  fs_inode_put(dir);
+  fs_inode_put(ip);
 
   return r;
 }
@@ -592,22 +603,21 @@ fs_rmdir(const char *path)
   char name[NAME_MAX + 1];
   int r;
 
-  if ((r = fs_path_lookup(path, name, 1, &dir)) < 0)
-    goto out1;
-  
-  fs_inode_lock(dir);
+  if ((r = fs_path_lookup(path, name, &ip, &dir)) < 0)
+    return r;
 
-  if ((r = fs_inode_lookup(dir, name, &ip)) < 0)
-    goto out2;
+  if (ip == NULL) {
+    fs_inode_put(dir);
+    return -ENOENT;
+  }
 
-  fs_inode_lock(ip);
-
+  fs_inode_lock_two(dir, ip);
   r = fs_inode_rmdir(dir, ip);
+  fs_inode_unlock_two(dir, ip);
 
-  fs_inode_unlock_put(dir);
-out2:
-  fs_inode_unlock_put(ip);
-out1:
+  fs_inode_put(dir);
+  fs_inode_put(ip);
+
   return r;
 }
 

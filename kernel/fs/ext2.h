@@ -4,13 +4,23 @@
 #include <stdint.h>
 #include <sys/types.h>
 
+/**
+ * Filesystem Superblock
+ */
 struct Ext2Superblock {
+  /** The total number of inodes, both used and free */
   uint32_t inodes_count;
+  /** The total number of blocks, including all used, free, and reserved */
   uint32_t block_count;
+  /** The total number of block reserved for the super user */
   uint32_t r_blocks_count;
+  /** The total number of free blocks, including reserved blocks */
   uint32_t free_blocks_count;
+  /** The total number of free inodes */
   uint32_t free_inodes_count;
+  /** ID of the block containing the superblock structure */
   uint32_t first_data_block;
+ 
   uint32_t log_block_size;
   uint32_t log_frag_size;
   uint32_t blocks_per_group;
@@ -35,16 +45,27 @@ struct Ext2Superblock {
   uint16_t block_group_nr;
 } __attribute__((packed));
 
-extern struct Ext2Superblock sb;
+extern struct Ext2Superblock ext2_sb;
 
-struct Ext2GroupDesc {
+/**
+ * Block Group Descriptor 
+ */
+struct Ext2BlockGroup {
+  /** ID of the first block of the block bitmap for this group */
   uint32_t block_bitmap;
+  /** ID of the first block of the inode bitmap for this group */
   uint32_t inode_bitmap;
+  /** ID of the first block of the inode table for this group */
   uint32_t inode_table;
+  /** The total number of free blocks for this group */
   uint16_t free_blocks_count;
+  /** The total number of free inodes for this group */
   uint16_t free_inodes_count;
+  /** The total number of inodes allocated to directories for this group */
   uint16_t used_dirs_count;
+  /** Padding to 32-bit boundary */
   uint16_t pad;
+  /** Reserved space for future revisions */
   uint8_t  reserved[12];
 } __attribute__((packed));
 
@@ -117,7 +138,7 @@ struct Inode;
 typedef int (*FillDirFunc)(void *, const char *, uint16_t, off_t, ino_t, uint8_t);
 
 int           ext2_bitmap_alloc(uint32_t, size_t, dev_t, uint32_t *);
-void          ext2_bitmap_free(uint32_t, dev_t, uint32_t);
+int           ext2_bitmap_free(uint32_t, dev_t, uint32_t);
 int           ext2_block_alloc(dev_t, uint32_t *, uint32_t);
 void          ext2_block_free(dev_t, uint32_t);
 void          ext2_block_zero(uint32_t, uint32_t);

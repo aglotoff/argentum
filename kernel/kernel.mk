@@ -24,6 +24,7 @@ KERNEL_SRCFILES :=	\
 	kernel/drivers/sd/sd.c \
 	kernel/drivers/eth.c \
 	kernel/gic.c \
+	kernel/fs/ext2_bitmap.c \
 	kernel/fs/ext2.c \
 	kernel/fs/buf.c \
 	kernel/fs/file.c \
