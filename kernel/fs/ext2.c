@@ -12,163 +12,18 @@
 
 #include "ext2.h"
 
+int ext2_sb_dirty;
 struct Ext2Superblock ext2_sb;
-
-/*
- * ----------------------------------------------------------------------------
- * Block allocator
- * ----------------------------------------------------------------------------
- */
-
-// Block descriptors begin at block 2
-#define GD_BLOCKS_BASE  2
-
-/**
- * Fill the block with zeros,
- * 
- * @param block_no The block number.
- * @param dev      The device.
- */
-void
-ext2_block_zero(uint32_t block_no, uint32_t dev)
-{
-  struct Buf *buf;
-  
-  if ((buf = buf_read(block_no, dev)) == NULL)
-    panic("Cannot read block");
-
-  memset(buf->data, 0, BLOCK_SIZE);
-
-  buf->flags |= BUF_DIRTY;
-  buf_release(buf);
-}
-
-// Try to allocate a block from the block group descriptor pointed to by `gd`.
-// If there is a free block, mark it as used and store its number (relative to
-// the group) into the memory location pointed to by `bstore`. Otherwise,
-// return `-ENOMEM`.
-static int
-ext2_block_group_alloc(struct Ext2BlockGroup *gd, dev_t dev, uint32_t *bstore)
-{
-  if (gd->free_blocks_count == 0)
-    return -ENOMEM;
-
-  if (ext2_bitmap_alloc(gd->block_bitmap, ext2_sb.blocks_per_group, dev, bstore) < 0)
-    // If free_blocks_count isn't zero, but we couldn't find a free block, the
-    // filesystem is corrupted.
-    panic("no free blocks");
-
-  gd->free_blocks_count--;
-
-  return 0;
-}
-
-/**
- * Allocate a zeroed block.
- * 
- * @param dev    The device to allocate block from.
- * @param bstore Pointer to the memory location where to store the allocated
- *               block number.
- * @param inode  The number of the inode for which the allocation is performed
- *               (used as a hint where to begin the search).
- *
- * @retval 0       Success
- * @retval -ENOMEM Couldn't find a free block.
- */
-int
-ext2_block_alloc(dev_t dev, uint32_t *bstore, uint32_t ino)
-{
-  struct Buf *buf;
-  struct Ext2BlockGroup *gdesc;
-  uint32_t gds_per_block, g, gi;
-  uint32_t block_no;
-
-  gds_per_block = BLOCK_SIZE / sizeof(struct Ext2BlockGroup);
-
-  // First try to find a free block in the same group as the specified inode
-  g  = (ino - 1) / ext2_sb.inodes_per_group;
-  gi = g % gds_per_block;
-  g  = g - gi;
-
-  if ((buf = buf_read(GD_BLOCKS_BASE + (g / gds_per_block), dev)) == NULL)
-    panic("cannot read the group descriptor table");
-
-  gdesc = (struct Ext2BlockGroup *) buf->data + gi;
-
-  if (ext2_block_group_alloc(gdesc, dev, &block_no) == 0) {
-    buf->flags |= BUF_DIRTY;
-    buf_release(buf);
-
-    block_no += (g + gi) * ext2_sb.blocks_per_group;
-
-    ext2_block_zero(block_no, dev);
-
-    *bstore = block_no;
-    return 0;
-  }
-
-  // Scan all group descriptors for a free block
-  for (g = 0; g < ext2_sb.block_count / ext2_sb.blocks_per_group; g += gds_per_block) {
-    if ((buf = buf_read(GD_BLOCKS_BASE + (g / gds_per_block), dev)) == NULL)
-      panic("cannot read the group descriptor table");
-
-    for (gi = 0; gi < gds_per_block; gi++) {
-      gdesc = (struct Ext2BlockGroup *) buf->data + gi;
-
-      if (ext2_block_group_alloc(gdesc, dev, &block_no) == 0) {
-        buf->flags |= BUF_DIRTY;
-        buf_release(buf);
-
-        block_no += (g + gi) * ext2_sb.blocks_per_group;
-
-        ext2_block_zero(block_no, dev);
-
-        *bstore = block_no;
-        return 0;
-      }
-    }
-
-    buf_release(buf);
-  }
-  
-  return -ENOMEM;
-}
-
-/**
- * Free a disk block.
- * 
- * @param dev The device the block belongs to.
- * @param bno The block number.
- */
-void
-ext2_block_free(dev_t dev, uint32_t bno)
-{
-  struct Buf *buf;
-  struct Ext2BlockGroup *gd;
-  uint32_t gds_per_block, gd_idx, g, gi;
-
-  gds_per_block = BLOCK_SIZE / sizeof(struct Ext2BlockGroup);
-  gd_idx = bno / ext2_sb.blocks_per_group;
-  g  = gd_idx / gds_per_block;
-  gi = gd_idx % gds_per_block;
-
-  buf = buf_read(2 + g, dev);
-
-  gd = (struct Ext2BlockGroup *) buf->data + gi;
-
-  ext2_bitmap_free(gd->block_bitmap, dev, bno % ext2_sb.blocks_per_group);
-
-  gd->free_blocks_count++;
-
-  buf->flags |= BUF_DIRTY;
-  buf_release(buf);
-}
+struct KMutex ext2_sb_mutex;
 
 /*
  * ----------------------------------------------------------------------------
  * Inode allocator
  * ----------------------------------------------------------------------------
  */
+
+// Block descriptors begin at block 2
+#define GD_BLOCKS_BASE  2
 
 // Try to allocate an inode from the inode group descriptor pointed to by `gd`.
 // If there is a free inode, mark it as used and store its number into the
@@ -342,7 +197,7 @@ ext2_inode_block_map(struct Inode *ip, unsigned block_no)
 
   if (block_no < DIRECT_BLOCKS) {
     if ((addr = ip->ext2.block[block_no]) == 0) {
-      if (ext2_block_alloc(ip->dev, &addr, ip->ino) != 0)
+      if (ext2_block_alloc(ip->dev, &addr) != 0)
         panic("cannot allocate direct block");
       ip->ext2.block[block_no] = addr;
       ip->ext2.blocks++;
@@ -357,7 +212,7 @@ ext2_inode_block_map(struct Inode *ip, unsigned block_no)
     panic("not implemented");
   
   if ((addr = ip->ext2.block[DIRECT_BLOCKS]) == 0) {
-    if (ext2_block_alloc(ip->dev, &addr, ip->ino) != 0)
+    if (ext2_block_alloc(ip->dev, &addr) != 0)
       panic("cannot allocate indirect block");
     ip->ext2.block[DIRECT_BLOCKS] = addr;
     ip->ext2.blocks++;
@@ -368,7 +223,7 @@ ext2_inode_block_map(struct Inode *ip, unsigned block_no)
 
   a = (uint32_t *) buf->data;
   if ((addr = a[block_no]) == 0) {
-    if (ext2_block_alloc(ip->dev, &addr, ip->ino) != 0)
+    if (ext2_block_alloc(ip->dev, &addr) != 0)
       panic("cannot allocate indirect block");
     a[block_no] = addr;
     ip->ext2.blocks++;
@@ -939,7 +794,7 @@ ext2_write_inode(struct Inode *ip)
   if (((ip->mode & EXT2_S_IFMASK) == EXT2_S_IFBLK) ||
       ((ip->mode & EXT2_S_IFMASK) == EXT2_S_IFCHR)) {
     if (ip->size == 0) {
-      if (ext2_block_alloc(ip->dev, &ip->ext2.block[0], ip->ino) != 0)
+      if (ext2_block_alloc(ip->dev, &ip->ext2.block[0]) != 0)
         panic("Cannot allocate block");
       ip->size = sizeof(uint16_t);
 
@@ -994,13 +849,33 @@ ext2_delete_inode(struct Inode *ip)
  * ----------------------------------------------------------------------------
  */
 
+void
+ext2_sb_sync(void)
+{
+  struct Buf *buf;
 
+  kmutex_lock(&ext2_sb_mutex);
+
+  if ((buf = buf_read(1, 0)) == NULL)
+    panic("cannot read the superblock");
+
+  ext2_sb.wtime = rtc_get_time();
+
+  memcpy(buf->data, &ext2_sb, sizeof(ext2_sb));
+  buf->flags = BUF_DIRTY;
+
+  buf_release(buf);
+
+  kmutex_unlock(&ext2_sb_mutex);
+}
 
 struct Inode *
 ext2_mount(void)
 {
   struct Buf *buf;
 
+  kmutex_init(&ext2_sb_mutex, "ext2_sb_mutex");
+  
   if ((buf = buf_read(1, 0)) == NULL)
     panic("cannot read the superblock");
 
@@ -1008,11 +883,13 @@ ext2_mount(void)
   buf_release(buf);
 
   if (ext2_sb.log_block_size != 0)
-    panic("block size must be 1024 bytes");
+    panic("only block sizes of 1024 are supported!");
 
   cprintf("Filesystem size = %dM, inodes_count = %d, block_count = %d\n",
           ext2_sb.block_count * BLOCK_SIZE / (1024 * 1024),
           ext2_sb.inodes_count, ext2_sb.block_count);
+
+  // TODO: update mtime, mnt_count, state, last_mounted
 
   return fs_inode_get(2, 0);
 }

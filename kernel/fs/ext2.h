@@ -4,6 +4,8 @@
 #include <stdint.h>
 #include <sys/types.h>
 
+#include <argentum/kmutex.h>
+
 /**
  * Filesystem Superblock
  */
@@ -44,8 +46,6 @@ struct Ext2Superblock {
   uint16_t inode_size;
   uint16_t block_group_nr;
 } __attribute__((packed));
-
-extern struct Ext2Superblock ext2_sb;
 
 /**
  * Block Group Descriptor 
@@ -135,16 +135,20 @@ struct Ext2DirEntry {
 
 struct Inode;
 
+extern struct Ext2Superblock ext2_sb;
+extern struct KMutex ext2_sb_mutex;
+
 typedef int (*FillDirFunc)(void *, const char *, uint16_t, off_t, ino_t, uint8_t);
 
 int           ext2_bitmap_alloc(uint32_t, size_t, dev_t, uint32_t *);
 int           ext2_bitmap_free(uint32_t, dev_t, uint32_t);
-int           ext2_block_alloc(dev_t, uint32_t *, uint32_t);
+int           ext2_block_alloc(dev_t, uint32_t *);
 void          ext2_block_free(dev_t, uint32_t);
-void          ext2_block_zero(uint32_t, uint32_t);
+int           ext2_block_zero(uint32_t, uint32_t);
 int           ext2_inode_alloc(mode_t, dev_t, uint32_t *, uint32_t);
 void          ext2_inode_free(dev_t, uint32_t);
 
+void          ext2_sb_sync(void);
 struct Inode *ext2_mount(void);
 void          ext2_read_inode(struct Inode *);
 void          ext2_write_inode(struct Inode *);
