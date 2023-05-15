@@ -1,7 +1,7 @@
 #include <assert.h>
 
-#include <argentum/kmutex.h>
-#include <argentum/task.h>
+#include <kernel/kmutex.h>
+#include <kernel/task.h>
 
 /**
  * Initialize a mutex.

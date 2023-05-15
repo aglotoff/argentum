@@ -1,12 +1,12 @@
 #include <stdint.h>
 
-#include <argentum/task.h>
-#include <argentum/spinlock.h>
-#include <argentum/mm/memlayout.h>
-#include <argentum/mm/vm.h>
-#include <argentum/drivers/console.h>
-#include <argentum/trap.h>
-#include <argentum/wchan.h>
+#include <kernel/task.h>
+#include <kernel/spinlock.h>
+#include <kernel/mm/memlayout.h>
+#include <kernel/mm/vm.h>
+#include <kernel/drivers/console.h>
+#include <kernel/trap.h>
+#include <kernel/wchan.h>
 
 #include "kbd.h"
 #include "display.h"

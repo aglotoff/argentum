@@ -4,7 +4,7 @@
 #include <stdint.h>
 #include <sys/types.h>
 
-#include <argentum/kmutex.h>
+#include <kernel/kmutex.h>
 
 /**
  * Filesystem Superblock

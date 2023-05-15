@@ -2,11 +2,11 @@
 #include <stdint.h>
 #include <string.h>
 
-#include <argentum/drivers/console.h>
-#include <argentum/mm/memlayout.h>
-#include <argentum/mm/page.h>
-#include <argentum/mm/vm.h>
-#include <argentum/types.h>
+#include <kernel/drivers/console.h>
+#include <kernel/mm/memlayout.h>
+#include <kernel/mm/page.h>
+#include <kernel/mm/vm.h>
+#include <kernel/types.h>
 
 #include "display.h"
 #include "pl111.h"

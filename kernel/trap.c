@@ -1,12 +1,12 @@
-#include <argentum/armv7/regs.h>
-#include <argentum/cprintf.h>
-#include <argentum/mm/page.h>
-#include <argentum/mm/vm.h>
-#include <argentum/process.h>
-#include <argentum/sys.h>
-#include <argentum/trap.h>
-#include <argentum/types.h>
-#include <argentum/irq.h>
+#include <kernel/armv7/regs.h>
+#include <kernel/cprintf.h>
+#include <kernel/mm/page.h>
+#include <kernel/mm/vm.h>
+#include <kernel/process.h>
+#include <kernel/sys.h>
+#include <kernel/trap.h>
+#include <kernel/types.h>
+#include <kernel/irq.h>
 
 static void trap_handle_abort(struct TrapFrame *);
 

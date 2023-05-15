@@ -2,14 +2,14 @@
 #include <errno.h>
 #include <stdint.h>
 
-#include <argentum/cprintf.h>
-#include <argentum/cpu.h>
-#include <argentum/fs/buf.h>
-#include <argentum/irq.h>
-#include <argentum/mm/memlayout.h>
-#include <argentum/task.h>
-#include <argentum/sd.h>
-#include <argentum/spinlock.h>
+#include <kernel/cprintf.h>
+#include <kernel/cpu.h>
+#include <kernel/fs/buf.h>
+#include <kernel/irq.h>
+#include <kernel/mm/memlayout.h>
+#include <kernel/task.h>
+#include <kernel/sd.h>
+#include <kernel/spinlock.h>
 
 #include "pl180.h"
 

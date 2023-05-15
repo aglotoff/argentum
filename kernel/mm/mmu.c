@@ -1,7 +1,7 @@
-#include <argentum/cprintf.h>
-#include <argentum/mm/mmu.h>
-#include <argentum/mm/page.h>
-#include <argentum/mm/vm.h>
+#include <kernel/cprintf.h>
+#include <kernel/mm/mmu.h>
+#include <kernel/mm/page.h>
+#include <kernel/mm/vm.h>
 
 static void mmu_map_static(l1_desc_t *, uintptr_t, uint32_t, size_t, int);
 

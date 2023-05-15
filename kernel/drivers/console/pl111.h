@@ -9,7 +9,7 @@
 
 #include <stdint.h>
 
-#include <argentum/mm/memlayout.h>
+#include <kernel/mm/memlayout.h>
 
 /**
  * PL111 Driver instance.

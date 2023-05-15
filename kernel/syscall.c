@@ -8,15 +8,15 @@
 #include <sys/utsname.h>
 #include <time.h>
 
-#include <argentum/cprintf.h>
-#include <argentum/cpu.h>
-#include <argentum/drivers/rtc.h>
-#include <argentum/fs/file.h>
-#include <argentum/fs/fs.h>
-#include <argentum/mm/vm.h>
-#include <argentum/process.h>
-#include <argentum/sys.h>
-#include <argentum/types.h>
+#include <kernel/cprintf.h>
+#include <kernel/cpu.h>
+#include <kernel/drivers/rtc.h>
+#include <kernel/fs/file.h>
+#include <kernel/fs/fs.h>
+#include <kernel/mm/vm.h>
+#include <kernel/process.h>
+#include <kernel/sys.h>
+#include <kernel/types.h>
 
 static int     sys_get_num(void);
 static int32_t sys_get_arg(int);

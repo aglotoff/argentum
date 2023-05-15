@@ -1,11 +1,11 @@
 #include <assert.h>
 
-#include <argentum/cprintf.h>
-#include <argentum/sd.h>
-#include <argentum/fs/buf.h>
-#include <argentum/list.h>
-#include <argentum/mm/kmem.h>
-#include <argentum/spinlock.h>
+#include <kernel/cprintf.h>
+#include <kernel/sd.h>
+#include <kernel/fs/buf.h>
+#include <kernel/list.h>
+#include <kernel/mm/kmem.h>
+#include <kernel/spinlock.h>
 
 struct KMemCache *buf_desc_cache;
 

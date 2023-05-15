@@ -2,11 +2,11 @@
 #include <errno.h>
 #include <string.h>
 
-#include <argentum/cprintf.h>
-#include <argentum/cpu.h>
-#include <argentum/irq.h>
-#include <argentum/task.h>
-#include <argentum/spinlock.h>
+#include <kernel/cprintf.h>
+#include <kernel/cpu.h>
+#include <kernel/irq.h>
+#include <kernel/task.h>
+#include <kernel/spinlock.h>
 
 static void task_run(void);
 void context_switch(struct Context **, struct Context *);

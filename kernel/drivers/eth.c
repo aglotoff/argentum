@@ -1,13 +1,13 @@
 #include <stdint.h>
 #include <string.h>
 
-#include <argentum/cpu.h>
-#include <argentum/cprintf.h>
-#include <argentum/drivers/eth.h>
-#include <argentum/mm/memlayout.h>
-#include <argentum/mm/page.h>
-#include <argentum/irq.h>
-#include <argentum/types.h>
+#include <kernel/cpu.h>
+#include <kernel/cprintf.h>
+#include <kernel/drivers/eth.h>
+#include <kernel/mm/memlayout.h>
+#include <kernel/mm/page.h>
+#include <kernel/irq.h>
+#include <kernel/types.h>
 
 // RX an TX FIFO ports, divided by 4 for use as uint32_t[] indices
 #define RX_DATA_FIFO_PORT   (0x00 / 4)

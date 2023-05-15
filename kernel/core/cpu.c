@@ -1,11 +1,11 @@
 #include <assert.h>
 #include <stddef.h>
 
-#include <argentum/armv7/regs.h>
-#include <argentum/cprintf.h>
-#include <argentum/cpu.h>
-#include <argentum/irq.h>
-#include <argentum/task.h>
+#include <kernel/armv7/regs.h>
+#include <kernel/cprintf.h>
+#include <kernel/cpu.h>
+#include <kernel/irq.h>
+#include <kernel/task.h>
 
 struct Cpu _cpus[NCPU];
 

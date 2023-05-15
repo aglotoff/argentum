@@ -1,10 +1,10 @@
 #include <stdint.h>
 #include <string.h>
 
-#include <argentum/drivers/rtc.h>
-#include <argentum/mm/memlayout.h>
-#include <argentum/mm/vm.h>
-#include <argentum/spinlock.h>
+#include <kernel/drivers/rtc.h>
+#include <kernel/mm/memlayout.h>
+#include <kernel/mm/vm.h>
+#include <kernel/spinlock.h>
 
 #include "ds1338.h"
 #include "sbcon.h"

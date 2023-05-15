@@ -1,6 +1,6 @@
-#include <argentum/drivers/console.h>
-#include <argentum/mm/memlayout.h>
-#include <argentum/irq.h>
+#include <kernel/drivers/console.h>
+#include <kernel/mm/memlayout.h>
+#include <kernel/irq.h>
 
 #include "pl011.h"
 #include "serial.h"

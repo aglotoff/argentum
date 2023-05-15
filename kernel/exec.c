@@ -2,15 +2,15 @@
 #include <string.h>
 #include <sys/stat.h>
 
-#include <argentum/cprintf.h>
-#include <argentum/elf.h>
-#include <argentum/fs/fs.h>
-#include <argentum/mm/memlayout.h>
-#include <argentum/mm/mmu.h>
-#include <argentum/mm/page.h>
-#include <argentum/mm/vm.h>
-#include <argentum/process.h>
-#include <argentum/types.h>
+#include <kernel/cprintf.h>
+#include <kernel/elf.h>
+#include <kernel/fs/fs.h>
+#include <kernel/mm/memlayout.h>
+#include <kernel/mm/mmu.h>
+#include <kernel/mm/page.h>
+#include <kernel/mm/vm.h>
+#include <kernel/process.h>
+#include <kernel/types.h>
 
 static int
 copy_args(struct VM *vm, char *const args[], uintptr_t limit, char **sp)

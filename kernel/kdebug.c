@@ -1,8 +1,8 @@
 #include <dwarf.h>
 #include <stddef.h>
 
-#include <argentum/cprintf.h>
-#include <argentum/kdebug.h>
+#include <kernel/cprintf.h>
+#include <kernel/kdebug.h>
 
 static int scan_aranges(uintptr_t, struct PcDebugInfo *); 
 static int parse_cu(uint8_t *, uintptr_t, struct PcDebugInfo *);

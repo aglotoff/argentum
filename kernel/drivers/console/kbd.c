@@ -1,9 +1,9 @@
 #include <stdint.h>
 
-#include <argentum/drivers/console.h>
-#include <argentum/mm/memlayout.h>
-#include <argentum/mm/vm.h>
-#include <argentum/irq.h>
+#include <kernel/drivers/console.h>
+#include <kernel/mm/memlayout.h>
+#include <kernel/mm/vm.h>
+#include <kernel/irq.h>
 
 #include "kbd.h"
 #include "pl050.h"

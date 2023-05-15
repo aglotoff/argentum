@@ -5,21 +5,21 @@
 #include <sys/stat.h>
 #include <sys/wait.h>
 
-#include <argentum/armv7/regs.h>
-#include <argentum/cpu.h>
-#include <argentum/cprintf.h>
-#include <argentum/elf.h>
-#include <argentum/fs/file.h>
-#include <argentum/fs/fs.h>
-#include <argentum/hash.h>
-#include <argentum/mm/kmem.h>
-#include <argentum/mm/mmu.h>
-#include <argentum/mm/page.h>
-#include <argentum/mm/vm.h>
-#include <argentum/monitor.h>
-#include <argentum/process.h>
-#include <argentum/spinlock.h>
-#include <argentum/trap.h>
+#include <kernel/armv7/regs.h>
+#include <kernel/cpu.h>
+#include <kernel/cprintf.h>
+#include <kernel/elf.h>
+#include <kernel/fs/file.h>
+#include <kernel/fs/fs.h>
+#include <kernel/hash.h>
+#include <kernel/mm/kmem.h>
+#include <kernel/mm/mmu.h>
+#include <kernel/mm/page.h>
+#include <kernel/mm/vm.h>
+#include <kernel/monitor.h>
+#include <kernel/process.h>
+#include <kernel/spinlock.h>
+#include <kernel/trap.h>
 
 struct KMemCache *process_cache;
 struct KMemCache *thread_cache;

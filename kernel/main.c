@@ -3,20 +3,20 @@
 #include <stdint.h>
 #include <sys/utsname.h>
 
-#include <argentum/cprintf.h>
-#include <argentum/cpu.h>
-#include <argentum/drivers/console.h>
-// #include <argentum/drivers/eth.h>
-#include <argentum/drivers/rtc.h>
-#include <argentum/fs/buf.h>
-#include <argentum/fs/file.h>
-#include <argentum/irq.h>
-#include <argentum/mm/kmem.h>
-#include <argentum/mm/mmu.h>
-#include <argentum/mm/page.h>
-#include <argentum/mm/vm.h>
-#include <argentum/process.h>
-#include <argentum/sd.h>
+#include <kernel/cprintf.h>
+#include <kernel/cpu.h>
+#include <kernel/drivers/console.h>
+// #include <kernel/drivers/eth.h>
+#include <kernel/drivers/rtc.h>
+#include <kernel/fs/buf.h>
+#include <kernel/fs/file.h>
+#include <kernel/irq.h>
+#include <kernel/mm/kmem.h>
+#include <kernel/mm/mmu.h>
+#include <kernel/mm/page.h>
+#include <kernel/mm/vm.h>
+#include <kernel/process.h>
+#include <kernel/sd.h>
 
 static void mp_main(void);
 void core_test(void);

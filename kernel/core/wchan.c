@@ -1,6 +1,6 @@
-#include <argentum/task.h>
-#include <argentum/spinlock.h>
-#include <argentum/wchan.h>
+#include <kernel/task.h>
+#include <kernel/spinlock.h>
+#include <kernel/wchan.h>
 
 /**
  * Initialize the wait channel.

@@ -1,8 +1,8 @@
 #include <assert.h>
 #include <errno.h>
 
-#include <argentum/fs/buf.h>
-#include <argentum/types.h>
+#include <kernel/fs/buf.h>
+#include <kernel/types.h>
 
 #include "ext2.h"
 

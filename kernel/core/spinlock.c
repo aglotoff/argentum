@@ -2,13 +2,13 @@
 #include <stddef.h>
 #include <string.h>
 
-#include <argentum/armv7/regs.h>
-#include <argentum/cprintf.h>
-#include <argentum/cpu.h>
-#include <argentum/irq.h>
-#include <argentum/kdebug.h>
-#include <argentum/process.h>
-#include <argentum/spinlock.h>
+#include <kernel/armv7/regs.h>
+#include <kernel/cprintf.h>
+#include <kernel/cpu.h>
+#include <kernel/irq.h>
+#include <kernel/kdebug.h>
+#include <kernel/process.h>
+#include <kernel/spinlock.h>
 
 static void arch_spin_lock(volatile int *);
 static void arch_spin_unlock(volatile int *);

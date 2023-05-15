@@ -2,12 +2,12 @@
 #include <errno.h>
 #include <stddef.h>
 
-#include <argentum/process.h>
-#include <argentum/armv7/regs.h>
-#include <argentum/irq.h>
-#include <argentum/cprintf.h>
-#include <argentum/mm/memlayout.h>
-#include <argentum/mm/vm.h>
+#include <kernel/process.h>
+#include <kernel/armv7/regs.h>
+#include <kernel/irq.h>
+#include <kernel/cprintf.h>
+#include <kernel/mm/memlayout.h>
+#include <kernel/mm/vm.h>
 
 #include "gic.h"
 #include "ptimer.h"

@@ -2,15 +2,15 @@
 #include <errno.h>
 #include <string.h>
 
-#include <argentum/cprintf.h>
-#include <argentum/drivers/console.h>
-#include <argentum/fs/fs.h>
-#include <argentum/types.h>
-#include <argentum/mm/kmem.h>
-#include <argentum/mm/mmu.h>
-#include <argentum/mm/page.h>
-#include <argentum/mm/vm.h>
-#include <argentum/process.h>
+#include <kernel/cprintf.h>
+#include <kernel/drivers/console.h>
+#include <kernel/fs/fs.h>
+#include <kernel/types.h>
+#include <kernel/mm/kmem.h>
+#include <kernel/mm/mmu.h>
+#include <kernel/mm/page.h>
+#include <kernel/mm/vm.h>
+#include <kernel/process.h>
 
 static struct KMemCache *vmcache;
 static struct KMemCache *vm_areacache;

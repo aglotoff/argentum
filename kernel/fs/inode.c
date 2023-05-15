@@ -5,12 +5,12 @@
 #include <limits.h>
 #include <string.h>
 
-#include <argentum/cprintf.h>
-#include <argentum/drivers/console.h>
-#include <argentum/drivers/rtc.h>
-#include <argentum/fs/buf.h>
-#include <argentum/fs/fs.h>
-#include <argentum/process.h>
+#include <kernel/cprintf.h>
+#include <kernel/drivers/console.h>
+#include <kernel/drivers/rtc.h>
+#include <kernel/fs/buf.h>
+#include <kernel/fs/fs.h>
+#include <kernel/process.h>
 
 #include "ext2.h"
 
