@@ -312,6 +312,11 @@ fs_inode_read_dir(struct Inode *ip, void *buf, size_t nbyte, off_t *off)
   char *dst = (char *) buf;
   ssize_t total = 0;
 
+  struct {
+    struct dirent de;
+    char buf[256];
+  } de;
+
   if (!fs_inode_holding(ip))
     panic("not locked");
 
@@ -319,16 +324,15 @@ fs_inode_read_dir(struct Inode *ip, void *buf, size_t nbyte, off_t *off)
     return -EPERM;
 
   while (nbyte > 0) {
-    struct dirent *de = (struct dirent *) dst;
     ssize_t nread;
 
-    if ((nread = ext2_readdir(ip, de, fs_filldir, *off)) < 0)
+    if ((nread = ext2_readdir(ip, &de, fs_filldir, *off)) < 0)
       return nread;
 
     if (nread == 0)
       break;
     
-    if (de->d_reclen > nbyte) {
+    if (de.de.d_reclen > nbyte) {
       if (total == 0) {
         return -EINVAL;
       }
@@ -337,9 +341,11 @@ fs_inode_read_dir(struct Inode *ip, void *buf, size_t nbyte, off_t *off)
 
     *off += nread;
 
-    dst   += de->d_reclen;
-    total += de->d_reclen;
-    nbyte -= de->d_reclen;
+    memmove(dst, &de, de.de.d_reclen);
+
+    dst   += de.de.d_reclen;
+    total += de.de.d_reclen;
+    nbyte -= de.de.d_reclen;
   }
 
   return total;
