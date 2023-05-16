@@ -400,7 +400,7 @@ fs_inode_create(struct Inode *dir, char *name, mode_t mode, dev_t dev,
     return -EPERM;
 
   if (ext2_inode_lookup(dir, name) != NULL)
-    return -EEXISTS;
+    return -EEXIST;
 
   switch (mode & S_IFMT) {
   case S_IFDIR:

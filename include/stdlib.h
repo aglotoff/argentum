@@ -91,6 +91,7 @@ void               *calloc(size_t, size_t);
 void               *malloc(size_t);
 void                free(void *);
 void               *realloc(void *, size_t);
+int                 wctomb(char *, wchar_t);
 
 // TODO: atof, strtod
 

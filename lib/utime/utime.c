@@ -1,0 +1,15 @@
+#include <utime.h>
+#include <stdio.h>
+#include <stdlib.h>
+
+int
+utime(const char *path, const struct utimbuf *times)
+{
+  (void) path;
+  (void) times;
+
+  fprintf(stderr, "TODO: utime");
+  abort();
+
+  return -1;
+}

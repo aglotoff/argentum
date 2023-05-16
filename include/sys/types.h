@@ -23,6 +23,8 @@ typedef int             pid_t;
 typedef unsigned int    size_t;
 /** Represents a count of bytes or an error indication. */
 typedef long            ssize_t;
+/** Represents time in microseconds. */
+typedef long            suseconds_t;
 /** Represents time in seconds.*/
 typedef long            time_t;
 /** Represents user IDs. */

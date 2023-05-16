@@ -4,6 +4,10 @@
 #include <stdarg.h>
 #include <stddef.h>
 
+#define SEEK_SET  0
+#define SEEK_CUR  1
+#define SEEK_END  2
+
 /** A structure containing information about a file. */
 typedef struct _File {
   int mode;       // Mode bits
@@ -43,12 +47,29 @@ FILE *freopen(const char *, const char *, FILE *);
 int   remove(const char *);
 
 int   __printf(int (*)(void *, int), void *, const char *, va_list);
+int   fprintf(FILE *, const char *, ...);
 int   printf(const char *, ...);
 int   snprintf(char *s, size_t n, const char *, ...);
 int   vprintf(const char *, va_list);
+int   vfprintf(FILE *, const char *, va_list);
 int   vsnprintf(char *s, size_t n, const char *, va_list);
 
 void  perror(const char *);
+
+// TODO:
+int    fflush(FILE *);
+size_t fread(void *, size_t, size_t, FILE *);
+int    fseek(FILE *, long, int);
+long   ftell(FILE *);
+size_t fwrite(const void *, size_t, size_t, FILE *);
+void   setbuf(FILE *, char *);
+int    vfprintf(FILE *, const char *, va_list);
+int    sprintf(char *, const char *, ...);
+int    setvbuf(FILE *, char *, int, size_t);
+int    fsync(int);
+int    putc(int, FILE *);
+int    fileno(FILE *);
+int    getchar(void);
 
 #ifdef __cplusplus
 };

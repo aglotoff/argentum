@@ -15,7 +15,7 @@ SYSROOT := sysroot
 # The recommended target for the cross-compiler toolchain is "arm-none-eabi-".
 # If you want to use the host tools (i.e. binutils, gcc, gdb, etc.), comment
 # this line out.
-TOOLPREFIX := arm-none-eabi-
+TOOLPREFIX := arm-none-argentum-
 
 # QEMU executable
 QEMU := qemu-system-arm
@@ -58,9 +58,10 @@ include kernel/kernel.mk
 include lib/lib.mk
 include user/user.mk
 
-$(OBJ)/fs.img: $(USER_APPS)
+$(OBJ)/fs.img: $(SYSROOT) $(USER_APPS)
 	@echo "+ GEN $@"
-	$(V)mkdir -p $@.d/{,etc,home/{,root,guest},tmp}
+	$(V)mkdir -p $@.d/{,dev,etc,home/{,root,guest},tmp}
+	$(V)cp -R $(SYSROOT)/usr $@.d/
 	$(V)(pushd $(OBJ)/user; cp --parent $(patsubst $(OBJ)/user/%, %, $(USER_APPS)) $(PWD)/$@.d; popd)
 	$(V)mke2fs -E root_owner=0:0 -F -b 1K -d $@.d -t ext2 $@ 32M 
 	$(V)rm -rf $@.d
@@ -81,14 +82,13 @@ qemu: $(KERNEL) $(OBJ)/fs.img
 qemu-gdb: $(KERNEL) $(OBJ)/fs.img
 	$(QEMU) $(QEMUOPTS) -s -S
 
-sysroot:
-	@mkdir -p $(SYSROOT)
-	@cp -R include $(SYSROOT)
-	@cp -R $(OBJ)/lib $(SYSROOT)
+$(SYSROOT): $(OBJ)/lib/libc.a $(CRT_OBJFILES)
+	@mkdir -p $(SYSROOT){,/usr{,/include,/lib}}
+	@cp -R include/* $(SYSROOT)/usr/include
+	@cp -R $(OBJ)/lib/*{.a,.o} $(SYSROOT)/usr/lib
 
 clean:
 	rm -rf $(OBJ) $(SYSROOT)
 
 .PRECIOUS: $(OBJ)/user/%.o
-.PHONY: all lib qemu clean sysroot
-
+.PHONY: all lib qemu clean

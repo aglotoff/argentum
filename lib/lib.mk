@@ -28,13 +28,17 @@ LIB_SRCFILES += \
 	lib/ctype/toupper.c
 
 LIB_SRCFILES += \
-  lib/dirent/getdents.c
+  lib/dirent/closedir.c \
+	lib/dirent/getdents.c \
+	lib/dirent/opendir.c \
+	lib/dirent/readdir.c
 
 LIB_SRCFILES += \
   lib/errno/errno.c
 
 LIB_SRCFILES += \
   lib/fcntl/creat.c \
+	lib/fcntl/fcntl.c \
 	lib/fcntl/open.c
 
 LIB_SRCFILES += \
@@ -64,20 +68,37 @@ LIB_SRCFILES += \
 	lib/setjmp/setjmp.S
 
 LIB_SRCFILES += \
+	lib/signal/raise.c \
+	lib/signal/sigaction.c \
+	lib/signal/signal.c
+
+LIB_SRCFILES += \
   lib/stdio/__fclose.c \
 	lib/stdio/__ffree.c \
 	lib/stdio/__files.c \
 	lib/stdio/__fopen.c \
   lib/stdio/__printf.c \
 	lib/stdio/fclose.c \
+	lib/stdio/fflush.c \
+	lib/stdio/fileno.c \
 	lib/stdio/fopen.c \
+	lib/stdio/fprintf.c \
 	lib/stdio/freopen.c \
+	lib/stdio/fsync.c \
+	lib/stdio/ftell.c \
+	lib/stdio/fwrite.c \
+	lib/stdio/getchar.c \
 	lib/stdio/perror.c \
 	lib/stdio/printf.c \
+	lib/stdio/putc.c \
 	lib/stdio/putchar.c \
 	lib/stdio/puts.c \
 	lib/stdio/remove.c \
+	lib/stdio/setvbuf.c \
 	lib/stdio/snprintf.c \
+	lib/stdio/sprintf.c \
+	lib/stdio/ungetc.c \
+	lib/stdio/vfprintf.c \
 	lib/stdio/vprintf.c \
 	lib/stdio/vsnprintf.c
 
@@ -107,7 +128,8 @@ LIB_SRCFILES += \
 	lib/stdlib/setenv.c \
 	lib/stdlib/srand.c \
 	lib/stdlib/strtol.c \
-	lib/stdlib/strtoul.c
+	lib/stdlib/strtoul.c \
+	lib/stdlib/wctomb.c
 
 LIB_SRCFILES += \
 	lib/string/memchr.c \
@@ -120,6 +142,7 @@ LIB_SRCFILES += \
 	lib/string/strcmp.c \
 	lib/string/strcpy.c \
 	lib/string/strcspn.c \
+	lib/string/strdup.c \
 	lib/string/strerror.c \
 	lib/string/strlen.c \
 	lib/string/strncat.c \
@@ -141,6 +164,9 @@ LIB_SRCFILES += \
 	lib/sys/stat/umask.c
 
 LIB_SRCFILES += \
+  lib/sys/time/gettimeofday.c
+
+LIB_SRCFILES += \
 	lib/sys/utsname/uname.c
 
 LIB_SRCFILES += \
@@ -159,8 +185,11 @@ LIB_SRCFILES += \
 	lib/time/time.c
 
 LIB_SRCFILES += \
-  lib/unistd/chdir.c \
+  lib/unistd/_exit.c \
+	lib/unistd/access.c \
+	lib/unistd/chdir.c \
 	lib/unistd/close.c \
+	lib/unistd/dup.c \
 	lib/unistd/execl.c \
 	lib/unistd/execle.c \
 	lib/unistd/execlp.c \
@@ -172,12 +201,18 @@ LIB_SRCFILES += \
 	lib/unistd/getcwd.c \
 	lib/unistd/getpid.c \
 	lib/unistd/getppid.c \
+	lib/unistd/isatty.c \
 	lib/unistd/link.c \
+	lib/unistd/lseek.c \
+	lib/unistd/pipe.c \
 	lib/unistd/read.c \
 	lib/unistd/rmdir.c \
 	lib/unistd/sbrk.c \
 	lib/unistd/write.c \
 	lib/unistd/unlink.c
+
+LIB_SRCFILES += \
+  lib/utime/utime.c \
 
 LIB_OBJFILES := $(patsubst %.c, $(OBJ)/%.o, $(LIB_SRCFILES))
 LIB_OBJFILES := $(patsubst %.S, $(OBJ)/%.o, $(LIB_OBJFILES))

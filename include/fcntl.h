@@ -20,7 +20,13 @@
 #define O_NONBLOCK  (1 << 6)
 #define O_TRUNC     (1 << 7)
 
+#define F_DUPFD     0
+#define F_GETFD     1
+#define F_SETFD     2
+#define F_GETFL     3
+
 int creat(const char *, mode_t);
+int fcntl(int, int, ...);
 int open(const char *, int, ...);
 
 #endif  // !__FCNTL_H__

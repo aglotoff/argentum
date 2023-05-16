@@ -540,7 +540,7 @@ ext2_inode_link(struct Inode *dir, char *name, struct Inode *ip)
 
   if ((ip2 = ext2_inode_lookup(dir, name)) != NULL) {
     fs_inode_put(ip2);
-    return -EEXISTS;
+    return -EEXIST;
   }
 
   name_len = strlen(name);

@@ -119,7 +119,7 @@ char
 
     if (next == NULL) {
       free_entries(path);
-      errno = EACCESS;
+      errno = EACCES;
       return NULL;
     }
 

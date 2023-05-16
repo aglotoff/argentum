@@ -3,6 +3,7 @@
 
 #define SIG_DFL   ((void (*)(void)) -1)
 #define SIG_IGN   ((void (*)(void)) -2)
+#define SIG_ERR   ((void (*)(void)) -3)
 
 #define SIGABRT   1     ///< Abnormal termination
 #define SIGALRM   2     ///< Timeout
@@ -33,5 +34,9 @@ struct sigaction {
   sigset_t sa_mask;
   int      sa_flags;
 };
+
+int raise(int);
+int sigaction(int, const struct sigaction *, struct sigaction *);
+void (*signal(int, void (*)(int)))(int);
 
 #endif  // !__SIGNAL_H__

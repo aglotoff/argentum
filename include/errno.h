@@ -13,14 +13,14 @@
 extern int errno;
 
 #define E2BIG         1     ///< Arg list too long
-#define EACCESS       2     ///< Permission denied
+#define EACCES       2     ///< Permission denied
 #define EAGAIN        3     ///< Resource temporarily unavailable
 #define EBADF         4     ///< Bad file descriptor
 #define EBUSY         5     ///< Resource busy
 #define ECHILD        6     ///< No child processes
 #define EDEADLK       7     ///< Resource deadlock avoided
 #define EDOM          8     ///< Domain error
-#define EEXISTS       9     ///< File exists
+#define EEXIST        9     ///< File exists
 #define EFAULT        10    ///< Bad address
 #define EFBIG         11    ///< File too large
 #define EINTR         12    ///< Interrupted function call
@@ -50,5 +50,6 @@ extern int errno;
 #define ESPIPE        36    ///< Invalid seek
 #define ESRCH         37    ///< No such process
 #define EXDEV         38    ///< Improper link
+#define ELOOP         39    ///< Too many levels of symbolic links
 
 #endif  // !__ERRNO_H__

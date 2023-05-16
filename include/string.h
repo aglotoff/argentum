@@ -41,6 +41,8 @@ char  *strerror(int);
 size_t strlen(const char *);
 size_t strnlen(const char *, size_t);
 
+char  *strdup(const char *);
+
 #ifdef __cplusplus
 };
 #endif

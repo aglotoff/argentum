@@ -2,6 +2,7 @@
 #define __UNISTD_H__
 
 #include <stddef.h>
+#include <stdint.h>
 #include <sys/types.h>
 
 extern char **environ;
@@ -31,5 +32,11 @@ ssize_t  read(int, void *, size_t);
 ssize_t  write(int, const void *, size_t);
 
 void    *sbrk(ptrdiff_t);
+int      pipe(int[2]);
+int      isatty(int);
+void     _exit(int);
+int      dup(int);
+int      access(const char *, int);
+off_t    lseek(int, off_t, int);
 
 #endif  // !__UNISTD_H__

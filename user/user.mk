@@ -1,5 +1,5 @@
 USER_CFLAGS  := $(CFLAGS) -Wno-return-local-addr
-USER_LDFLAGS := $(LDFLAGS) -T user/user.ld -nostdlib
+USER_LDFLAGS := $(LDFLAGS) -T user/user.ld -nostdlib -L$(OBJ)/lib
 
 USER_SRCFILES :=
 
@@ -7,7 +7,7 @@ USER_SRCFILES :=
 # 	user/hello.c
 
 USER_SRCFILES += \
-  user/bin/cat.c \
+	user/bin/cat.c \
 	user/bin/chmod.c \
 	user/bin/date.c \
 	user/bin/echo.c \
@@ -50,10 +50,11 @@ $(OBJ)/user/%.o: user/%.S $(OBJ)/.vars.USER_CFLAGS
 	$(V)$(CC) $(USER_CFLAGS) -c -o $@ $<
 
 $(OBJ)/user/%: $(OBJ)/user/%.o $(OBJ)/lib/crt0.o $(OBJ)/lib/crti.o \
-		$(OBJ)/lib/crtn.o $(OBJ)/lib/libc.a $(OBJ)/.vars.USER_LDFLAGS
+		$(OBJ)/lib/crtn.o $(OBJ)/lib/libc.a $(SYSROOT) $(OBJ)/.vars.USER_LDFLAGS
 	@echo "+ LD [USER] $@"
 	@mkdir -p $(@D)
-	$(V)$(LD) -o $@ $(USER_LDFLAGS) $(OBJ)/lib/crt0.o $(OBJ)/lib/crti.o $@.o \
-		$(OBJ)/lib/crtn.o -L$(OBJ)/lib -L$(dir $(LIBGCC)) -lc -lgcc
+	$(V)$(LD) -o $@ $(USER_LDFLAGS) \
+		$(OBJ)/lib/crt0.o $(OBJ)/lib/crti.o $@.o $(OBJ)/lib/crtn.o \
+		-L$(dir $(LIBGCC)) -lc -lgcc
 	$(V)$(OBJDUMP) -S $@ > $@.asm
 	$(V)$(NM) -n $@ > $@.sym
