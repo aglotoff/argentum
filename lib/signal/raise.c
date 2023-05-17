@@ -7,8 +7,7 @@ raise(int sig)
 {
   (void) sig;
 
-  fprintf(stderr, "TODO: raise");
-  abort();
+  // fprintf(stderr, "TODO: raise\n");
 
   return -1;
 }

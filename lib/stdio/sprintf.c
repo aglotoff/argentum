@@ -1,14 +1,14 @@
 #include <stdio.h>
-#include <stdlib.h>
 
 int
 sprintf(char *s, const char *format, ...)
 {
-  (void) s;
-  (void) format;
+  va_list ap;
+  int ret;
 
-  fprintf(stderr, "TODO: sprintf");
-  abort();
+  va_start(ap, format);
+  ret = vsprintf(s, format, ap);
+  va_end(ap);
 
-  return -1;
+  return ret;
 }

@@ -1,14 +1,16 @@
+#include <fcntl.h>
 #include <unistd.h>
-#include <stdio.h>
-#include <stdlib.h>
 
 int
 isatty(int fildes)
 {
-  (void) fildes;
+  struct stat stat;
 
-  fprintf(stderr, "TODO: isatty");
-  abort();
+  if (fstat(fildes, &stat) != 0)
+    return -1;
 
-  return -1;
+  // The only character device currently implemented is the console
+  // TODO: use a more robust solution!
+
+  return S_ISCHR(stat.st_mode);
 }

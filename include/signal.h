@@ -24,7 +24,18 @@
 #define SIGTSTP   17    ///< Interactive stop signal
 #define SIGTTIN   18    ///< Background process wants to read
 #define SIGTTOU   19    ///< Background process wants to write
+#define SIGBUS    20    ///< Access to an undefined portion of a memory object
+#define SIGPOLL   21    ///< Pollable event
+#define SIGPROF   22    ///< Profiling timer expired
+#define SIGSYS    23    ///< Bad system call
+#define SIGTRAP   24    ///< Trace/breakpoint trap
+#define SIGURG    25    ///< High bandwidth data is available at a socket
+#define SIGVTALRM 26    ///< Virtual timer expired
+#define SIGXCPU   27    ///< CPU time limit exceeded
+#define SIGXFSZ   28    ///< File size limit exceeded
 
+#define SIG_BLOCK 0
+#define SIG_SETMASK 1
 
 /** Used to represent sets of signals */
 typedef unsigned long sigset_t;
@@ -38,5 +49,9 @@ struct sigaction {
 int raise(int);
 int sigaction(int, const struct sigaction *, struct sigaction *);
 void (*signal(int, void (*)(int)))(int);
+int sigprocmask(int, const sigset_t *, sigset_t *);
+int sigemptyset(sigset_t *);
+int sigismember(const sigset_t *, int);
+int sigaddset(sigset_t *, int);
 
 #endif  // !__SIGNAL_H__

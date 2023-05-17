@@ -5,10 +5,10 @@
 char *
 strdup(const char *s1)
 {
-  (void) s1;
+  char *s2;
 
-  fprintf(stderr, "TODO: strdup");
-  abort();
+  if ((s2 = malloc(strlen(s1))) == NULL)
+    return NULL;
 
-  return NULL;
+  return strcpy(s2, s1);
 }

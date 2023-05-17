@@ -666,6 +666,8 @@ fs_chdir(const char *path)
   return r;
 }
 
+#define CHMOD_MASK  (S_IRWXU | S_IRWXG | S_IRWXO | S_ISUID | S_ISGID)
+
 int
 fs_inode_chmod(struct Inode *ip, mode_t mode)
 {
@@ -679,7 +681,7 @@ fs_inode_chmod(struct Inode *ip, mode_t mode)
 
   // TODO: additional permission checks
 
-  ip->mode  = mode;
+  ip->mode  = (ip->mode & ~CHMOD_MASK) | (mode & CHMOD_MASK);
   ip->ctime = rtc_get_time();
   ip->flags |= FS_INODE_DIRTY;
 

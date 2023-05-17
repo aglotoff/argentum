@@ -1,9 +1,11 @@
+#include <signal.h>
 #include <stdio.h>
 #include <stdlib.h>
 
 int
-putc(int c, FILE *stream)
+sigemptyset(sigset_t *set)
 {
-  fprintf(stream, "%c", c);
+  *set = 0;
+
   return 0;
 }

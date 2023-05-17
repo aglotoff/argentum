@@ -68,6 +68,8 @@ process_exec(const char *path, char *const argv[], char *const envp[])
 
   if ((r = fs_name_lookup(path, &ip)) < 0)
     return r;
+  if (ip == NULL)
+    return -ENOENT;
 
   fs_inode_lock(ip);
 

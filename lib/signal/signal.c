@@ -7,8 +7,7 @@ void (*signal(int sig, void (*func)(int)))(int)
   (void) sig;
   (void) func;
 
-  fprintf(stderr, "TODO: signal");
-  abort();
+  // fprintf(stderr, "TODO: signal\n");
 
   return (void (*)(int)) -1;
 }

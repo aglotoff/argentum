@@ -1,15 +1,16 @@
 #include <sys/time.h>
-#include <stdio.h>
-#include <stdlib.h>
+#include <time.h>
 
 int
 gettimeofday(struct timeval *tp, void *tzp)
 {
-  (void) tp;
   (void) tzp;
 
-  fprintf(stderr, "TODO: gettimeofday");
-  abort();
+  tp->tv_sec  = time(NULL);
+  tp->tv_usec = 0;
+
+  // TODO: use timezone info
+  // TODO: add microseconds
 
   return -1;
 }

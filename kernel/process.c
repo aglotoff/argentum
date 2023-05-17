@@ -307,6 +307,8 @@ process_destroy(int status)
   struct Process *child, *current = process_current();
   int fd, has_zombies;
 
+  // cprintf("[k] process %d dies with %d\n", current->thread->pid, status);
+
   // Remove the pid hash link
   // TODO: place this code somewhere else?
   spin_lock(&pid_hash.lock);

@@ -7,9 +7,8 @@ utime(const char *path, const struct utimbuf *times)
 {
   (void) path;
   (void) times;
+  
+  // fprintf(stderr, "TODO: utime\n");
 
-  fprintf(stderr, "TODO: utime");
-  abort();
-
-  return -1;
+  return 0;
 }

@@ -24,7 +24,7 @@ main(void)
   int status;
 
   char *const argv[] = { "/bin/sh", NULL };
-  char *const envp[] = { "PATH=/bin", NULL };
+  char *const envp[] = { "PATH=/bin:/usr/bin", NULL };
 
   // Create the directory for special device files.
   mkdir("/dev", 0755);

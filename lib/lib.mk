@@ -70,7 +70,11 @@ LIB_SRCFILES += \
 LIB_SRCFILES += \
 	lib/signal/raise.c \
 	lib/signal/sigaction.c \
-	lib/signal/signal.c
+	lib/signal/sigaddset.c \
+	lib/signal/sigemptyset.c \
+	lib/signal/sigismember.c \
+	lib/signal/signal.c \
+	lib/signal/sigprocmask.c
 
 LIB_SRCFILES += \
   lib/stdio/__fclose.c \
@@ -100,7 +104,8 @@ LIB_SRCFILES += \
 	lib/stdio/ungetc.c \
 	lib/stdio/vfprintf.c \
 	lib/stdio/vprintf.c \
-	lib/stdio/vsnprintf.c
+	lib/stdio/vsnprintf.c \
+	lib/stdio/vsprintf.c
 
 LIB_SRCFILES += \
   lib/stdlib/__getmem.c \

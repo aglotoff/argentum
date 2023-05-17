@@ -6,8 +6,7 @@ fflush(FILE *stream)
 {
   (void) stream;
 
-  fprintf(stderr, "TODO: fflush");
-  abort();
+  // TODO: implement
 
-  return -1;
+  return 0;
 }

@@ -1,13 +1,13 @@
+#include <errno.h>
 #include <stdio.h>
-#include <stdlib.h>
 
 int
 fileno(FILE *stream)
 {
-  (void) stream;
+  if (!stream->mode) {
+    errno = EBADF;
+    return -1;
+  }
 
-  fprintf(stderr, "TODO: fileno");
-  abort();
-
-  return -1;
+  return stream->fd;
 }

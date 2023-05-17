@@ -62,10 +62,10 @@ file_open(const char *path, int oflag, mode_t mode, struct File **fstore)
   } else {
     fs_inode_lock(ip);
 
-    if ((oflag & O_CREAT) && (oflag & O_EXCL))
+    if ((oflag & O_CREAT) && (oflag & O_EXCL)) {
+      r = -EEXIST;
       goto out2;
-
-    
+    }
   }
 
   if (S_ISDIR(ip->mode) && (oflag & O_WRONLY)) {
