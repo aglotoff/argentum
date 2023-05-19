@@ -78,26 +78,37 @@ LIB_SRCFILES += \
 
 LIB_SRCFILES += \
   lib/stdio/__fclose.c \
+	lib/stdio/__fflush.c \
 	lib/stdio/__ffree.c \
 	lib/stdio/__files.c \
 	lib/stdio/__fopen.c \
   lib/stdio/__printf.c \
 	lib/stdio/fclose.c \
+	lib/stdio/feof.c \
+	lib/stdio/ferror.c \
 	lib/stdio/fflush.c \
+	lib/stdio/fgetc.c \
+	lib/stdio/fgets.c \
 	lib/stdio/fileno.c \
 	lib/stdio/fopen.c \
 	lib/stdio/fprintf.c \
+	lib/stdio/fputc.c \
+	lib/stdio/fputs.c \
+	lib/stdio/fread.c \
 	lib/stdio/freopen.c \
 	lib/stdio/fsync.c \
 	lib/stdio/ftell.c \
 	lib/stdio/fwrite.c \
+	lib/stdio/getc.c \
 	lib/stdio/getchar.c \
+	lib/stdio/gets.c \
 	lib/stdio/perror.c \
 	lib/stdio/printf.c \
 	lib/stdio/putc.c \
 	lib/stdio/putchar.c \
 	lib/stdio/puts.c \
 	lib/stdio/remove.c \
+	lib/stdio/setbuf.c \
 	lib/stdio/setvbuf.c \
 	lib/stdio/snprintf.c \
 	lib/stdio/sprintf.c \

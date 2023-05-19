@@ -19,6 +19,8 @@
 /** Maximum value returned by rand(). */
 #define RAND_MAX      0x7fffffff
 
+#define MB_CUR_MAX    1
+
 #ifdef __cplusplus
 extern "C" {
 #endif

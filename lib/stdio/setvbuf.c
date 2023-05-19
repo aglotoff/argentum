@@ -1,16 +1,28 @@
+#include <errno.h>
 #include <stdio.h>
 #include <stdlib.h>
 
 int
 setvbuf(FILE *stream, char *buf, int type, size_t size)
 {
-  (void) stream;
-  (void) buf;
-  (void) type;
-  (void) size;
+  if ((stream->mode == 0) || (stream->buf != NULL)) {
+    errno = EBADF;
+    return -1;
+  }
 
-  fprintf(stderr, "TODO: setvbuf");
-  abort();
+  if (type == _IONBF) {
+    stream->mode    |= _MODE_NO_BUF;
+    stream->buf      = stream->char_buf;
+    stream->buf_size = 1;
+    return 0;
+  } 
 
-  return -1;
+  stream->mode |= (type == _IOLBF) ? _MODE_LINE_BUF : _MODE_FULL_BUF;
+
+  if (size != 0) {
+    stream->buf      = buf;
+    stream->buf_size = size;
+  }
+
+  return 0;
 }

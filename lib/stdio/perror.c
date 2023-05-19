@@ -11,7 +11,7 @@
 void
 perror(const char *s)
 {
-  if (s)
-    printf("%s: ", s);
-  printf("%s\n", strerror(errno));
+  if (s != NULL)
+    fprintf(stderr, "%s: ", s);
+  fprintf(stderr, "%s\n", strerror(errno));
 }

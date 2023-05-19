@@ -2,7 +2,7 @@
 #include <stdlib.h>
 
 int
-(getchar)(void)
+(getc)(FILE *stream)
 {
-  return getc(stdin);
+  return fgetc(stream);
 }

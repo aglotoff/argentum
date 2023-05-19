@@ -2,8 +2,7 @@
 #include <stdlib.h>
 
 int
-putc(int c, FILE *stream)
+(putc)(int c, FILE *stream)
 {
-  fprintf(stream, "%c", c);
-  return 0;
+  return fputc(c, stream);
 }

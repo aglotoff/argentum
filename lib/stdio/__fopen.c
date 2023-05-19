@@ -45,10 +45,15 @@ __fopen(FILE *fp, const char *pathname, const char *mode)
   if ((fd = open(pathname, oflag)) < 0)
     return fd;
 
-  fp->mode |= mode_bits;
-  fp->fd    = fd;
+  fp->fd         = fd;
+  fp->mode      |= mode_bits;
+  fp->state      = 0;
+  fp->buf        = NULL;
+  fp->buf_size   = 0;
+  fp->next       = NULL;
+  fp->read_end   = NULL;
+  fp->write_end  = NULL;
+  fp->back_count = 0;
 
-  // TODO: init other fields
-    
   return 0;
 }

@@ -14,7 +14,7 @@ static FILE stdout_file = {
 
 // Standard error output stream
 static FILE stderr_file = {
-  .mode = _MODE_WRITE,
+  .mode = _MODE_WRITE | _IONBF,
   .fd   = 2,
 };
 

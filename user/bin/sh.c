@@ -61,23 +61,27 @@ get_cmd(void)
 {
   static const char *home = "/home/root";
 
-  size_t nread, n;
+  size_t n;
 
-  printf("\x1b[1;32m[ \x1b[m");
+  fprintf(stdout, "\x1b[1;32m[ \x1b[m");
 
   n = strlen(home);
   if ((strncmp(cwd, home, n) == 0) && ((cwd[n] == '/') || (cwd[n] == '\0'))) {
-    printf("~%s", &cwd[n]);
+    fprintf(stdout, "~%s", &cwd[n]);
   } else {
-    printf(cwd);
+    fprintf(stdout, cwd);
   }
 
-  printf("\x1b[1;32m ]$ \x1b[m");
+  fprintf(stdout, "\x1b[1;32m ]$ \x1b[m");
+  fflush(stdout);
 
-  if ((nread = read(0, buf, sizeof(buf))) < 1)
-    exit(0);
-
-  buf[nread - 1] = '\0';
+  if (fgets(buf, sizeof(buf), stdin) == NULL) {
+    if (ferror(stdin)) {
+      perror("fread");
+      exit(EXIT_FAILURE);
+    }
+    exit(EXIT_FAILURE);
+  }
 
   return buf;
 }

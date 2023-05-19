@@ -1,7 +1,9 @@
 #include <stdio.h>
 
-void
+int
 puts(const char *s)
 {
-  printf("%s\n", s);
+  if (fputs(s, stdout) == EOF)
+    return EOF;
+  return fputc('\n', stdout);
 }

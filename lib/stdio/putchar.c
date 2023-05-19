@@ -1,7 +1,7 @@
 #include <stdio.h>
 
-void
-putchar(int c)
+int
+(putchar)(int c)
 {
-  printf("%c", c);
+  return putc(c, stdout);
 }

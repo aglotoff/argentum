@@ -3,8 +3,8 @@
 #include <string.h>
 
 struct pft {
-  int   (*putc)(void *, int);
-  void   *putc_arg;
+  int   (*xputc)(void *, int);
+  void   *xputc_arg;
   int     nchar;
   int     flags;
   int     width;
@@ -44,9 +44,9 @@ __printf(int       (*xputc)(void *, int),
          va_list     ap)
 {
   struct pft pft = {
-    .putc     = xputc,
-    .putc_arg = xputc_arg,
-    .nchar    = 0,
+    .xputc     = xputc,
+    .xputc_arg = xputc_arg,
+    .nchar     = 0,
   };
   long long num;
   long double ld;
@@ -261,7 +261,7 @@ get_double_arg(va_list *ap, int length)
 static void
 print_char(struct pft *pft, char c)
 {
-  pft->nchar += pft->putc(pft->putc_arg, c);
+  pft->nchar += pft->xputc(pft->xputc_arg, c);
 }
 
 // Print a formatted integer.
