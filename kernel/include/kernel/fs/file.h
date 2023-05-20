@@ -16,8 +16,7 @@ struct stat;
 struct File {
   int           type;         ///< File type (inode, console, or pipe)
   int           ref_count;    ///< The number of references to this file
-  int           readable;     ///< Whether the file is readable?
-  int           writeable;    ///< Whether the file is writeable?
+  int           flags;
   off_t         offset;       ///< Current offset within the file
   struct Inode *inode;        ///< Pointer to the corresponding inode
 };
@@ -31,5 +30,7 @@ ssize_t      file_write(struct File *, const void *, size_t);
 ssize_t      file_getdents(struct File *, void *, size_t);
 int          file_stat(struct File *, struct stat *);
 int          file_chdir(struct File *);
+off_t        file_seek(struct File *, off_t, int);
+int          file_cntl(struct File *, int, long);
 
 #endif  // !__KERNEL_INCLUDE_KERNEL_FS_FILE__

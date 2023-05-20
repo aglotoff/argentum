@@ -43,13 +43,14 @@ extern int errno;
 #define ENOTTY        29    ///< Inappropriate I/O control operation
 #define ENXIO         30    ///< No such device or address
 #define EOPNOTSUPP    31
-#define EPERM         32    ///< Operation not permitted
-#define EPIPE         33    ///< Broken pipe
-#define ERANGE        34    ///< Result too large
-#define EROFS         35    ///< Read-only file system
-#define ESPIPE        36    ///< Invalid seek
-#define ESRCH         37    ///< No such process
-#define EXDEV         38    ///< Improper link
-#define ELOOP         39    ///< Too many levels of symbolic links
+#define EOVERFLOW     32
+#define EPERM         33    ///< Operation not permitted
+#define EPIPE         34    ///< Broken pipe
+#define ERANGE        35    ///< Result too large
+#define EROFS         36    ///< Read-only file system
+#define ESPIPE        37    ///< Invalid seek
+#define ESRCH         38    ///< No such process
+#define EXDEV         39    ///< Improper link
+#define ELOOP         40    ///< Too many levels of symbolic links
 
 #endif  // !__ERRNO_H__

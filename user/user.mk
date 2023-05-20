@@ -32,6 +32,7 @@ USER_SRCFILES += \
 	user/test/fork.c \
 	user/test/limits.c \
 	user/test/math.c \
+	user/test/seek.c \
 	user/test/setjmp.c \
 	user/test/sort.c \
 	user/test/stdlib.c \

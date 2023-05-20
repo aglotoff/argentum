@@ -190,15 +190,18 @@ ext2_inode_free(dev_t dev, uint32_t ino)
 #define INDIRECT_BLOCKS   BLOCK_SIZE / sizeof(uint32_t)
 
 static unsigned
-ext2_inode_block_map(struct Inode *ip, unsigned block_no)
+ext2_inode_block_map(struct Inode *ip, unsigned block_no, int alloc)
 {
   struct Buf *buf;
   uint32_t addr, *a;
 
   if (block_no < DIRECT_BLOCKS) {
-    if ((addr = ip->ext2.block[block_no]) == 0) {
+    addr = ip->ext2.block[block_no];
+
+    if ((addr == 0) && alloc) {
       if (ext2_block_alloc(ip->dev, &addr) != 0)
         panic("cannot allocate direct block");
+      
       ip->ext2.block[block_no] = addr;
       ip->ext2.blocks++;
     }
@@ -212,6 +215,9 @@ ext2_inode_block_map(struct Inode *ip, unsigned block_no)
     panic("not implemented");
   
   if ((addr = ip->ext2.block[DIRECT_BLOCKS]) == 0) {
+    if (!alloc)
+      return 0;
+    
     if (ext2_block_alloc(ip->dev, &addr) != 0)
       panic("cannot allocate indirect block");
     ip->ext2.block[DIRECT_BLOCKS] = addr;
@@ -222,7 +228,13 @@ ext2_inode_block_map(struct Inode *ip, unsigned block_no)
     panic("cannot read the block");
 
   a = (uint32_t *) buf->data;
-  if ((addr = a[block_no]) == 0) {
+
+  addr = a[block_no];
+
+  if (addr == 0) {
+    if (!alloc)
+      return 0;
+
     if (ext2_block_alloc(ip->dev, &addr) != 0)
       panic("cannot allocate indirect block");
     a[block_no] = addr;
@@ -289,23 +301,26 @@ ext2_inode_read(struct Inode *ip, void *buf, size_t nbyte, off_t off)
   size_t total, nread;
   uint8_t *dst;
 
-  if (off > ip->size)
-    return -EINVAL;
-
-  if ((off + nbyte) > ip->size)
-    nbyte = ip->size - off;
+  if (nbyte == 0)
+    return 0;
 
   dst = (uint8_t *) buf;
   total = 0;
   while (total < nbyte) {
-    bno = ext2_inode_block_map(ip, off / BLOCK_SIZE);
-    if ((b = buf_read(bno, ip->dev)) == NULL)
-      panic("cannot read the block");
-
     nread = MIN(BLOCK_SIZE - (size_t) off % BLOCK_SIZE, nbyte - total);
-    memmove(dst, &((const uint8_t *) b->data)[off % BLOCK_SIZE], nread);
 
-    buf_release(b);
+    bno = ext2_inode_block_map(ip, off / BLOCK_SIZE, 1);
+
+    if (bno == 0) {
+      memset(dst, 0, nread);
+    } else {
+      if ((b = buf_read(bno, ip->dev)) == NULL)
+        panic("cannot read the block");
+
+      memmove(dst, &((const uint8_t *) b->data)[off % BLOCK_SIZE], nread);
+
+      buf_release(b);
+    }
 
     total += nread;
     dst   += nread;
@@ -330,7 +345,7 @@ ext2_inode_write(struct Inode *ip, const void *buf, size_t nbyte, off_t off)
   total = 0;
 
   while (total < nbyte) {
-    bno = ext2_inode_block_map(ip, off / BLOCK_SIZE);
+    bno = ext2_inode_block_map(ip, off / BLOCK_SIZE, 1);
     if ((b = buf_read(bno, ip->dev)) == NULL)
       panic("cannot read the block");
 

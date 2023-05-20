@@ -16,7 +16,7 @@ typedef unsigned short  mode_t;
 /** Represents link counts. */
 typedef short           nlink_t;
 /** Represents file sizes. */
-typedef unsigned long   off_t;
+typedef long            off_t;
 /** Represents process IDs and process group IDs. */
 typedef int             pid_t;
 /** Represents sizes of objects. */

@@ -3,6 +3,7 @@
 
 #include <stdarg.h>
 #include <stddef.h>
+#include <sys/types.h>
 
 /** Size of stdio buffers */
 #define BUFSIZ    256
@@ -18,23 +19,26 @@
 #define SEEK_CUR  1
 #define SEEK_END  2
 
+#define _UNGETC_MAX 2
+
 /** A structure containing information about a file. */
 typedef struct _File {
-  int    fd;          // File descriptor
-  int    mode;        // Mode bits
-  int    state;       // State bits
+  int    fd;                // File descriptor
+  int    mode;              // Mode bits
+  int    state;             // State bits
 
   char  *buf;
   size_t buf_size;    
 
-  char   char_buf[1]; // One-character buffer
+  char   char_buf[1];       // One-character buffer
 
-  char   back[2];     // Buffer for pushback characters
-  size_t back_count;  // The number of pushed back characters
+  char   back[_UNGETC_MAX]; // Buffer for pushback characters
+  size_t back_count;        // The number of pushed back characters
 
-  char  *next;        // Pointer to the next read/write position
-  char  *read_end;    // Pointer beyound the last available read position
-  char  *write_end;   // Pointer beyound the last available write position
+  char  *next;              // Pointer to the next read/write position
+  char  *read_end;          // Pointer beyond the last available read position
+  char  *read_save;         // Save read end
+  char  *write_end;         // Pointer beyond the last available write position
 } FILE;
 
 #define _MODE_READ        (1 << 0)  // Open for reading
@@ -116,6 +120,7 @@ int    setvbuf(FILE *, char *, int, size_t);
 int    fsync(int);
 int    fileno(FILE *);
 int    fputc(int , FILE *);
+int    fseeko(FILE *, off_t, int);
 
 #define getc(stream)    (((stream)->next < (stream)->read_end) \
   ? *(stream)->next++ \

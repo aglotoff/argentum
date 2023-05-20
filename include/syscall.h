@@ -16,19 +16,21 @@
 #define __SYS_CHDIR       9
 #define __SYS_FCHDIR      10
 #define __SYS_OPEN        11
-#define __SYS_UMASK       12
-#define __SYS_LINK        13
-#define __SYS_MKNOD       14
-#define __SYS_UNLINK      15
-#define __SYS_RMDIR       16
-#define __SYS_STAT        17
-#define __SYS_CLOSE       18
-#define __SYS_READ        19
-#define __SYS_WRITE       20
-#define __SYS_SBRK        21
-#define __SYS_UNAME       22
-#define __SYS_CHMOD       23
-#define __SYS_CLOCK_TIME  24
+#define __SYS_FCNTL       12
+#define __SYS_SEEK        13
+#define __SYS_UMASK       14
+#define __SYS_LINK        15
+#define __SYS_MKNOD       16
+#define __SYS_UNLINK      17
+#define __SYS_RMDIR       18
+#define __SYS_STAT        19
+#define __SYS_CLOSE       20
+#define __SYS_READ        21
+#define __SYS_WRITE       22
+#define __SYS_SBRK        23
+#define __SYS_UNAME       24
+#define __SYS_CHMOD       25
+#define __SYS_CLOCK_TIME  26
 
 // Generic system call: pass system call number as an immediate operand of the
 // SVC instruction, and up to three parameters in R0, R1, R2.

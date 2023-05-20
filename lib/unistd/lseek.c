@@ -1,16 +1,8 @@
 #include <unistd.h>
-#include <stdio.h>
-#include <stdlib.h>
+#include <syscall.h>
 
 off_t
 lseek(int fildes, off_t offset, int whence)
 {
-  (void) fildes;
-  (void) offset;
-  (void) whence;
-
-  fprintf(stderr, "TODO: lseek");
-  abort();
-
-  return -1;
+  return __syscall(__SYS_SEEK, fildes, offset, whence);
 }

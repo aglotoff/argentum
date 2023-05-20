@@ -1,15 +1,23 @@
 #include <fcntl.h>
-#include <stdio.h>
-#include <stdlib.h>
+#include <stdarg.h>
+#include <syscall.h>
 
 int
 fcntl(int fildes, int cmd, ...)
 {
-  (void) fildes;
-  (void) cmd;
+  int arg;
+  va_list ap;
 
-  fprintf(stderr, "TODO: fcntl");
-  abort();
+  switch (cmd) {
+  case F_SETFD:
+    va_start(ap, cmd);
+    arg = va_arg(ap, int);
+    va_end(ap);
+    break;
+  default:
+    arg = 0;
+    break;
+  }
 
-  return -1;
+  return __syscall(__SYS_FCNTL, fildes, cmd, arg);
 }

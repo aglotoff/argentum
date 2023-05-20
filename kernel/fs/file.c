@@ -36,8 +36,7 @@ file_open(const char *path, int oflag, mode_t mode, struct File **fstore)
   
   f->type      = 0;
   f->ref_count = 0;
-  f->readable  = 0;
-  f->writeable = 0;
+  f->flags     = oflag;
   f->offset    = 0;
   f->inode     = NULL;
 
@@ -91,8 +90,6 @@ file_open(const char *path, int oflag, mode_t mode, struct File **fstore)
       r = -EPERM;
       goto out2;
     }
-
-    f->readable = 1;
   }
 
   if (oflag & O_WRONLY) {
@@ -101,8 +98,6 @@ file_open(const char *path, int oflag, mode_t mode, struct File **fstore)
       r = -EPERM;
       goto out2;
     }
-
-    f->writeable = 1;
   }
 
   fs_inode_unlock(ip);
@@ -164,12 +159,54 @@ file_close(struct File *f)
   kmem_free(file_cache, f);
 }
 
+off_t
+file_seek(struct File *f, off_t offset, int whence)
+{
+  // TODO: validate
+  off_t new_offset;
+
+  switch (f->type) {
+  case FD_INODE:
+    assert(f->inode != NULL);
+
+    switch (whence) {
+    case SEEK_SET:
+      new_offset = offset;
+      break;
+    case SEEK_CUR:
+      new_offset = f->offset + offset;
+      break;
+    case SEEK_END:
+      fs_inode_lock(f->inode);
+      new_offset = f->inode->size + offset;
+      fs_inode_unlock(f->inode);
+      break;
+    default:
+      return -EINVAL;
+    }
+
+    if (new_offset < 0)
+      return -EOVERFLOW;
+
+    f->offset = new_offset;
+
+    return new_offset;
+
+  case FD_PIPE:
+    return -ESPIPE;
+
+  default:
+    panic("Invalid type");
+    return 0;
+  }
+}
+
 ssize_t
 file_read(struct File *f, void *buf, size_t nbytes)
 {
   int r;
 
-  if (!f->readable)
+  if (!(f->flags & O_RDONLY))
     return -EBADF;
   
   switch (f->type) {
@@ -205,7 +242,7 @@ file_getdents(struct File *f, void *buf, size_t nbytes)
 {
   int r;
 
-  if (!f->readable)
+  if (!(f->flags & O_RDONLY))
     return -EBADF;
 
   if ((f->type != FD_INODE) || !S_ISDIR(f->inode->mode))
@@ -232,7 +269,7 @@ file_write(struct File *f, const void *buf, size_t nbytes)
 {
   int r;
   
-  if (!f->writeable)
+  if (!(f->flags & O_WRONLY))
     return -EBADF;
 
   switch (f->type) {
@@ -291,4 +328,20 @@ file_chdir(struct File *file)
   fs_inode_unlock(file->inode);
 
   return r;
+}
+
+int
+file_cntl(struct File *file, int cmd, long arg)
+{
+  (void) arg;
+
+  switch (cmd) {
+  case F_GETFL:
+    return file->flags & (O_ACCMODE | O_APPEND);
+  case F_SETFD:
+    // TODO: close on exec
+    return 0;
+  default:
+    return -EINVAL;
+  }
 }

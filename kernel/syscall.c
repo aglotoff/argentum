@@ -32,6 +32,8 @@ static int32_t (*syscalls[])(void) = {
   [__SYS_CHDIR]      = sys_chdir,
   [__SYS_FCHDIR]     = sys_fchdir,
   [__SYS_OPEN]       = sys_open,
+  [__SYS_FCNTL]      = sys_fcntl,
+  [__SYS_SEEK]       = sys_seek,
   [__SYS_UMASK]      = sys_umask,
   [__SYS_MKNOD]      = sys_mknod,
   [__SYS_LINK]       = sys_link,
@@ -569,6 +571,40 @@ sys_read(void)
     return r;
 
   return file_read(f, buf, n);
+}
+
+int32_t
+sys_seek(void)
+{
+  struct File *f;
+  off_t offset;
+  int whence, r;
+
+  if ((r = sys_arg_fd(0, NULL, &f)) < 0)
+    return r;
+  if ((r = sys_arg_long(1, (long *) &offset)) < 0)
+    return r;
+  if ((r = sys_arg_int(2, (int *) &whence)) < 0)
+    return r;
+
+  return file_seek(f, offset, whence);
+}
+
+int32_t
+sys_fcntl(void)
+{
+  struct File *f;
+  int cmd, r;
+  long arg;
+
+  if ((r = sys_arg_fd(0, NULL, &f)) < 0)
+    return r;
+  if ((r = sys_arg_int(1, &cmd)) < 0)
+    return r;
+  if ((r = sys_arg_long(2, &arg)) < 0)
+    return r;
+
+  return file_cntl(f, cmd, arg);
 }
 
 int32_t

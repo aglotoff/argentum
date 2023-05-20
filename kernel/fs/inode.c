@@ -246,8 +246,10 @@ fs_inode_read(struct Inode *ip, void *buf, size_t nbyte, off_t *off)
     return ret;
   }
 
-  if ((*off + nbyte) < *off)
+  if ((off_t) (*off + nbyte) < *off)
     return -EINVAL;
+  if ((off_t) (*off + nbyte) > ip->size)
+    nbyte = ip->size - *off;
 
   if ((ret = ext2_inode_read(ip, buf, nbyte, *off)) < 0)
     return ret;
@@ -279,7 +281,7 @@ fs_inode_write(struct Inode *ip, const void *buf, size_t nbyte, off_t *off)
     return total;
   }
 
-  if ((*off + nbyte) < *off)
+  if ((off_t) (*off + nbyte) < *off)
     return -EINVAL;
 
   total = ext2_inode_write(ip, buf, nbyte, *off);

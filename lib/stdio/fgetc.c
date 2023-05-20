@@ -30,8 +30,14 @@ fgetc(FILE *stream)
   }
 
   // If there are pushback characters, return them first
-  if (stream->back_count > 0)
-    return stream->back[--stream->back_count];
+  if (stream->back_count > 0) {
+    if (--stream->back_count == 0) {
+      stream->read_end  = stream->read_end;
+      stream->read_save = NULL;
+    }
+
+    return stream->back[stream->back_count];
+  }
 
   // Input buffer empty - try to read more bytes from the file descriptor
   if (stream->next >= stream->read_end) {

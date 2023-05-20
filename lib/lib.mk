@@ -97,6 +97,7 @@ LIB_SRCFILES += \
 	lib/stdio/fputs.c \
 	lib/stdio/fread.c \
 	lib/stdio/freopen.c \
+	lib/stdio/fseeko.c \
 	lib/stdio/fsync.c \
 	lib/stdio/ftell.c \
 	lib/stdio/fwrite.c \
