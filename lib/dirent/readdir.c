@@ -5,10 +5,23 @@
 struct dirent *
 readdir(DIR *dirp)
 {
-  (void) dirp;
+  struct dirent *de;
+  
+  if (dirp->_Next >= dirp->_Buf_end) {
+    ssize_t nread;
+    
+    if ((nread = getdents(dirp->_Fd, dirp->_Buf, _DIRENT_MAX)) <= 0) {
+      dirp->_Next    = NULL;
+      dirp->_Buf_end = NULL;
+      return NULL;
+    }
 
-  fprintf(stderr, "TODO: readdir");
-  abort();
+    dirp->_Next    = dirp->_Buf;
+    dirp->_Buf_end = dirp->_Buf + nread;
+  }
 
-  return NULL;
+  de = (struct dirent *) dirp->_Next;
+  dirp->_Next += de->d_reclen;
+
+  return de;
 }

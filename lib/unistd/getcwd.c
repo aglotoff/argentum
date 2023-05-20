@@ -91,7 +91,7 @@ char
 
         if (dp->d_ino == curr_ino) {
           if (((next = malloc(sizeof(struct Entry))) == NULL) ||
-              ((next->name = malloc(dp->d_namelen + 1)) == NULL)) {
+              ((next->name = malloc(strlen(dp->d_name) + 1)) == NULL)) {
 
             if (next != NULL)
               free(next);
@@ -102,8 +102,7 @@ char
             return NULL;
           }
 
-          strncpy(next->name, dp->d_name, dp->d_namelen);
-          next->name[dp->d_namelen] = '\0';
+          strcpy(next->name, dp->d_name);
 
           next->next = path;
           path = next;

@@ -121,7 +121,7 @@ struct Ext2DirEntry {
   uint16_t rec_len;
   uint8_t  name_len;
   uint8_t  file_type;
-  char     name[256];
+  char     name[255];
 } __attribute__((packed));
 
 #define EXT2_FT_UNKNOWN   0
@@ -138,7 +138,7 @@ struct Inode;
 extern struct Ext2Superblock ext2_sb;
 extern struct KMutex ext2_sb_mutex;
 
-typedef int (*FillDirFunc)(void *, const char *, uint16_t, off_t, ino_t, uint8_t);
+typedef int (*FillDirFunc)(void *, ino_t, const char *, size_t);
 
 int           ext2_bitmap_alloc(uint32_t, size_t, dev_t, uint32_t *);
 int           ext2_bitmap_free(uint32_t, dev_t, uint32_t);

@@ -1,14 +1,20 @@
 #include <dirent.h>
-#include <stdio.h>
+#include <errno.h>
 #include <stdlib.h>
+#include <unistd.h>
 
 int
 closedir(DIR *dirp)
 {
-  (void) dirp;
+  if ((dirp == NULL) || (dirp->_Fd < 0)) {
+    errno = EBADF;
+    return -1;
+  }
+  
+  if (close(dirp->_Fd) < 0)
+    return -1;
 
-  fprintf(stderr, "TODO: closedir");
-  abort();
+  free(dirp);
 
-  return -1;
+  return 0;
 }

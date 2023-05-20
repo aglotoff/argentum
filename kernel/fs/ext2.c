@@ -909,7 +909,7 @@ ext2_readdir(struct Inode *dir, void *buf, FillDirFunc filldir, off_t off)
   if ((nread = ext2_dirent_read(dir, &de, off)) < 0)
     return nread;
 
-  filldir(buf, de.name, de.name_len, off + de.rec_len, de.inode, de.file_type);
+  filldir(buf, de.inode, de.name, de.name_len);
 
   return de.rec_len;
 }

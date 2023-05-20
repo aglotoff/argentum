@@ -1,21 +1,27 @@
 #ifndef __DIRENT_H__
 #define __DIRENT_H__
 
-#include <stdint.h>
+#include <limits.h>
 #include <sys/types.h>
 
-typedef int DIR;
-
 struct dirent {
+  /** File serial number */
   ino_t     d_ino;
-  off_t     d_off;
-  uint16_t  d_reclen;
-  uint8_t   d_type;
-  uint16_t  d_namelen;
+  size_t    d_reclen;
   char      d_name[0];
 };
 
+#define _DIRENT_MAX  (sizeof(struct dirent) + NAME_MAX + 1)
+
+typedef struct _Dir {
+  int   _Fd;
+  char  _Buf[_DIRENT_MAX];
+  char *_Buf_end;
+  char *_Next;
+} DIR;
+
 int            closedir(DIR *);
+DIR           *fdopendir(int);
 ssize_t        getdents(int, void *, size_t);
 DIR           *opendir(const char *);
 struct dirent *readdir(DIR *);

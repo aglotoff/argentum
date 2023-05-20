@@ -29,6 +29,7 @@ LIB_SRCFILES += \
 
 LIB_SRCFILES += \
   lib/dirent/closedir.c \
+	lib/dirent/fdopendir.c \
 	lib/dirent/getdents.c \
 	lib/dirent/opendir.c \
 	lib/dirent/readdir.c

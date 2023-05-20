@@ -291,17 +291,14 @@ fs_inode_write(struct Inode *ip, const void *buf, size_t nbyte, off_t *off)
 }
 
 static int
-fs_filldir(void *buf, const char *name, uint16_t name_len, off_t off,
-           ino_t ino, uint8_t type)
+fs_filldir(void *buf, ino_t ino, const char *name, size_t name_len)
 {
   struct dirent *dp = (struct dirent *) buf;
 
-  dp->d_reclen  = name_len + offsetof(struct dirent, d_name);
+  dp->d_reclen  = name_len + offsetof(struct dirent, d_name) + 1;
   dp->d_ino     = ino;
-  dp->d_off     = off;
-  dp->d_namelen = name_len;
-  dp->d_type    = type;
   memmove(&dp->d_name[0], name, name_len);
+  dp->d_name[name_len] = '\0';
 
   return dp->d_reclen;
 }
@@ -314,7 +311,7 @@ fs_inode_read_dir(struct Inode *ip, void *buf, size_t nbyte, off_t *off)
 
   struct {
     struct dirent de;
-    char buf[256];
+    char buf[NAME_MAX + 1];
   } de;
 
   if (!fs_inode_holding(ip))
