@@ -145,13 +145,13 @@ int           ext2_bitmap_free(uint32_t, dev_t, uint32_t);
 int           ext2_block_alloc(dev_t, uint32_t *);
 void          ext2_block_free(dev_t, uint32_t);
 int           ext2_block_zero(uint32_t, uint32_t);
-int           ext2_inode_alloc(mode_t, dev_t, uint32_t *, uint32_t);
+int           ext2_inode_alloc(mode_t, dev_t, dev_t, uint32_t *, uint32_t);
 void          ext2_inode_free(dev_t, uint32_t);
 
 void          ext2_sb_sync(void);
 struct Inode *ext2_mount(void);
-void          ext2_read_inode(struct Inode *);
-void          ext2_write_inode(struct Inode *);
+int           ext2_read_inode(struct Inode *);
+int           ext2_write_inode(struct Inode *);
 void          ext2_delete_inode(struct Inode *);
 
 int           ext2_inode_create(struct Inode *, char *, mode_t,
@@ -169,5 +169,6 @@ ssize_t       ext2_inode_read(struct Inode *, void *, size_t, off_t);
 ssize_t       ext2_inode_write(struct Inode *, const void *, size_t, off_t);
 
 ssize_t       ext2_readdir(struct Inode *, void *, FillDirFunc, off_t);
+uint32_t      ext2_inode_get_block(struct Inode *, uint32_t, int);
 
 #endif  // !__KERNEL_FS_EXT2_H__

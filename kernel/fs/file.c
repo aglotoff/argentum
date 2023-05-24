@@ -335,7 +335,7 @@ file_cntl(struct File *file, int cmd, long arg)
 {
   (void) arg;
 
-  switch (cmd) {
+  switch (cmd) { 
   case F_GETFL:
     return file->flags & (O_ACCMODE | O_APPEND);
   case F_SETFD:

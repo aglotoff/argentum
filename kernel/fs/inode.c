@@ -248,11 +248,17 @@ fs_inode_read(struct Inode *ip, void *buf, size_t nbyte, off_t *off)
 
   if ((off_t) (*off + nbyte) < *off)
     return -EINVAL;
+
   if ((off_t) (*off + nbyte) > ip->size)
     nbyte = ip->size - *off;
+  if (nbyte == 0)
+    return 0;
 
   if ((ret = ext2_inode_read(ip, buf, nbyte, *off)) < 0)
     return ret;
+
+  ip->atime  = rtc_get_time();
+  ip->flags |= FS_INODE_DIRTY;
 
   *off += ret;
 
@@ -284,10 +290,20 @@ fs_inode_write(struct Inode *ip, const void *buf, size_t nbyte, off_t *off)
   if ((off_t) (*off + nbyte) < *off)
     return -EINVAL;
 
+  if (nbyte == 0)
+    return 0;
+
   total = ext2_inode_write(ip, buf, nbyte, *off);
 
-  if (total > 0)
+  if (total > 0) {
     *off += total;
+
+    if (*off > ip->size)
+      ip->size = *off;
+
+    ip->mtime = rtc_get_time();
+    ip->flags |= FS_INODE_DIRTY;
+  }
 
   return total;
 }
@@ -382,6 +398,10 @@ fs_inode_truncate(struct Inode *inode)
     return -EPERM;
 
   ext2_inode_trunc(inode);
+  
+  inode->size = 0;
+  inode->ctime = inode->mtime = rtc_get_time();
+  inode->flags |= FS_INODE_DIRTY;
 
   return 0;
 }

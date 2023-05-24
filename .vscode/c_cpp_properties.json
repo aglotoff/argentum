@@ -7,7 +7,7 @@
       ],
       "includePath": ["./include", "./kernel/include"],
       "intelliSenseMode": "linux-gcc-x64",
-      "compilerPath": "/usr/bin/arm-none-eabi-gcc",
+      "compilerPath": "/usr/local/bin/arm-none-eabi-gcc",
       "cStandard": "gnu11",
       "cppStandard": "c++11"
     }

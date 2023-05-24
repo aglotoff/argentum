@@ -45,7 +45,8 @@ ext2_inode_group_alloc(struct Ext2BlockGroup *gd, dev_t dev, uint32_t *istore)
 }
 
 static int
-ext2_inode_init(uint32_t table, uint32_t inum, uint16_t mode)
+ext2_inode_init(dev_t dev, uint32_t table, uint32_t inum, uint16_t mode,
+                dev_t rdev)
 {
   unsigned inodes_per_block, itab_idx, inode_block_idx, inode_block;
   struct Ext2Inode *raw;
@@ -64,6 +65,20 @@ ext2_inode_init(uint32_t table, uint32_t inum, uint16_t mode)
   raw->mode  = mode;
   raw->ctime = raw->atime = raw->mtime = rtc_get_time();
 
+  if (((mode & EXT2_S_IFMASK) == EXT2_S_IFBLK) ||
+      ((mode & EXT2_S_IFMASK) == EXT2_S_IFCHR)) {
+    ext2_block_alloc(dev, &raw->block[0]);
+    struct Buf *block_buf;
+
+    block_buf = buf_read(raw->block[0], dev);
+    *(uint16_t *) block_buf->data = rdev;
+    block_buf->flags |= BUF_DIRTY;
+    buf_release(block_buf);
+
+    raw->size = sizeof(uint16_t);
+    raw->blocks++;
+  }
+
   buf->flags |= BUF_DIRTY;
   buf_release(buf);
 
@@ -81,7 +96,8 @@ ext2_inode_init(uint32_t table, uint32_t inum, uint16_t mode)
  * @retval -ENOMEM Couldn't find a free inode.
  */
 int
-ext2_inode_alloc(mode_t mode, dev_t dev, uint32_t *istore, uint32_t parent)
+ext2_inode_alloc(mode_t mode, dev_t rdev, dev_t dev, uint32_t *istore,
+                 uint32_t parent)
 {
   struct Buf *buf;
   struct Ext2BlockGroup *gd;
@@ -110,7 +126,7 @@ ext2_inode_alloc(mode_t mode, dev_t dev, uint32_t *istore, uint32_t parent)
 
     inum += 1 + (g + gi) * ext2_sb.inodes_per_group;
 
-    ext2_inode_init(table, inum, mode);
+    ext2_inode_init(dev, table, inum, mode, rdev);
 
     if (istore)
       *istore = inum;
@@ -135,7 +151,7 @@ ext2_inode_alloc(mode_t mode, dev_t dev, uint32_t *istore, uint32_t parent)
 
         inum += 1 + (g + gi) * ext2_sb.inodes_per_group;
 
-        ext2_inode_init(table, inum, mode);
+        ext2_inode_init(dev, table, inum, mode, rdev);
 
         if (istore)
           *istore = inum;
@@ -186,209 +202,25 @@ ext2_inode_free(dev_t dev, uint32_t ino)
  * ----------------------------------------------------------------------------
  */
 
-#define DIRECT_BLOCKS     12
-#define INDIRECT_BLOCKS   BLOCK_SIZE / sizeof(uint32_t)
-
-static unsigned
-ext2_inode_block_map(struct Inode *ip, unsigned block_no, int alloc)
-{
-  struct Buf *buf;
-  uint32_t addr, *a;
-
-  if (block_no < DIRECT_BLOCKS) {
-    addr = ip->ext2.block[block_no];
-
-    if ((addr == 0) && alloc) {
-      if (ext2_block_alloc(ip->dev, &addr) != 0)
-        panic("cannot allocate direct block");
-      
-      ip->ext2.block[block_no] = addr;
-      ip->ext2.blocks++;
-    }
-
-    return addr;
-  }
-
-  block_no -= DIRECT_BLOCKS;
-
-  if (block_no >= INDIRECT_BLOCKS)
-    panic("not implemented");
-  
-  if ((addr = ip->ext2.block[DIRECT_BLOCKS]) == 0) {
-    if (!alloc)
-      return 0;
-    
-    if (ext2_block_alloc(ip->dev, &addr) != 0)
-      panic("cannot allocate indirect block");
-    ip->ext2.block[DIRECT_BLOCKS] = addr;
-    ip->ext2.blocks++;
-  }
-
-  if ((buf = buf_read(addr, ip->dev)) == NULL)
-    panic("cannot read the block");
-
-  a = (uint32_t *) buf->data;
-
-  addr = a[block_no];
-
-  if (addr == 0) {
-    if (!alloc)
-      return 0;
-
-    if (ext2_block_alloc(ip->dev, &addr) != 0)
-      panic("cannot allocate indirect block");
-    a[block_no] = addr;
-    ip->ext2.blocks++;
-  }
-
-  buf->flags |= BUF_DIRTY;
-  buf_release(buf);
-
-  return addr;
-}
-
-void
-ext2_inode_trunc(struct Inode *ip)
-{
-  struct Buf *buf;
-  uint32_t *a, i;
-
-  for (i = 0; i < DIRECT_BLOCKS; i++) {
-    if (ip->ext2.block[i] == 0) {
-      assert(ip->ext2.blocks == 0);
-      return;
-    }
-
-    ext2_block_free(ip->dev, ip->ext2.block[i]);
-    ip->ext2.block[i] = 0;
-    ip->ext2.blocks--;
-  }
-
-  if (ip->ext2.block[DIRECT_BLOCKS] == 0)
-    return;
-  
-  buf = buf_read(ip->ext2.block[DIRECT_BLOCKS], ip->dev);
-  a = (uint32_t *) buf->data;
-
-  for (i = 0; i < INDIRECT_BLOCKS; i++) {
-    if (a[i] == 0)
-      break;
-    
-    ext2_block_free(ip->dev, a[i]);
-    a[i] = 0;
-    ip->ext2.blocks--;
-  }
-
-  buf->flags |= BUF_DIRTY;
-  buf_release(buf);
-
-  ext2_block_free(ip->dev, ip->ext2.block[DIRECT_BLOCKS]);
-  ip->ext2.block[DIRECT_BLOCKS] = 0;
-  ip->ext2.blocks--;
-  
-  assert(ip->ext2.blocks == 0);
-
-  ip->size = 0;
-  ip->ctime = ip->mtime = rtc_get_time();
-  ip->flags |= FS_INODE_DIRTY;
-}
-
-ssize_t
-ext2_inode_read(struct Inode *ip, void *buf, size_t nbyte, off_t off)
-{
-  struct Buf *b;
-  uint32_t bno;
-  size_t total, nread;
-  uint8_t *dst;
-
-  if (nbyte == 0)
-    return 0;
-
-  dst = (uint8_t *) buf;
-  total = 0;
-  while (total < nbyte) {
-    nread = MIN(BLOCK_SIZE - (size_t) off % BLOCK_SIZE, nbyte - total);
-
-    bno = ext2_inode_block_map(ip, off / BLOCK_SIZE, 1);
-
-    if (bno == 0) {
-      memset(dst, 0, nread);
-    } else {
-      if ((b = buf_read(bno, ip->dev)) == NULL)
-        panic("cannot read the block");
-
-      memmove(dst, &((const uint8_t *) b->data)[off % BLOCK_SIZE], nread);
-
-      buf_release(b);
-    }
-
-    total += nread;
-    dst   += nread;
-    off   += nread;
-  }
-
-  ip->atime = rtc_get_time();
-  ip->flags |= FS_INODE_DIRTY;
-
-  return total;
-}
-
-ssize_t
-ext2_inode_write(struct Inode *ip, const void *buf, size_t nbyte, off_t off)
-{
-  struct Buf *b;
-  size_t total, nwrite;
-  const uint8_t *src;
-  uint32_t bno;
-
-  src = (const uint8_t *) buf;
-  total = 0;
-
-  while (total < nbyte) {
-    bno = ext2_inode_block_map(ip, off / BLOCK_SIZE, 1);
-    if ((b = buf_read(bno, ip->dev)) == NULL)
-      panic("cannot read the block");
-
-    nwrite = MIN(BLOCK_SIZE - (size_t) off % BLOCK_SIZE, nbyte - total);
-    memmove(&((uint8_t *) b->data)[off % BLOCK_SIZE], src, nwrite);
-
-    b->flags |= BUF_DIRTY;
-    buf_release(b);
-
-    total += nwrite;
-    src   += nwrite;
-    off   += nwrite;
-  }
-
-  if (total > 0) {
-    if (off > ip->size)
-      ip->size = off;
-
-    ip->mtime = rtc_get_time();
-    ip->flags |= FS_INODE_DIRTY;
-  }
-
-  return total;
-}
-
 static struct Inode *
-fs_inode_alloc(mode_t mode, dev_t dev, ino_t parent)
+fs_inode_alloc(mode_t mode, dev_t rdev, dev_t dev, ino_t parent)
 {
   uint32_t inum;
 
-  if (ext2_inode_alloc(mode, dev, &inum, parent) < 0)
+  if (ext2_inode_alloc(mode, rdev, dev, &inum, parent) < 0)
     return NULL;
 
   return fs_inode_get(inum, dev);
 }
 
 int
-ext2_create(struct Inode *dirp, char *name, mode_t mode, struct Inode **istore)
+ext2_create(struct Inode *dirp, char *name, mode_t mode, dev_t rdev,
+            struct Inode **istore)
 {
   struct Inode *ip;
   int r;
 
-  if ((ip = fs_inode_alloc(mode, dirp->dev, dirp->ino)) == NULL)
+  if ((ip = fs_inode_alloc(mode, rdev, dirp->dev, dirp->ino)) == NULL)
     return -ENOMEM;
 
   fs_inode_lock(ip);
@@ -414,7 +246,7 @@ ext2_inode_create(struct Inode *dirp, char *name, mode_t mode,
   struct Inode *ip;
   int r;
 
-  if ((r = ext2_create(dirp, name, mode, &ip)) != 0)
+  if ((r = ext2_create(dirp, name, mode, 0, &ip)) != 0)
     return r;
 
   ip->nlink = 1;
@@ -439,7 +271,7 @@ ext2_inode_mkdir(struct Inode *dirp, char *name, mode_t mode,
   if (dirp->nlink >= LINK_MAX)
     return -EMLINK;
 
-  if ((r = ext2_create(dirp, name, mode, &ip)) != 0)
+  if ((r = ext2_create(dirp, name, mode, 0, &ip)) != 0)
     return r;
 
   // Create the "." entry
@@ -470,7 +302,7 @@ ext2_inode_mknod(struct Inode *dirp, char *name, mode_t mode, dev_t dev,
   struct Inode *ip;
   int r;
 
-  if ((r = ext2_create(dirp, name, mode, &ip)) != 0)
+  if ((r = ext2_create(dirp, name, mode, dev, &ip)) != 0)
     return r;
 
   ip->nlink = 1;
@@ -500,6 +332,9 @@ ext2_dirent_read(struct Inode *dir, struct Ext2DirEntry *de, off_t off)
   ret = ext2_inode_read(dir, de->name, de->name_len, off + ret);
   if (ret != de->name_len)
     panic("Cannot read directory");
+
+  dir->atime  = rtc_get_time();
+  dir->flags |= FS_INODE_DIRTY;
 
   return 0;
 }
@@ -707,7 +542,7 @@ int
 ext2_inode_rmdir(struct Inode *dir, struct Inode *ip)
 {
   int r;
-  
+
   if (!ext2_dir_empty(ip))
     return -ENOTEMPTY;
 
@@ -719,131 +554,6 @@ ext2_inode_rmdir(struct Inode *dir, struct Inode *ip)
   dir->flags |= FS_INODE_DIRTY;
 
   return 0;
-}
-
-static uint32_t
-ext2_get_inode_block(struct Inode *ip, uint32_t *idx)
-{
-  struct Buf *buf;
-  struct Ext2BlockGroup *gd;
-  unsigned gds_per_block, inodes_per_block;
-  unsigned block_group, table_block, table_idx;
-  unsigned inode_table_idx, block;
-
-  // Determine which block group the inode belongs to
-  block_group = (ip->ino - 1) / ext2_sb.inodes_per_group;
-
-  // Read the Block Group Descriptor corresponding to the Block Group which
-  // contains the inode to be looked up
-  gds_per_block = BLOCK_SIZE / sizeof(struct Ext2BlockGroup);
-  table_block = 2 + (block_group / gds_per_block);
-  table_idx = (block_group % gds_per_block);
-
-  if ((buf = buf_read(table_block, ip->dev)) == NULL)
-    panic("cannot read the group descriptor table");
-
-  gd = (struct Ext2BlockGroup *) buf->data + table_idx;
-
-  // From the Block Group Descriptor, extract the location of the block
-  // group's inode table
-
-  // Determine the index of the inode in the inode table. 
-  inodes_per_block = BLOCK_SIZE / ext2_sb.inode_size;
-  inode_table_idx  = (ip->ino - 1) % ext2_sb.inodes_per_group;
-
-  *idx = inode_table_idx % inodes_per_block;
-
-  block = gd->inode_table + inode_table_idx / inodes_per_block;
-
-  buf_release(buf);
-
-  return block;
-}
-
-void
-ext2_read_inode(struct Inode *ip)
-{
-  struct Buf *buf;
-  struct Ext2Inode *raw;
-  unsigned inode_block, inode_block_idx;
-
-  inode_block = ext2_get_inode_block(ip, &inode_block_idx);
-
-  // Index the inode table (taking into account non-standard inode size)
-  if ((buf = buf_read(inode_block, ip->dev)) == NULL)
-    panic("cannot read the inode table");
-
-  raw = (struct Ext2Inode *) (buf->data + inode_block_idx * ext2_sb.inode_size);
-
-  ip->mode        = raw->mode;
-  ip->nlink       = raw->links_count;
-  ip->uid         = raw->uid;
-  ip->gid         = raw->gid;
-  ip->size        = raw->size;
-  ip->atime       = raw->atime;
-  ip->mtime       = raw->mtime;
-  ip->ctime       = raw->ctime;
-  ip->ext2.blocks = raw->blocks;
-  memmove(ip->ext2.block, raw->block, sizeof(ip->ext2.block));
-
-  buf_release(buf);
-
-  if (((ip->mode & EXT2_S_IFMASK) == EXT2_S_IFBLK) ||
-      ((ip->mode & EXT2_S_IFMASK) == EXT2_S_IFCHR)) {
-    if ((buf = buf_read(ip->ext2.block[0], ip->dev)) == NULL)
-      panic("cannot read the data block");
-
-    ip->rdev = *(uint16_t *) buf->data;
-
-    buf_release(buf);
-  }
-}
-
-void
-ext2_write_inode(struct Inode *ip)
-{
-  struct Buf *buf;
-  struct Ext2Inode *raw;
-  unsigned inode_block, inode_block_idx;
-
-  if (((ip->mode & EXT2_S_IFMASK) == EXT2_S_IFBLK) ||
-      ((ip->mode & EXT2_S_IFMASK) == EXT2_S_IFCHR)) {
-    if (ip->size == 0) {
-      if (ext2_block_alloc(ip->dev, &ip->ext2.block[0]) != 0)
-        panic("Cannot allocate block");
-      ip->size = sizeof(uint16_t);
-
-      if ((buf = buf_read(ip->ext2.block[0], ip->dev)) == NULL)
-        panic("cannot read the data block");
-
-      *(uint16_t *) buf->data = ip->rdev;
-
-      buf_release(buf);
-    }
-  }
-
-  inode_block = ext2_get_inode_block(ip, &inode_block_idx);
-
-  // Index the inode table (taking into account non-standard inode size)
-  if ((buf = buf_read(inode_block, ip->dev)) == NULL)
-    panic("cannot read the inode table");
-
-  raw = (struct Ext2Inode *) &buf->data[inode_block_idx * ext2_sb.inode_size];
-
-  raw->mode        = ip->mode;
-  raw->links_count = ip->nlink;
-  raw->uid         = ip->uid;
-  raw->gid         = ip->gid;
-  raw->size        = ip->size;
-  raw->atime       = ip->atime;
-  raw->mtime       = ip->mtime;
-  raw->ctime       = ip->ctime;
-  raw->blocks      = ip->ext2.blocks;
-  memmove(raw->block, ip->ext2.block, sizeof(ip->ext2.block));
-
-  buf->flags |= BUF_DIRTY;
-
-  buf_release(buf);
 }
 
 void
