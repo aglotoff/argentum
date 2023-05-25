@@ -90,7 +90,7 @@ ext2_block_alloc(dev_t dev, uint32_t *bstore)
   }
 
   if ((ext2_sb.free_blocks_count < ext2_sb.r_blocks_count) &&
-      (my_process->uid != 0)) {
+      (my_process->euid != 0)) {
     kmutex_unlock(&ext2_sb_mutex);
     return -ENOSPC;
   }

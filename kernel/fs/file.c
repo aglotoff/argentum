@@ -45,7 +45,7 @@ file_open(const char *path, int oflag, mode_t mode, struct File **fstore)
   f->type = FD_INODE;
 
   // TODO: the check and the file creation should be atomic
-  if ((r = fs_name_lookup(path, &ip)) < 0)
+  if ((r = fs_name_lookup(path, 0, &ip)) < 0)
     goto out1;
 
   if (ip == NULL) {

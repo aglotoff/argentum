@@ -21,7 +21,7 @@
  *         an error.
  */
 static uint32_t
-ext2_inode_get_location(struct Inode *inode, uint32_t *offset)
+ext2_locate_inode(struct Inode *inode, uint32_t *offset)
 {
   size_t block_size         = 1024U << ext2_sb.log_block_size;
   unsigned gds_per_block    = block_size / sizeof(struct Ext2BlockGroup);
@@ -63,14 +63,14 @@ ext2_read_inode(struct Inode *inode)
   struct Ext2Inode *raw;
   unsigned inode_block, inode_offset;
 
-  inode_block = ext2_inode_get_location(inode, &inode_offset);
+  inode_block = ext2_locate_inode(inode, &inode_offset);
 
-  // Index the inode table (taking into account non-standard inode size)
   if ((buf = buf_read(inode_block, inode->dev)) == NULL)
     return -EIO;
 
   raw = (struct Ext2Inode *) (buf->data + inode_offset);
 
+  // Read common fields
   inode->mode        = raw->mode;
   inode->nlink       = raw->links_count;
   inode->uid         = raw->uid;
@@ -79,6 +79,8 @@ ext2_read_inode(struct Inode *inode)
   inode->atime       = raw->atime;
   inode->mtime       = raw->mtime;
   inode->ctime       = raw->ctime;
+
+  // Read ext2-specific fields
   inode->ext2.blocks = raw->blocks;
   memmove(inode->ext2.block, raw->block, sizeof(inode->ext2.block));
 
@@ -94,7 +96,7 @@ ext2_write_inode(struct Inode *inode)
   struct Ext2Inode *raw;
   unsigned block, offset;
 
-  block = ext2_inode_get_location(inode, &offset);
+  block = ext2_locate_inode(inode, &offset);
 
   if ((buf = buf_read(block, inode->dev)) == NULL)
     return -EIO;
@@ -258,7 +260,7 @@ ext2_inode_trunc(struct Inode *inode)
 }
 
 ssize_t
-ext2_inode_read(struct Inode *inode, void *buf, size_t nbyte, off_t off)
+ext2_read(struct Inode *inode, void *buf, size_t nbyte, off_t off)
 {
   size_t block_size = (1024U << ext2_sb.log_block_size);
   size_t total, n;
@@ -293,7 +295,7 @@ ext2_inode_read(struct Inode *inode, void *buf, size_t nbyte, off_t off)
 }
 
 ssize_t
-ext2_inode_write(struct Inode *inode, const void *buf, size_t nbyte, off_t off)
+ext2_write(struct Inode *inode, const void *buf, size_t nbyte, off_t off)
 {
   size_t block_size = (1024U << ext2_sb.log_block_size);
   size_t total, n;

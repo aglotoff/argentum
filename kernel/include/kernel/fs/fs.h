@@ -56,7 +56,7 @@ struct Inode {
 extern struct Inode *fs_root;
 
 void          fs_init(void);
-int           fs_name_lookup(const char *, struct Inode **);
+int           fs_name_lookup(const char *, int, struct Inode **);
 
 struct Inode *fs_inode_get(ino_t ino, dev_t dev);
 void          fs_inode_put(struct Inode *);
@@ -64,8 +64,8 @@ struct Inode *fs_inode_duplicate(struct Inode *);
 void          fs_inode_lock(struct Inode *);
 void          fs_inode_unlock_put(struct Inode *);
 void          fs_inode_unlock(struct Inode *);
-int           fs_inode_lookup(struct Inode *, const char *, struct Inode **);
-int           fs_path_lookup(const char *, char *, struct Inode **, struct Inode **);
+int           fs_inode_lookup(struct Inode *, const char *, int, struct Inode **);
+int           fs_path_lookup(const char *, char *, int, struct Inode **, struct Inode **);
 ssize_t       fs_inode_read(struct Inode *, void *, size_t, off_t *);
 ssize_t       fs_inode_read_dir(struct Inode *, void *, size_t, off_t *);
 ssize_t       fs_inode_write(struct Inode *, const void *, size_t, off_t *);
@@ -75,13 +75,10 @@ int           fs_create(const char *, mode_t, dev_t, struct Inode **);
 void          fs_inode_cache_init(void);
 int           fs_inode_truncate(struct Inode *);
 int           fs_set_pwd(struct Inode *);
-int           fs_inode_can_read(struct Inode *);
-int           fs_inode_can_write(struct Inode *);
-int           fs_inode_can_execute(struct Inode *);
 
 int           fs_unlink(const char *);
 int           fs_rmdir(const char *);
-int           fs_permissions(struct Inode *, mode_t);
+int           fs_permission(struct Inode *, mode_t, int);
 int           fs_link(char *, char *);
 int           fs_chdir(const char *);
 int           fs_chmod(const char *path, mode_t);

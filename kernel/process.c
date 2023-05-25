@@ -249,8 +249,8 @@ process_create(const void *binary, struct Process **pstore)
   if ((r = process_load_binary(proc, binary)) < 0)
     goto fail3;
 
-  proc->uid   = 0;
-  proc->gid   = 0;
+  proc->ruid = proc->euid = 0;
+  proc->rgid = proc->egid = 0;
   proc->cmask = 0;
 
   task_resume(&proc->thread->task);
@@ -380,8 +380,10 @@ process_copy(void)
     child->files[fd] = current->files[fd] ? file_dup(current->files[fd]) : NULL;
   }
 
-  child->uid   = current->uid;
-  child->gid   = current->gid;
+  child->ruid  = current->ruid;
+  child->euid  = current->euid;
+  child->rgid  = current->rgid;
+  child->egid  = current->egid;
   child->cmask = current->cmask;
   child->cwd   = fs_inode_duplicate(current->cwd);
 
@@ -467,7 +469,7 @@ process_run(void)
 
     fs_init();
 
-    if ((proc->cwd == NULL) && (fs_name_lookup("/", &proc->cwd) < 0))
+    if ((proc->cwd == NULL) && (fs_name_lookup("/", 0, &proc->cwd) < 0))
       panic("root not found");
   }
 

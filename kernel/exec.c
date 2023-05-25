@@ -66,7 +66,7 @@ process_exec(const char *path, char *const argv[], char *const envp[])
   int r, argc;
   void *a;
 
-  if ((r = fs_name_lookup(path, &ip)) < 0)
+  if ((r = fs_name_lookup(path, 0, &ip)) < 0)
     return r;
   if (ip == NULL)
     return -ENOENT;
@@ -78,7 +78,7 @@ process_exec(const char *path, char *const argv[], char *const envp[])
     goto out1;
   }
 
-  if (!fs_permissions(ip, FS_PERM_EXEC)) {
+  if (!fs_permission(ip, FS_PERM_EXEC, 0)) {
     r = -EPERM;
     goto out1;
   }

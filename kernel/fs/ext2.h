@@ -165,8 +165,8 @@ int           ext2_inode_rmdir(struct Inode *, struct Inode *);
 int           ext2_inode_mknod(struct Inode *, char *, mode_t, dev_t,
                                struct Inode **);
 void          ext2_inode_trunc(struct Inode *);
-ssize_t       ext2_inode_read(struct Inode *, void *, size_t, off_t);
-ssize_t       ext2_inode_write(struct Inode *, const void *, size_t, off_t);
+ssize_t       ext2_read(struct Inode *, void *, size_t, off_t);
+ssize_t       ext2_write(struct Inode *, const void *, size_t, off_t);
 
 ssize_t       ext2_readdir(struct Inode *, void *, FillDirFunc, off_t);
 uint32_t      ext2_inode_get_block(struct Inode *, uint32_t, int);

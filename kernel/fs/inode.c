@@ -129,48 +129,6 @@ fs_inode_put(struct Inode *inode)
   spin_unlock(&inode_cache.lock);
 }
 
-int
-fs_inode_can_read(struct Inode *inode)
-{
-  struct Process *my_process = process_current();
-
-  if (my_process->uid == 0)
-    return 1;
-  if ((my_process->uid == inode->uid) && (inode->mode & S_IRUSR))
-    return 1;
-  if ((my_process->gid == inode->gid) && (inode->mode & S_IRGRP))
-    return 1;
-  return inode->mode & S_IROTH;
-}
-
-int
-fs_inode_can_write(struct Inode *inode)
-{
-  struct Process *my_process = process_current();
-
-  if (my_process->uid == 0)
-    return 1;
-  if ((my_process->uid == inode->uid) && (inode->mode & S_IWUSR))
-    return 1;
-  if ((my_process->gid == inode->gid) && (inode->mode & S_IWGRP))
-    return 1;
-  return inode->mode & S_IWOTH;
-}
-
-int
-fs_inode_can_execute(struct Inode *inode)
-{
-  struct Process *my_process = process_current();
-
-  if (my_process->uid == 0)
-    return inode->mode & (S_IXUSR | S_IXGRP | S_IXOTH);
-  if ((my_process->uid == inode->uid) && (inode->mode & S_IXUSR))
-    return 1;
-  if ((my_process->gid == inode->gid) && (inode->mode & S_IXGRP))
-    return 1;
-  return inode->mode & S_IXOTH;
-}
-
 static int
 fs_inode_holding(struct Inode *ip)
 {
@@ -232,7 +190,7 @@ fs_inode_read(struct Inode *ip, void *buf, size_t nbyte, off_t *off)
   if (!fs_inode_holding(ip))
     panic("not locked");
 
-  if (!fs_inode_can_read(ip))
+  if (!fs_permission(ip, FS_PERM_READ, 0))
     return -EPERM;
 
   // Read from the corresponding device
@@ -254,7 +212,7 @@ fs_inode_read(struct Inode *ip, void *buf, size_t nbyte, off_t *off)
   if (nbyte == 0)
     return 0;
 
-  if ((ret = ext2_inode_read(ip, buf, nbyte, *off)) < 0)
+  if ((ret = ext2_read(ip, buf, nbyte, *off)) < 0)
     return ret;
 
   ip->atime  = rtc_get_time();
@@ -273,7 +231,7 @@ fs_inode_write(struct Inode *ip, const void *buf, size_t nbyte, off_t *off)
   if (!fs_inode_holding(ip))
     panic("not locked");
 
-  if (!fs_inode_can_write(ip))
+  if (!fs_permission(ip, FS_PERM_WRITE, 0))
     return -EPERM;
 
   // Write to the corresponding device
@@ -293,7 +251,7 @@ fs_inode_write(struct Inode *ip, const void *buf, size_t nbyte, off_t *off)
   if (nbyte == 0)
     return 0;
 
-  total = ext2_inode_write(ip, buf, nbyte, *off);
+  total = ext2_write(ip, buf, nbyte, *off);
 
   if (total > 0) {
     *off += total;
@@ -335,7 +293,7 @@ fs_inode_read_dir(struct Inode *ip, void *buf, size_t nbyte, off_t *off)
   if (!fs_inode_holding(ip))
     panic("not locked");
 
-  if (!fs_inode_can_read(ip))
+  if (!fs_permission(ip, FS_PERM_READ, 0))
     return -EPERM;
 
   while (nbyte > 0) {
@@ -394,7 +352,7 @@ fs_inode_truncate(struct Inode *inode)
   if (!fs_inode_holding(inode))
     panic("not locked");
 
-  if (!fs_inode_can_write(inode))
+  if (!fs_permission(inode, FS_PERM_WRITE, 0))
     return -EPERM;
 
   ext2_inode_trunc(inode);
@@ -415,7 +373,7 @@ fs_inode_create(struct Inode *dir, char *name, mode_t mode, dev_t dev,
   
   if (!S_ISDIR(dir->mode))
     return -ENOTDIR;
-  if (!fs_inode_can_write(dir))
+  if (!fs_permission(dir, FS_PERM_WRITE, 0))
     return -EPERM;
 
   if (ext2_inode_lookup(dir, name) != NULL)
@@ -441,7 +399,7 @@ fs_inode_link(struct Inode *inode, struct Inode *dir, char *name)
   
   if (!S_ISDIR(dir->mode))
     return -ENOTDIR;
-  if (!fs_inode_can_write(dir))
+  if (!fs_permission(dir, FS_PERM_WRITE, 0))
     return -EPERM;
   
   // TODO: Allow links to directories?
@@ -457,7 +415,8 @@ fs_inode_link(struct Inode *inode, struct Inode *dir, char *name)
 }
 
 int
-fs_inode_lookup(struct Inode *dir, const char *name, struct Inode **istore)
+fs_inode_lookup(struct Inode *dir, const char *name, int real,
+                struct Inode **istore)
 {
   struct Inode *inode;
 
@@ -466,7 +425,7 @@ fs_inode_lookup(struct Inode *dir, const char *name, struct Inode **istore)
   
   if (!S_ISDIR(dir->mode))
     return -ENOTDIR;
-  if (!fs_inode_can_read(dir))
+  if (!fs_permission(dir, FS_PERM_READ, real))
     return -EPERM;
 
   inode = ext2_inode_lookup(dir, name);
@@ -489,7 +448,7 @@ fs_inode_unlink(struct Inode *dir, struct Inode *inode)
   
   if (!S_ISDIR(dir->mode))
     return -ENOTDIR;
-  if (!fs_inode_can_write(dir))
+  if (!fs_permission(dir, FS_PERM_WRITE, 0))
     return -EPERM;
 
   // TODO: Allow links to directories?
@@ -509,7 +468,7 @@ fs_inode_rmdir(struct Inode *dir, struct Inode *inode)
   
   if (!S_ISDIR(dir->mode))
     return -ENOTDIR;
-  if (!fs_inode_can_write(dir))
+  if (!fs_permission(dir, FS_PERM_WRITE, 0))
     return -EPERM;
 
   // TODO: Allow links to directories?
@@ -526,7 +485,7 @@ fs_create(const char *path, mode_t mode, dev_t dev, struct Inode **istore)
   char name[NAME_MAX + 1];
   int r;
 
-  if ((r = fs_path_lookup(path, name, NULL, &dir)) < 0)
+  if ((r = fs_path_lookup(path, name, 0, NULL, &dir)) < 0)
     return r;
 
   mode &= ~process_current()->cmask;
@@ -576,10 +535,10 @@ fs_link(char *path1, char *path2)
   char name[NAME_MAX + 1];
   int r;
 
-  if ((r = fs_name_lookup(path1, &ip)) < 0)
+  if ((r = fs_name_lookup(path1, 0, &ip)) < 0)
     return r;
 
-  if ((r = fs_path_lookup(path2, name, NULL, &dirp)) < 0)
+  if ((r = fs_path_lookup(path2, name, 0, NULL, &dirp)) < 0)
     goto out1;
 
   // TODO: check for the same node?
@@ -603,7 +562,7 @@ fs_unlink(const char *path)
   char name[NAME_MAX + 1];
   int r;
 
-  if ((r = fs_path_lookup(path, name, &ip, &dir)) < 0)
+  if ((r = fs_path_lookup(path, name, 0, &ip, &dir)) < 0)
     return r;
 
   if (ip == NULL) {
@@ -628,7 +587,7 @@ fs_rmdir(const char *path)
   char name[NAME_MAX + 1];
   int r;
 
-  if ((r = fs_path_lookup(path, name, &ip, &dir)) < 0)
+  if ((r = fs_path_lookup(path, name, 0, &ip, &dir)) < 0)
     return r;
 
   if (ip == NULL) {
@@ -657,7 +616,7 @@ fs_set_pwd(struct Inode *inode)
     fs_inode_unlock(inode);
     return -ENOTDIR;
   }
-  if (!fs_inode_can_execute(inode)) {
+  if (!fs_permission(inode, FS_PERM_EXEC, 0)) {
     fs_inode_unlock(inode);
     return -EPERM;
   }
@@ -676,7 +635,7 @@ fs_chdir(const char *path)
   struct Inode *ip;
   int r;
 
-  if ((r = fs_name_lookup(path, &ip)) < 0)
+  if ((r = fs_name_lookup(path, 0, &ip)) < 0)
     return r;
 
   if ((r = fs_set_pwd(ip)) != 0)
@@ -695,7 +654,7 @@ fs_inode_chmod(struct Inode *ip, mode_t mode)
   if (!fs_inode_holding(ip))
     panic("not holding");
 
-  if ((current->uid != 0) && (ip->uid != current->uid))
+  if ((current->euid != 0) && (ip->uid != current->euid))
     return -EPERM;
 
   // TODO: additional permission checks
@@ -713,7 +672,7 @@ fs_chmod(const char *path, mode_t mode)
   struct Inode *ip;
   int r;
 
-  if ((r = fs_name_lookup(path, &ip)) < 0)
+  if ((r = fs_name_lookup(path, 0, &ip)) < 0)
     return r;
   
   fs_inode_lock(ip);
@@ -725,16 +684,22 @@ fs_chmod(const char *path, mode_t mode)
   return r;
 }
 
-
-
 int
-fs_permissions(struct Inode *inode, mode_t mode)
+fs_permission(struct Inode *inode, mode_t mode, int real)
 {
-  struct Process *proc = process_current();
+  struct Process *my_process = process_current();
 
-  if (proc->uid == inode->uid)
+  uid_t uid = real ? my_process->ruid : my_process->euid;
+  gid_t gid = real ? my_process->rgid : my_process->egid;
+
+  if (uid == 0)
+    return (mode & FS_PERM_EXEC)
+      ? ((inode->mode & (S_IXUSR | S_IXGRP | S_IXOTH)) != 0)
+      : 1;
+
+  if (uid == inode->uid)
     mode <<= 6;
-  else if (proc->gid == inode->gid)
+  else if (gid == inode->gid)
     mode <<= 3;
 
   return (inode->mode & mode) == mode;

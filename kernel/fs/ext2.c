@@ -225,7 +225,7 @@ ext2_create(struct Inode *dirp, char *name, mode_t mode, dev_t rdev,
 
   fs_inode_lock(ip);
 
-  ip->uid = process_current()->uid;
+  ip->uid = process_current()->euid;
   ip->gid = dirp->gid;
 
   if ((r = ext2_inode_link(dirp, name, ip)))
@@ -325,11 +325,11 @@ ext2_dirent_read(struct Inode *dir, struct Ext2DirEntry *de, off_t off)
 {
   ssize_t ret;
 
-  ret = ext2_inode_read(dir, de, DE_NAME_OFFSET, off);
+  ret = ext2_read(dir, de, DE_NAME_OFFSET, off);
   if (ret != DE_NAME_OFFSET)
     panic("Cannot read directory");
 
-  ret = ext2_inode_read(dir, de->name, de->name_len, off + ret);
+  ret = ext2_read(dir, de->name, de->name_len, off + ret);
   if (ret != de->name_len)
     panic("Cannot read directory");
 
@@ -344,7 +344,7 @@ ext2_dirent_write(struct Inode *dir, struct Ext2DirEntry *de, off_t off)
 {
   size_t ret;
 
-  ret = ext2_inode_write(dir, de, DE_NAME_OFFSET + de->name_len, off);
+  ret = ext2_write(dir, de, DE_NAME_OFFSET + de->name_len, off);
   if (ret != (DE_NAME_OFFSET + de->name_len))
     panic("Cannot read directory");
 

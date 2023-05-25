@@ -48,8 +48,8 @@ fs_path_next(const char *path, char *name_buf, char **result)
 }
 
 int
-fs_path_lookup(const char *path, char *name_buf, struct Inode **istore,
-               struct Inode **pstore)
+fs_path_lookup(const char *path, char *name_buf, int real, 
+               struct Inode **istore, struct Inode **pstore)
 {
   struct Inode *parent, *current;
   int r;
@@ -70,7 +70,7 @@ fs_path_lookup(const char *path, char *name_buf, struct Inode **istore,
     parent = current;
 
     fs_inode_lock(parent);
-    r = fs_inode_lookup(parent, name_buf, &current);
+    r = fs_inode_lookup(parent, name_buf, real, &current);
     fs_inode_unlock(parent);
 
     if (r < 0)
@@ -99,7 +99,7 @@ fs_path_lookup(const char *path, char *name_buf, struct Inode **istore,
 }
 
 int
-fs_name_lookup(const char *path, struct Inode **ip)
+fs_name_lookup(const char *path, int real, struct Inode **ip)
 {
   char name_buf[NAME_MAX + 1];
 
@@ -108,7 +108,7 @@ fs_name_lookup(const char *path, struct Inode **ip)
     return 0;
   }
 
-  return fs_path_lookup(path, name_buf, ip, NULL);
+  return fs_path_lookup(path, name_buf, real, ip, NULL);
 }
 
 void

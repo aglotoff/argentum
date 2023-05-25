@@ -59,10 +59,14 @@ struct Process {
   /** Exit code */
   int                   exit_code;
 
-  /** User ID */
-  uid_t                 uid;
-  /** Group ID */
-  gid_t                 gid;
+  /** Real user ID */
+  uid_t                 ruid;
+  /** Effective user ID */
+  uid_t                 euid;
+  /** Real group ID */
+  gid_t                 rgid;
+  /** Effective group ID */
+  gid_t                 egid;
   /** File mode creation mask */
   mode_t                cmask;
   /** Open file descriptors */
