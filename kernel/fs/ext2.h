@@ -164,7 +164,7 @@ int           ext2_inode_mkdir(struct Inode *, char *, mode_t,
 int           ext2_inode_rmdir(struct Inode *, struct Inode *);
 int           ext2_inode_mknod(struct Inode *, char *, mode_t, dev_t,
                                struct Inode **);
-void          ext2_inode_trunc(struct Inode *);
+void          ext2_inode_trunc(struct Inode *, off_t);
 ssize_t       ext2_read(struct Inode *, void *, size_t, off_t);
 ssize_t       ext2_write(struct Inode *, const void *, size_t, off_t);
 

@@ -355,7 +355,7 @@ fs_inode_truncate(struct Inode *inode)
   if (!fs_permission(inode, FS_PERM_WRITE, 0))
     return -EPERM;
 
-  ext2_inode_trunc(inode);
+  ext2_inode_trunc(inode, 0);
   
   inode->size = 0;
   inode->ctime = inode->mtime = rtc_get_time();
