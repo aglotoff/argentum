@@ -46,6 +46,11 @@ LIB_SRCFILES += \
 	lib/float/__fvalues.c
 
 LIB_SRCFILES += \
+	lib/locale/_C_locale.c \
+	lib/locale/localeconv.c \
+	lib/locale/setlocale.c
+
+LIB_SRCFILES += \
 	lib/math/__math_classify_double.c \
 	lib/math/__math_log.c \
 	lib/math/__math_normalize_double.c \
