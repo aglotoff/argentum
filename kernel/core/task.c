@@ -11,10 +11,8 @@
 static void task_run(void);
 void context_switch(struct Context **, struct Context *);
 
-static struct {
-  struct ListLink queue[TASK_MAX_PRIORITIES];
-  struct SpinLock lock;
-} sched;
+static struct ListLink sched_queue[TASK_MAX_PRIORITIES];
+struct SpinLock __sched_lock = SPIN_INITIALIZER("sched");
 
 /**
  * Initialize the scheduler data structures.
@@ -27,19 +25,17 @@ sched_init(void)
   int i;
 
   for (i = 0; i < TASK_MAX_PRIORITIES; i++)
-    list_init(&sched.queue[i]);
-
-  spin_init(&sched.lock, "sched");
+    list_init(&sched_queue[i]);
 }
 
 // Add the specified task to the run queue with the corresponding priority
 static void
 sched_enqueue(struct Task *th)
 {
-  assert(spin_holding(&sched.lock));
+  assert(spin_holding(&__sched_lock));
 
   th->state = TASK_STATE_READY;
-  list_add_back(&sched.queue[th->priority], &th->link);
+  list_add_back(&sched_queue[th->priority], &th->link);
 }
 
 // Retrieve the highest-priority task from the run queue
@@ -49,11 +45,11 @@ sched_dequeue(void)
   struct ListLink *link;
   int i;
   
-  assert(spin_holding(&sched.lock));
+  assert(spin_holding(&__sched_lock));
 
   for (i = 0; i < TASK_MAX_PRIORITIES; i++) {
-    if (!list_empty(&sched.queue[i])) {
-      link = sched.queue[i].next;
+    if (!list_empty(&sched_queue[i])) {
+      link = sched_queue[i].next;
       list_remove(link);
 
       return LIST_CONTAINER(link, struct Task, link);
@@ -71,7 +67,7 @@ sched_start(void)
 {
   struct Cpu *my_cpu;
 
-  spin_lock(&sched.lock);
+  sched_lock();
 
   my_cpu = cpu_current();
 
@@ -87,6 +83,8 @@ sched_start(void)
         hooks->prepare_switch(next);
 
       next->state = TASK_STATE_RUNNING;
+
+      next->u.running.cpu = my_cpu;
       my_cpu->task = next;
 
       context_switch(&my_cpu->scheduler, next->context);
@@ -97,22 +95,22 @@ sched_start(void)
         hooks->finish_switch(next);
 
       // Perform cleanup for the exited task
-      if (next->state == TASK_STATE_ZOMBIE) {
-        next->state = TASK_STATE_UNUSED;
+      if ((next->state == TASK_STATE_DESTROYED) && (next->destroyer == NULL)) {
+        next->state = TASK_STATE_NONE;
 
         if ((hooks != NULL) && (hooks->destroy != NULL)) {
-          spin_unlock(&sched.lock);
+          sched_unlock();
           hooks->destroy(next);
-          spin_lock(&sched.lock);
+          sched_lock();
         }
       }
     } else {
-      spin_unlock(&sched.lock);
+      sched_unlock();
 
       cpu_irq_enable();
       asm volatile("wfi");
 
-      spin_lock(&sched.lock);
+      sched_lock();
     }
   }
 }
@@ -123,7 +121,7 @@ sched_yield(void)
 {
   int irq_flags;
 
-  assert(spin_holding(&sched.lock));
+  assert(spin_holding(&__sched_lock));
 
   irq_flags = cpu_current()->irq_flags;
   context_switch(&task_current()->context, cpu_current()->scheduler);
@@ -147,7 +145,7 @@ sched_isr_exit(void)
 {
   struct Cpu *my_cpu;
 
-  spin_lock(&sched.lock);
+  sched_lock();
 
   my_cpu = cpu_current();
 
@@ -157,22 +155,31 @@ sched_isr_exit(void)
   if (--my_cpu->isr_nesting == 0) {
     struct Task *my_task = my_cpu->task;
 
+    // Before resuming the current task, check whether it must give up the CPU
+    // or exit.
     if (my_task != NULL) {
-      // Before resuming the current task, check whether it must give up the
-      // CPU due to a higher-priority task becoming available or due to time
-      // quanta exhaustion.
-      if (my_task->flags & TASK_FLAGS_RESCHEDULE) {
+      if ((my_task->flags & TASK_FLAGS_DESTROY) &&
+          (my_task->protect_count == 0)) {
+        task_cleanup(my_task);
+
+        if (my_task->destroyer != NULL)
+          sched_enqueue(my_task->destroyer);
+
+        sched_yield();
+        panic("should not return");
+      }
+
+      if ((my_task->flags & TASK_FLAGS_RESCHEDULE) &&
+          (my_task->lock_count == 0)) {
         my_task->flags &= ~TASK_FLAGS_RESCHEDULE;
 
         sched_enqueue(my_task);
         sched_yield();
       }
-
-      // TODO: the task could also be marked for desruction?
     }
   }
 
-  spin_unlock(&sched.lock);
+  sched_unlock();
 }
 
 /**
@@ -186,9 +193,9 @@ sched_tick(void)
   // Tell the scheduler that the current task has used up its time slice
   // TODO: add support for more complex sheculing policies
   if (current_task != NULL) {
-    spin_lock(&sched.lock);
+    sched_lock();
     current_task->flags |= TASK_FLAGS_RESCHEDULE;
-    spin_unlock(&sched.lock);
+    sched_unlock();
   }
 }
 
@@ -226,11 +233,14 @@ int
 task_init(struct Task *task, void (*entry)(void), int priority, uint8_t *stack,
           struct TaskHooks *hooks)
 {
-  task->flags = 0;
-  task->priority = priority;
-  task->state = TASK_STATE_SUSPENDED;
-  task->entry = entry;
-  task->hooks = hooks;
+  task->flags         = 0;
+  task->priority      = priority;
+  task->state         = TASK_STATE_SUSPENDED;
+  task->entry         = entry;
+  task->hooks         = hooks;
+  task->destroyer     = NULL;
+  task->lock_count    = 0;
+  task->protect_count = 0;
 
   stack -= sizeof *task->context;
   task->context = (struct Context *) stack;
@@ -252,28 +262,51 @@ task_destroy(struct Task *task)
   if (task == NULL)
     task = my_task;
 
-  spin_lock(&sched.lock);
+  sched_lock();
 
-  // TODO: state-specific cleanup
+  if ((task == NULL) || (task->flags & TASK_FLAGS_DESTROY)) {
+    // TODO: report an error if task is NULL
+    sched_unlock();
+    return;
+  }
 
-  // Cleanup for the current task will be performed from the scheduler context
   if (task == my_task) {
-    task->state = TASK_STATE_ZOMBIE;
+    // TODO: what if protect_lock > 0?
+
+    task_cleanup(task);
+
     sched_yield();
     panic("should not return");
   }
 
-  if (task->state == TASK_STATE_RUNNING) {
-    // TODO: the task is executing on another CPU! send IPI in this case
-    panic("not implmented");
+  if ((task->state == TASK_STATE_RUNNING) || (task->protect_count > 0)) {
+    task->flags |= TASK_FLAGS_DESTROY;
+
+    if (task->protect_count == 0)
+      irq_ipi();
+
+    if (my_task == NULL) {
+      sched_unlock();
+      return;
+    }
+
+    task->destroyer = my_task;
+
+    my_task->state = TASK_STATE_DESTROY;
+    my_task->u.destroy.task = task;
+
+    sched_yield();
+  } else {
+    task_cleanup(task);
   }
 
-  task->state = TASK_STATE_UNUSED;
+  task->state = TASK_STATE_NONE;
 
   hooks = task->hooks;
 
-  spin_unlock(&sched.lock);
+  sched_unlock();
 
+  // Execute the "destroy" hook in the context of the current task
   if ((hooks != NULL) && (hooks->destroy != NULL))
     hooks->destroy(task);
 }
@@ -289,12 +322,12 @@ task_yield(void)
   if (current == NULL)
     panic("no current task");
 
-  spin_lock(&sched.lock);
+  sched_lock();
 
   sched_enqueue(current);
   sched_yield();
 
-  spin_unlock(&sched.lock);
+  sched_unlock();
 }
 
 // Execution of each task begins here.
@@ -302,13 +335,16 @@ static void
 task_run(void)
 {
   // Still holding the scheduler lock (acquired in sched_start)
-  spin_unlock(&sched.lock);
+  sched_unlock();
 
   // Make sure IRQs are enabled
   cpu_irq_enable();
 
   // Jump to the task entry point
   task_current()->entry();
+
+  // Destroy the task on exit
+  task_destroy(NULL);
 }
 
 // Compare task priorities. Note that a smaller priority value corresponds
@@ -324,25 +360,41 @@ task_priority_cmp(struct Task *t1, struct Task *t2)
 // Check whether a reschedule is required (taking into account the priority
 // of a task most recently added to the run queue)
 static void
-task_check_resched(struct Task *recent)
+sched_may_yield(struct Task *candidate)
 {
   struct Cpu *my_cpu;
   struct Task *my_task;
 
-  assert(spin_holding(&sched.lock));
+  assert(spin_holding(&__sched_lock));
 
   my_cpu  = cpu_current();
   my_task = my_cpu->task;
 
-  if ((my_task != NULL) && (task_priority_cmp(recent, my_task) > 0)) {
-    if (my_cpu->isr_nesting > 0) {
-      // Cannot yield inside an ISR handler, delay until the last call to
-      // sched_isr_exit()
+  if ((my_task != NULL) && (task_priority_cmp(candidate, my_task) > 0)) {
+    if ((my_cpu->isr_nesting > 0) || (my_task->lock_count > 0)) {
+      // Cannot yield right now, delay until the last call to sched_isr_exit()
+      // or task_unlock().
       my_task->flags |= TASK_FLAGS_RESCHEDULE;
     } else {
       sched_enqueue(my_task);
       sched_yield();
     }
+  }
+}
+
+void
+sched_wakeup_all(struct ListLink *task_list)
+{
+  assert(spin_holding(&__sched_lock));
+  
+  while (!list_empty(task_list)) {
+    struct ListLink *link = task_list->next;
+    struct Task *task = LIST_CONTAINER(link, struct Task, link);
+
+    list_remove(link);
+
+    sched_enqueue(task);
+    sched_may_yield(task);
   }
 }
 
@@ -355,20 +407,22 @@ task_check_resched(struct Task *recent)
 int
 task_resume(struct Task *task)
 {
-  spin_lock(&sched.lock);
+  sched_lock();
 
   if (task->state != TASK_STATE_SUSPENDED) {
-    spin_unlock(&sched.lock);
+    sched_unlock();
     return -EINVAL;
   }
 
   sched_enqueue(task);
-  task_check_resched(task);
+  sched_may_yield(task);
 
-  spin_unlock(&sched.lock);
+  sched_unlock();
 
   return 0;
 }
+
+
 
 /**
  * Put the current task into sleep.
@@ -382,24 +436,25 @@ task_sleep(struct ListLink *queue, int state, struct SpinLock *lock)
 {
   struct Task *current = task_current();
 
-  // someone may call this function while holding sched.lock?
-  if (lock != &sched.lock) {
-    spin_lock(&sched.lock);
+  // someone may call this function while holding __sched_lock?
+  if (lock != &__sched_lock) {
+    sched_lock();
     if (lock != NULL)
       spin_unlock(lock);
   }
 
-  assert(spin_holding(&sched.lock));
+  assert(spin_holding(&__sched_lock));
+
+  current->state = state;
 
   if (queue != NULL)
     list_add_back(queue, &current->link);
 
-  current->state = state;
   sched_yield();
 
-  // someone may call this function while holding sched.lock?
-  if (lock != &sched.lock) {
-    spin_unlock(&sched.lock);
+  // someone may call this function while holding __sched_lock?
+  if (lock != &__sched_lock) {
+    sched_unlock();
     if (lock != NULL)
       spin_lock(lock);
   }
@@ -418,7 +473,7 @@ task_wakeup_one(struct ListLink *queue)
 
   highest = NULL;
 
-  spin_lock(&sched.lock);
+  sched_lock();
 
   LIST_FOREACH(queue, l) {
     struct Task *t = LIST_CONTAINER(l, struct Task, link);
@@ -431,10 +486,10 @@ task_wakeup_one(struct ListLink *queue)
     list_remove(&highest->link);
     sched_enqueue(highest);
 
-    task_check_resched(highest);
+    sched_may_yield(highest);
   }
 
-  spin_unlock(&sched.lock);
+  sched_unlock();
 }
 
 /**
@@ -445,20 +500,99 @@ task_wakeup_one(struct ListLink *queue)
 void
 task_wakeup_all(struct ListLink *queue)
 {
-  spin_lock(&sched.lock);
+  sched_lock();
+  sched_wakeup_all(queue);
+  sched_unlock();
+}
 
-  while (!list_empty(queue)) {
-    struct ListLink *l;
-    struct Task *t;
+void
+task_lock(struct Task *task)
+{
+  if ((task == NULL) && ((task = task_current()) == NULL))
+    panic("no current task");
 
-    l = queue->next;
-    list_remove(l);
+  sched_lock();
+  task->lock_count++;
+  sched_unlock();
+}
 
-    t = LIST_CONTAINER(l, struct Task, link);
-    sched_enqueue(t);
+void
+task_unlock(struct Task *task)
+{
+  struct Task *my_task = task_current();
 
-    task_check_resched(t);
+  if ((task == NULL) && ((task = my_task) == NULL))
+    panic("no current task");
+
+  sched_lock();
+
+  if ((--task->lock_count == 0) && (task->flags & TASK_FLAGS_RESCHEDULE)) {
+    if (task == my_task) {
+      if (cpu_current()->isr_nesting == 0) {
+        sched_enqueue(task);
+        sched_yield();
+      }
+    } else if (task->state == TASK_STATE_RUNNING) {
+      irq_ipi();
+    }
   }
 
-  spin_unlock(&sched.lock);
+  sched_unlock();
+}
+
+void
+task_protect(struct Task *task)
+{
+  if ((task == NULL) && ((task = task_current()) == NULL))
+    panic("no current task");
+
+  sched_lock();
+  task->protect_count++;
+  sched_unlock();
+}
+
+void
+task_cleanup(struct Task *task)
+{
+  switch (task->state) {
+  case TASK_STATE_DESTROY:
+    task->u.destroy.task->destroyer = NULL;
+    break;
+  // TODO: other states
+  default:
+    break;
+  }
+
+  task->state = TASK_STATE_DESTROYED;
+}
+
+void
+task_unprotect(struct Task *task)
+{
+  struct Task *my_task = task_current();
+
+  if ((task == NULL) && ((task = my_task) == NULL))
+    panic("no current task");
+
+  sched_lock();
+
+  if ((--task->protect_count > 0) || !(task->flags & TASK_FLAGS_DESTROY)) {
+    // Nothing to do
+    sched_unlock();
+    return;
+  }
+
+  task_cleanup(task);
+
+  if (task->destroyer != NULL)
+    sched_enqueue(task->destroyer);
+
+  if (task == my_task) {
+    sched_yield();
+    panic("should not return");
+  } else if (task->destroyer != NULL) {
+    sched_may_yield(task->destroyer);
+  }
+
+  sched_unlock();
 }

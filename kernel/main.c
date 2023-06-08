@@ -65,7 +65,7 @@ main(void)
   sched_init();         // Scheduler
   process_init();       // Process table
 
-  //core_test();
+  // core_test();
 
   // Unblock other CPUs
   bsp_started = 1;    
@@ -97,35 +97,49 @@ mp_main(void)
   sched_start();   
 }
 
-// uint8_t th1_stack[4096];
-// uint8_t th2_stack[4096];
+struct Task th1, th2;
 
-// static void
-// th1_func(void)
-// {
-//   //cpu_irq_enable();
+static uint8_t th1_stack[4096];
+static uint8_t th2_stack[4096];
 
-//   for (;;)
-//     cprintf("AAAAA");
-// }
+static void
+on_task_destroy(struct Task *t)
+{
+  (void) t;
 
-// static void
-// th2_func(void)
-// {
-//   //cpu_irq_enable();
+  cprintf("Task destroyed\n");
+}
 
-//   for (;;)
-//     cprintf("BBBBB");
-// }
+struct TaskHooks hooks = {
+  .destroy = on_task_destroy,
+};
 
-// void
-// core_test(void)
-// {
-//   struct Task *th1, *th2;
+static void
+th1_func(void)
+{
+  int i;
 
-//   th1 = task_init(NULL, th1_func, 0, th1_stack + 4096);
-//   task_resume(th1);
+  for (i = 0; i < 200000; i++)
+    task_yield();
+}
 
-//   th2 = task_init(NULL, th2_func, 0, th2_stack + 4096);
-//   task_resume(th2);
-// }
+static void
+th2_func(void)
+{
+  int i;
+
+  for (i = 0; i < 2000; i++)
+    task_yield();
+
+  task_destroy(&th1);
+}
+
+void
+core_test(void)
+{
+  task_init(&th1, th1_func, 0, th1_stack + 4096, &hooks);
+  task_resume(&th1);
+
+  task_init(&th2, th2_func, 0, th2_stack + 4096, &hooks);
+  task_resume(&th2);
+}

@@ -20,5 +20,6 @@ void     gic_enable(struct Gic *, unsigned, unsigned);
 void     gic_disable(struct Gic *, unsigned);
 unsigned gic_intid(struct Gic *);
 void     gic_eoi(struct Gic *, unsigned);
+void     gic_sgi(struct Gic *, unsigned);
 
 #endif  // !__KERNEL_GIC_H__

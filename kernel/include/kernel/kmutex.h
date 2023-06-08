@@ -21,11 +21,9 @@ struct Task;
  */
 struct KMutex {
   /** The task currently holding the mutex. */
-  struct Task   *owner;
+  struct Task      *owner;
   /** List of tasks waiting for this mutex to be released. */
   struct ListLink   queue;
-  /** Spinlock protecting the mutex. */
-  struct SpinLock   lock;
   /** Mutex name (for debugging purposes). */
   const char       *name;
 };

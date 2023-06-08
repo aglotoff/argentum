@@ -22,6 +22,18 @@ ptimer_irq(void)
   sched_tick();
 }
 
+static void
+ipi_irq(void)
+{
+  return;
+}
+
+void
+irq_ipi(void)
+{
+  gic_sgi(&gic, 0);
+}
+
 void
 irq_init(void)
 {
@@ -29,6 +41,7 @@ irq_init(void)
   ptimer_init(&ptimer, PA2KVA(PHYS_PTIMER));
 
   irq_attach(IRQ_PTIMER, ptimer_irq, cp15_mpidr_get() & 0x3);
+  irq_attach(0, ipi_irq, cp15_mpidr_get() & 0x3);
 }
 
 void
@@ -38,6 +51,7 @@ irq_init_percpu(void)
   ptimer_init_percpu(&ptimer);
 
   gic_enable(&gic, IRQ_PTIMER, cp15_mpidr_get() & 0x3);
+  gic_enable(&gic, 0, cp15_mpidr_get() & 0x3);
 }
 
 static void (*irq_handlers[IRQ_MAX])(void);

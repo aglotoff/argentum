@@ -14,5 +14,6 @@ void         irq_init(void);
 void         irq_init_percpu(void);
 void         irq_dispatch(void);
 int          irq_attach(int, void (*)(void), int);
+void         irq_ipi(void);
 
 #endif  // !__KERNEL_INCLUDE_KERNEL_IRQ_H__

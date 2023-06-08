@@ -76,11 +76,17 @@ gic_disable(struct Gic *gic, unsigned irq)
 unsigned
 gic_intid(struct Gic *gic)
 {
-  return gic->icc[ICCIAR];
+  return gic->icc[ICCIAR] & 0x3FF;
 }
 
 void
 gic_eoi(struct Gic *gic, unsigned irq)
 {
   gic->icc[ICCEOIR] = irq;
+}
+
+void
+gic_sgi(struct Gic *gic, unsigned irq)
+{
+  gic->icd[ICDSGIR] = (1 << 24) | (0xF << 16) | irq;
 }
