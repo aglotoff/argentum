@@ -14,6 +14,8 @@ void context_switch(struct Context **, struct Context *);
 static struct ListLink sched_queue[TASK_MAX_PRIORITIES];
 struct SpinLock __sched_lock = SPIN_INITIALIZER("sched");
 
+static void task_sleep_callback(void *arg);
+
 /**
  * Initialize the scheduler data structures.
  * 
@@ -242,6 +244,8 @@ task_create(struct Task *task, void (*entry)(void), int priority, uint8_t *stack
   task->lock_count    = 0;
   task->protect_count = 0;
 
+  ktimer_create(&task->timer, task_sleep_callback, task, 0, 0, 0);
+
   stack -= sizeof *task->context;
   task->context = (struct Context *) stack;
   memset(task->context, 0, sizeof *task->context);
@@ -392,6 +396,7 @@ sched_wakeup_all(struct ListLink *task_list)
     struct Task *task = LIST_CONTAINER(link, struct Task, link);
 
     list_remove(link);
+    ktimer_stop(&task->timer);
 
     sched_enqueue(task);
     sched_may_yield(task);
@@ -559,12 +564,13 @@ task_cleanup(struct Task *task)
     task->u.destroy.task->destroyer = NULL;
     break;
   case TASK_STATE_SLEEPING:
-    ktimer_destroy(&task->timer);
     break;
   // TODO: other states
   default:
     break;
   }
+
+  ktimer_destroy(&task->timer);
 
   task->state = TASK_STATE_DESTROYED;
 }
@@ -609,6 +615,16 @@ task_sleep_callback(void *arg)
 
   sched_lock();
 
+  switch (task->state) {
+  case TASK_STATE_SEMAPHORE:
+    task->u.semaphore.result = -ETIMEDOUT;
+    // fall through
+  case TASK_STATE_SLEEPING:
+    sched_enqueue(task);
+    sched_may_yield(task);
+    break;
+  }
+
   if (task->state == TASK_STATE_SLEEPING) {
     sched_enqueue(task);
     sched_may_yield(task);
@@ -632,12 +648,11 @@ task_delay(unsigned long delay)
   if (my_task->lock_count > 0)
     panic("locked");
 
-  ktimer_create(&my_task->timer, task_sleep_callback, my_task, delay, 0, 1);
+  my_task->timer.remain = delay;
+  ktimer_start(&my_task->timer);
 
   my_task->state = TASK_STATE_SLEEPING;
   sched_yield();
-
-  ktimer_destroy(&my_task->timer);
 
   sched_unlock();
 }

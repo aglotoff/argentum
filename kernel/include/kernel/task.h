@@ -20,7 +20,8 @@ enum {
   TASK_STATE_RUNNING,
   TASK_STATE_MUTEX,
   TASK_STATE_SLEEPING_WCHAN,
-  TASK_STATE_SLEEPING,      
+  TASK_STATE_SLEEPING,    
+  TASK_STATE_SEMAPHORE,  
   TASK_STATE_SUSPENDED,
   TASK_STATE_DESTROY,
   TASK_STATE_DESTROYED,
@@ -92,6 +93,9 @@ struct Task {
     struct {
       struct Task *task;
     } destroy;
+    struct {
+      int result;
+    } semaphore;
   } u;
 };
 

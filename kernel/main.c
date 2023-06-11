@@ -11,6 +11,7 @@
 #include <kernel/fs/buf.h>
 #include <kernel/fs/file.h>
 #include <kernel/irq.h>
+#include <kernel/ksemaphore.h>
 #include <kernel/ktimer.h>
 #include <kernel/mm/kmem.h>
 #include <kernel/mm/mmu.h>
@@ -129,36 +130,38 @@ timer_func2(void *a)
   ktimer_destroy((struct KTimer *) a);
 }
 
+struct KSemaphore sem;
+
 static void
 th1_func(void)
 {
   int i;
 
-  // ktimer_create(&tmr1, timer_func, (void *) 1, 10, 100, 1);
-  // ktimer_create(&tmr2, timer_func, (void *) 2, 10, 100, 1);
+  i = ksem_get(&sem, 100);
 
-  // ktimer_create(&tmr3, timer_func2, &tmr2, 3000, 0, 1);
-
-  for (i = 0; i < 200000; i++)
-    task_yield();
+  cprintf("Got: %d\n", i);
 }
 
 static void
 th2_func(void)
 {
-  int i;
+  // int i;
 
-  for (i = 0; i < 2000; i++)
-    task_yield();
+  ksem_put(&sem);
 
-  cprintf("Hello\n");
-  task_delay(1000);
-  cprintf("Bye\n");
+  // for (i = 0; i < 2000; i++)
+  //   task_yield();
+
+  // cprintf("Hello\n");
+  // task_delay(1000);
+  // cprintf("Bye\n");
 }
 
 void
 core_test(void)
 {
+  ksem_create(&sem, 0);
+
   task_create(&th1, th1_func, 0, th1_stack + 4096, &hooks);
   task_resume(&th1);
 
