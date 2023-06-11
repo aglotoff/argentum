@@ -6,6 +6,7 @@
 #include <kernel/armv7/regs.h>
 #include <kernel/irq.h>
 #include <kernel/cprintf.h>
+#include <kernel/ktimer.h>
 #include <kernel/mm/memlayout.h>
 #include <kernel/mm/vm.h>
 
@@ -19,6 +20,10 @@ static void
 ptimer_irq(void)
 {
   ptimer_eoi(&ptimer);
+
+  if (cpu_id() == 0)
+    ktimer_tick();
+
   sched_tick();
 }
 

@@ -230,7 +230,7 @@ task_current(void)
  * @return 0 on success.
  */
 int
-task_init(struct Task *task, void (*entry)(void), int priority, uint8_t *stack,
+task_create(struct Task *task, void (*entry)(void), int priority, uint8_t *stack,
           struct TaskHooks *hooks)
 {
   task->flags         = 0;
@@ -566,20 +566,20 @@ task_cleanup(struct Task *task)
   task->state = TASK_STATE_DESTROYED;
 }
 
-void
+int
 task_unprotect(struct Task *task)
 {
   struct Task *my_task = task_current();
 
   if ((task == NULL) && ((task = my_task) == NULL))
-    panic("no current task");
+    return -EINVAL;
 
   sched_lock();
 
   if ((--task->protect_count > 0) || !(task->flags & TASK_FLAGS_DESTROY)) {
     // Nothing to do
     sched_unlock();
-    return;
+    return 0;
   }
 
   task_cleanup(task);
@@ -595,4 +595,6 @@ task_unprotect(struct Task *task)
   }
 
   sched_unlock();
+
+  return 0;
 }

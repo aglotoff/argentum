@@ -11,6 +11,7 @@
 #include <kernel/fs/buf.h>
 #include <kernel/fs/file.h>
 #include <kernel/irq.h>
+#include <kernel/ktimer.h>
 #include <kernel/mm/kmem.h>
 #include <kernel/mm/mmu.h>
 #include <kernel/mm/page.h>
@@ -114,10 +115,29 @@ struct TaskHooks hooks = {
   .destroy = on_task_destroy,
 };
 
+struct KTimer tmr1, tmr2, tmr3;
+
+void
+timer_func(void *arg)
+{
+  cprintf("Timer %p\n", arg);
+}
+
+void
+timer_func2(void *a)
+{
+  ktimer_destroy((struct KTimer *) a);
+}
+
 static void
 th1_func(void)
 {
   int i;
+
+  ktimer_create(&tmr1, timer_func, (void *) 1, 10, 100, 1);
+  ktimer_create(&tmr2, timer_func, (void *) 2, 10, 100, 1);
+
+  ktimer_create(&tmr3, timer_func2, &tmr2, 3000, 0, 1);
 
   for (i = 0; i < 200000; i++)
     task_yield();
@@ -137,9 +157,9 @@ th2_func(void)
 void
 core_test(void)
 {
-  task_init(&th1, th1_func, 0, th1_stack + 4096, &hooks);
+  task_create(&th1, th1_func, 0, th1_stack + 4096, &hooks);
   task_resume(&th1);
 
-  task_init(&th2, th2_func, 0, th2_stack + 4096, &hooks);
+  task_create(&th2, th2_func, 0, th2_stack + 4096, &hooks);
   task_resume(&th2);
 }

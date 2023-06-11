@@ -142,7 +142,7 @@ process_alloc(void)
   process->thread->tf = (struct TrapFrame *) sp;
 
   // Setup new context to start executing at thread_run.
-  if (task_init(&thread->task, process_run, NZERO, sp, &process_thread_hooks))
+  if (task_create(&thread->task, process_run, NZERO, sp, &process_thread_hooks))
     goto fail3;
 
   process->parent = NULL;

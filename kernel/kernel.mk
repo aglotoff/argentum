@@ -10,6 +10,12 @@ ifdef PROCESS_NAME
 endif
 
 KERNEL_SRCFILES :=	\
+	kernel/core/cpu.c \
+	kernel/core/kmutex.c \
+	kernel/core/ktimer.c \
+	kernel/core/task.c \
+	kernel/core/spinlock.c \
+	kernel/core/wchan.c \
 	kernel/drivers/console/kbd.c \
 	kernel/drivers/console/display.c \
 	kernel/drivers/console/pl011.c \
@@ -37,11 +43,6 @@ KERNEL_SRCFILES :=	\
 	kernel/mm/page.c \
 	kernel/mm/kmem.c \
 	kernel/mm/vm.c \
-	kernel/core/cpu.c \
-	kernel/core/kmutex.c \
-	kernel/core/task.c \
-	kernel/core/spinlock.c \
-	kernel/core/wchan.c \
 	kernel/context.S \
 	kernel/cprintf.c \
 	kernel/entry.S \

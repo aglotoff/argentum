@@ -92,7 +92,7 @@ struct Task {
 };
 
 struct Task *task_current(void);
-int          task_init(struct Task *, void (*)(void), int, uint8_t *,
+int          task_create(struct Task *, void (*)(void), int, uint8_t *,
                        struct TaskHooks *);
 void         task_destroy(struct Task *);
 int          task_resume(struct Task *);
@@ -103,7 +103,7 @@ void         task_wakeup_all(struct ListLink *);
 void         task_lock(struct Task *);
 void         task_unlock(struct Task *);
 void         task_protect(struct Task *);
-void         task_unprotect(struct Task *);
+int          task_unprotect(struct Task *);
 void         task_cleanup(struct Task *);
 
 void         sched_wakeup_all(struct ListLink *);
