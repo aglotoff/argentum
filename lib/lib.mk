@@ -32,7 +32,8 @@ LIB_SRCFILES += \
 	lib/dirent/fdopendir.c \
 	lib/dirent/getdents.c \
 	lib/dirent/opendir.c \
-	lib/dirent/readdir.c
+	lib/dirent/readdir.c \
+	lib/dirent/rewinddir.c
 
 LIB_SRCFILES += \
   lib/errno/errno.c
@@ -222,6 +223,7 @@ LIB_SRCFILES += \
 	lib/unistd/fchdir.c \
   lib/unistd/fork.c \
 	lib/unistd/getcwd.c \
+	lib/unistd/getgroups.c \
 	lib/unistd/getpid.c \
 	lib/unistd/getppid.c \
 	lib/unistd/isatty.c \
@@ -231,6 +233,7 @@ LIB_SRCFILES += \
 	lib/unistd/read.c \
 	lib/unistd/rmdir.c \
 	lib/unistd/sbrk.c \
+	lib/unistd/sleep.c \
 	lib/unistd/write.c \
 	lib/unistd/unlink.c
 

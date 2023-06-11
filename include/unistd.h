@@ -42,5 +42,7 @@ void     _exit(int);
 int      dup(int);
 int      access(const char *, int);
 off_t    lseek(int, off_t, int);
+int      getgroups(int, gid_t[]);
+unsigned sleep(unsigned);
 
 #endif  // !__UNISTD_H__

@@ -25,5 +25,6 @@ DIR           *fdopendir(int);
 ssize_t        getdents(int, void *, size_t);
 DIR           *opendir(const char *);
 struct dirent *readdir(DIR *);
+void           rewinddir(DIR *);
 
 #endif  // !__DIRENT_H__
