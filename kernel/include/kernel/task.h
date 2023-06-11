@@ -8,20 +8,22 @@
 #include <limits.h>
 #include <stdint.h>
 
+#include <kernel/ktimer.h>
 #include <kernel/list.h>
 #include <kernel/spinlock.h>
 
 #define TASK_MAX_PRIORITIES  (2 * NZERO)
 
 enum {
-  TASK_STATE_NONE           = 0,
-  TASK_STATE_READY          = 1,
-  TASK_STATE_RUNNING        = 2,
-  TASK_STATE_MUTEX          = 3,
-  TASK_STATE_SLEEPING_WCHAN = 4,
-  TASK_STATE_SUSPENDED      = 5,
-  TASK_STATE_DESTROY        = 6,
-  TASK_STATE_DESTROYED      = 7,
+  TASK_STATE_NONE = 0,
+  TASK_STATE_READY,
+  TASK_STATE_RUNNING,
+  TASK_STATE_MUTEX,
+  TASK_STATE_SLEEPING_WCHAN,
+  TASK_STATE_SLEEPING,      
+  TASK_STATE_SUSPENDED,
+  TASK_STATE_DESTROY,
+  TASK_STATE_DESTROYED,
 };
 
 enum {
@@ -75,6 +77,8 @@ struct Task {
   struct TaskHooks *hooks;
   /** Task waiting for this task to exit */
   struct Task      *destroyer;
+  /** Timer for timeouts */
+  struct KTimer     timer;
   /** Count to keep track of nested task_protect() calls */
   int               protect_count;
   /** Count to keep track of nested task_lock() calls */
@@ -105,6 +109,7 @@ void         task_unlock(struct Task *);
 void         task_protect(struct Task *);
 int          task_unprotect(struct Task *);
 void         task_cleanup(struct Task *);
+void         task_delay(unsigned long);
 
 void         sched_wakeup_all(struct ListLink *);
 void         sched_init(void);

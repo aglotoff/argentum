@@ -64,9 +64,9 @@ main(void)
   buf_init();           // Buffer cache
   file_init();          // File table
   sched_init();         // Scheduler
-  process_init();       // Process table
+  // process_init();       // Process table
 
-  // core_test();
+  core_test();
 
   // Unblock other CPUs
   bsp_started = 1;    
@@ -134,10 +134,10 @@ th1_func(void)
 {
   int i;
 
-  ktimer_create(&tmr1, timer_func, (void *) 1, 10, 100, 1);
-  ktimer_create(&tmr2, timer_func, (void *) 2, 10, 100, 1);
+  // ktimer_create(&tmr1, timer_func, (void *) 1, 10, 100, 1);
+  // ktimer_create(&tmr2, timer_func, (void *) 2, 10, 100, 1);
 
-  ktimer_create(&tmr3, timer_func2, &tmr2, 3000, 0, 1);
+  // ktimer_create(&tmr3, timer_func2, &tmr2, 3000, 0, 1);
 
   for (i = 0; i < 200000; i++)
     task_yield();
@@ -151,7 +151,9 @@ th2_func(void)
   for (i = 0; i < 2000; i++)
     task_yield();
 
-  task_destroy(&th1);
+  cprintf("Hello\n");
+  task_delay(1000);
+  cprintf("Bye\n");
 }
 
 void

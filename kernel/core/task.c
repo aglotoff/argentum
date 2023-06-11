@@ -558,6 +558,9 @@ task_cleanup(struct Task *task)
   case TASK_STATE_DESTROY:
     task->u.destroy.task->destroyer = NULL;
     break;
+  case TASK_STATE_SLEEPING:
+    ktimer_destroy(&task->timer);
+    break;
   // TODO: other states
   default:
     break;
@@ -597,4 +600,44 @@ task_unprotect(struct Task *task)
   sched_unlock();
 
   return 0;
+}
+
+static void
+task_sleep_callback(void *arg)
+{
+  struct Task *task = (struct Task *) arg;
+
+  sched_lock();
+
+  if (task->state == TASK_STATE_SLEEPING) {
+    sched_enqueue(task);
+    sched_may_yield(task);
+  }
+
+  sched_unlock();
+}
+
+void
+task_delay(unsigned long delay)
+{
+  struct Task *my_task = task_current();
+
+  if (my_task == NULL)
+    panic("no current task");
+
+  sched_lock();
+
+  if (cpu_current()->isr_nesting > 0)
+    panic("isr");
+  if (my_task->lock_count > 0)
+    panic("locked");
+
+  ktimer_create(&my_task->timer, task_sleep_callback, my_task, delay, 0, 1);
+
+  my_task->state = TASK_STATE_SLEEPING;
+  sched_yield();
+
+  ktimer_destroy(&my_task->timer);
+
+  sched_unlock();
 }
