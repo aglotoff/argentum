@@ -65,9 +65,9 @@ main(void)
   buf_init();           // Buffer cache
   file_init();          // File table
   sched_init();         // Scheduler
-  // process_init();       // Process table
+  process_init();       // Process table
 
-  core_test();
+  // core_test();
 
   // Unblock other CPUs
   bsp_started = 1;    
@@ -137,7 +137,7 @@ th1_func(void)
 {
   int i;
 
-  i = ksem_get(&sem, 100);
+  i = ksem_get(&sem, 1000, 1);
 
   cprintf("Got: %d\n", i);
 }
@@ -147,13 +147,15 @@ th2_func(void)
 {
   // int i;
 
+  task_sleep(500);
+
   ksem_put(&sem);
 
   // for (i = 0; i < 2000; i++)
   //   task_yield();
 
   // cprintf("Hello\n");
-  // task_delay(1000);
+  // task_sleep(1000);
   // cprintf("Bye\n");
 }
 

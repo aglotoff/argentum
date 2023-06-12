@@ -17,39 +17,43 @@ ksem_create(struct KSemaphore *sem, unsigned long initial_count)
 int
 ksem_destroy(struct KSemaphore *sem)
 {
-  // TODO: notify pending tasks
-  (void) sem;
+  sched_lock();
+  sched_wakeup_all(&sem->queue, -EINVAL);
+  sched_unlock();
 
   return 0;
 }
 
 int
-ksem_get(struct KSemaphore *sem, unsigned long timeout)
+ksem_get(struct KSemaphore *sem, unsigned long timeout, int blocking)
 {
   struct Task *my_task = task_current();
   int ret;
 
-  if (my_task == NULL)
-    panic("no current task");
-  
+  if ((my_task == NULL) && blocking)
+    // TODO: choose another value to indicate an error?
+    return -EAGAIN;
+
   sched_lock();
 
-  if ((my_task->lock_count> 0) || (cpu_current()->isr_nesting > 0))
-    panic("bad context");
+  while (sem->count == 0) {
+    struct Cpu *my_cpu = cpu_current();
 
-  my_task->u.semaphore.result = 0;
-
-  while ((sem->count == 0) && (my_task->u.semaphore.result == 0)) {
-    if (timeout != 0) {
-      my_task->timer.remain = timeout;
-      ktimer_start(&my_task->timer);
+    if (!blocking || (my_task->lock_count > 0) || (my_cpu->isr_nesting > 0)) {
+      // Can't block
+      sched_unlock();
+      return -EAGAIN;
     }
 
-    task_sleep(&sem->queue, TASK_STATE_SEMAPHORE, &__sched_lock);
+    sched_sleep(&sem->queue, TASK_STATE_SEMAPHORE, timeout, NULL);
+
+    if ((ret = my_task->sleep_result) != 0) {
+      sched_unlock();
+      return ret;
+    }
   }
 
-  if ((ret = my_task->u.semaphore.result) == 0)
-    ret = --sem->count; 
+  ret = --sem->count;
 
   sched_unlock();
   return ret;
@@ -61,7 +65,7 @@ ksem_put(struct KSemaphore *sem)
   sched_lock();
 
   sem->count++;
-  sched_wakeup_all(&sem->queue);
+  sched_wakeup_one(&sem->queue, 0);
 
   sched_unlock();
   return 0;

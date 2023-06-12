@@ -201,21 +201,341 @@ sched_tick(void)
   }
 }
 
-/**
- * Get the currently executing task.
- * 
- * @return A pointer to the currently executing task or NULL
- */
-struct Task *
-task_current(void)
+// Compare task priorities. Note that a smaller priority value corresponds
+// to a higher priority! Returns a number less than, equal to, or greater than
+// zero if t1's priority is correspondingly less than, equal to, or greater than
+// t2's priority.
+static int
+task_priority_cmp(struct Task *t1, struct Task *t2)
 {
-  struct Task *task;
+  return t2->priority - t1->priority; 
+}
 
-  cpu_irq_save();
-  task = cpu_current()->task;
-  cpu_irq_restore();
+// Check whether a reschedule is required (taking into account the priority
+// of a task most recently added to the run queue)
+static void
+sched_may_yield(struct Task *candidate)
+{
+  struct Cpu *my_cpu;
+  struct Task *my_task;
 
-  return task;
+  assert(spin_holding(&__sched_lock));
+
+  my_cpu  = cpu_current();
+  my_task = my_cpu->task;
+
+  if ((my_task != NULL) && (task_priority_cmp(candidate, my_task) > 0)) {
+    if ((my_cpu->isr_nesting > 0) || (my_task->lock_count > 0)) {
+      // Cannot yield right now, delay until the last call to sched_isr_exit()
+      // or task_unlock().
+      my_task->flags |= TASK_FLAGS_RESCHEDULE;
+    } else {
+      sched_enqueue(my_task);
+      sched_yield();
+    }
+  }
+}
+
+void
+sched_wakeup_all(struct ListLink *task_list, int result)
+{
+  if (!spin_holding(&__sched_lock))
+    panic("sched not locked");
+  
+  while (!list_empty(task_list)) {
+    struct ListLink *link = task_list->next;
+    struct Task *task = LIST_CONTAINER(link, struct Task, link);
+
+    list_remove(link);
+
+    task->sleep_result = result;
+
+    sched_enqueue(task);
+    sched_may_yield(task);
+  }
+}
+
+/**
+ * Wake up the task with the highest priority.
+ *
+ * @param queue Pointer to the head of the wait queue.
+ */
+void
+sched_wakeup_one(struct ListLink *queue, int result)
+{
+  struct ListLink *l;
+  struct Task *highest;
+
+  if (!spin_holding(&__sched_lock))
+    panic("sched not locked");
+
+  highest = NULL;
+
+  LIST_FOREACH(queue, l) {
+    struct Task *t = LIST_CONTAINER(l, struct Task, link);
+    
+    if ((highest == NULL) || (task_priority_cmp(t, highest) > 0))
+      highest = t;
+  }
+
+  if (highest != NULL) {
+    list_remove(&highest->link);
+    highest->sleep_result = result;
+
+    sched_enqueue(highest);
+    sched_may_yield(highest);
+  }
+}
+
+/**
+ * Put the current task into sleep.
+ *
+ * @param queue An optional queue to insert the task into.
+ * @param state The state indicating a kind of sleep.
+ * @param lock  An optional spinlock to release while going to sleep.
+ */
+void
+sched_sleep(struct ListLink *queue, int state, unsigned long timeout,
+            struct SpinLock *lock)
+{
+  struct Task *my_task = task_current();
+
+  // someone may call this function while holding __sched_lock?
+  if (lock != NULL) {
+    sched_lock();
+    spin_unlock(lock);
+  }
+
+  assert(spin_holding(&__sched_lock));
+
+  if (timeout != 0) {
+    my_task->sleep_timer.remain = timeout;
+    ktimer_start(&my_task->sleep_timer);
+  }
+
+  my_task->state = state;
+
+  if (queue != NULL)
+    list_add_back(queue, &my_task->link);
+
+  sched_yield();
+
+  if (timeout != 0)
+    ktimer_stop(&my_task->sleep_timer);
+
+  // someone may call this function while holding __sched_lock?
+  if (lock != NULL) {
+    sched_unlock();
+    spin_lock(lock);
+  }
+}
+
+int
+task_lock(struct Task *task)
+{
+  if ((task == NULL) && ((task = task_current()) == NULL))
+    return -EINVAL;
+
+  sched_lock();
+
+  task->lock_count++;
+
+  sched_unlock();
+  return 0;
+}
+
+int
+task_unlock(struct Task *task)
+{
+  struct Task *my_task = task_current();
+
+  if ((task == NULL) && ((task = my_task) == NULL))
+    return -EINVAL;
+
+  sched_lock();
+
+  if ((--task->lock_count == 0) && (task->flags & TASK_FLAGS_RESCHEDULE)) {
+    if (task == my_task) {
+      if (cpu_current()->isr_nesting == 0) {
+        sched_enqueue(task);
+        sched_yield();
+      }
+    } else if (task->state == TASK_STATE_RUNNING) {
+      irq_ipi();
+    }
+  }
+
+  sched_unlock();
+  return 0;
+}
+
+int
+task_protect(struct Task *task)
+{
+  if ((task == NULL) && ((task = task_current()) == NULL))
+    return -EINVAL;
+
+  sched_lock();
+
+  task->protect_count++;
+
+  sched_unlock();
+  return 0;
+}
+
+void
+task_cleanup(struct Task *task)
+{
+  switch (task->state) {
+  case TASK_STATE_DESTROY:
+    task->u.destroy.task->destroyer = NULL;
+    break;
+  case TASK_STATE_SLEEPING:
+    break;
+  // TODO: other states
+  default:
+    break;
+  }
+
+  ktimer_destroy(&task->sleep_timer);
+
+  task->state = TASK_STATE_DESTROYED;
+}
+
+int
+task_unprotect(struct Task *task)
+{
+  struct Task *my_task = task_current();
+
+  if ((task == NULL) && ((task = my_task) == NULL))
+    return -EINVAL;
+
+  sched_lock();
+
+  if ((--task->protect_count > 0) || !(task->flags & TASK_FLAGS_DESTROY)) {
+    // Nothing to do
+    sched_unlock();
+    return 0;
+  }
+
+  task_cleanup(task);
+
+  if (task->destroyer != NULL)
+    sched_enqueue(task->destroyer);
+
+  if (task == my_task) {
+    sched_yield();
+    panic("should not return");
+  } else if (task->destroyer != NULL) {
+    sched_may_yield(task->destroyer);
+  }
+
+  sched_unlock();
+  return 0;
+}
+
+static void
+task_sleep_callback(void *arg)
+{
+  struct Task *task = (struct Task *) arg;
+
+  sched_lock();
+
+  switch (task->state) {
+  // TODO: other functions here
+  case TASK_STATE_SEMAPHORE:
+    task->sleep_result = -ETIMEDOUT;
+    // fall through
+  case TASK_STATE_SLEEPING:
+    sched_enqueue(task);
+    sched_may_yield(task);
+    break;
+  default:
+    break;
+  }
+
+  sched_unlock();
+}
+
+int
+task_sleep(unsigned long timeout)
+{
+  struct Task *my_task = task_current();
+
+  if (my_task == NULL)
+    return -EINVAL;
+
+  sched_lock();
+
+  if ((my_task->lock_count > 0) || (cpu_current()->isr_nesting > 0)) {
+    sched_unlock();
+    return -EINVAL;
+  }
+
+  sched_sleep(NULL, TASK_STATE_SLEEPING, timeout, NULL);
+
+  sched_unlock();
+  return 0;
+}
+
+/**
+ * Resume execution of a previously suspended task (or begin execution of a
+ * newly created one).
+ * 
+ * @param task The kernel task to resume execution
+ */
+int
+task_resume(struct Task *task)
+{
+  sched_lock();
+
+  if (task->state != TASK_STATE_SUSPENDED) {
+    sched_unlock();
+    return -EINVAL;
+  }
+
+  sched_enqueue(task);
+  sched_may_yield(task);
+
+  sched_unlock();
+
+  return 0;
+}
+
+/**
+ * Relinguish the CPU allowing another task to be run.
+ */
+void
+task_yield(void)
+{
+  struct Task *current = task_current();
+  
+  if (current == NULL)
+    panic("no current task");
+
+  sched_lock();
+
+  sched_enqueue(current);
+  sched_yield();
+
+  sched_unlock();
+}
+
+// Execution of each task begins here.
+static void
+task_run(void)
+{
+  // Still holding the scheduler lock (acquired in sched_start)
+  sched_unlock();
+
+  // Make sure IRQs are enabled
+  cpu_irq_enable();
+
+  // Jump to the task entry point
+  task_current()->entry();
+
+  // Destroy the task on exit
+  task_destroy(NULL);
 }
 
 /**
@@ -244,7 +564,7 @@ task_create(struct Task *task, void (*entry)(void), int priority, uint8_t *stack
   task->lock_count    = 0;
   task->protect_count = 0;
 
-  ktimer_create(&task->timer, task_sleep_callback, task, 0, 0, 0);
+  ktimer_create(&task->sleep_timer, task_sleep_callback, task, 0, 0, 0);
 
   stack -= sizeof *task->context;
   task->context = (struct Context *) stack;
@@ -316,343 +636,18 @@ task_destroy(struct Task *task)
 }
 
 /**
- * Relinguish the CPU allowing another task to be run.
- */
-void
-task_yield(void)
-{
-  struct Task *current = task_current();
-  
-  if (current == NULL)
-    panic("no current task");
-
-  sched_lock();
-
-  sched_enqueue(current);
-  sched_yield();
-
-  sched_unlock();
-}
-
-// Execution of each task begins here.
-static void
-task_run(void)
-{
-  // Still holding the scheduler lock (acquired in sched_start)
-  sched_unlock();
-
-  // Make sure IRQs are enabled
-  cpu_irq_enable();
-
-  // Jump to the task entry point
-  task_current()->entry();
-
-  // Destroy the task on exit
-  task_destroy(NULL);
-}
-
-// Compare task priorities. Note that a smaller priority value corresponds
-// to a higher priority! Returns a number less than, equal to, or greater than
-// zero if t1's priority is correspondingly less than, equal to, or greater than
-// t2's priority.
-static int
-task_priority_cmp(struct Task *t1, struct Task *t2)
-{
-  return t2->priority - t1->priority; 
-}
-
-// Check whether a reschedule is required (taking into account the priority
-// of a task most recently added to the run queue)
-static void
-sched_may_yield(struct Task *candidate)
-{
-  struct Cpu *my_cpu;
-  struct Task *my_task;
-
-  assert(spin_holding(&__sched_lock));
-
-  my_cpu  = cpu_current();
-  my_task = my_cpu->task;
-
-  if ((my_task != NULL) && (task_priority_cmp(candidate, my_task) > 0)) {
-    if ((my_cpu->isr_nesting > 0) || (my_task->lock_count > 0)) {
-      // Cannot yield right now, delay until the last call to sched_isr_exit()
-      // or task_unlock().
-      my_task->flags |= TASK_FLAGS_RESCHEDULE;
-    } else {
-      sched_enqueue(my_task);
-      sched_yield();
-    }
-  }
-}
-
-void
-sched_wakeup_all(struct ListLink *task_list)
-{
-  assert(spin_holding(&__sched_lock));
-  
-  while (!list_empty(task_list)) {
-    struct ListLink *link = task_list->next;
-    struct Task *task = LIST_CONTAINER(link, struct Task, link);
-
-    list_remove(link);
-    ktimer_stop(&task->timer);
-
-    sched_enqueue(task);
-    sched_may_yield(task);
-  }
-}
-
-/**
- * Resume execution of a previously suspended task (or begin execution of a
- * newly created one).
+ * Get the currently executing task.
  * 
- * @param task The kernel task to resume execution
+ * @return A pointer to the currently executing task or NULL
  */
-int
-task_resume(struct Task *task)
+struct Task *
+task_current(void)
 {
-  sched_lock();
+  struct Task *task;
 
-  if (task->state != TASK_STATE_SUSPENDED) {
-    sched_unlock();
-    return -EINVAL;
-  }
+  cpu_irq_save();
+  task = cpu_current()->task;
+  cpu_irq_restore();
 
-  sched_enqueue(task);
-  sched_may_yield(task);
-
-  sched_unlock();
-
-  return 0;
-}
-
-
-
-/**
- * Put the current task into sleep.
- *
- * @param queue An optional queue to insert the task into.
- * @param state The state indicating a kind of sleep.
- * @param lock  An optional spinlock to release while going to sleep.
- */
-void
-task_sleep(struct ListLink *queue, int state, struct SpinLock *lock)
-{
-  struct Task *current = task_current();
-
-  // someone may call this function while holding __sched_lock?
-  if (lock != &__sched_lock) {
-    sched_lock();
-    if (lock != NULL)
-      spin_unlock(lock);
-  }
-
-  assert(spin_holding(&__sched_lock));
-
-  current->state = state;
-
-  if (queue != NULL)
-    list_add_back(queue, &current->link);
-
-  sched_yield();
-
-  // someone may call this function while holding __sched_lock?
-  if (lock != &__sched_lock) {
-    sched_unlock();
-    if (lock != NULL)
-      spin_lock(lock);
-  }
-}
-
-/**
- * Wake up the task with the highest priority.
- *
- * @param queue Pointer to the head of the wait queue.
- */
-void
-task_wakeup_one(struct ListLink *queue)
-{
-  struct ListLink *l;
-  struct Task *highest;
-
-  highest = NULL;
-
-  sched_lock();
-
-  LIST_FOREACH(queue, l) {
-    struct Task *t = LIST_CONTAINER(l, struct Task, link);
-    
-    if ((highest == NULL) || (task_priority_cmp(t, highest) > 0))
-      highest = t;
-  }
-
-  if (highest != NULL) {
-    list_remove(&highest->link);
-    sched_enqueue(highest);
-
-    sched_may_yield(highest);
-  }
-
-  sched_unlock();
-}
-
-/**
- * Wake up all processes sleeping on the wait queue.
- *
- * @param queue Pointer to the head of the wait queue.
- */
-void
-task_wakeup_all(struct ListLink *queue)
-{
-  sched_lock();
-  sched_wakeup_all(queue);
-  sched_unlock();
-}
-
-void
-task_lock(struct Task *task)
-{
-  if ((task == NULL) && ((task = task_current()) == NULL))
-    panic("no current task");
-
-  sched_lock();
-  task->lock_count++;
-  sched_unlock();
-}
-
-void
-task_unlock(struct Task *task)
-{
-  struct Task *my_task = task_current();
-
-  if ((task == NULL) && ((task = my_task) == NULL))
-    panic("no current task");
-
-  sched_lock();
-
-  if ((--task->lock_count == 0) && (task->flags & TASK_FLAGS_RESCHEDULE)) {
-    if (task == my_task) {
-      if (cpu_current()->isr_nesting == 0) {
-        sched_enqueue(task);
-        sched_yield();
-      }
-    } else if (task->state == TASK_STATE_RUNNING) {
-      irq_ipi();
-    }
-  }
-
-  sched_unlock();
-}
-
-void
-task_protect(struct Task *task)
-{
-  if ((task == NULL) && ((task = task_current()) == NULL))
-    panic("no current task");
-
-  sched_lock();
-  task->protect_count++;
-  sched_unlock();
-}
-
-void
-task_cleanup(struct Task *task)
-{
-  switch (task->state) {
-  case TASK_STATE_DESTROY:
-    task->u.destroy.task->destroyer = NULL;
-    break;
-  case TASK_STATE_SLEEPING:
-    break;
-  // TODO: other states
-  default:
-    break;
-  }
-
-  ktimer_destroy(&task->timer);
-
-  task->state = TASK_STATE_DESTROYED;
-}
-
-int
-task_unprotect(struct Task *task)
-{
-  struct Task *my_task = task_current();
-
-  if ((task == NULL) && ((task = my_task) == NULL))
-    return -EINVAL;
-
-  sched_lock();
-
-  if ((--task->protect_count > 0) || !(task->flags & TASK_FLAGS_DESTROY)) {
-    // Nothing to do
-    sched_unlock();
-    return 0;
-  }
-
-  task_cleanup(task);
-
-  if (task->destroyer != NULL)
-    sched_enqueue(task->destroyer);
-
-  if (task == my_task) {
-    sched_yield();
-    panic("should not return");
-  } else if (task->destroyer != NULL) {
-    sched_may_yield(task->destroyer);
-  }
-
-  sched_unlock();
-
-  return 0;
-}
-
-static void
-task_sleep_callback(void *arg)
-{
-  struct Task *task = (struct Task *) arg;
-
-  sched_lock();
-
-  switch (task->state) {
-  case TASK_STATE_SEMAPHORE:
-    task->u.semaphore.result = -ETIMEDOUT;
-    // fall through
-  case TASK_STATE_SLEEPING:
-    sched_enqueue(task);
-    sched_may_yield(task);
-    break;
-  }
-
-  if (task->state == TASK_STATE_SLEEPING) {
-    sched_enqueue(task);
-    sched_may_yield(task);
-  }
-
-  sched_unlock();
-}
-
-void
-task_delay(unsigned long delay)
-{
-  struct Task *my_task = task_current();
-
-  if (my_task == NULL)
-    panic("no current task");
-
-  sched_lock();
-
-  if (cpu_current()->isr_nesting > 0)
-    panic("isr");
-  if (my_task->lock_count > 0)
-    panic("locked");
-
-  my_task->timer.remain = delay;
-  ktimer_start(&my_task->timer);
-
-  my_task->state = TASK_STATE_SLEEPING;
-  sched_yield();
-
-  sched_unlock();
+  return task;
 }

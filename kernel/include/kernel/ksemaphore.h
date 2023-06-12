@@ -1,5 +1,5 @@
-#ifndef __KERNEL_INCLUDE_KERNEL_SEMAPHORE_H__
-#define __KERNEL_INCLUDE_KERNEL_SEMAPHORE_H__
+#ifndef __KERNEL_INCLUDE_KERNEL_KSEMAPHORE_H__
+#define __KERNEL_INCLUDE_KERNEL_KSEMAPHORE_H__
 
 #include <kernel/list.h>
 
@@ -10,7 +10,7 @@ struct KSemaphore {
 
 int ksem_create(struct KSemaphore *, unsigned long);
 int ksem_destroy(struct KSemaphore *);
-int ksem_get(struct KSemaphore *, unsigned long);
+int ksem_get(struct KSemaphore *, unsigned long, int);
 int ksem_put(struct KSemaphore *);
 
-#endif  // !__KERNEL_INCLUDE_KERNEL_SEMAPHORE_H__
+#endif  // !__KERNEL_INCLUDE_KERNEL_KSEMAPHORE_H__

@@ -23,7 +23,7 @@ wchan_init(struct WaitChannel *chan)
 void
 wchan_sleep(struct WaitChannel *chan, struct SpinLock *lock)
 {
-  task_sleep(&chan->head, TASK_STATE_SLEEPING_WCHAN, lock);
+  sched_sleep(&chan->head, TASK_STATE_SLEEPING_WCHAN, 0, lock);
 }
 
 /**
@@ -34,7 +34,9 @@ wchan_sleep(struct WaitChannel *chan, struct SpinLock *lock)
 void
 wchan_wakeup_one(struct WaitChannel *chan)
 {
-  task_wakeup_one(&chan->head);
+  sched_lock();
+  sched_wakeup_one(&chan->head, 0);
+  sched_unlock();
 }
 
 /**
@@ -45,5 +47,7 @@ wchan_wakeup_one(struct WaitChannel *chan)
 void
 wchan_wakeup_all(struct WaitChannel *chan)
 {
-  task_wakeup_all(&chan->head);
+  sched_lock();
+  sched_wakeup_all(&chan->head, 0);
+  sched_unlock();
 }

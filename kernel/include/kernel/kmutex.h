@@ -28,9 +28,9 @@ struct KMutex {
   const char       *name;
 };
 
-void kmutex_init(struct KMutex *, const char *);
-void kmutex_lock(struct KMutex *);
-void kmutex_unlock(struct KMutex *);
-int  kmutex_holding(struct KMutex *);
+int kmutex_init(struct KMutex *, const char *);
+int kmutex_lock(struct KMutex *);
+int kmutex_unlock(struct KMutex *);
+int kmutex_holding(struct KMutex *);
 
 #endif  // !__KERNEL_INCLUDE_KERNEL_KMUTEX_H__

@@ -79,7 +79,9 @@ struct Task {
   /** Task waiting for this task to exit */
   struct Task      *destroyer;
   /** Timer for timeouts */
-  struct KTimer     timer;
+  struct KTimer     sleep_timer;
+  /** Value that indicated sleep result */
+  int               sleep_result;
   /** Count to keep track of nested task_protect() calls */
   int               protect_count;
   /** Count to keep track of nested task_lock() calls */
@@ -93,9 +95,6 @@ struct Task {
     struct {
       struct Task *task;
     } destroy;
-    struct {
-      int result;
-    } semaphore;
   } u;
 };
 
@@ -105,17 +104,17 @@ int          task_create(struct Task *, void (*)(void), int, uint8_t *,
 void         task_destroy(struct Task *);
 int          task_resume(struct Task *);
 void         task_yield(void);
-void         task_sleep(struct ListLink *, int, struct SpinLock *lock);
-void         task_wakeup_one(struct ListLink *);
-void         task_wakeup_all(struct ListLink *);
-void         task_lock(struct Task *);
-void         task_unlock(struct Task *);
-void         task_protect(struct Task *);
+void         sched_sleep(struct ListLink *, int, unsigned long,
+                         struct SpinLock *lock);
+int          task_lock(struct Task *);
+int          task_unlock(struct Task *);
+int          task_protect(struct Task *);
 int          task_unprotect(struct Task *);
 void         task_cleanup(struct Task *);
-void         task_delay(unsigned long);
+int          task_sleep(unsigned long);
 
-void         sched_wakeup_all(struct ListLink *);
+void         sched_wakeup_all(struct ListLink *, int);
+void         sched_wakeup_one(struct ListLink *, int);
 void         sched_init(void);
 void         sched_start(void);
 void         sched_tick(void);
