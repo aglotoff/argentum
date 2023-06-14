@@ -20,11 +20,7 @@ static void
 ptimer_irq(void)
 {
   ptimer_eoi(&ptimer);
-
-  if (cpu_id() == 0)
-    ktimer_tick();
-
-  sched_tick();
+  ktime_tick();
 }
 
 static void

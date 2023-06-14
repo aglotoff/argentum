@@ -184,22 +184,6 @@ sched_isr_exit(void)
   sched_unlock();
 }
 
-/**
- * Notify the kernel that a timer IRQ has occured.
- */
-void
-sched_tick(void)
-{
-  struct Task *current_task = task_current();
-
-  // Tell the scheduler that the current task has used up its time slice
-  // TODO: add support for more complex sheculing policies
-  if (current_task != NULL) {
-    sched_lock();
-    current_task->flags |= TASK_FLAGS_RESCHEDULE;
-    sched_unlock();
-  }
-}
 
 // Compare task priorities. Note that a smaller priority value corresponds
 // to a higher priority! Returns a number less than, equal to, or greater than
