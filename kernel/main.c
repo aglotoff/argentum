@@ -11,6 +11,7 @@
 #include <kernel/fs/buf.h>
 #include <kernel/fs/file.h>
 #include <kernel/irq.h>
+#include <kernel/kqueue.h>
 #include <kernel/ksemaphore.h>
 #include <kernel/ktimer.h>
 #include <kernel/mm/kmem.h>
@@ -132,37 +133,42 @@ timer_func2(void *a)
 
 struct KSemaphore sem;
 
+struct KQueue mq;
+int mq_buf[4];
+
 static void
 th1_func(void)
 {
-  int i;
+  int cnt = 0;
 
-  i = ksem_get(&sem, 1000, 1);
+  for (;;) {
+    for (int i = 0; i < 5; i++) {
+      cnt++;
+      kqueue_send(&mq, &cnt, 0, 1);
+    }
 
-  cprintf("Got: %d\n", i);
+    task_sleep(700);
+  }
 }
 
 static void
 th2_func(void)
 {
-  // int i;
+  for (;;) {
+    int r;
 
-  task_sleep(500);
+    task_sleep(100);
+    kqueue_receive(&mq, &r, 0, 1);
 
-  ksem_put(&sem);
-
-  // for (i = 0; i < 2000; i++)
-  //   task_yield();
-
-  // cprintf("Hello\n");
-  // task_sleep(1000);
-  // cprintf("Bye\n");
+    cprintf("Got %d\n", r);
+  }
 }
 
 void
 core_test(void)
 {
   ksem_create(&sem, 0);
+  kqueue_init(&mq, sizeof(int), mq_buf, sizeof mq_buf);
 
   task_create(&th1, th1_func, 0, th1_stack + 4096, &hooks);
   task_resume(&th1);

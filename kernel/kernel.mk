@@ -13,6 +13,7 @@ KERNEL_SRCFILES :=	\
 	kernel/core/cpu.c \
 	kernel/core/kmutex.c \
 	kernel/core/ksemaphore.c \
+	kernel/core/kqueue.c \
 	kernel/core/ktimer.c \
 	kernel/core/task.c \
 	kernel/core/spinlock.c \
