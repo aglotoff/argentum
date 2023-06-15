@@ -36,7 +36,7 @@ static struct {
 // Lock to protect the parent/child relationships between the processes
 static struct SpinLock process_lock;
 
-static void process_run(void);
+static void process_run(void *);
 static void process_pop_tf(struct TrapFrame *);
 
 static struct Process *init_process;
@@ -142,7 +142,8 @@ process_alloc(void)
   process->thread->tf = (struct TrapFrame *) sp;
 
   // Setup new context to start executing at thread_run.
-  if (task_create(&thread->task, process_run, NZERO, sp, &process_thread_hooks))
+  if (task_create(&thread->task, process_run, NULL, NZERO, sp,
+      &process_thread_hooks))
     goto fail3;
 
   process->parent = NULL;
@@ -458,11 +459,13 @@ process_wait(pid_t pid, int *stat_loc, int options)
 }
 
 static void
-process_run(void)
+process_run(void *arg)
 {
   static int first;
 
   struct Process *proc = process_current();
+
+  (void) arg;
 
   if (!first) {
     first = 1;

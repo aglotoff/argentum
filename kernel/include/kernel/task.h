@@ -73,7 +73,8 @@ struct Task {
   /** Saved kernel context */
   struct Context   *context;
   /** Entry point */
-  void            (*entry)(void);
+  void            (*entry)(void *);
+  void             *arg;
   /** Various flags */
   int               flags;
   /** Hooks to be called for this task */
@@ -101,7 +102,7 @@ struct Task {
 };
 
 struct Task *task_current(void);
-int          task_create(struct Task *, void (*)(void), int, uint8_t *,
+int          task_create(struct Task *, void (*)(void *), void *, int, uint8_t *,
                        struct TaskHooks *);
 void         task_destroy(struct Task *);
 int          task_resume(struct Task *);

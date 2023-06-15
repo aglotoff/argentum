@@ -509,6 +509,8 @@ task_yield(void)
 static void
 task_run(void)
 {
+  struct Task *my_task = task_current();
+
   // Still holding the scheduler lock (acquired in sched_start)
   sched_unlock();
 
@@ -516,7 +518,7 @@ task_run(void)
   cpu_irq_enable();
 
   // Jump to the task entry point
-  task_current()->entry();
+  my_task->entry(my_task->arg);
 
   // Destroy the task on exit
   task_destroy(NULL);
@@ -536,13 +538,14 @@ task_run(void)
  * @return 0 on success.
  */
 int
-task_create(struct Task *task, void (*entry)(void), int priority, uint8_t *stack,
-          struct TaskHooks *hooks)
+task_create(struct Task *task, void (*entry)(void *), void *arg, int priority,
+            uint8_t *stack, struct TaskHooks *hooks)
 {
   task->flags         = 0;
   task->priority      = priority;
   task->state         = TASK_STATE_SUSPENDED;
   task->entry         = entry;
+  task->arg           = arg;
   task->hooks         = hooks;
   task->destroyer     = NULL;
   task->lock_count    = 0;

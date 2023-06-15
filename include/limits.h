@@ -100,4 +100,6 @@
 /** Default process priority. */
 #define NZERO             20
 
+#define SSIZE_MAX         LONG_MAX
+
 #endif  // !__LIMITS_H__

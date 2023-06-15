@@ -7,6 +7,7 @@
 #include <kernel/mm/memlayout.h>
 #include <kernel/mm/page.h>
 #include <kernel/irq.h>
+#include <kernel/net.h>
 #include <kernel/types.h>
 
 // RX an TX FIFO ports, divided by 4 for use as uint32_t[] indices
@@ -225,7 +226,7 @@ eth_init(void)
   eth[TX_CFG] = TX_CFG_TX_ON;
 
   // Set receive configuration
-  eth[RX_CFG] = 0x200;
+  eth[RX_CFG] = 0x000;
 
   // Setup MAC for TX and RX
   mac_cr = mac_read(MAC_CR);
@@ -257,7 +258,7 @@ eth_rx(void)
       // Packet has error: discard and update status
       uint32_t i, tmp;
 
-      for (i = ROUND_UP(packet_len, sizeof(uint32_t)); i > 0; i--)
+      for (i = ROUND_UP(packet_len, sizeof(uint32_t)); i > 0; i -= sizeof(uint32_t))
         tmp = eth[RX_DATA_FIFO_PORT];
       (void) tmp;
     } else {
@@ -270,15 +271,10 @@ eth_rx(void)
       packet = (uint8_t *) page2kva(p);
       data = (uint32_t *) page2kva(p);
 
-      for (i = ROUND_UP(packet_len, sizeof(uint32_t)); i > 0; i--)
+      for (i = ROUND_UP(packet_len, sizeof(uint32_t)); i > 0; i -= sizeof(uint32_t))
         *data++ = eth[RX_DATA_FIFO_PORT];
 
-      cprintf("Received packet (length = %d):\n", packet_len);
-      for (uint32_t i = 0; i < packet_len; i++) {
-        cprintf(" %02x", packet[i + 2]);
-        if ((i % 26 == 25) || (i == packet_len - 1))
-          cprintf("\n");
-      }
+      net_enqueue(packet, packet_len);
 
       page_free_one(p);
     }

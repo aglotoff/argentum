@@ -2,7 +2,11 @@
 # Makefile fragment for the kernel
 #
 
+LWIPDIR := kernel/net/lwip
+include kernel/net/lwip/Filelists.mk
+
 KERNEL_CFLAGS  := $(CFLAGS) $(INIT_CFLAGS) -Ikernel/include -D__AG_KERNEL__
+KERNEL_CFLAGS  += -I$(LWIPDIR)/include -I$(LWIPDIR)/argentum -Wno-type-limits
 KERNEL_LDFLAGS := $(LDFLAGS) -T kernel/kernel.ld -nostdlib
 
 ifdef PROCESS_NAME
@@ -46,6 +50,7 @@ KERNEL_SRCFILES :=	\
 	kernel/mm/page.c \
 	kernel/mm/kmem.c \
 	kernel/mm/vm.c \
+	kernel/net/net.c \
 	kernel/context.S \
 	kernel/cprintf.c \
 	kernel/entry.S \
@@ -62,7 +67,15 @@ KERNEL_SRCFILES :=	\
 	kernel/main.c
 
 KERNEL_SRCFILES += \
+	lib/ctype/__ctype.c \
+	lib/ctype/__tolower.c \
 	lib/stdio/__printf.c \
+	lib/stdlib/__stdlib_parse_int.c \
+	lib/stdlib/atoi.c \
+	lib/stdlib/rand.c \
+	lib/stdlib/rand_r.c \
+	lib/stdlib/strtol.c \
+	lib/string/memchr.c \
 	lib/string/memcmp.c \
 	lib/string/memcpy.c \
 	lib/string/memmove.c \
@@ -79,6 +92,11 @@ KERNEL_SRCFILES += \
 	lib/string/strtok.c \
 	lib/time/gmtime.c \
 	lib/time/mktime.c
+
+KERNEL_SRCFILES += $(LWIPNOAPPSFILES)
+KERNEL_SRCFILES += \
+	kernel/net/lwip/argentum/arch/sys_arch.c \
+	kernel/net/lwip/argentum/arch/sio.c
 
 KERNEL_OBJFILES := $(patsubst %.c, $(OBJ)/%.o, $(KERNEL_SRCFILES))
 KERNEL_OBJFILES := $(patsubst %.S, $(OBJ)/%.o, $(KERNEL_OBJFILES))

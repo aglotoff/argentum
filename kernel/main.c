@@ -6,7 +6,7 @@
 #include <kernel/cprintf.h>
 #include <kernel/cpu.h>
 #include <kernel/drivers/console.h>
-// #include <kernel/drivers/eth.h>
+#include <kernel/drivers/eth.h>
 #include <kernel/drivers/rtc.h>
 #include <kernel/fs/buf.h>
 #include <kernel/fs/file.h>
@@ -20,9 +20,9 @@
 #include <kernel/mm/vm.h>
 #include <kernel/process.h>
 #include <kernel/sd.h>
+#include <kernel/net.h>
 
 static void mp_main(void);
-void core_test(void);
 
 // Whether the bootstrap processor has finished its initialization?
 int bsp_started;
@@ -60,15 +60,14 @@ main(void)
   // Initialize the device drivers
   rtc_init();           // Real-time clock
   sd_init();            // MultiMedia Card
-  // eth_init();        // Ethernet
+  eth_init();           // Ethernet
 
   // Initialize the remaining kernel services
   buf_init();           // Buffer cache
   file_init();          // File table
   sched_init();         // Scheduler
+  net_init();           // Network
   process_init();       // Process table
-
-  // core_test();
 
   // Unblock other CPUs
   bsp_started = 1;    
@@ -97,82 +96,5 @@ mp_main(void)
   cprintf("Starting CPU %d\n", cpu_id());
 
   // Enter the scheduler loop
-  sched_start();   
-}
-
-struct Task th1, th2;
-
-static uint8_t th1_stack[4096];
-static uint8_t th2_stack[4096];
-
-static void
-on_task_destroy(struct Task *t)
-{
-  (void) t;
-
-  cprintf("Task destroyed\n");
-}
-
-struct TaskHooks hooks = {
-  .destroy = on_task_destroy,
-};
-
-struct KTimer tmr1, tmr2, tmr3;
-
-void
-timer_func(void *arg)
-{
-  cprintf("Timer %p\n", arg);
-}
-
-void
-timer_func2(void *a)
-{
-  ktimer_destroy((struct KTimer *) a);
-}
-
-struct KSemaphore sem;
-
-struct KQueue mq;
-int mq_buf[4];
-
-static void
-th1_func(void)
-{
-  int cnt = 0;
-
-  for (;;) {
-    for (int i = 0; i < 5; i++) {
-      cnt++;
-      kqueue_send(&mq, &cnt, 0, 1);
-    }
-
-    task_sleep(700);
-  }
-}
-
-static void
-th2_func(void)
-{
-  for (;;) {
-    int r;
-
-    task_sleep(100);
-    kqueue_receive(&mq, &r, 0, 1);
-
-    cprintf("Got %d\n", r);
-  }
-}
-
-void
-core_test(void)
-{
-  ksem_create(&sem, 0);
-  kqueue_init(&mq, sizeof(int), mq_buf, sizeof mq_buf);
-
-  task_create(&th1, th1_func, 0, th1_stack + 4096, &hooks);
-  task_resume(&th1);
-
-  task_create(&th2, th2_func, 0, th2_stack + 4096, &hooks);
-  task_resume(&th2);
+  sched_start();
 }

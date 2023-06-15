@@ -5,7 +5,7 @@
       "defines": [
         "__AG_KERNEL__"
       ],
-      "includePath": ["./include", "./kernel/include"],
+      "includePath": ["./include", "./kernel/include", "./kernel/net/lwip/argentum", "./kernel/net/lwip/include"],
       "intelliSenseMode": "linux-gcc-x64",
       "compilerPath": "/usr/local/bin/arm-none-eabi-gcc",
       "cStandard": "gnu11",
