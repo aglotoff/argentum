@@ -6,7 +6,7 @@
 
 // Initial translation table
 __attribute__((__aligned__(L1_TABLE_SIZE))) l1_desc_t
-entry_trtab[L1_NR_ENTRIES] = {
+entry_pgdir[L1_NR_ENTRIES] = {
   // Identity mapping for the first 1MB of physical memory (just enough to
   // load the entry point code):
   [0x0]                            = MAKE_L1_SECTION(0x000000, AP_PRIV_RW),

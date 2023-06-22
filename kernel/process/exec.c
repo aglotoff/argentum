@@ -13,7 +13,7 @@
 #include <kernel/types.h>
 
 static int
-copy_args(struct VM *vm, char *const args[], uintptr_t limit, char **sp)
+copy_args(struct VMSpace *vm, char *const args[], uintptr_t limit, char **sp)
 {
   char *oargs[32];
   char *p;
@@ -30,7 +30,7 @@ copy_args(struct VM *vm, char *const args[], uintptr_t limit, char **sp)
     if (p < (char *) limit)
       return -E2BIG;
 
-    if ((r = vm_user_copy_out(vm, p, args[i], n)) < 0)
+    if ((r = vm_space_copy_out(vm, p, args[i], n)) < 0)
       return r;
 
     oargs[i] = p;
@@ -43,7 +43,7 @@ copy_args(struct VM *vm, char *const args[], uintptr_t limit, char **sp)
   if (p < (char *) (VIRT_USTACK_TOP - USTACK_SIZE))
     return -E2BIG;
 
-  if ((r = vm_user_copy_out(vm, p, oargs, n)) < 0)
+  if ((r = vm_space_copy_out(vm, p, oargs, n)) < 0)
     return r;
 
   *sp = p;
@@ -60,7 +60,7 @@ process_exec(const char *path, char *const argv[], char *const envp[])
   Elf32_Ehdr elf;
   Elf32_Phdr ph;
   off_t off;
-  struct VM *vm;
+  struct VMSpace *vm;
   uintptr_t heap, ustack;
   char *usp, *uargv, *uenvp;
   int r, argc;
@@ -88,7 +88,7 @@ process_exec(const char *path, char *const argv[], char *const envp[])
     goto out1;
   }
 
-  vm = vm_create();
+  vm = vm_space_create();
 
   off = 0;
   if ((r = fs_inode_read(ip, &elf, sizeof(elf), &off)) != sizeof(elf))
@@ -120,7 +120,7 @@ process_exec(const char *path, char *const argv[], char *const envp[])
       goto out2;
     }
 
-    a = vm_mmap(vm, (void *) ph.vaddr, ph.memsz,
+    a = vm_space_alloc(vm, (void *) ph.vaddr, ph.memsz,
                 VM_READ | VM_WRITE | VM_EXEC | VM_USER);
     if ((int) a < 0) {
       r = (int) a;
@@ -132,14 +132,14 @@ process_exec(const char *path, char *const argv[], char *const envp[])
       goto out2;
     }
 
-    if ((r = vm_user_load(vm, (void *) ph.vaddr, ip, ph.filesz, ph.offset)) < 0)
+    if ((r = vm_space_load_inode(vm, (void *) ph.vaddr, ip, ph.filesz, ph.offset)) < 0)
       goto out2;
 
     heap = MAX(heap, ph.vaddr + ph.memsz);
   }
 
   // Allocate user stack.
-  if ((r = (int) vm_mmap(vm, (void *) ustack, USTACK_SIZE,
+  if ((r = (int) vm_space_alloc(vm, (void *) ustack, USTACK_SIZE,
                            VM_READ | VM_WRITE | VM_USER)) < 0)
     return r;
 
@@ -160,8 +160,8 @@ process_exec(const char *path, char *const argv[], char *const envp[])
 
   proc = process_current();
 
-  mmu_switch_user(vm->trtab);
-  vm_destroy(proc->vm);
+  mmu_switch_user(vm->pgdir);
+  vm_space_destroy(proc->vm);
 
   proc->vm        = vm;
 
@@ -178,7 +178,7 @@ process_exec(const char *path, char *const argv[], char *const envp[])
   return argc;
 
 out2:
-  vm_destroy(vm);
+  vm_space_destroy(vm);
 
 out1:
   fs_inode_unlock_put(ip);

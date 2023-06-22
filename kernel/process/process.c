@@ -77,7 +77,7 @@ process_init(void)
 static void
 process_thread_prepare_switch(struct Task *task)
 {
-  mmu_switch_user(((struct ProcessThread *) task)->process->vm->trtab);
+  mmu_switch_user(((struct ProcessThread *) task)->process->vm->pgdir);
 }
 
 static void
@@ -178,7 +178,7 @@ fail1:
 int
 process_setup_vm(struct Process *proc)
 {
-  if ((proc->vm = vm_create()) == NULL)
+  if ((proc->vm = vm_space_create()) == NULL)
     return -ENOMEM;
 
   return 0;
@@ -206,7 +206,7 @@ process_load_binary(struct Process *proc, const void *binary)
     if (ph->filesz > ph->memsz)
       return -EINVAL;
     
-    a = vm_mmap(proc->vm, (void *) ph->vaddr, ph->memsz,
+    a = vm_space_alloc(proc->vm, (void *) ph->vaddr, ph->memsz,
                 VM_READ | VM_WRITE | VM_EXEC | VM_USER);
     if ((int) a < 0)
       return (int) a;
@@ -214,12 +214,12 @@ process_load_binary(struct Process *proc, const void *binary)
     if ((void *) ph->vaddr != a)
       return -EINVAL;
 
-    if ((r = vm_user_copy_out(proc->vm, (void *) ph->vaddr,
+    if ((r = vm_space_copy_out(proc->vm, (void *) ph->vaddr,
                          (uint8_t *) elf + ph->offset, ph->filesz)) < 0)
       return r;
   }
 
-  if ((r = (int) vm_mmap(proc->vm, (void *) (VIRT_USTACK_TOP - USTACK_SIZE), USTACK_SIZE,
+  if ((r = (int) vm_space_alloc(proc->vm, (void *) (VIRT_USTACK_TOP - USTACK_SIZE), USTACK_SIZE,
                            VM_READ | VM_WRITE | VM_USER) < 0))
     return r;
 
@@ -262,7 +262,7 @@ process_create(const void *binary, struct Process **pstore)
   return 0;
 
 fail3:
-  vm_destroy(proc->vm);
+  vm_space_destroy(proc->vm);
 fail2:
   process_free(proc);
 fail1:
@@ -316,7 +316,7 @@ process_destroy(int status)
   HASH_REMOVE(&current->thread->pid_link);
   spin_unlock(&pid_hash.lock);
 
-  vm_destroy(current->vm);
+  vm_space_destroy(current->vm);
 
   for (fd = 0; fd < OPEN_MAX; fd++)
     if (current->files[fd])
@@ -368,7 +368,7 @@ process_copy(void)
   if ((child = process_alloc()) == NULL)
     return -ENOMEM;
 
-  if ((child->vm = vm_clone(current->vm)) == NULL) {
+  if ((child->vm = vm_space_clone(current->vm)) == NULL) {
     process_free(child);
     return -ENOMEM;
   }
@@ -499,5 +499,5 @@ process_grow(ptrdiff_t increment)
 {
   struct Process *current = process_current();
 
-  return vm_mmap(current->vm, (void *) 0, increment, VM_READ | VM_WRITE | VM_USER);
+  return vm_space_alloc(current->vm, (void *) 0, increment, VM_READ | VM_WRITE | VM_USER);
 }

@@ -22,37 +22,41 @@ struct Page;
 #define VM_NOCACHE  (1 << 4)  ///< Disable caching
 #define VM_COW      (1 << 5)  ///< Copy-on-write
 
-struct VMArea {
+struct VMSpaceMapEntry {
   struct ListLink link;
   uintptr_t       start;
   size_t          length;
   int             flags;
 };
 
-struct VM {
-  l1_desc_t      *trtab;
+struct VMSpace {
+  l1_desc_t      *pgdir;
   struct ListLink areas;
 };
 
 void         vm_init(void);
 
-struct VM   *vm_create(void);
-void         vm_destroy(struct VM *);
-struct VM   *vm_clone(struct VM *);
+struct Page *vm_page_lookup(l1_desc_t *, const void *, l2_desc_t **);
+int          vm_page_insert(l1_desc_t *, struct Page *, void *, unsigned);
+void         vm_page_remove(l1_desc_t *, void *);
 
-int          vm_user_copy_out(struct VM *, void *, const void *, size_t);
-int          vm_user_copy_in(struct VM *, void *, const void *, size_t);
-int          vm_user_check_buf(struct VM *, const void *, size_t, unsigned);
-int          vm_user_check_str(struct VM *, const char *, unsigned);
+struct VMSpace   *vm_space_create(void);
+void         vm_space_destroy(struct VMSpace *);
+struct VMSpace   *vm_space_clone(struct VMSpace *);
 
-int          vm_user_load(struct VM *, void *, struct Inode *, size_t, off_t);
+int          vm_space_copy_out(struct VMSpace *, void *, const void *, size_t);
+int          vm_space_copy_in(struct VMSpace *, void *, const void *, size_t);
+int          vm_space_check_buf(struct VMSpace *, const void *, size_t, unsigned);
+int          vm_space_check_str(struct VMSpace *, const char *, unsigned);
 
-int          vm_range_alloc(struct VM *, void *, size_t, int);
-void         vm_range_free(struct VM *, void *, size_t);
+int          vm_space_load_inode(struct VMSpace *, void *, struct Inode *, size_t, off_t);
 
-int          vm_handle_fault(struct VM *, uintptr_t);
+int          vm_range_alloc(struct VMSpace *, void *, size_t, int);
+void         vm_range_free(struct VMSpace *, void *, size_t);
 
-// void         vm_print_areas(struct VM *);
-void        *vm_mmap(struct VM *, void *, size_t, int);
+int          vm_handle_fault(struct VMSpace *, uintptr_t);
+
+// void         vm_print_areas(struct VMSpace *);
+void        *vm_space_alloc(struct VMSpace *, void *, size_t, int);
 
 #endif  // !__KERNEL_INCLUDE_KERNEL_MM_VM_H__

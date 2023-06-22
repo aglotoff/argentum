@@ -51,7 +51,7 @@ entry:
   vmsr  fpexc, r3
 
   // Load the physical address of the initial translation table
-  ldr   r2, =KVA2PA(entry_trtab)
+  ldr   r2, =KVA2PA(entry_pgdir)
   mcr   CP15_TTBR0(r2)
 
   // Assign domain access

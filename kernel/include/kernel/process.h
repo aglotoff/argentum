@@ -40,7 +40,7 @@ struct ProcessThread {
  */
 struct Process {
   /** The process' address space */
-  struct VM            *vm;
+  struct VMSpace            *vm;
 
   /** Main process thread */
   struct ProcessThread *thread;

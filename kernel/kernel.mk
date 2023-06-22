@@ -46,20 +46,20 @@ KERNEL_SRCFILES :=	\
 	kernel/fs/file.c \
 	kernel/fs/inode.c \
 	kernel/fs/path.c \
-	kernel/mm/mmu.c \
-	kernel/mm/page.c \
 	kernel/mm/kmem.c \
+	kernel/mm/page.c \
 	kernel/mm/vm.c \
 	kernel/net/net.c \
+	kernel/process/exec.c \
+	kernel/process/process.c \
+	kernel/process/vm_space.c \
 	kernel/context.S \
 	kernel/cprintf.c \
 	kernel/entry.S \
 	kernel/entry_trtab.c \
-	kernel/exec.c \
 	kernel/irq.c \
 	kernel/kdebug.c \
 	kernel/monitor.c \
-	kernel/process.c \
 	kernel/ptimer.c \
 	kernel/syscall.c \
 	kernel/trapentry.S \

@@ -45,7 +45,7 @@ static int          page_list_contains(struct Page *, unsigned);
 // Initialization happens in two phases:
 // 
 // 1. main() calls page_init_low() while still using the initial translation
-//    table to place just the pages mapped by entry_trtab on the free list.
+//    table to place just the pages mapped by entry_pgdir on the free list.
 // 2. main() calls page_init_high() after installing the full kernel
 //    translation table to place the rest of the pages on the free list.
 //
@@ -75,7 +75,7 @@ page_init_low(void)
     free_list[i].bitmap = (uint32_t *) boot_alloc(bitmap_len);
   }
 
-  // Place pages mapped by 'entry_trtab' to the free list.
+  // Place pages mapped by 'entry_pgdir' to the free list.
   page_free_region(0, PHYS_KERNEL_LOAD);
   page_free_region(KVA2PA(boot_alloc(0)), PHYS_ENTRY_LIMIT);
 

@@ -79,7 +79,7 @@ sys_get_num(void)
   int *pc = (int *) (current->thread->tf->pc - 4);
   int r;
 
-  if ((r = vm_user_check_buf(current->vm, pc, sizeof(int), VM_READ)) < 0)
+  if ((r = vm_space_check_buf(current->vm, pc, sizeof(int), VM_READ)) < 0)
     return r;
 
   return *pc & 0xFFFFFF;
@@ -166,7 +166,7 @@ sys_arg_buf(int n, void **pp, size_t len, int perm)
   void *ptr = (void *) sys_get_arg(n);
   int r;
 
-  if ((r = vm_user_check_buf(process_current()->vm, ptr, len, perm)) < 0)
+  if ((r = vm_space_check_buf(process_current()->vm, ptr, len, perm)) < 0)
     return r;
 
   *pp = ptr;
@@ -192,7 +192,7 @@ sys_arg_str(int n, const char **strp, int perm)
   char *str = (char *) sys_get_arg(n);
   int r;
 
-  if ((r = vm_user_check_str(process_current()->vm, str, perm)) < 0)
+  if ((r = vm_space_check_str(process_current()->vm, str, perm)) < 0)
     return r;
 
   *strp = str;
@@ -241,14 +241,14 @@ sys_arg_args(int n, char ***store)
   for (i = 0; ; i++) {
     int r;
 
-    if ((r = vm_user_check_buf(current->vm, args + i, sizeof(args[i]),
+    if ((r = vm_space_check_buf(current->vm, args + i, sizeof(args[i]),
                                VM_READ)) < 0)
       return r;
 
     if (args[i] == NULL)
       break;
     
-    if ((r = vm_user_check_str(current->vm, args[i], VM_READ)) < 0)
+    if ((r = vm_space_check_str(current->vm, args[i], VM_READ)) < 0)
       return r;
   }
 
