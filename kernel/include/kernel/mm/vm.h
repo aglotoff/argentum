@@ -15,12 +15,23 @@
 struct Inode;
 struct Page;
 
-#define VM_READ     (1 << 0)  ///< Readable
-#define VM_WRITE    (1 << 1)  ///< Writeable
-#define VM_USER     (1 << 2)  ///< Accessible from user mode
-#define VM_EXEC     (1 << 3)  ///< Executable
-#define VM_NOCACHE  (1 << 4)  ///< Disable caching
-#define VM_COW      (1 << 5)  ///< Copy-on-write
+/** Virtual memory mapping flags */
+enum {
+  /** Readable */
+  VM_READ      = (1 << 0),
+  /** Writeable */
+  VM_WRITE     = (1 << 1),
+  /** Accessible from user mode */
+  VM_USER      = (1 << 2),
+  /** Executable */
+  VM_EXEC      = (1 << 3),
+  /** Disable cacheing */
+  VM_NOCACHE   = (1 << 4),
+  /** Copy-on-write */
+  VM_COW       = (1 << 5),
+  /** Anonymous mapping (i.e. not a file or fixed physical address) */
+  VM_ANONYMOUS = (1 << 6),
+};
 
 struct VMSpaceMapEntry {
   struct ListLink link;
@@ -36,9 +47,9 @@ struct VMSpace {
 
 void         vm_init(void);
 
-struct Page *vm_page_lookup(l1_desc_t *, const void *, l2_desc_t **);
-int          vm_page_insert(l1_desc_t *, struct Page *, void *, unsigned);
-void         vm_page_remove(l1_desc_t *, void *);
+struct Page *vm_page_lookup(void *, uintptr_t, int *);
+int          vm_page_insert(void *, struct Page *, uintptr_t, int);
+int          vm_page_remove(void *, uintptr_t);
 
 struct VMSpace   *vm_space_create(void);
 void         vm_space_destroy(struct VMSpace *);

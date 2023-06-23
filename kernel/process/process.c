@@ -77,14 +77,14 @@ process_init(void)
 static void
 process_thread_prepare_switch(struct Task *task)
 {
-  mmu_switch_user(((struct ProcessThread *) task)->process->vm->pgdir);
+  vm_load(((struct ProcessThread *) task)->process->vm->pgdir);
 }
 
 static void
 process_thread_finish_switch(struct Task *task)
 {
   (void) task;
-  mmu_switch_kernel();
+  vm_load_kernel();
 }
 
 static void

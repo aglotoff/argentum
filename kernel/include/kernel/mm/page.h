@@ -23,8 +23,8 @@ struct KMemSlab;
  * Physical page block info.
  */
 struct Page {
-  struct ListLink     link;         ///< Link into the free list
-  int                 ref_count;    ///< Reference counter
+  struct ListLink  link;         ///< Link into the free list
+  int              ref_count;    ///< Reference counter
   struct KMemSlab *slab;         ///< The slab this page block belongs to
 };
 

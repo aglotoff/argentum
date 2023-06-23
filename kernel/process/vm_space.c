@@ -34,7 +34,7 @@ vm_range_alloc(struct VMSpace *vm, void *va, size_t n, int prot)
       return -ENOMEM;
     }
 
-    if ((r = (vm_page_insert(vm->pgdir, page, a, prot)) != 0)) {
+    if ((r = (vm_page_insert(vm->pgdir, page, (uintptr_t) a, prot)) != 0)) {
       page_free_one(page);
       vm_range_free(vm, start, a - start);
       return r;
@@ -56,14 +56,13 @@ vm_range_free(struct VMSpace *vm, void *va, size_t n)
     panic("invalid range [%p,%p)", a, end);
 
   for ( ; a < end; a += PAGE_SIZE)
-    vm_page_remove(vm->pgdir, a);
+    vm_page_remove(vm->pgdir, (uintptr_t) a);
 }
 
 int
 vm_range_clone(struct VMSpace *src, struct VMSpace *dst, void *va, size_t n)
 {
   struct Page *src_page, *dst_page;
-  l2_desc_t *pte;
   uint8_t *a, *end;
   int r;
 
@@ -71,26 +70,24 @@ vm_range_clone(struct VMSpace *src, struct VMSpace *dst, void *va, size_t n)
   end = ROUND_UP((uint8_t *) va + n, PAGE_SIZE);
 
   for ( ; a < end; a += PAGE_SIZE) {
-    src_page = vm_page_lookup(src->pgdir, a, &pte);
+    int perm;
+
+    src_page = vm_page_lookup(src->pgdir, (uintptr_t) a, &perm);
 
     if (src_page != NULL) {
-      unsigned perm;
-
-      perm = mmu_pte_get_flags(pte);
-
       if ((perm & VM_WRITE) || (perm & VM_COW)) {
         perm &= ~VM_WRITE;
         perm |= VM_COW;
 
-        if ((r = vm_page_insert(src->pgdir, src_page, a, perm)) < 0)
+        if ((r = vm_page_insert(src->pgdir, src_page, (uintptr_t) a, perm)) < 0)
           return r;
-        if ((r = vm_page_insert(dst->pgdir, src_page, a, perm)) < 0)
+        if ((r = vm_page_insert(dst->pgdir, src_page, (uintptr_t) a, perm)) < 0)
           return r;
       } else {
         if ((dst_page = page_alloc_one(0)) == NULL)
           return -ENOMEM;
 
-        if ((r = vm_page_insert(dst->pgdir, dst_page, va, perm)) < 0) {
+        if ((r = vm_page_insert(dst->pgdir, dst_page, (uintptr_t) va, perm)) < 0) {
           page_free_one(dst_page);
           return r;
         }
@@ -120,7 +117,7 @@ vm_space_copy_out(struct VMSpace *vm, void *dst_va, const void *src_va, size_t n
     uint8_t *kva;
     size_t offset, ncopy;
 
-    if ((page = vm_page_lookup(vm->pgdir, dst, NULL)) == NULL)
+    if ((page = vm_page_lookup(vm->pgdir, (uintptr_t) dst, NULL)) == NULL)
       return -EFAULT;
     
     kva    = (uint8_t *) page2kva(page);
@@ -148,7 +145,7 @@ vm_space_copy_in(struct VMSpace *vm, void *dst_va, const void *src_va, size_t n)
     uint8_t *kva;
     size_t offset, ncopy;
 
-    if ((page = vm_page_lookup(vm->pgdir, src, NULL)) == NULL)
+    if ((page = vm_page_lookup(vm->pgdir, (uintptr_t) src, NULL)) == NULL)
       return -EFAULT;
 
     kva    = (uint8_t *) page2kva(page);
@@ -176,7 +173,6 @@ vm_space_check_buf(struct VMSpace *vm, const void *va, size_t n, unsigned perm)
 {
   struct Page *page, *new_page;
   const char *p, *end;
-  l2_desc_t *pte;
 
   p   = ROUND_DOWN((const char *) va, PAGE_SIZE);
   end = ROUND_UP((const char *) va + n, PAGE_SIZE);
@@ -185,12 +181,10 @@ vm_space_check_buf(struct VMSpace *vm, const void *va, size_t n, unsigned perm)
     return -EFAULT;
 
   while (p != end) {
-    unsigned curr_perm;
+    int curr_perm;
 
-    if ((page = vm_page_lookup(vm->pgdir, (void *) p, &pte)) == NULL)
+    if ((page = vm_page_lookup(vm->pgdir, (uintptr_t) p, &curr_perm)) == NULL)
       return -EFAULT;
-
-    curr_perm = mmu_pte_get_flags(pte);
 
     if ((perm & VM_WRITE) && (curr_perm & VM_COW)) {
       curr_perm &= ~VM_COW;
@@ -204,7 +198,7 @@ vm_space_check_buf(struct VMSpace *vm, const void *va, size_t n, unsigned perm)
 
       memcpy(page2kva(new_page), page2kva(page), PAGE_SIZE);
 
-      if ((vm_page_insert(vm->pgdir, new_page, (void *) p, curr_perm)) != 0)
+      if ((vm_page_insert(vm->pgdir, new_page, (uintptr_t) p, curr_perm)) != 0)
         return -EFAULT;
     } else {
       if ((curr_perm & perm) != perm)
@@ -223,13 +217,14 @@ vm_space_check_str(struct VMSpace *vm, const char *s, unsigned perm)
   struct Page *page;
   const char *p;
   unsigned off;
-  l2_desc_t *pte;
 
   assert(VIRT_KERNEL_BASE % PAGE_SIZE == 0);
 
   while (s < (char *) VIRT_KERNEL_BASE) {
-    page = vm_page_lookup(vm->pgdir, s, &pte);
-    if ((page == NULL) || ((mmu_pte_get_flags(pte) & perm) != perm))
+    int flags;
+
+    page = vm_page_lookup(vm->pgdir, (uintptr_t) s, &flags);
+    if ((page == NULL) || ((flags & perm) != perm))
       return -EFAULT;
 
     p = (const char *) page2kva(page);
@@ -259,7 +254,7 @@ vm_space_load_inode(struct VMSpace *vm, void *va, struct Inode *ip, size_t n, of
   dst = (uint8_t *) va;
 
   while (n != 0) {
-    page = vm_page_lookup(vm->pgdir, dst, NULL);
+    page = vm_page_lookup(vm->pgdir, (uintptr_t) dst, NULL);
     if (page == NULL)
       return -EFAULT;
 
@@ -286,7 +281,7 @@ vm_space_create(void)
   if ((vm = (struct VMSpace *) kmem_alloc(vmcache)) == NULL)
     return NULL;
 
-  if ((vm->pgdir = mmu_pgtab_create()) == NULL) {
+  if ((vm->pgdir = vm_create()) == NULL) {
     kmem_free(vmcache, vm);
     return NULL;
   }
@@ -307,7 +302,7 @@ vm_space_destroy(struct VMSpace *vm)
     list_remove(&area->link);
   }
 
-  mmu_pgtab_destroy(vm->pgdir);
+  vm_destroy(vm->pgdir);
 
   kmem_free(vmcache, vm);
 }
@@ -356,19 +351,17 @@ int
 vm_handle_fault(struct VMSpace *vm, uintptr_t va)
 {
   struct Page *fault_page, *page;
-  l2_desc_t *pte;
-  int prot;
+  int flags;
 
-  fault_page = vm_page_lookup(vm->pgdir, (void *) va, &pte);
-  prot = mmu_pte_get_flags(pte);
+  fault_page = vm_page_lookup(vm->pgdir, va, &flags);
 
-  if ((prot & VM_COW) && ((page = page_alloc_one(0)) != NULL)) {
+  if ((flags & VM_COW) && ((page = page_alloc_one(0)) != NULL)) {
     memcpy(page2kva(page), page2kva(fault_page), PAGE_SIZE);
 
-    prot &= ~VM_COW;
-    prot |= VM_WRITE;
+    flags &= ~VM_COW;
+    flags |= VM_WRITE;
 
-    if (vm_page_insert(vm->pgdir, page, (void *) va, prot) == 0)
+    if (vm_page_insert(vm->pgdir, page, va, flags) == 0)
       return 0;
   }
 

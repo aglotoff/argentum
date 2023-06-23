@@ -160,7 +160,7 @@ process_exec(const char *path, char *const argv[], char *const envp[])
 
   proc = process_current();
 
-  mmu_switch_user(vm->pgdir);
+  vm_load(vm->pgdir);
   vm_space_destroy(proc->vm);
 
   proc->vm        = vm;
