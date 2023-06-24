@@ -29,6 +29,7 @@ USER_SRCFILES += \
 	user/test/ctype.c \
 	user/test/errno.c \
 	user/test/float.c \
+	user/test/fnmatch.c \
 	user/test/fork.c \
 	user/test/limits.c \
 	user/test/math.c \

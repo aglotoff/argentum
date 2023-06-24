@@ -47,6 +47,9 @@ LIB_SRCFILES += \
 	lib/float/__fvalues.c
 
 LIB_SRCFILES += \
+	lib/fnmatch/fnmatch.c
+
+LIB_SRCFILES += \
 	lib/locale/_C_locale.c \
 	lib/locale/localeconv.c \
 	lib/locale/setlocale.c
