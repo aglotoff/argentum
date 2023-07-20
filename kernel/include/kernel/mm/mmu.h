@@ -18,8 +18,8 @@ void    vm_destroy(void *);
 
 
 
-void         mmu_init(void);
-void         mmu_init_percpu(void);
+void         vm_init(void);
+void         vm_init_percpu(void);
 
 void         vm_load_kernel(void);
 void         vm_load(void *);

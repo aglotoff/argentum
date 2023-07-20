@@ -15,10 +15,10 @@
 #include <kernel/mm/kmem.h>
 #include <kernel/mm/mmu.h>
 #include <kernel/mm/page.h>
-#include <kernel/mm/vm.h>
 #include <kernel/monitor.h>
 #include <kernel/process.h>
 #include <kernel/spinlock.h>
+#include <kernel/vmspace.h>
 #include <kernel/trap.h>
 
 struct KMemCache *process_cache;

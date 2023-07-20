@@ -13,7 +13,7 @@
 #include <kernel/drivers/rtc.h>
 #include <kernel/fs/file.h>
 #include <kernel/fs/fs.h>
-#include <kernel/mm/vm.h>
+#include <kernel/vmspace.h>
 #include <kernel/process.h>
 #include <kernel/sys.h>
 #include <kernel/types.h>

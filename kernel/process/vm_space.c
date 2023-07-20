@@ -9,7 +9,7 @@
 #include <kernel/mm/kmem.h>
 #include <kernel/mm/mmu.h>
 #include <kernel/mm/page.h>
-#include <kernel/mm/vm.h>
+#include <kernel/vmspace.h>
 #include <kernel/process.h>
 
 static struct KMemCache *vmcache;
@@ -341,7 +341,7 @@ vm_space_clone(struct VMSpace *vm)
 }
 
 void
-vm_init(void)
+vm_space_init(void)
 {
   vmcache = kmem_cache_create("vmcache", sizeof(struct VMSpace), 0, NULL, NULL);
   vm_areacache = kmem_cache_create("vm_areacache", sizeof(struct VMSpaceMapEntry), 0, NULL, NULL);
@@ -358,10 +358,7 @@ vm_handle_fault(struct VMSpace *vm, uintptr_t va)
   if ((flags & VM_COW) && ((page = page_alloc_one(0)) != NULL)) {
     memcpy(page2kva(page), page2kva(fault_page), PAGE_SIZE);
 
-    flags &= ~VM_COW;
-    flags |= VM_WRITE;
-
-    if (vm_page_insert(vm->pgdir, page, va, flags) == 0)
+    if (vm_page_insert(vm->pgdir, page, va, (flags & ~VM_COW) | VM_WRITE) == 0)
       return 0;
   }
 

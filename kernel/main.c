@@ -17,7 +17,7 @@
 #include <kernel/mm/kmem.h>
 #include <kernel/mm/mmu.h>
 #include <kernel/mm/page.h>
-#include <kernel/mm/vm.h>
+#include <kernel/vmspace.h>
 #include <kernel/process.h>
 #include <kernel/sd.h>
 #include <kernel/net.h>
@@ -46,7 +46,7 @@ main(void)
 {
   // Begin the memory manager initialization
   page_init_low();      // Physical page allocator (lower memory)
-  mmu_init();           // Memory management unit and kernel mappings
+  vm_init();            // Memory management unit and kernel mappings
 
   // Now we can initialize the console to print messages during initialization
   irq_init();           // Interrupt controller
@@ -55,7 +55,7 @@ main(void)
   // Complete the memory manager initialization
   page_init_high();     // Physical page allocator (higher memory)
   kmem_init();          // Object allocator
-  vm_init();            // Virtual memory manager
+  vm_space_init();      // Virtual memory manager
 
   // Initialize the device drivers
   rtc_init();           // Real-time clock
@@ -84,7 +84,7 @@ void
 mp_enter(void)
 {
   // Per-CPU initialization
-  mmu_init_percpu();    // Load the kernel page table
+  vm_init_percpu();    // Load the kernel page table
   irq_init_percpu();
 
   mp_main();

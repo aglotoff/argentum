@@ -46,6 +46,7 @@ KERNEL_SRCFILES :=	\
 	kernel/fs/file.c \
 	kernel/fs/inode.c \
 	kernel/fs/path.c \
+	kernel/mm/entry_pgdir.c \
 	kernel/mm/kmem.c \
 	kernel/mm/page.c \
 	kernel/mm/vm.c \
@@ -56,7 +57,6 @@ KERNEL_SRCFILES :=	\
 	kernel/context.S \
 	kernel/cprintf.c \
 	kernel/entry.S \
-	kernel/entry_trtab.c \
 	kernel/irq.c \
 	kernel/kdebug.c \
 	kernel/monitor.c \
