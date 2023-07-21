@@ -4,7 +4,8 @@
 #include <kernel/mm/page.h>
 #include <kernel/mm/vm.h>
 
-static void        *arch_vm_create_kernel(void);
+// TODO: move these into a seperate header
+static void         arch_vm_create_kernel(void);
 static void         arch_vm_init_percpu(void);
 static int          arch_vm_pte_valid(void *);
 static physaddr_t   arch_vm_pte_addr(void *);
@@ -21,19 +22,18 @@ static void         arch_vm_invalidate(uintptr_t);
 static void *kernel_pgtab;
 
 /**
- * Initialize and load the master page table.
+ * Initialize MMU, create and load the master page table. This function must be
+ * called only on the bootstrap processor.
  */
 void
 vm_init(void)
 {
-  if ((kernel_pgtab = arch_vm_create_kernel()) == NULL)
-    panic("out of memory");
-
-  vm_init_percpu();
+  arch_vm_create_kernel();
+  arch_vm_init_percpu();
 }
 
 /**
- * Load the master page table.
+ * Initialize MMU and load the master page table on the current processor.
  */
 void
 vm_init_percpu(void)
@@ -54,6 +54,9 @@ vm_create(void)
 
 /**
  * Destroy a page table.
+ * 
+ * The caller must remove all mappings from the page table before calling
+ * this function.
  * 
  * @param pgtab Pointer to the page table to be destroyed.
  */
@@ -84,6 +87,20 @@ vm_load(void *pgtab)
 }
 
 /**
+ * Check that mappings for the provided virtual address could be modified
+ * in the specified page table.
+ * 
+ * @param pgtab Pointer to the page table
+ * @param va    The virtual address
+ */
+static void
+vm_assert(void *pgtab, uintptr_t va)
+{
+  if ((va >= VIRT_KERNEL_BASE) && (pgtab != kernel_pgtab))
+    panic("user va %p must be below VIRT_KERNEL_BASE", va);
+}
+
+/**
  * Find a physical page mapped at the given virtual address.
  * 
  * @param pgtab       Pointer to the page table to search
@@ -98,13 +115,12 @@ vm_page_lookup(void *pgtab, uintptr_t va, int *flags_store)
 {
   void *pte;
 
-  if ((va >= VIRT_KERNEL_BASE) && (pgtab != kernel_pgtab))
-    panic("va must be below VIRT_KERNEL_BASE");
+  vm_assert(pgtab, va);
 
   if ((pte = arch_vm_lookup(pgtab, va, 0)) == NULL)
     return NULL;
 
-  if (!arch_vm_pte_valid(pte) || !(arch_vm_pte_flags(pte) & VM_ANONYMOUS))
+  if (!arch_vm_pte_valid(pte) || !(arch_vm_pte_flags(pte) & __VM_PAGE))
     return NULL;
 
   if (flags_store)
@@ -130,8 +146,7 @@ vm_page_insert(void *pgtab, struct Page *page, uintptr_t va, int flags)
 {
   void *pte;
 
-  if ((va >= VIRT_KERNEL_BASE) && (pgtab != kernel_pgtab))
-    panic("va must be below VIRT_KERNEL_BASE");
+  vm_assert(pgtab, va);
 
   if ((pte = arch_vm_lookup(pgtab, va, 1)) == NULL)
     return -ENOMEM;
@@ -144,7 +159,7 @@ vm_page_insert(void *pgtab, struct Page *page, uintptr_t va, int flags)
   // If present, remove the previous mapping
   vm_page_remove(pgtab, (uintptr_t) va);
 
-  arch_vm_pte_set(pte, page2pa(page), flags | VM_ANONYMOUS);
+  arch_vm_pte_set(pte, page2pa(page), flags | __VM_PAGE);
 
   return 0;
 }
@@ -164,13 +179,12 @@ vm_page_remove(void *pgtab, uintptr_t va)
   struct Page *page;
   void *pte;
 
-  if ((va >= VIRT_KERNEL_BASE) && (pgtab != kernel_pgtab))
-    panic("va must be below VIRT_KERNEL_BASE");
+  vm_assert(pgtab, va);
 
   if ((pte = arch_vm_lookup(pgtab, va, 0)) == NULL)
     return 0;
 
-  if (!arch_vm_pte_valid(pte) || !(arch_vm_pte_flags(pte) & VM_ANONYMOUS))
+  if (!arch_vm_pte_valid(pte) || !(arch_vm_pte_flags(pte) & __VM_PAGE))
     return 0;
 
   page = pa2page(arch_vm_pte_addr(pte));
@@ -185,8 +199,31 @@ vm_page_remove(void *pgtab, uintptr_t va)
 }
 
 // -----------------------------------------------------------------------------
-// Architecture-specific functions
+// Implementation of architecture-specific VM functions.
+//
+// By design, ARMv7 MMU uses two translation tables. The kernel is located in
+// the upper part of address space (above VIRT_KERNEL_BASE) and managed by the
+// page table in TTBR1. User processes are in the lower part of memory (below
+// VIRT_KERNEL_BASE) and managed by the page table in TTBR0. On each context
+// switch, TTBR0 is updated to point to the page table of the current process.
+// The value of TTBR1 should never change.
+// 
+// Since the ARM hardware support 1K page tables at the second level, but our
+// kernel manages physical memory in units of 4K pages, we fit two second-level
+// tables in one page (and use the remaining space to store extra flags that are
+// not provided by the hardware for each page table entry).
+//
+// TODO: move these into a separate file
+//
 // -----------------------------------------------------------------------------
+
+#define L2_TABLES_PER_PAGE  2
+
+static int *
+arch_vm_pte_ext(void *pte)
+{
+  return (int *) ((l2_desc_t *) pte + (L2_NR_ENTRIES * L2_TABLES_PER_PAGE));
+}
 
 /**
  * Check whether a page table entry is valid.
@@ -198,6 +235,7 @@ vm_page_remove(void *pgtab, uintptr_t va)
 static int
 arch_vm_pte_valid(void *pte)
 {
+  // In our implementation, all valid PTEs map small pages 
   return (*(l2_desc_t *) pte & L2_DESC_TYPE_SM) == L2_DESC_TYPE_SM;
 }
 
@@ -224,10 +262,10 @@ arch_vm_pte_addr(void *pte)
 static int
 arch_vm_pte_flags(void *pte)
 {
-  return *((l2_desc_t *) pte + (L2_NR_ENTRIES * 2));
+  return *arch_vm_pte_ext(pte);
 }
 
-// Map VM flags to ARM MMU AP bits
+// Map VM flags to ARMv7 MMU AP bits
 static int flags_to_ap[] = {
   [VM_READ]                      = AP_PRIV_RO, 
   [VM_WRITE]                     = AP_PRIV_RW, 
@@ -237,14 +275,8 @@ static int flags_to_ap[] = {
   [VM_USER | VM_READ | VM_WRITE] = AP_BOTH_RW, 
 };
 
-static void
-arch_vm_pte_set_flags(l2_desc_t *pte, int flags)
-{
-  *(pte + (L2_NR_ENTRIES * 2)) = flags;
-}
-
 /**
- * Set a page table entry
+ * Set a page table entry.
  * 
  * @param pte   Pointer to the page table entry
  * @param pa    Base physical address
@@ -261,67 +293,68 @@ arch_vm_pte_set(void *pte, physaddr_t pa, int flags)
   if (!(flags & VM_NOCACHE))
     bits |= (L2_DESC_B | L2_DESC_C);
 
-  *(l2_desc_t *)pte = pa | bits | L2_DESC_TYPE_SM;
-  arch_vm_pte_set_flags(pte, flags);
+  *(l2_desc_t *) pte = pa | bits | L2_DESC_TYPE_SM;
+  *arch_vm_pte_ext(pte) = flags;
 }
 
+/**
+ * Clear a page table entry.
+ * 
+ * @param pte Pointer to the page table entry
+ */
 static void
 arch_vm_pte_clear(void *pte)
 {
   *(l2_desc_t *) pte = 0;
-  arch_vm_pte_set_flags((l2_desc_t *) pte, 0);
+  *arch_vm_pte_ext(pte) = 0;
 }
 
-static inline void
-arch_vm_section_set(l1_desc_t *tte, physaddr_t pa, int prot)
-{
-  int flags;
-
-  flags = L1_DESC_SECT_AP(flags_to_ap[prot & 7]);
-  if ((prot & VM_USER) && !(prot & VM_EXEC))
-    flags |= L1_DESC_SECT_XN;
-  if (!(prot & VM_NOCACHE))
-    flags |= (L1_DESC_SECT_B | L1_DESC_SECT_C);
-
-  *tte = pa | flags | L1_DESC_TYPE_SECT;
-}
-
+/**
+ * Invalidate TLB entries matching the specified virtual address.
+ *
+ * @param va The virtual address of the page to invalidate
+ */
 static void
 arch_vm_invalidate(uintptr_t va)
 {
   cp15_tlbimva(va);
 }
 
-//
-// Returns the pointer to the page table entry in the translation table pgtab
-// that corresponds to the virtual address va. If alloc is not zero, allocate
-// any required page tables.
-//
+/**
+ * Get a page table entry for the given virtual address.
+ * 
+ * @param pgtab Pointer to the page table
+ * @param va    The virtual address
+ * @param alloc Whether to allocate memory for the relevant entry if it doesn't
+ *              exist
+ * 
+ * @return Pointer to the page table entry for the specified virtual address
+ *         or NULL if the relevant entry does not exist
+ */
 static void *
 arch_vm_lookup(void *pgtab, uintptr_t va, int alloc)
 {
-  l1_desc_t *trtab, *tte;
+  l1_desc_t *tt, *tte;
   l2_desc_t *pte;
 
-  trtab = (l1_desc_t *) pgtab;
-  tte = &trtab[L1_IDX(va)];
+  tt = (l1_desc_t *) pgtab;
+  tte = &tt[L1_IDX(va)];
   if ((*tte & L1_DESC_TYPE_MASK) == L1_DESC_TYPE_FAULT) {
     struct Page *page;
     physaddr_t pa;
 
     if (!alloc || (page = page_alloc_one(PAGE_ALLOC_ZERO)) == NULL)
       return NULL;
-    
+  
     page->ref_count++;
 
     pa = page2pa(page);
 
-    // We could fit four page tables into one physical page. But since we
-    // also need to store some metadata for each entry, we store only two
-    // page tables in the bottom of the allocated physical page.
-    trtab[(L1_IDX(va) & ~1) + 0] = pa | L1_DESC_TYPE_TABLE;
-    trtab[(L1_IDX(va) & ~1) + 1] = (pa + L2_TABLE_SIZE) | L1_DESC_TYPE_TABLE;
+    // Allocate space for two second-level page tables at a time
+    tt[(L1_IDX(va) & ~1) + 0] = pa | L1_DESC_TYPE_TABLE;
+    tt[(L1_IDX(va) & ~1) + 1] = (pa + L2_TABLE_SIZE) | L1_DESC_TYPE_TABLE;
   } else if ((*tte & L1_DESC_TYPE_MASK) != L1_DESC_TYPE_TABLE) {
+    // The requested va belongs to a permanently mapped section
     panic("not a page table");
   }
 
@@ -329,47 +362,67 @@ arch_vm_lookup(void *pgtab, uintptr_t va, int alloc)
   return &pte[L2_IDX(va)];
 }
 
-// 
-// Map [va, va + n) of virtual address space to physical [pa, pa + n) in
-// the translation page pgtab.
-//
-// This function is only intended to set up static mappings in the kernel's
-// portion of address space.
-//
+/**
+ * Set a 1Mb section entry.
+ * 
+ * @param tte   Pointer to the section entry
+ * @param pa    Base physical address
+ * @param flags Mapping flags
+ */
+static inline void
+arch_vm_section_set(l1_desc_t *tte, physaddr_t pa, int flags)
+{
+  int bits;
+
+  bits = L1_DESC_SECT_AP(flags_to_ap[flags & 7]);
+  if ((flags & VM_USER) && !(flags & VM_EXEC))
+    bits |= L1_DESC_SECT_XN;
+  if (!(flags & VM_NOCACHE))
+    bits |= (L1_DESC_SECT_B | L1_DESC_SECT_C);
+
+  *tte = pa | bits | L1_DESC_TYPE_SECT;
+}
+
+/**
+ * Setup a permanent mapping for the given memory region in the master
+ * translation table. The memory region must be page-aligned.
+ * 
+ * @param va    The starting virtual address
+ * @param pa    The physical address to map to
+ * @param n     The size of the memory region to be mapped (in bytes)
+ * @param flags Mapping flags
+ */
 static void
-arch_vm_fixed_map(l1_desc_t *pgtab, uintptr_t va, uint32_t pa, size_t n,
-                  int prot)
+arch_vm_fixed_map(uintptr_t va, uint32_t pa, size_t n, int flags)
 { 
   assert(va % PAGE_SIZE == 0);
   assert(pa % PAGE_SIZE == 0);
   assert(n  % PAGE_SIZE == 0);
 
   while (n != 0) {
-    // Whenever possible, map entire 1MB sections to reduce the memory
-    // management overhead.
-    if ((va % L1_SECTION_SIZE == 0) &&
-        (pa % L1_SECTION_SIZE == 0) &&
+    // Whenever possible, map entire 1MB sections to reduce memory overhead for
+    // second-level page tables
+    if ((va % L1_SECTION_SIZE == 0) && (pa % L1_SECTION_SIZE == 0) &&
         (n  % L1_SECTION_SIZE == 0)) {
-      l1_desc_t *tte;
+      l1_desc_t *tte = (l1_desc_t *) kernel_pgtab + L1_IDX(va);
 
-      tte = &pgtab[L1_IDX(va)];
       if (*tte)
-        panic("remap");
+        panic("TTE for %p already exists", va);
 
-      arch_vm_section_set(tte, pa, prot);
+      arch_vm_section_set(tte, pa, flags);
 
       va += L1_SECTION_SIZE;
       pa += L1_SECTION_SIZE;
       n  -= L1_SECTION_SIZE;
     } else {
-      l2_desc_t *pte;
+      l2_desc_t *pte = arch_vm_lookup(kernel_pgtab, va, 1);
 
-      if ((pte = arch_vm_lookup(pgtab, va, 1)) == NULL)
-        panic("out of memory");
+      if (pte == NULL)
+        panic("cannot allocate PTE for %p", va);
       if (arch_vm_pte_valid(pte))
-        panic("remap %p", *pte);
+        panic("PTE for %p already exists", va);
 
-      arch_vm_pte_set(pte, pa, prot);
+      arch_vm_pte_set(pte, pa, flags);
 
       va += PAGE_SIZE;
       pa += PAGE_SIZE;
@@ -378,64 +431,67 @@ arch_vm_fixed_map(l1_desc_t *pgtab, uintptr_t va, uint32_t pa, size_t n,
   }
 }
 
-static void *
+/**
+ * Setup the master translation table.
+ */
+static void
 arch_vm_create_kernel(void)
 {
   extern uint8_t _start[];
 
   struct Page *page;
-  l1_desc_t *trtab;
 
   // Allocate the master translation table
   if ((page = page_alloc_block(2, PAGE_ALLOC_ZERO)) == NULL)
-    return NULL;
+    panic("cannot allocate kernel page table");
 
-  trtab = (l1_desc_t *) page2kva(page);
+  kernel_pgtab = page2kva(page);
+  page->ref_count++;
 
   // Map all physical memory at VIRT_KERNEL_BASE
   // Permissions: kernel RW, user NONE
-  arch_vm_fixed_map(trtab,
-                    VIRT_KERNEL_BASE, 0,
-                    PHYS_LIMIT,
-                    VM_READ | VM_WRITE);
+  arch_vm_fixed_map(VIRT_KERNEL_BASE, 0, PHYS_LIMIT, VM_READ | VM_WRITE);
 
   // Map I/O devices
   // Permissions: kernel RW, user NONE, disable cache 
-  arch_vm_fixed_map(trtab,
-                    VIRT_KERNEL_BASE + PHYS_LIMIT, PHYS_LIMIT,
+  arch_vm_fixed_map(VIRT_KERNEL_BASE + PHYS_LIMIT, PHYS_LIMIT,
                     VIRT_VECTOR_BASE - (VIRT_KERNEL_BASE + PHYS_LIMIT),
                     VM_READ | VM_WRITE | VM_NOCACHE);
 
   // Map exception vectors at VIRT_VECTOR_BASE
   // Permissions: kernel R, user NONE
-  arch_vm_fixed_map(trtab,
-                    VIRT_VECTOR_BASE, (physaddr_t) _start,
-                    PAGE_SIZE,
-                    VM_READ);
-
-  return trtab;
+  arch_vm_fixed_map(VIRT_VECTOR_BASE, (physaddr_t) _start, PAGE_SIZE, VM_READ);
 }
 
+/**
+ * Switch from the minimal entry translation table to the full master
+ * translation table
+ */
 static void
 arch_vm_init_percpu(void)
 {
-  // Switch from the minimal entry translation table to the full translation
-  // table.
   cp15_ttbr0_set(KVA2PA(kernel_pgtab));
   cp15_ttbr1_set(KVA2PA(kernel_pgtab));
 
-  // Size of the TTBR0 translation table is 8KB.
-  cp15_ttbcr_set(1);
+  cp15_ttbcr_set(1);  // TTBR0 table size is 8Kb
 
   cp15_tlbiall();
 }
 
-void *
+// Page block allocation order for user process page tables (8Kb)
+#define PGTAB_ORDER 1
+
+/**
+ * Create a user process page table.
+ *
+ * @return Pointer to the allocated page table or NULL if out of memory
+ */
+static void *
 arch_vm_create(void)
 {
   struct Page *page;
 
-  if ((page = page_alloc_block(1, PAGE_ALLOC_ZERO)) == NULL)
+  if ((page = page_alloc_block(PGTAB_ORDER, PAGE_ALLOC_ZERO)) == NULL)
     return NULL;
 
   page->ref_count++;
@@ -443,36 +499,49 @@ arch_vm_create(void)
   return page2kva(page);
 }
 
+/**
+ * Destroy a user process page table.
+ */
 static void
 arch_vm_destroy(void *pgtab)
 {
   struct Page *page;
   l1_desc_t *trtab;
-  l2_desc_t *pte;
-  unsigned i;
-  unsigned j;
+  
+  unsigned i, j;
   
   trtab = (l1_desc_t *) pgtab;
 
-  for (i = 0; i < L1_IDX(VIRT_KERNEL_BASE); i += 2) {
+  // Free all allocated second-level page tables
+  for (i = 0; i < L1_IDX(VIRT_KERNEL_BASE); i += L2_TABLES_PER_PAGE) {
+    l2_desc_t *pt;
+
     if (!trtab[i])
       continue;
 
     page = pa2page(L2_DESC_SM_BASE(trtab[i]));
+    pt   = (l2_desc_t *) page2kva(page);
 
-    pte = (l2_desc_t *) page2kva(page);
-    for (j = 0; j < L2_NR_ENTRIES * 2; j++)
-      assert(pte[j] == 0);
+    // Check that the caller has removed all mappings
+    for (j = 0; j < L2_NR_ENTRIES * L2_TABLES_PER_PAGE; j++)
+      if (arch_vm_pte_valid(&pt[j]))
+        panic("pte still in use");
 
     if (--page->ref_count == 0)
       page_free_one(page);
   }
 
+  // Finally, free the first-level translation table itself
   page = kva2page(trtab);
   if (--page->ref_count == 0)
-      page_free_block(page, 1);
+      page_free_block(page, PGTAB_ORDER);
 }
 
+/**
+ * Load a page table (architecture-specific version).
+ *
+ * @param pgtab Pointer to the page table to be loaded.
+ */
 static void
 arch_vm_load(void *pgtab)
 {

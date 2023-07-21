@@ -28,8 +28,8 @@ enum {
   VM_NOCACHE   = (1 << 4),
   /** Copy-on-write */
   VM_COW       = (1 << 5),
-  /** Anonymous mapping (i.e. not a file or fixed physical address) */
-  VM_ANONYMOUS = (1 << 6),
+  /** Page mapping (i.e. not a file or MMIO address) */
+  __VM_PAGE    = (1 << 6),
 };
 
 void         vm_init(void);
