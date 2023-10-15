@@ -1,0 +1,16 @@
+{
+  "files.associations": {
+    "stddef.h": "c",
+    "spinlock.h": "c",
+    "kernel.h": "c",
+    "regs.h": "c",
+    "trap.h": "c",
+    "realview_bpx_a9.h": "c",
+    "irq.h": "c",
+    "cpu.h": "c",
+    "assert.h": "c",
+    "arch_spinlock.h": "c",
+    "gic.h": "c",
+    "smp.h": "c"
+  }
+}

@@ -1,0 +1,18 @@
+{
+  "configurations": [
+    {
+      "name": "Codename Argentum",
+      "defines": ["__AG_KERNEL__"],
+      "includePath": [
+        "./include",
+        "./kernel/include",
+        "./kernel/arch/arm/include"
+      ],
+      "intelliSenseMode": "linux-gcc-x64",
+      "compilerPath": "/usr/bin/arm-none-eabi-gcc",
+      "cStandard": "gnu11",
+      "cppStandard": "c++11"
+    }
+  ],
+  "version": 4
+}
