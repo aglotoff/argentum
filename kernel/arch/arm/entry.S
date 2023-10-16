@@ -1,3 +1,4 @@
+#include <arch_vm.h>
 #include <smp.h>
 #include <memlayout.h>
 #include <regs.h>
@@ -51,6 +52,20 @@ _start:
   // Enable the FPU
   mov   r3, #FPEXC_EN 
   vmsr  fpexc, r3
+
+  // Load the physical address of the initial translation table
+  ldr   r2, =(entry_pgdir - VIRT_KERNEL_BASE)
+  mcr   CP15_TTBR0(r2)
+
+  // Assign domain access
+  ldr   r2, =DACR_DN(0, DA_CLIENT)
+  mcr   CP15_DACR(r2)
+
+  // Enable MMU, cache, and high exception vectors
+  mrc   CP15_SCTLR(r2)
+  ldr   r1, =(SCTLR_M | SCTLR_C | SCTLR_I | SCTLR_V)
+  orr   r2, r2, r1
+  mcr   CP15_SCTLR(r2)
 
   // Get the current processor ID
   mrc   CP15_MPIDR(r0)

@@ -11,17 +11,20 @@ SECTIONS
     *(.entry*)
   }
 
-  .text : AT(ADDR(.text)) { 
+  /* Link the rest of the kernel at high virtual addresses */
+  . += 0x80000000;
+
+  .text : AT(ADDR(.text) - 0x80000000) { 
     *(.text*)
     PROVIDE(_etext = .);
   }
 
-  .rodata : AT(ADDR(.rodata)) {
+  .rodata : AT(ADDR(.rodata) - 0x80000000) {
     *(.rodata*)
   }
 
   /* Include debugging information in kernel memory */
-  .debug : AT(ADDR(.debug)) {
+  .debug : AT(ADDR(.debug) - 0x80000000) {
     PROVIDE(__debug_info_begin__ = .);
     *(.debug_info*)
     PROVIDE(__debug_info_end__ = .);
@@ -51,12 +54,12 @@ SECTIONS
   /* Adjust the address of the data section to the next page boundary */
   . = ALIGN(0x1000);
 
-  .data : AT(ADDR(.data))  {
+  .data : AT(ADDR(.data) - 0x80000000)  {
     *(.data*)
     PROVIDE(_edata = .);
   }
 
-  .bss : AT(ADDR(.bss))  {
+  .bss : AT(ADDR(.bss) - 0x80000000)  {
     *(.bss*)
     *(COMMON*)
     PROVIDE(_end = .);

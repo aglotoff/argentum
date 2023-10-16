@@ -4,6 +4,7 @@
 #include <mptimer.h>
 #include <realview_bpx_a9.h>
 #include <regs.h>
+#include <vm.h>
 #include <smp.h>
 
 #define PERIPHCLK     100000000U    // Peripheral clock rate, in Hz
@@ -32,10 +33,10 @@ void
 arch_irq_init(void)
 {
   // Initialize the interrupt controller
-  gic_init(&gic, (void *) GICD_BASE, (void *) GICC_BASE);
+  gic_init(&gic, PA2KVA(GICD_BASE), PA2KVA(GICC_BASE));
 
   // Initialize the private timer and register the timer IRQ handler
-  mptimer_init(&mptimer, (void *) MPTIMER_BASE, PERIPHCLK / TICK_RATE);
+  mptimer_init(&mptimer, PA2KVA(MPTIMER_BASE), PERIPHCLK / TICK_RATE);
   irq_hook_attach(&mptimer_hook, MPTIMER_IRQ, mptimer_handle_irq);
 }
 

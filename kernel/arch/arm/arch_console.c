@@ -1,4 +1,5 @@
 #include <arch_console.h>
+#include <vm.h>
 #include <pl011.h>
 #include <realview_bpx_a9.h>
 
@@ -9,7 +10,7 @@ static struct PL011 uart0;
 void
 arch_console_init(void)
 {
-  pl011_init(&uart0, (void *) UART0_BASE, UART_CLOCK, UART_BAUD_RATE);
+  pl011_init(&uart0, PA2KVA(UART0_BASE), UART_CLOCK, UART_BAUD_RATE);
 }
 
 void

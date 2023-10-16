@@ -4,21 +4,26 @@
 #include <arch_trap.h>
 #include <irq.h>
 #include <kernel.h>
+#include <page.h>
 #include <smp.h>
+#include <vm.h>
 
 void
 main(void)
 {
+  // Initialize architecture-specific trap handling
+  arch_trap_init();
+  
+  // Initialize the physical page allocator
+  page_init();
+  // Initialize architecture-specific virtual memory system
+  arch_vm_init();
+
   // Initialize the console driver
   arch_console_init();
   // Now we can output messages
   kprintf("Argentum booting\n");
-
-  // Initialize architecture-specific trap handling
-  arch_trap_init();
   
-  // TODO: initialize the page allocator
-  // TODO: initialize architecture-specific virtual memory system
   // TODO: initialize the slab allocator
 
   // Initialize IRQ structures
@@ -28,6 +33,7 @@ main(void)
 
   // TODO: initialize the process manager
 
+  // Start other cores
   arch_smp_init();
 
   // TODO: start the scheduler

@@ -12,6 +12,8 @@ KERNEL_SRCFILES :=	\
 	kernel/arch/arm/arch_irq.c \
 	kernel/arch/arm/arch_spinlock.c \
 	kernel/arch/arm/arch_trap.c \
+	kernel/arch/arm/arch_vm.c \
+	kernel/arch/arm/entry_pgdir.c \
 	kernel/arch/arm/entry.S \
 	kernel/arch/arm/gic.c \
 	kernel/arch/arm/mptimer.c \
@@ -21,11 +23,14 @@ KERNEL_SRCFILES :=	\
 	kernel/irq.c \
 	kernel/kprintf.c \
 	kernel/main.c \
+	kernel/page.c \
 	kernel/smp.c \
-	kernel/spinlock.c
+	kernel/spinlock.c \
+	kernel/vm.c
 
 KERNEL_SRCFILES += \
-  lib/memmove.c \
+	lib/memmove.c \
+	lib/memset.c \
 	lib/snprintf.c \
 	lib/strchr.c \
 	lib/strlen.c \

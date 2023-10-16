@@ -7,6 +7,7 @@
 #include <smp.h>
 #include <realview_bpx_a9.h>
 #include <spinlock.h>
+#include <vm.h>
 
 static struct Cpu cpus[SMP_CPU_MAX];
 
@@ -18,13 +19,14 @@ arch_smp_init(void)
   // The boot code for realview-pbx-a9 enables GIC for secondary CPUs and puts
   // them into a loop waiting for an IPI and checking the SYS_FLAGS register for
   // an address to jump to (application can assign any meaning to SYS_FLAGS)
-  *(volatile uintptr_t *) SYS_FLAGSSET = (uintptr_t) _start;
+  *(volatile uintptr_t *) PA2KVA(SYS_FLAGSSET) = (uintptr_t) _start;
   arch_irq_ipi_others(0);
 }
 
 void
 arch_smp_main(void)
 {
+  arch_vm_init_percpu();
   arch_irq_init_percpu();
 
   // TODO: start the scheduler

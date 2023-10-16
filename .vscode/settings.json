@@ -11,6 +11,7 @@
     "assert.h": "c",
     "arch_spinlock.h": "c",
     "gic.h": "c",
-    "smp.h": "c"
+    "smp.h": "c",
+    "page.h": "c"
   }
 }
