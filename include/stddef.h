@@ -1,5 +1,5 @@
-#ifndef __AG_STDDEF_H__
-#define __AG_STDDEF_H__
+#ifndef __AG_INCLUDE_STDDEF_H__
+#define __AG_INCLUDE_STDDEF_H__
 
 /**
  * @file include/stddef.h
@@ -11,7 +11,7 @@
 typedef long            ptrdiff_t;
 
 /** Unsigned integer type of the result of the sizeof operator */
-typedef unsigned int   size_t;
+typedef unsigned long   size_t;
 
 /** The offset (in bytes) of a structure member */
 #define offsetof(type, member)  ((size_t) (&((type *) 0)->member))
@@ -25,4 +25,4 @@ typedef unsigned int   size_t;
   #define NULL    nullptr
 #endif
 
-#endif  // !__AG_STDDEF_H__
+#endif  // !__AG_INCLUDE_STDDEF_H__

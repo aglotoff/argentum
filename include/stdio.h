@@ -1,5 +1,5 @@
-#ifndef __AG_STDIO_H__
-#define __AG_STDIO_H__
+#ifndef __AG_INCLUDE_STDIO_H__
+#define __AG_INCLUDE_STDIO_H__
 
 /**
  * @file include/stdio.h
@@ -20,4 +20,4 @@ void xprintf(void (*)(void *, int),  void *, const char *, va_list);
 };
 #endif
 
-#endif  // !__AG_STDIO_H__
+#endif  // !__AG_INCLUDE_STDIO_H__

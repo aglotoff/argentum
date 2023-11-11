@@ -1,5 +1,5 @@
-#ifndef __AG_STRING_H__
-#define __AG_STRING_H__
+#ifndef __AG_INCLUDE_STRING_H__
+#define __AG_INCLUDE_STRING_H__
 
 /**
  * @file include/string.h
@@ -20,4 +20,4 @@ size_t strlen(const char *);
 };
 #endif
 
-#endif  // !__AG_STRING_H__
+#endif  // !__AG_INCLUDE_STRING_H__

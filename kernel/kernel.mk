@@ -2,24 +2,15 @@
 # Makefile fragment for the kernel
 #
 
-KERNEL_CFLAGS  := $(CFLAGS) -D__AG_KERNEL__
-KERNEL_CFLAGS  += -I kernel/include -I kernel/arch/arm/include
+include arch/$(ARCH)/kernel/kernel.mk
 
-KERNEL_LDFLAGS := $(LDFLAGS) -T kernel/kernel.ld -nostdlib
+KERNEL_CFLAGS := $(CFLAGS) -D__AG_KERNEL__ -I kernel/include
+KERNEL_CFLAGS += -I arch/$(ARCH)/include
 
-KERNEL_SRCFILES :=	\
-	kernel/arch/arm/arch_console.c \
-	kernel/arch/arm/arch_irq.c \
-	kernel/arch/arm/arch_spinlock.c \
-	kernel/arch/arm/arch_trap.c \
-	kernel/arch/arm/arch_vm.c \
-	kernel/arch/arm/entry_pgdir.c \
-	kernel/arch/arm/entry.S \
-	kernel/arch/arm/gic.c \
-	kernel/arch/arm/mptimer.c \
-	kernel/arch/arm/pl011.c \
-	kernel/arch/arm/arch_smp.c \
-	kernel/arch/arm/trapentry.S \
+KERNEL_LDFLAGS := $(LDFLAGS) -nostdlib
+KERNEL_LDFLAGS += -T arch/$(ARCH)/kernel/kernel.ld
+
+KERNEL_SRCFILES := \
 	kernel/irq.c \
 	kernel/kprintf.c \
 	kernel/main.c \
@@ -27,6 +18,8 @@ KERNEL_SRCFILES :=	\
 	kernel/smp.c \
 	kernel/spinlock.c \
 	kernel/vm.c
+
+KERNEL_SRCFILES += $(ARCH_KERNEL_SRCFILES)
 
 KERNEL_SRCFILES += \
 	lib/memmove.c \
@@ -46,7 +39,12 @@ $(OBJ)/kernel/%.o: kernel/%.c $(OBJ)/.vars.KERNEL_CFLAGS
 	@mkdir -p $(@D)
 	$(V)$(CC) $(KERNEL_CFLAGS) -c -o $@ $<
 
-$(OBJ)/kernel/%.o: kernel/%.S $(OBJ)/.vars.KERNEL_CFLAGS
+$(OBJ)/arch/$(ARCH)/kernel/%.o: arch/$(ARCH)/kernel/%.c $(OBJ)/.vars.KERNEL_CFLAGS
+	@echo "+ CC [KERNEL] $<"
+	@mkdir -p $(@D)
+	$(V)$(CC) $(KERNEL_CFLAGS) -c -o $@ $<
+
+$(OBJ)/arch/$(ARCH)/kernel/%.o: arch/$(ARCH)/kernel/%.S $(OBJ)/.vars.KERNEL_CFLAGS
 	@echo "+ AS [KERNEL] $<"
 	@mkdir -p $(@D)
 	$(V)$(CC) $(KERNEL_CFLAGS) -c -o $@ $<
@@ -56,10 +54,9 @@ $(OBJ)/kernel/%.o: lib/%.c $(OBJ)/.vars.KERNEL_CFLAGS
 	@mkdir -p $(@D)
 	$(V)$(CC) $(KERNEL_CFLAGS) -c -o $@ $<
 
-$(KERNEL): $(KERNEL_OBJFILES) $(KERNEL_BINFILES) kernel/kernel.ld
+$(KERNEL): $(KERNEL_OBJFILES) $(KERNEL_BINFILES) arch/$(ARCH)/kernel/kernel.ld
 	@echo "+ LD [KERNEL] $@"
-	$(V)$(LD) -o $@.elf $(KERNEL_LDFLAGS) $(KERNEL_OBJFILES) $(LIBGCC) \
+	$(V)$(LD) -o $@ $(KERNEL_LDFLAGS) $(KERNEL_OBJFILES) $(LIBGCC) \
 		-b binary $(KERNEL_BINFILES)
-	$(V)$(OBJCOPY) -O binary $@.elf $@
-	$(V)$(OBJDUMP) -S $@.elf > $@.asm
-	$(V)$(NM) -n $@.elf > $@.sym
+	$(V)$(OBJDUMP) -S $@ > $@.asm
+	$(V)$(NM) -n $@ > $@.sym

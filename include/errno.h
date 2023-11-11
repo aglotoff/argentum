@@ -1,5 +1,5 @@
-#ifndef __ERRNO_H__
-#define __ERRNO_H__
+#ifndef __AG_INCLUDE_ERRNO_H__
+#define __AG_INCLUDE_ERRNO_H__
 
 /**
  * @file include/errno.h
@@ -55,4 +55,4 @@ extern int errno;
 #define EXDEV         40      ///< Improper link
 #define ELOOP         41      ///< Too many levels of symbolic links
 
-#endif  // !__ERRNO_H__
+#endif  // !__AG_INCLUDE_ERRNO_H__

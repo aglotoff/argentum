@@ -1,8 +1,8 @@
 #include <string.h>
 
-#include <kernel.h>
-#include <page.h>
-#include <spinlock.h>
+#include <kernel/kernel.h>
+#include <kernel/page.h>
+#include <kernel/spinlock.h>
 
 /** The kernel uses this array to keep track of physical pages. */
 struct Page *pages;

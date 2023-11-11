@@ -12,6 +12,13 @@
     "arch_spinlock.h": "c",
     "gic.h": "c",
     "smp.h": "c",
-    "page.h": "c"
+    "page.h": "c",
+    "arch_irq.h": "c",
+    "arch_console.h": "c",
+    "vm.h": "c",
+    "mmu.h": "c",
+    "mptimer.h": "c",
+    "pl011.h": "c",
+    "console.h": "c"
   }
 }

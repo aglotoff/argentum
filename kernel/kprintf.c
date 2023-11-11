@@ -1,8 +1,8 @@
 #include <stdio.h>
 
-#include <arch_console.h>
-#include <kernel.h>
-#include <spinlock.h>
+#include <arch/kernel/console.h>
+#include <kernel/kernel.h>
+#include <kernel/spinlock.h>
 
 static struct SpinLock kprintf_lock = SPIN_INITIALIZER("console");
 

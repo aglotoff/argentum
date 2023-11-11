@@ -1,5 +1,5 @@
-#include <irq.h>
-#include <smp.h>
+#include <kernel/irq.h>
+#include <kernel/smp.h>
 
 /**
  * Get the current CPU structure. The caller must disable interrupts, otherwise

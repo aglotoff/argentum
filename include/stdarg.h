@@ -1,5 +1,5 @@
-#ifndef __AG_STDARG_H__
-#define __AG_STDARG_H__
+#ifndef __AG_INCLUDE_STDARG_H__
+#define __AG_INCLUDE_STDARG_H__
 
 /**
  * @file include/stdarg.h
@@ -20,4 +20,4 @@ typedef __builtin_va_list va_list;
 /** End using a variable argument list */
 #define va_end(ap)          __builtin_va_end(ap)
 
-#endif  // !__AG_STDARG_H__
+#endif  // !__AG_INCLUDE_STDARG_H__

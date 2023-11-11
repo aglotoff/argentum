@@ -5,8 +5,7 @@
       "defines": ["__AG_KERNEL__"],
       "includePath": [
         "./include",
-        "./kernel/include",
-        "./kernel/arch/arm/include"
+        "./arch/arm/include"
       ],
       "intelliSenseMode": "linux-gcc-x64",
       "compilerPath": "/usr/bin/arm-none-eabi-gcc",

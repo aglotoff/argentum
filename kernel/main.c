@@ -1,12 +1,12 @@
 #include <stdio.h>
 
-#include <arch_console.h>
-#include <arch_trap.h>
-#include <irq.h>
-#include <kernel.h>
-#include <page.h>
-#include <smp.h>
-#include <vm.h>
+#include <arch/kernel/console.h>
+#include <arch/kernel/trap.h>
+#include <kernel/irq.h>
+#include <kernel/kernel.h>
+#include <kernel/page.h>
+#include <kernel/smp.h>
+#include <kernel/vm.h>
 
 void
 main(void)

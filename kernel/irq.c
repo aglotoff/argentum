@@ -1,8 +1,7 @@
-
-#include <smp.h>
-#include <irq.h>
-#include <kernel.h>
-#include <spinlock.h>
+#include <kernel/irq.h>
+#include <kernel/kernel.h>
+#include <kernel/smp.h>
+#include <kernel/spinlock.h>
 
 static struct {
   struct ListLink list;

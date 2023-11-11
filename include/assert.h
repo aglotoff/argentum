@@ -1,5 +1,5 @@
-#ifndef __AG_ASSERT_H__
-#define __AG_ASSERT_H__
+#ifndef __AG_INCLUDE_ASSERT_H__
+#define __AG_INCLUDE_ASSERT_H__
 
 #ifdef __cplusplus
 extern "C" {
@@ -28,4 +28,4 @@ void _Panic(const char *, int, const char *, ...);
     do { if (!(expr)) panic("Assertion failed: %s", #expr); } while(0)
 #endif
 
-#endif  // !__AG_ASSERT_H__
+#endif  // !__AG_INCLUDE_ASSERT_H__

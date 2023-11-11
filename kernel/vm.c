@@ -1,6 +1,6 @@
-#include <kernel.h>
-#include <page.h>
-#include <vm.h>
+#include <kernel/kernel.h>
+#include <kernel/page.h>
+#include <kernel/vm.h>
 
 // Master kernel page table.
 void *kernel_pgtab;
