@@ -1,6 +1,10 @@
 #ifndef __AG_INCLUDE_ARCH_KERNEL_IRQ_H__
 #define __AG_INCLUDE_ARCH_KERNEL_IRQ_H__
 
+#ifndef __AG_KERNEL__
+#error "This is an Argentum kernel header; user programs should not include it"
+#endif
+
 #define ARCH_IRQ_MAX  64
 
 #ifndef __ASSEMBLER__

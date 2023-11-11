@@ -1,6 +1,10 @@
 #ifndef __AG_INCLUDE_ARCH_KERNEL_MEMLAYOUT_H__
 #define __AG_INCLUDE_ARCH_KERNEL_MEMLAYOUT_H__
 
+#ifndef __AG_KERNEL__
+#error "This is an Argentum kernel header; user programs should not include it"
+#endif
+
 /** Size of a kernel stack */
 #define KSTACK_SIZE     4096
 

@@ -1,6 +1,10 @@
 #ifndef __AG_INCLUDE_KERNEL_KERNEL_H__
 #define __AG_INCLUDE_KERNEL_KERNEL_H__
 
+#ifndef __AG_KERNEL__
+#error "This is an Argentum kernel header; user programs should not include it"
+#endif
+
 #ifndef __ASSEMBLER__
 
 #include <assert.h>

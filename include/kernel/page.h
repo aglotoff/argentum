@@ -6,18 +6,28 @@
  * Physical page allocator.
  */
 
+#ifndef __AG_KERNEL__
+#error "This is an Argentum kernel header; user programs should not include it"
+#endif
+
 #include <assert.h>
 #include <stddef.h>
 
 #include <kernel/list.h>
 #include <kernel/vm.h>
 
+struct ObjectSlab;
+
 /**
  * Physical page block info.
  */
 struct Page {
-  struct ListLink  link;         ///< Link into the free list
-  int              ref_count;    ///< Reference counter
+  /** Link into the free list */
+  struct ListLink    link;
+  /** Reference counter */
+  int                ref_count;
+  /** The slab this page block belongs to */
+  struct ObjectSlab *slab;
 };
 
 extern struct Page *pages;

@@ -1,6 +1,10 @@
 #ifndef __AG_INCLUDE_ARCH_KERNEL_MMU_H__
 #define __AG_INCLUDE_ARCH_KERNEL_MMU_H__
 
+#ifndef __AG_KERNEL__
+#error "This is an Argentum kernel header; user programs should not include it"
+#endif
+
 /**
  * 
  * This file contains definitions for the ARMv7 Memory Management Unit (MMU).

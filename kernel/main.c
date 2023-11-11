@@ -4,6 +4,7 @@
 #include <arch/kernel/trap.h>
 #include <kernel/irq.h>
 #include <kernel/kernel.h>
+#include <kernel/object.h>
 #include <kernel/page.h>
 #include <kernel/smp.h>
 #include <kernel/vm.h>
@@ -24,7 +25,8 @@ main(void)
   // Now we can output messages
   kprintf("Argentum booting\n");
   
-  // TODO: initialize the slab allocator
+  // Initialize the slab allocator
+  object_init();
 
   // Initialize IRQ structures
   irq_init();

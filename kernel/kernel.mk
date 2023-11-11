@@ -14,6 +14,7 @@ KERNEL_SRCFILES := \
 	kernel/irq.c \
 	kernel/kprintf.c \
 	kernel/main.c \
+	kernel/object.c \
 	kernel/page.c \
 	kernel/smp.c \
 	kernel/spinlock.c \
@@ -27,6 +28,7 @@ KERNEL_SRCFILES += \
 	lib/snprintf.c \
 	lib/strchr.c \
 	lib/strlen.c \
+	lib/strncpy.c \
 	lib/vsnprintf.c \
 	lib/xprintf.c
 

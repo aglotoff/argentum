@@ -1,6 +1,10 @@
 #ifndef __AG_INCLUDE_ARCH_KERNEL_REALVIEW_PBX_A9_H__
 #define __AG_INCLUDE_ARCH_KERNEL_REALVIEW_PBX_A9_H__
 
+#ifndef __AG_KERNEL__
+#error "This is an Argentum kernel header; user programs should not include it"
+#endif
+
 /**
  * 
  * Definitions related to the Realview PBX-A9 board
