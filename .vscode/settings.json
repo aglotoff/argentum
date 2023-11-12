@@ -19,6 +19,9 @@
     "mmu.h": "c",
     "mptimer.h": "c",
     "pl011.h": "c",
-    "console.h": "c"
-  }
+    "console.h": "c",
+    "object.h": "c",
+    "thread.h": "c"
+  },
+  "editor.tabSize": 2
 }

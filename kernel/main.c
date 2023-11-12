@@ -7,12 +7,21 @@
 #include <kernel/object.h>
 #include <kernel/page.h>
 #include <kernel/smp.h>
+#include <kernel/thread.h>
 #include <kernel/vm.h>
+
+static void
+test_thread(void *arg)
+{
+  for (int i = 0; i < 10000; i++) {
+    kprintf("%d", arg);
+  }
+}
 
 void
 main(void)
 {
-  // Initialize architecture-specific trap handling
+  // Initialize architecture-specific trap handling mechanism
   arch_trap_init();
   
   // Initialize the physical page allocator
@@ -25,25 +34,28 @@ main(void)
   // Now we can output messages
   kprintf("Argentum booting\n");
   
-  // Initialize the slab allocator
+  // Initialize the object allocator
   object_init();
 
   // Initialize IRQ structures
   irq_init();
-  // Initialize architecture-specific IRQ handling
+  // Initialize architecture-specific IRQ handling mechanism
   arch_irq_init();
 
-  // TODO: initialize the process manager
+  // Initialize threads
+  thread_init();
+
+  // Create test threads
+  thread_create(test_thread, (void *) 1, 0);
+  thread_create(test_thread, (void *) 2, 0);
+  thread_create(test_thread, (void *) 3, 10);
+  thread_create(test_thread, (void *) 4, 10);
 
   // Start other cores
   arch_smp_init();
 
-  // TODO: start the scheduler
-  irq_enable();
-
-  for (;;) {
-    asm volatile("wfi");
-  }
+  // Start the scheduler
+  thread_start();
 }
 
 /**

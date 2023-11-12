@@ -16,8 +16,8 @@ KERNEL_SRCFILES := \
 	kernel/main.c \
 	kernel/object.c \
 	kernel/page.c \
-	kernel/smp.c \
 	kernel/spinlock.c \
+	kernel/thread.c \
 	kernel/vm.c
 
 KERNEL_SRCFILES += $(ARCH_KERNEL_SRCFILES)

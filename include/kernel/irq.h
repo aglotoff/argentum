@@ -49,5 +49,7 @@ int  irq_hook_detach(struct IrqHook *);
 int  irq_hook_enable(struct IrqHook *);
 int  irq_hook_disable(struct IrqHook *);
 void irq_handle(int);
+void irq_handler_enter(void);
+void irq_handler_exit(void);
 
 #endif  // !__AG_INCLUDE_KERNEL_IRQ_H__

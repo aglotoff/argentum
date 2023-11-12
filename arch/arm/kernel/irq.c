@@ -1,5 +1,6 @@
 #include <kernel/irq.h>
 #include <kernel/smp.h>
+#include <kernel/thread.h>
 #include <kernel/vm.h>
 
 #include <arch/kernel/gic.h>
@@ -22,9 +23,7 @@ mptimer_handle_irq(int irq)
 
   mptimer_eoi(&mptimer);
   
-  // TODO: update kernel timeouts
-
- kprintf("Tick on CPU %d\n", smp_id());
+  thread_tick();
 
   return 1;
 }
@@ -106,9 +105,12 @@ arch_irq_dispatch(void)
 {
   int irq_id = gic_irq_ack(&gic);
 
-  irq_handle(irq_id & 0x3FF);
+  irq_handler_enter();
 
+  irq_handle(irq_id & 0x3FF);
   gic_irq_eoi(&gic, irq_id);
+
+  irq_handler_exit();
 }
 
 void

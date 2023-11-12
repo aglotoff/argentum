@@ -5,6 +5,7 @@
 #include <kernel/irq.h>
 #include <kernel/smp.h>
 #include <kernel/spinlock.h>
+#include <kernel/thread.h>
 #include <kernel/vm.h>
 
 #include <arch/kernel/realview_pbx_a9.h>
@@ -30,12 +31,7 @@ arch_smp_main(void)
   arch_vm_init_percpu();
   arch_irq_init_percpu();
 
-  // TODO: start the scheduler
-  irq_enable();
-
-  for (;;) {
-    asm volatile("wfi");
-  }
+  thread_start();
 }
 
 unsigned

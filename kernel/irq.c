@@ -2,6 +2,7 @@
 #include <kernel/kernel.h>
 #include <kernel/smp.h>
 #include <kernel/spinlock.h>
+#include <kernel/thread.h>
 
 static struct {
   struct ListLink list;
@@ -152,4 +153,17 @@ irq_handle(int irq)
     arch_irq_unmask(irq);
 
   spin_unlock(&irq_hooks[irq].lock);
+}
+
+void
+irq_handler_enter(void)
+{
+  smp_cpu()->irq_handler_level++;
+}
+
+void
+irq_handler_exit(void)
+{
+  if (--smp_cpu()->irq_handler_level == 0)
+    thread_may_yield();
 }
