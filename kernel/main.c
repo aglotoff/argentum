@@ -10,13 +10,15 @@
 #include <kernel/thread.h>
 #include <kernel/vm.h>
 
-static void
-test_thread(void *arg)
-{
-  for (int i = 0; i < 10000; i++) {
-    kprintf("%d", arg);
-  }
-}
+// static void
+// test_thread(void *arg)
+// {
+//   for (int i = 0; i < 10000; i++) {
+//     kprintf("%d", arg);
+//   }
+// }
+
+extern uint8_t _binary_obj_user_init_start[];
 
 void
 main(void)
@@ -44,12 +46,14 @@ main(void)
 
   // Initialize threads
   thread_init();
+  process_init();
 
   // Create test threads
-  thread_create(test_thread, (void *) 1, 0);
-  thread_create(test_thread, (void *) 2, 0);
-  thread_create(test_thread, (void *) 3, 10);
-  thread_create(test_thread, (void *) 4, 10);
+  process_create(_binary_obj_user_init_start);
+
+  // thread_create(0, test_thread, (void *) 2, 0);
+  // thread_create(0, test_thread, (void *) 3, 10);
+  // thread_create(0, test_thread, (void *) 4, 10);
 
   // Start other cores
   arch_smp_init();

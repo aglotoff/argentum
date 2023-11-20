@@ -5,6 +5,7 @@
 #error "This is an Argentum kernel header; user programs should not include it"
 #endif
 
+#include <stddef.h>
 #include <arch/kernel/vm.h>
 
 // Master kernel page table.
@@ -51,5 +52,9 @@ enum {
 struct Page *vm_page_lookup(void *, uintptr_t, int *);
 int          vm_page_insert(void *, struct Page *, uintptr_t, int);
 int          vm_page_remove(void *, uintptr_t);
+int          vm_range_alloc(void *, uintptr_t, size_t, int);
+void         vm_range_free(void *, uintptr_t, size_t);
+int          vm_copy_out(void *, uintptr_t, const void *, size_t);
+int          vm_copy_in(void *, uintptr_t, void *, size_t);
 
 #endif  // !__AG_INCLUDE_KERNEL_VM_H__

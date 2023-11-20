@@ -1,11 +1,11 @@
 #include <string.h>
 
 /**
- * Copy fixed length string.
- * 
- * @param s1 Pointer to the array where the content is to be copied.
- * @param s2 C string to be copied.
- * @param n  The maximum number of characters to copy.
+ * Copy no more than 'n' bytes from a string.
+ *
+ * @param s1 Pointer to the array where the content is to be copied
+ * @param s2 The C string to be copied
+ * @param n  The maximum number of bytes to copy
  * 
  * @return s1
  */

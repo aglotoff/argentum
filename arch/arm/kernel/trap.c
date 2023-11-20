@@ -3,6 +3,7 @@
 #include <kernel/smp.h>
 #include <kernel/irq.h>
 #include <kernel/kernel.h>
+#include <kernel/syscall.h>
 
 #include <arch/kernel/mptimer.h>
 #include <arch/kernel/realview_pbx_a9.h>
@@ -36,10 +37,15 @@ arch_trap(struct TrapFrame *tf)
   case T_IRQ:
     arch_irq_dispatch();
     break;
+  case T_SWI:
+    syscall_dispatch(tf);
+    break;
   default:
     // Either the user process misbehaved or the kernel has a bug.
-    if ((tf->psr & PSR_M_MASK) == PSR_M_USR)
+    if ((tf->psr & PSR_M_MASK) == PSR_M_USR) {
+      arch_trap_print_frame(tf);
       panic("unhandled trap in user");
+    }
 
     arch_trap_print_frame(tf);
     panic("unhandled trap in kernel");

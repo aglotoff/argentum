@@ -1,15 +1,13 @@
 #include <string.h>
 
 /**
- * Copy bytes in memory with overlapping areas.
- * 
- * @param s1 Pointer to the block of memory to copy to.
- * @param s2 Pointer to the block of memoty to copy from.
- * @param n  The number of bytes to copy.
- * 
+ * Copy bytes in memory between overlapping areas.
+ *
+ * @param s1 Pointer to the block of memory to copy to
+ * @param s2 Pointer to the block of memoty to copy from
+ * @param n  The number of bytes to copy
+ *
  * @return s1
- * 
- * @sa memcpy, strcpy, strncpy
  */
 void *
 memmove(void *s1, const void *s2, size_t n)

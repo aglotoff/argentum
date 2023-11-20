@@ -1,10 +1,10 @@
 #include <string.h>
 
 /**
- * String scanning operation.
+ * Locate the first occurence of a character in the C string.
  *
- * @param s C string.
- * @param c The character to be located.
+ * @param s The string
+ * @param c The character to be located
  *
  * @return A pointer to the character, or NULL if the character was not found.
  */

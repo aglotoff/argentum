@@ -26,7 +26,7 @@ OBJDUMP := $(TOOLPREFIX)objdump
 CFLAGS := -ffreestanding -nostdlib -fno-builtin -nostdinc -I$(TOP)/include
 CFLAGS += -Wall -Wextra -Werror -Wno-address-of-packed-member
 CFLAGS += --std=gnu11 -O1 -gdwarf-3
-CFLAGS += $(ARCH_CFLAGS)
+CFLAGS += $(ARCH_CFLAGS) -I arch/$(ARCH)/include
 
 # libgcc contains auxiliary helper routines and runtime support
 LIBGCC := $(shell $(CC) $(CFLAGS) -print-libgcc-file-name)
@@ -46,8 +46,10 @@ $(OBJ)/.vars.%: .FORCE
 .PRECIOUS: $(OBJ)/.vars.%
 .PHONY: .FORCE
 
-all: $(KERNEL)
+all: $(OBJ)/lib/libc.a $(KERNEL)
 
+include lib/lib.mk
+include user/user.mk
 include kernel/kernel.mk
 
 include arch/$(ARCH)/qemu.mk

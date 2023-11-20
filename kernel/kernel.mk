@@ -5,7 +5,6 @@
 include arch/$(ARCH)/kernel/kernel.mk
 
 KERNEL_CFLAGS := $(CFLAGS) -D__AG_KERNEL__ -I kernel/include
-KERNEL_CFLAGS += -I arch/$(ARCH)/include
 
 KERNEL_LDFLAGS := $(LDFLAGS) -nostdlib
 KERNEL_LDFLAGS += -T arch/$(ARCH)/kernel/kernel.ld
@@ -16,13 +15,16 @@ KERNEL_SRCFILES := \
 	kernel/main.c \
 	kernel/object.c \
 	kernel/page.c \
+	kernel/process.c \
 	kernel/spinlock.c \
+	kernel/syscall.c \
 	kernel/thread.c \
 	kernel/vm.c
 
 KERNEL_SRCFILES += $(ARCH_KERNEL_SRCFILES)
 
 KERNEL_SRCFILES += \
+	lib/memcmp.c \
 	lib/memmove.c \
 	lib/memset.c \
 	lib/snprintf.c \
@@ -35,6 +37,9 @@ KERNEL_SRCFILES += \
 KERNEL_OBJFILES := $(patsubst %.c, $(OBJ)/%.o, $(KERNEL_SRCFILES))
 KERNEL_OBJFILES := $(patsubst %.S, $(OBJ)/%.o, $(KERNEL_OBJFILES))
 KERNEL_OBJFILES := $(patsubst $(OBJ)/lib/%, $(OBJ)/kernel/%, $(KERNEL_OBJFILES))
+
+KERNEL_BINFILES := user/init
+KERNEL_BINFILES := $(patsubst %, $(OBJ)/%, $(KERNEL_BINFILES))
 
 $(OBJ)/kernel/%.o: kernel/%.c $(OBJ)/.vars.KERNEL_CFLAGS
 	@echo "+ CC [KERNEL] $<"

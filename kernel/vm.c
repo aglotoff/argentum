@@ -1,3 +1,5 @@
+#include <string.h>
+
 #include <kernel/kernel.h>
 #include <kernel/page.h>
 #include <kernel/vm.h>
@@ -158,6 +160,104 @@ vm_page_remove(void *pgtab, uintptr_t va)
 
   arch_vm_pte_clear(pte);
   arch_vm_invalidate(va);
+
+  return 0;
+}
+
+int
+vm_range_alloc(void *pgtab, uintptr_t va, size_t n, int prot)
+{
+  struct Page *page;
+  uintptr_t a, start, end;
+  int r;
+
+  start = ROUND_DOWN(va, PAGE_SIZE);
+  end   = ROUND_UP(va + n, PAGE_SIZE);
+
+  if ((start > end) || (end > VIRT_KERNEL_BASE))
+    return -EINVAL;
+
+  for (a = start; a < end; a += PAGE_SIZE) {
+    if ((page = page_alloc_one(PAGE_ALLOC_ZERO)) == NULL) {
+      vm_range_free(pgtab, start, a - start);
+      return -ENOMEM;
+    }
+
+    if ((r = (vm_page_insert(pgtab, page, a, prot)) != 0)) {
+      page_free_one(page);
+      vm_range_free(pgtab, start, a - start);
+      return r;
+    }
+  }
+
+  return 0;
+}
+
+void
+vm_range_free(void *pgdir, uintptr_t va, size_t n)
+{
+  uintptr_t a, end;
+
+  a   = ROUND_DOWN(va, PAGE_SIZE);
+  end = ROUND_UP(va + n, PAGE_SIZE);
+
+  if ((a > end) || (end > VIRT_KERNEL_BASE))
+    panic("invalid range [%p,%p)", a, end);
+
+  for ( ; a < end; a += PAGE_SIZE)
+    vm_page_remove(pgdir, a);
+}
+
+int
+vm_copy_out(void *pgtab, uintptr_t dst, const void *src_va, size_t n)
+{
+  uint8_t *src = (uint8_t *) src_va;
+
+  while (n != 0) {
+    struct Page *page;
+    uint8_t *kva;
+    size_t offset, ncopy;
+
+    if ((page = vm_page_lookup(pgtab, dst, NULL)) == NULL)
+      return -EFAULT;
+    
+    kva    = (uint8_t *) page2kva(page);
+    offset = (uintptr_t) dst % PAGE_SIZE;
+    ncopy  = MIN(PAGE_SIZE - offset, n);
+
+    memmove(kva + offset, src, ncopy);
+
+    src += ncopy;
+    dst += ncopy;
+    n   -= ncopy;
+  }
+
+  return 0;
+}
+
+int
+vm_copy_in(void *pgtab, uintptr_t src, void *dst_va, size_t n)
+{
+  uint8_t *dst = (uint8_t *) dst_va;
+
+  while (n != 0) {
+    struct Page *page;
+    uint8_t *kva;
+    size_t offset, ncopy;
+
+    if ((page = vm_page_lookup(pgtab, src, NULL)) == NULL)
+      return -EFAULT;
+    
+    kva    = (uint8_t *) page2kva(page);
+    offset = (uintptr_t) src % PAGE_SIZE;
+    ncopy  = MIN(PAGE_SIZE - offset, n);
+
+    memmove(dst, kva + offset, ncopy);
+
+    src += ncopy;
+    dst += ncopy;
+    n   -= ncopy;
+  }
 
   return 0;
 }

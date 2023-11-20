@@ -28,5 +28,7 @@ struct ThreadContext {
 void arch_thread_idle(void);
 void arch_thread_switch(void **, void *);
 void arch_thread_create(struct Thread *);
+void arch_thread_create_user(struct Thread *, void *, void *, void *, void *);
+void arch_thread_pop_tf(struct Thread *);
 
 #endif  // !__AG_INCLUDE_ARCH_KERNEL_THREAD_H__

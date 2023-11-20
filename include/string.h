@@ -3,6 +3,8 @@
 
 /**
  * @file include/string.h
+ * 
+ * String operations
  */
 
 #include <stddef.h>
@@ -11,6 +13,7 @@
 extern "C" {
 #endif
 
+int    memcmp(const void *, const void *, size_t);
 void  *memmove(void *, const void *, size_t);
 void  *memset(void *, int, size_t);
 char  *strchr(const char *, int);
