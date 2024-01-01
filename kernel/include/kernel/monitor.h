@@ -1,7 +1,7 @@
 #ifndef __KERNEL_INCLUDE_KERNEL_MONITOR_H__
 #define __KERNEL_INCLUDE_KERNEL_MONITOR_H__
 
-#ifndef __AG_KERNEL__
+#ifndef __OSDEV_KERNEL__
 #error "This is a kernel header; user programs should not #include it"
 #endif
 

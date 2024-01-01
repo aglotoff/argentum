@@ -2,12 +2,12 @@
 #define __KERNEL_INCLUDE_KERNEL_ARMV7_MMU_H__
 
 /**
- * @file include/argentum/armv7/regs.h
+ * @file include/armv7/regs.h
  * 
  * This file contains definitions for the ARMv7 Memory Management Unit (MMU).
  */
 
-#ifndef __AG_KERNEL__
+#ifndef __OSDEV_KERNEL__
 #error "This is a kernel header; user programs should not #include it"
 #endif
 

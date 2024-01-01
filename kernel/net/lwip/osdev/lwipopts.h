@@ -1,5 +1,5 @@
-#ifndef __LWIP_ARGENTUM_LWIPOPTS_H__
-#define __LWIP_ARGENTUM_LWIPOPTS_H__
+#ifndef __LWIP_OSDEV_LWIPOPTS_H__
+#define __LWIP_OSDEV_LWIPOPTS_H__
 
 // #define NO_SYS              1
 // #define LWIP_RAW            1
@@ -9,4 +9,4 @@
 #define LWIP_DNS                1
 #define LWIP_DHCP               1
 
-#endif  /* __LWIP_ARGENTUM_LWIPOPTS_H__ */
+#endif  /* __LWIP_OSDEV_LWIPOPTS_H__ */

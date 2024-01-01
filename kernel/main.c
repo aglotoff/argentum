@@ -29,62 +29,60 @@ int bsp_started;
 
 // For uname()
 struct utsname utsname = {
-  .sysname  = "Argentum",
-  .nodename = "localhost",
-  .release  = "0.1.0",
-  .version  = __DATE__ " " __TIME__,
-  .machine  = "arm",
+    .sysname = "OSDev",
+    .nodename = "localhost",
+    .release = "0.1.0",
+    .version = __DATE__ " " __TIME__,
+    .machine = "arm",
 };
 
 /**
  * Main kernel function.
- * 
+ *
  * The bootstrap processor starts running C code here.
  */
-void
-main(void)
+void main(void)
 {
   // Begin the memory manager initialization
-  page_init_low();      // Physical page allocator (lower memory)
-  vm_init();            // Memory management unit and kernel mappings
+  page_init_low(); // Physical page allocator (lower memory)
+  vm_init();       // Memory management unit and kernel mappings
 
   // Now we can initialize the console to print messages during initialization
-  irq_init();           // Interrupt controller
-  console_init();       // Console driver
+  irq_init();     // Interrupt controller
+  console_init(); // Console driver
 
   // Complete the memory manager initialization
-  page_init_high();     // Physical page allocator (higher memory)
-  kmem_init();          // Object allocator
-  vm_space_init();      // Virtual memory manager
+  page_init_high(); // Physical page allocator (higher memory)
+  kmem_init();      // Object allocator
+  vm_space_init();  // Virtual memory manager
 
   // Initialize the device drivers
-  rtc_init();           // Real-time clock
-  sd_init();            // MultiMedia Card
-  eth_init();           // Ethernet
+  rtc_init(); // Real-time clock
+  sd_init();  // MultiMedia Card
+  eth_init(); // Ethernet
 
   // Initialize the remaining kernel services
-  buf_init();           // Buffer cache
-  file_init();          // File table
-  sched_init();         // Scheduler
-  net_init();           // Network
-  process_init();       // Process table
+  buf_init();     // Buffer cache
+  file_init();    // File table
+  sched_init();   // Scheduler
+  net_init();     // Network
+  process_init(); // Process table
 
   // Unblock other CPUs
-  bsp_started = 1;    
+  bsp_started = 1;
 
   mp_main();
 }
 
 /**
- * Initialization code for non-boot (AP) processors. 
+ * Initialization code for non-boot (AP) processors.
  *
  * AP processors jump here from 'entry.S'.
  */
-void
-mp_enter(void)
+void mp_enter(void)
 {
   // Per-CPU initialization
-  vm_init_percpu();    // Load the kernel page table
+  vm_init_percpu(); // Load the kernel page table
   irq_init_percpu();
 
   mp_main();

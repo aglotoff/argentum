@@ -2,12 +2,12 @@
 #define __KERNEL_INCLUDE_KERNEL_MM_MEMLAYOUT_H__
 
 /**
- * @file include/argentum/mm/memlayout.h
+ * @file include/mm/memlayout.h
  * 
  * Common memory management definitions.
  */
 
-#ifndef __AG_KERNEL__
+#ifndef __OSDEV_KERNEL__
 #error "This is a kernel header; user programs should not #include it"
 #endif
 

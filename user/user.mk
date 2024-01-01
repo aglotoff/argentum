@@ -1,5 +1,9 @@
 USER_CFLAGS  := $(CFLAGS) -Wno-return-local-addr
-USER_LDFLAGS := $(LDFLAGS) -T user/user.ld -nostdlib -L$(OBJ)/lib
+
+USER_LDFLAGS := $(LDFLAGS)
+ifneq ($(LD),arm-none-osdev-ld)
+	USER_LDFLAGS += -T user/user.ld -nostdlib -L$(OBJ)/lib
+endif
 
 USER_SRCFILES :=
 

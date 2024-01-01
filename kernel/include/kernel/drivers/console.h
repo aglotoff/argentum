@@ -1,12 +1,12 @@
 #ifndef __KERNEL_INCLUDE_KERNEL_DRIVERS_CONSOLE_H__
 #define __KERNEL_INCLUDE_KERNEL_DRIVERS_CONSOLE_H__
 
-#ifndef __AG_KERNEL__
+#ifndef __OSDEV_KERNEL__
 #error "This is a kernel header; user programs should not #include it"
 #endif
 
 /**
- * @file include/argentum/drivers/console.h
+ * @file include/drivers/console.h
  * 
  * General device-independent console code.
  */

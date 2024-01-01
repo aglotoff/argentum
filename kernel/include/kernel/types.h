@@ -1,12 +1,12 @@
 #ifndef __KERNEL_INCLUDE_KERNEL_TYPES_H__
 #define __KERNEL_INCLUDE_KERNEL_TYPES_H__
 
-#ifndef __AG_KERNEL__
+#ifndef __OSDEV_KERNEL__
 #error "This is a kernel header; user programs should not #include it"
 #endif
 
 /**
- * @file include/argentum/types.h
+ * @file include/types.h
  *
  * Defines some often used types and macros.
  */

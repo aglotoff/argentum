@@ -16,8 +16,10 @@ if [ ! -d ${BUILD_DIR} ]; then
   popd
 fi
 
+export CFLAGS="-mcpu=cortex-a9 -mhard-float"
+
 pushd ${BUILD_DIR} &&
-./configure --host=arm-none-argentum --prefix=/usr &&
+./configure --host=arm-none-osdev --prefix=/usr &&
 make &&
 make DESTDIR="../../../sysroot" install &&
 popd

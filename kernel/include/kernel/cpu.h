@@ -1,7 +1,7 @@
 #ifndef __KERNEL_INCLUDE_KERNEL_CPU_H__
 #define __KERNEL_INCLUDE_KERNEL_CPU_H__
 
-#ifndef __AG_KERNEL__
+#ifndef __OSDEV_KERNEL__
 #error "This is a kernel header; user programs should not #include it"
 #endif
 
@@ -11,7 +11,7 @@ struct Context;
 struct Task;
 
 /**
- * The Argentum kernel maintains a special structure for each processor, which
+ * The kernel maintains a special structure for each processor, which
  * records the per-CPU information.
  */
 struct Cpu {

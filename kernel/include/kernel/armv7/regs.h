@@ -8,7 +8,7 @@
  * routines to let C code access those registers.
  */
 
-#ifndef __AG_KERNEL__
+#ifndef __OSDEV_KERNEL__
 #error "This is a kernel header; user programs should not #include it"
 #endif
 

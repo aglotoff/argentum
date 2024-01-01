@@ -1,12 +1,12 @@
 #ifndef __KERNEL_INCLUDE_KERNEL_FS_BUF_H__
 #define __KERNEL_INCLUDE_KERNEL_FS_BUF_H__
 
-#ifndef __AG_KERNEL__
+#ifndef __OSDEV_KERNEL__
 #error "This is a kernel header; user programs should not #include it"
 #endif
 
 /**
- * @file include/argentum/fs/buf.h
+ * @file include/fs/buf.h
  * 
  * Buffer cache layer of the filesystem.
  */

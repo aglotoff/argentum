@@ -2,12 +2,12 @@
 #define __KERNEL_INCLUDE_KERNEL_MM_KMEM_H__
 
 /**
- * @file include/argentum/mm/kmem.h
+ * @file include/mm/kmem.h
  * 
  * Kernel Object Allocator.
  */
 
-#ifndef __AG_KERNEL__
+#ifndef __OSDEV_KERNEL__
 #error "This is a kernel header; user programs should not #include it"
 #endif
 

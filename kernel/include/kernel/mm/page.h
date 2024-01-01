@@ -2,12 +2,12 @@
 #define __KERNEL_INCLUDE_KERNEL_MM_PAGE_H__
 
 /**
- * @file include/argentum/mm/page.h
+ * @file include/mm/page.h
  * 
  * Physical page allocator.
  */
 
-#ifndef __AG_KERNEL__
+#ifndef __OSDEV_KERNEL__
 #error "This is a kernel header; user programs should not #include it"
 #endif
 

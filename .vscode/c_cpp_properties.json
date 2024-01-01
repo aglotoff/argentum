@@ -1,11 +1,16 @@
 {
   "configurations": [
     {
-      "name": "Codename Argentum",
+      "name": "OSDev",
       "defines": [
-        "__AG_KERNEL__"
+        "__OSDEV_KERNEL__"
       ],
-      "includePath": ["./include", "./kernel/include", "./kernel/net/lwip/argentum", "./kernel/net/lwip/include"],
+      "includePath": [
+        "./include",
+        "./kernel/include",
+        "./kernel/net/lwip/osdev",
+        "./kernel/net/lwip/include"
+      ],
       "intelliSenseMode": "linux-gcc-x64",
       "compilerPath": "/usr/local/bin/arm-none-eabi-gcc",
       "cStandard": "gnu11",

@@ -1,0 +1,70 @@
+diff -ruN orig/config.sub new/config.sub
+--- orig/config.sub	2023-07-27 11:13:03.000000000 +0300
++++ new/config.sub	2024-01-01 17:52:54.892876292 +0300
+@@ -1749,7 +1749,7 @@
+ 	     | onefs* | tirtos* | phoenix* | fuchsia* | redox* | bme* \
+ 	     | midnightbsd* | amdhsa* | unleashed* | emscripten* | wasi* \
+ 	     | nsk* | powerunix* | genode* | zvmoe* | qnx* | emx* | zephyr* \
+-	     | fiwix* )
++	     | fiwix* | osdev* )
+ 		;;
+ 	# This one is extra strict with allowed versions
+ 	sco3.2v2 | sco3.2v[4-9]* | sco5v6*)
+diff -ruN orig/fixincludes/mkfixinc.sh new/fixincludes/mkfixinc.sh
+--- orig/fixincludes/mkfixinc.sh	2023-07-27 11:13:03.000000000 +0300
++++ new/fixincludes/mkfixinc.sh	2024-01-01 17:52:51.602876301 +0300
+@@ -11,6 +11,8 @@
+ 
+ # Check for special fix rules for particular targets
+ case $machine in
++    *-osdev* | \
++    *-*-osdev* | \
+     i?86-*-cygwin* | \
+     i?86-*-mingw32* | \
+     x86_64-*-mingw32* | \
+diff -ruN orig/gcc/config.gcc new/gcc/config.gcc
+--- orig/gcc/config.gcc	2023-07-27 11:13:04.000000000 +0300
++++ new/gcc/config.gcc	2024-01-01 17:52:53.912876294 +0300
+@@ -962,6 +962,11 @@
+   d_target_objs="${d_target_objs} openbsd-d.o"
+   target_has_targetdm=yes
+   ;;
++*-*-osdev*)
++  gas=yes
++  gnu_ld=yes
++  default_use_cxa_atexit=yes
++  ;;
+ *-*-phoenix*)
+   gas=yes
+   gnu_ld=yes
+@@ -1391,6 +1396,13 @@
+ 	# The EABI requires the use of __cxa_atexit.
+ 	default_use_cxa_atexit=yes
+ 	;;
++arm*-*-osdev*)
++	tm_file="elfos.h arm/unknown-elf.h arm/elf.h arm/bpabi.h"
++	tm_file="${tm_file} newlib-stdint.h"
++	tm_file="${tm_file} arm/aout.h arm/arm.h"
++	tmake_file="${tmake_file} arm/t-arm arm/t-bpabi arm/t-arm-elf"
++	target_cpu_cname="arm7tdmi"
++	;;
+ arm*-*-phoenix*)
+ 	tm_file="elfos.h arm/unknown-elf.h arm/elf.h arm/bpabi.h"
+ 	tm_file="${tm_file} newlib-stdint.h phoenix.h"
+diff -ruN orig/libgcc/config.host new/libgcc/config.host
+--- orig/libgcc/config.host	2023-07-27 11:13:07.000000000 +0300
++++ new/libgcc/config.host	2024-01-01 17:52:52.442876297 +0300
+@@ -520,6 +520,13 @@
+ 	unwind_header=config/arm/unwind-arm.h
+ 	extra_parts="$extra_parts crti.o crtn.o"
+ 	;;
++arm*-*-osdev*)
++	tmake_file="t-hardfp t-softfp arm/t-arm arm/t-elf arm/t-softfp"
++	tmake_file="${tmake_file} arm/t-bpabi"
++	tm_file="$tm_file arm/bpabi-lib.h"
++	extra_parts="crtbegin.o crtend.o crti.o crtn.o"
++	unwind_header=config/arm/unwind-arm.h
++	;;
+ arm*-*-phoenix*)
+ 	tmake_file="t-hardfp t-softfp arm/t-arm arm/t-elf arm/t-softfp arm/t-phoenix"
+ 	tmake_file="${tmake_file} arm/t-bpabi"
