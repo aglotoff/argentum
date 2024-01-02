@@ -31,7 +31,7 @@ OBJCOPY := $(TOOLPREFIX)objcopy
 OBJDUMP := $(TOOLPREFIX)objdump
 
 # Common compiler flags
-CFLAGS := -ffreestanding -nostdlib -fno-builtin -nostdinc -I$(TOP)/include
+CFLAGS := -ffreestanding -nostdlib -fno-builtin
 CFLAGS += -Wall -Wextra -Werror  -Wno-address-of-packed-member
 CFLAGS += --std=gnu11
 CFLAGS += -O1 -mcpu=cortex-a9 -mapcs-frame -fno-omit-frame-pointer
@@ -54,10 +54,10 @@ $(OBJ)/.vars.%: .FORCE
 .PRECIOUS: $(OBJ)/.vars.%
 .PHONY: .FORCE
 
-all: $(KERNEL)
+all: install-headers install-lib $(KERNEL)
 
-include kernel/kernel.mk
 include lib/lib.mk
+include kernel/kernel.mk
 include user/user.mk
 
 $(OBJ)/fs.img: $(SYSROOT) $(USER_APPS)
@@ -78,19 +78,22 @@ QEMUOPTS += -drive if=sd,format=raw,file=$(OBJ)/fs.img
 QEMUOPTS += -nic user,hostfwd=tcp::8080-:80
 QEMUOPTS += -serial mon:stdio
 
-qemu: $(KERNEL) $(OBJ)/fs.img
+qemu: install-headers install-lib $(KERNEL) $(OBJ)/fs.img
 	$(QEMU) $(QEMUOPTS)
 
 qemu-gdb: $(KERNEL) $(OBJ)/fs.img
 	$(QEMU) $(QEMUOPTS) -s -S
 
-$(SYSROOT): $(OBJ)/lib/libc.a $(CRT_OBJFILES)
-	@mkdir -p $(SYSROOT){,/usr{,/include,/lib}}
-	@cp -R include/* $(SYSROOT)/usr/include
+install-headers:
+	@mkdir -p $(SYSROOT){,/usr{,/include}}
+	@cp -R lib/include/* $(SYSROOT)/usr/include
+
+install-lib: $(OBJ)/lib/libc.a $(CRT_OBJFILES)
+	@mkdir -p $(SYSROOT){,/usr{,/lib}}
 	@cp -R $(OBJ)/lib/*{.a,.o} $(SYSROOT)/usr/lib
 
 clean:
 	rm -rf $(OBJ) $(SYSROOT)
 
 .PRECIOUS: $(OBJ)/user/%.o
-.PHONY: all lib qemu clean
+.PHONY: all lib qemu clean install-headers install-lib

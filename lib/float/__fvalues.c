@@ -1,4 +1,5 @@
 #include <float.h>
+#include <yvals.h>
 
 #if __D0 != 0
   #define FLT_INIT(u0, ux)	    { { (u0), (u0) } }

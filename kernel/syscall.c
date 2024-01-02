@@ -633,7 +633,7 @@ sys_sbrk(void)
   ptrdiff_t n;
   int r;
 
-  if ((r = sys_arg_long(0, &n)) < 0)
+  if ((r = sys_arg_int(0, &n)) < 0)
     return r;
   
   return (int32_t) process_grow(n);

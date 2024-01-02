@@ -1,6 +1,20 @@
 #ifndef __YVALS_H__
 #define __YVALS_H__
 
+extern struct __flt {
+  union {
+    unsigned short w[2];
+    float          f;
+  } max, min, eps;
+} __flt;
+
+extern struct __dbl {
+  union {
+    unsigned short w[4];
+    double         d;
+  } max, min, eps, inf, nan;
+} __dbl;
+
 /**
  * @file include/yvals.h
  *
