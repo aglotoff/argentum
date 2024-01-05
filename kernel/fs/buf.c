@@ -1,4 +1,4 @@
-#include <assert.h>
+#include <kernel/assert.h>
 
 #include <kernel/cprintf.h>
 #include <kernel/sd.h>

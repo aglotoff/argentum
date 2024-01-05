@@ -1,4 +1,4 @@
-#include <assert.h>
+#include <kernel/assert.h>
 #include <errno.h>
 #include <string.h>
 
@@ -61,7 +61,7 @@ ext2_read_inode(struct Inode *inode)
 {
   struct Buf *buf;
   struct Ext2Inode *raw;
-  unsigned inode_block, inode_offset;
+  unsigned long inode_block, inode_offset;
 
   inode_block = ext2_locate_inode(inode, &inode_offset);
 
@@ -94,7 +94,7 @@ ext2_write_inode(struct Inode *inode)
 {
   struct Buf *buf;
   struct Ext2Inode *raw;
-  unsigned block, offset;
+  unsigned long block, offset;
 
   block = ext2_locate_inode(inode, &offset);
 

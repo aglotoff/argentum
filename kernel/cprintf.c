@@ -18,6 +18,8 @@ cputc(void *arg, int c)
   return 1;
 }
 
+int   __printf(int (*)(void *, int), void *, const char *, va_list);
+
 /**
  * Printf-like formatted output to the console.
  * 

@@ -1,6 +1,7 @@
-#include <assert.h>
+#include <kernel/assert.h>
 #include <errno.h>
 #include <fcntl.h>
+#include <stdio.h>
 #include <string.h>
 #include <sys/stat.h>
 
@@ -206,7 +207,7 @@ file_read(struct File *f, void *buf, size_t nbytes)
 {
   int r;
 
-  if (!(f->flags & O_RDONLY))
+  if (f->flags & O_WRONLY)
     return -EBADF;
   
   switch (f->type) {
@@ -242,7 +243,7 @@ file_getdents(struct File *f, void *buf, size_t nbytes)
 {
   int r;
 
-  if (!(f->flags & O_RDONLY))
+  if (f->flags & O_WRONLY)
     return -EBADF;
 
   if ((f->type != FD_INODE) || !S_ISDIR(f->inode->mode))
@@ -319,7 +320,7 @@ int
 file_chdir(struct File *file)
 {
   int r;
-  
+
   if (file->type != FD_INODE)
     return -ENOTDIR;
 

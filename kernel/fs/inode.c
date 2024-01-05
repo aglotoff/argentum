@@ -1,4 +1,4 @@
-#include <assert.h>
+#include <kernel/assert.h>
 #include <dirent.h>
 #include <errno.h>
 #include <fcntl.h>
@@ -465,14 +465,15 @@ fs_inode_rmdir(struct Inode *dir, struct Inode *inode)
     panic("inode not locked");
   if (!fs_inode_holding(dir))
     panic("directory not locked");
-  
+ 
   if (!S_ISDIR(dir->mode))
     return -ENOTDIR;
+
   if (!fs_permission(dir, FS_PERM_WRITE, 0))
     return -EPERM;
 
   // TODO: Allow links to directories?
-  if (S_ISDIR(inode->mode))
+  if (!S_ISDIR(inode->mode))
     return -EPERM;
 
   return ext2_inode_rmdir(dir, inode);
@@ -537,6 +538,8 @@ fs_link(char *path1, char *path2)
 
   if ((r = fs_name_lookup(path1, 0, &ip)) < 0)
     return r;
+  if (ip == NULL)
+    return -ENOENT;
 
   if ((r = fs_path_lookup(path2, name, 0, NULL, &dirp)) < 0)
     goto out1;
@@ -637,6 +640,9 @@ fs_chdir(const char *path)
 
   if ((r = fs_name_lookup(path, 0, &ip)) < 0)
     return r;
+
+  if (ip == NULL)
+    return -ENOENT;
 
   if ((r = fs_set_pwd(ip)) != 0)
     fs_inode_put(ip);

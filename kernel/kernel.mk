@@ -6,6 +6,7 @@ LWIPDIR := kernel/net/lwip
 include kernel/net/lwip/Filelists.mk
 
 KERNEL_CFLAGS  := $(CFLAGS) $(INIT_CFLAGS) -Ikernel/include -D__OSDEV_KERNEL__
+KERNEL_CFLAGS += -ffreestanding -nostdlib -fno-builtin
 KERNEL_CFLAGS  += -I$(LWIPDIR)/include -I$(LWIPDIR)/osdev -Wno-type-limits
 KERNEL_LDFLAGS := $(LDFLAGS) -T kernel/kernel.ld -nostdlib
 
@@ -67,31 +68,28 @@ KERNEL_SRCFILES :=	\
 	kernel/main.c
 
 KERNEL_SRCFILES += \
-	lib/ctype/__ctype.c \
-	lib/ctype/__tolower.c \
-	lib/stdio/__printf.c \
-	lib/stdlib/__stdlib_parse_int.c \
-	lib/stdlib/atoi.c \
-	lib/stdlib/rand.c \
-	lib/stdlib/rand_r.c \
-	lib/stdlib/strtol.c \
-	lib/string/memchr.c \
-	lib/string/memcmp.c \
-	lib/string/memcpy.c \
-	lib/string/memmove.c \
-	lib/string/memset.c \
-	lib/string/strchr.c \
-	lib/string/strcmp.c \
-	lib/string/strcpy.c \
-	lib/string/strlen.c \
-	lib/string/strncmp.c \
-	lib/string/strncpy.c \
-	lib/string/strnlen.c \
-	lib/string/strpbrk.c \
-	lib/string/strspn.c \
-	lib/string/strtok.c \
-	lib/time/gmtime.c \
-	lib/time/mktime.c
+	kernel/lib/__printf.c \
+	kernel/lib/atoi.c \
+	kernel/lib/rand.c \
+	kernel/lib/rand_r.c \
+	kernel/lib/strtol.c \
+	kernel/lib/memchr.c \
+	kernel/lib/memcmp.c \
+	kernel/lib/memcpy.c \
+	kernel/lib/memmove.c \
+	kernel/lib/memset.c \
+	kernel/lib/strchr.c \
+	kernel/lib/strcmp.c \
+	kernel/lib/strcpy.c \
+	kernel/lib/strlen.c \
+	kernel/lib/strncmp.c \
+	kernel/lib/strncpy.c \
+	kernel/lib/strnlen.c \
+	kernel/lib/strpbrk.c \
+	kernel/lib/strspn.c \
+	kernel/lib/strtok.c \
+	kernel/lib/gmtime.c \
+	kernel/lib/mktime.c
 
 KERNEL_SRCFILES += $(LWIPNOAPPSFILES)
 KERNEL_SRCFILES += \

@@ -56,7 +56,7 @@
 
 #ifndef __ASSEMBLER__
 
-#include <assert.h>
+#include <kernel/assert.h>
 #include <stdint.h>
 
 /** Integer type wide enough to represent a physical address. */

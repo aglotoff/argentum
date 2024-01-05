@@ -1,4 +1,4 @@
-#include <assert.h>
+#include <kernel/assert.h>
 #include <errno.h>
 #include <limits.h>
 #include <string.h>

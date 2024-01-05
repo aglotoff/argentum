@@ -1,9 +1,12 @@
 #ifndef __LWIP_OSDEV_ARCH_CC_H__
 #define __LWIP_OSDEV_ARCH_CC_H__
 
-#include <assert.h>
+#include <kernel/assert.h>
 #include <kernel/cprintf.h>
+#include <sys/time.h>
 #include <stdlib.h>
+
+#define LWIP_NO_CTYPE_H         1
 
 typedef int sys_prot_t;
 

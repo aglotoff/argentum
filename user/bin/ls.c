@@ -9,9 +9,8 @@
 #include <time.h>
 #include <unistd.h>
 
-char buf[256];
-char name[256];
-char datebuf[256];
+static char name[256];
+static char datebuf[256];
 
 int
 main(int argc, char **argv)
@@ -63,7 +62,7 @@ main(int argc, char **argv)
             st.st_mode & S_IROTH ? 'r' : '-',
             st.st_mode & S_IWOTH ? 'w' : '-',
             st.st_mode & S_IXOTH ? 'x' : '-');
-    printf("%2d root root %6d", st.st_nlink, st.st_size);
+    printf("%2d root root %6ld", st.st_nlink, st.st_size);
     strftime(datebuf, 256, "%b %d %H:%M", gmtime(&st.st_mtime));
     printf(" %s", datebuf);
     printf(" \x1b[%sm%s\x1b[m\n", color, de->d_name);

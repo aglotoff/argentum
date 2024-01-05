@@ -5,3 +5,5 @@ sysroot/
 ports/*/*
 !ports/*/build.sh
 !ports/*/*.patch
+
+lib/newlib-4.4.0.20231231/

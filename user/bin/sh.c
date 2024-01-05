@@ -7,6 +7,7 @@
 #include <sys/wait.h>
 #include <time.h>
 #include <unistd.h>
+#include <limits.h>
 
 struct Cmd;
 
@@ -77,7 +78,7 @@ get_cmd(void)
 
   if (fgets(buf, sizeof(buf), stdin) == NULL) {
     if (ferror(stdin)) {
-      perror("fread");
+      perror("fgets");
       exit(EXIT_FAILURE);
     }
     exit(EXIT_FAILURE);
@@ -148,8 +149,11 @@ main(void)
 
   umask(S_IWGRP | S_IWOTH);
 
+  setenv("PATH", "/bin", 1);
+
   if (getcwd(cwd, sizeof(cwd)) == NULL) {
     perror("getcwd");
+    for (;;);
     exit(EXIT_FAILURE);
   }
   
@@ -288,9 +292,12 @@ peek(char *s, char *tokens, char **p)
 {
   if (*s == '\0')
     return 0;
-  
+
   while (isspace(*s))
     s++;
+
+  if (*s == '\0')
+    return 0;
 
   if (p != NULL)
     *p = s;
@@ -344,6 +351,8 @@ static struct Cmd *
 cmd_parse_redir(struct Cmd *cmd, char *s, char **ep)
 {
   struct RedirCmd *rcmd;
+
+  // printf("rest %s\n", s);
   
   while (peek(s, "<>", &s)) {
     rcmd = (struct RedirCmd *) malloc(sizeof(struct RedirCmd));
@@ -406,7 +415,7 @@ cmd_parse_exec(char *s, char **ep)
     }
 
     cmd->eargv[argc] = s;
-
+//
     ret = cmd_parse_redir(ret, s, &s);
   }
 

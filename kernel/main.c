@@ -1,4 +1,4 @@
-#include <assert.h>
+#include <kernel/assert.h>
 #include <stddef.h>
 #include <stdint.h>
 #include <sys/utsname.h>

@@ -1,4 +1,4 @@
-#include <assert.h>
+#include <kernel/assert.h>
 #include <errno.h>
 #include <limits.h>
 #include <stddef.h>
@@ -57,8 +57,13 @@ sys_dispatch(void)
   if ((num = sys_get_num()) < 0)
     return num;
 
-  if ((num < (int) ARRAY_SIZE(syscalls)) && syscalls[num])
-    return syscalls[num]();
+  // cprintf("  incoming %d\n", num);
+
+  if ((num < (int) ARRAY_SIZE(syscalls)) && syscalls[num]) {
+    int r = syscalls[num]();
+    //cprintf("%d -> %d\n", num, r);
+    return r;
+  }
 
   cprintf("Unknown system call %d\n", cpu_id(), num);
   return -ENOSYS;
@@ -338,7 +343,7 @@ sys_clock_time(void)
   struct timespec *prev;
   int r;
   
-  if ((r = sys_arg_int(0, &clock_id)) < 0)
+  if ((r = sys_arg_long(0, (long *) &clock_id)) < 0)
     return r;
   
   if ((r = sys_arg_buf(1, (void **) &prev, sizeof(*prev), VM_WRITE)) < 0)

@@ -1,4 +1,4 @@
-#include <dwarf.h>
+#include <kernel/dwarf.h>
 #include <stddef.h>
 
 #include <kernel/cprintf.h>

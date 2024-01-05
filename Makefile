@@ -31,7 +31,7 @@ OBJCOPY := $(TOOLPREFIX)objcopy
 OBJDUMP := $(TOOLPREFIX)objdump
 
 # Common compiler flags
-CFLAGS := -ffreestanding -nostdlib -fno-builtin
+#CFLAGS := -ffreestanding -nostdlib -fno-builtin
 CFLAGS += -Wall -Wextra -Werror  -Wno-address-of-packed-member
 CFLAGS += --std=gnu11
 CFLAGS += -O1 -mcpu=cortex-a9 -mapcs-frame -fno-omit-frame-pointer
@@ -54,19 +54,24 @@ $(OBJ)/.vars.%: .FORCE
 .PRECIOUS: $(OBJ)/.vars.%
 .PHONY: .FORCE
 
-all: install-headers install-lib $(KERNEL)
+all: kernel user
+
+sysroot: install-headers install-lib
 
 include lib/lib.mk
 include kernel/kernel.mk
 include user/user.mk
+
+kernel: $(KERNEL)
+user: $(USER_APPS)
 
 $(OBJ)/fs.img: $(SYSROOT) $(USER_APPS)
 	@echo "+ GEN $@"
 	$(V)mkdir -p $@.d/{,dev,etc,home/{,root,guest},tmp}
 	$(V)cp -R $(SYSROOT)/usr $@.d/
 	$(V)(pushd $(OBJ)/user; cp --parent $(patsubst $(OBJ)/user/%, %, $(USER_APPS)) $(PWD)/$@.d; popd)
-	$(V)mke2fs -E root_owner=0:0 -F -b 1K -d $@.d -t ext2 $@ 32M 
-	$(V)rm -rf $@.d
+	$(V)mke2fs -E root_owner=0:0 -F -b 1K -d $@.d -t ext2 $@ 64M
+#
 
 ifndef CPUS
   CPUS := 2
@@ -78,7 +83,7 @@ QEMUOPTS += -drive if=sd,format=raw,file=$(OBJ)/fs.img
 QEMUOPTS += -nic user,hostfwd=tcp::8080-:80
 QEMUOPTS += -serial mon:stdio
 
-qemu: install-headers install-lib $(KERNEL) $(OBJ)/fs.img
+qemu: $(SYSROOT) $(KERNEL) $(OBJ)/fs.img
 	$(QEMU) $(QEMUOPTS)
 
 qemu-gdb: $(KERNEL) $(OBJ)/fs.img
@@ -86,14 +91,14 @@ qemu-gdb: $(KERNEL) $(OBJ)/fs.img
 
 install-headers:
 	@mkdir -p $(SYSROOT){,/usr{,/include}}
-	@cp -R lib/include/* $(SYSROOT)/usr/include
+#	@cp -R lib/include/* $(SYSROOT)/usr/include
 
-install-lib: $(OBJ)/lib/libc.a $(CRT_OBJFILES)
+install-lib:
 	@mkdir -p $(SYSROOT){,/usr{,/lib}}
-	@cp -R $(OBJ)/lib/*{.a,.o} $(SYSROOT)/usr/lib
+#	@cp -R $(OBJ)/lib/*{.a,.o} $(SYSROOT)/usr/lib
 
 clean:
 	rm -rf $(OBJ) $(SYSROOT)
 
 .PRECIOUS: $(OBJ)/user/%.o
-.PHONY: all lib qemu clean install-headers install-lib
+.PHONY: all sysroot kernel user lib qemu clean install-headers install-lib

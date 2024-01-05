@@ -11,7 +11,7 @@
 #error "This is a kernel header; user programs should not #include it"
 #endif
 
-#include <assert.h>
+#include <kernel/assert.h>
 #include <stddef.h>
 
 #include <kernel/list.h>

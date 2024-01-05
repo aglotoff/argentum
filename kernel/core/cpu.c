@@ -1,4 +1,4 @@
-#include <assert.h>
+#include <kernel/assert.h>
 #include <stddef.h>
 
 #include <kernel/armv7/regs.h>
