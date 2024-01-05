@@ -34,8 +34,8 @@ OBJDUMP := $(TOOLPREFIX)objdump
 #CFLAGS := -ffreestanding -nostdlib -fno-builtin
 CFLAGS += -Wall -Wextra -Werror  -Wno-address-of-packed-member
 CFLAGS += --std=gnu11
-CFLAGS += -O1 -mcpu=cortex-a9 -mapcs-frame -fno-omit-frame-pointer
-CFLAGS += -mhard-float -mfpu=vfp
+CFLAGS += -O1 -mapcs-frame -fno-omit-frame-pointer
+CFLAGS += -mcpu=cortex-a9 -mhard-float -mfpu=vfp
 CFLAGS += -gdwarf-3
 
 # Common linker flags
@@ -55,8 +55,6 @@ $(OBJ)/.vars.%: .FORCE
 .PHONY: .FORCE
 
 all: kernel user
-
-sysroot: install-headers install-lib
 
 include lib/lib.mk
 include kernel/kernel.mk
@@ -89,16 +87,12 @@ qemu: $(SYSROOT) $(KERNEL) $(OBJ)/fs.img
 qemu-gdb: $(KERNEL) $(OBJ)/fs.img
 	$(QEMU) $(QEMUOPTS) -s -S
 
-install-headers:
-	@mkdir -p $(SYSROOT){,/usr{,/include}}
-#	@cp -R lib/include/* $(SYSROOT)/usr/include
-
-install-lib:
-	@mkdir -p $(SYSROOT){,/usr{,/lib}}
-#	@cp -R $(OBJ)/lib/*{.a,.o} $(SYSROOT)/usr/lib
+$(SYSROOT):
+	@mkdir -p $@{,/usr{,/lib,/include}}
 
 clean:
 	rm -rf $(OBJ) $(SYSROOT)
 
 .PRECIOUS: $(OBJ)/user/%.o
-.PHONY: all sysroot kernel user lib qemu clean install-headers install-lib
+.PHONY: all kernel user lib qemu clean clean-kernel clean-user clean-lib \
+	install-headers install-lib

@@ -136,3 +136,6 @@ $(OBJ)/kernel/kernel: $(KERNEL_OBJFILES) $(KERNEL_BINFILES) kernel/kernel.ld
 		-b binary $(KERNEL_BINFILES)
 	$(V)$(OBJDUMP) -S $@ > $@.asm
 	$(V)$(NM) -n $@ > $@.sym
+
+clean-kernel:
+	rm -rf $(OBJ)/kernel

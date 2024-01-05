@@ -1,47 +1,71 @@
 #!/bin/bash
 
+PACKAGE_NAME=gcc-13.2.0
 TARBALL_NAME=gcc-13.2.0.tar.xz
 DOWNLOAD_URL="https://ftp.gnu.org/gnu/gcc/gcc-13.2.0/${TARBALL_NAME}"
 SOURCE_DIR=gcc-13.2.0
 BUILD_DIR=build-gcc
-PATCH_FILE=gcc-13.2.0.patch
+PATCH_FILE=${PACKAGE_NAME}.patch
 
-if [ ! -d ${SOURCE_DIR} ]; then
+# Download and patch the package contents
+if [ ! -f ${PACKAGE_NAME}.unpacked ]; then
   if [ ! -f ${TARBALL_NAME} ]; then
     wget ${DOWNLOAD_URL}
-  fi
+  fi || exit 1
 
-  tar xf ${TARBALL_NAME}
+  rm -rf ${SOURCE_DIR}
+
+  tar xf ${TARBALL_NAME} &&
   pushd ${SOURCE_DIR} &&
   patch -p1 -i "../${PATCH_FILE}" &&
   ./contrib/download_prerequisites &&
-  popd
-fi
+  popd &&
+  touch ${PACKAGE_NAME}.unpacked
+fi || exit 1
 
+# Create the build directory
 if [ ! -d ${BUILD_DIR} ]; then
   mkdir ${BUILD_DIR}
+fi || exit 1
+
+# Configure the package
+if [ ! -f ${PACKAGE_NAME}.configured ]; then
+  pushd ${BUILD_DIR} &&
+  ../${SOURCE_DIR}/configure --target=arm-none-osdev \
+                             --prefix=/usr/local \
+                             --with-sysroot=${HOME}/osdev/sysroot \
+                             --without-headers \
+                             --enable-languages=c,c++ \
+                             --disable-nls \
+                             --disable-werror \
+                             --with-multilib-list=rmprofile \
+                             --with-newlib \
+                             --disable-decimal-float \
+                             --disable-libffi \
+                             --disable-libgomp \
+                             --disable-libmudflap \
+                             --disable-libquadmath  \
+                             --disable-libssp \
+                             --disable-libstdcxx-pch \
+                             --disable-shared \
+                             --disable-threads \
+                             --disable-tls &&
+  popd &&
+  touch ${PACKAGE_NAME}.configured
+fi || exit 1
+
+# Build the package
+if [ ! -f ${PACKAGE_NAME}.built ]; then
+  pushd ${BUILD_DIR} &&
+  make all-gcc all-target-libgcc &&
+  popd &&
+  touch ${PACKAGE_NAME}.built
+fi || exit 1
+
+# Install the package
+if [ ! -f ${PACKAGE_NAME}.installed ]; then
+  pushd ${BUILD_DIR} &&
+  sudo make install-gcc install-target-libgcc &&
+  popd &&
+  touch ${PACKAGE_NAME}.installed
 fi
-
-pushd ${BUILD_DIR} &&
-../${SOURCE_DIR}/configure --target=arm-none-osdev \
-                           --prefix=/usr/local \
-                           --with-sysroot=${HOME}/osdev/sysroot \
-                           --enable-languages=c,c++ \
-                           --disable-nls \
-                           --disable-werror \
-                           --with-multilib-list=rmprofile \
-                           --with-newlib \
-                           --disable-decimal-float \
-                           --disable-libffi \
-                           --disable-libgomp \
-                           --disable-libmudflap \
-                           --disable-libquadmath  \
-                           --disable-libssp \
-                           --disable-libstdcxx-pch \
-                           --disable-shared \
-                           --disable-threads \
-                           --disable-tls  
-
-make all-gcc all-target-libgcc &&
-sudo make install-gcc install-target-libgcc &&
-popd

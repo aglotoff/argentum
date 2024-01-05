@@ -7,3 +7,5 @@ ports/*/*
 !ports/*/*.patch
 
 lib/newlib-4.4.0.20231231/
+
+tarballs/

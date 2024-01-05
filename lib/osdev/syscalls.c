@@ -10,6 +10,7 @@
 #include <stdlib.h>
 #include <stdarg.h>
 #include <dirent.h>
+#include <limits.h>
 
 int
 fcntl(int fildes, int cmd, ...)
@@ -174,21 +175,6 @@ pid_t
 wait(int *stat_loc)
 {
   return __syscall(__SYS_WAIT, -1, (uint32_t) stat_loc, 0);
-}
-
-int
-stat(const char *path, struct stat *buf)
-{
-  int fd, r;
-
-  if ((fd = open(path, O_RDONLY)) < 0)
-    return fd;
-  
-  r = fstat(fd, buf);
-
-  close(fd);
-
-  return r;
 }
 
 int

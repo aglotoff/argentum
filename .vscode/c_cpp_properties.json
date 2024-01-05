@@ -3,16 +3,17 @@
     {
       "name": "OSDev",
       "defines": [
+        "__OSDEV__",
         "__OSDEV_KERNEL__"
       ],
       "includePath": [
-        "./include",
+        "./sysroot/usr/include",
         "./kernel/include",
         "./kernel/net/lwip/osdev",
         "./kernel/net/lwip/include"
       ],
       "intelliSenseMode": "linux-gcc-x64",
-      "compilerPath": "/usr/local/bin/arm-none-eabi-gcc",
+      "compilerPath": "/usr/local/bin/arm-none-osdev-gcc",
       "cStandard": "gnu11",
       "cppStandard": "c++11"
     }
