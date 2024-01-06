@@ -3,7 +3,7 @@
 #include <limits.h>
 #include <stddef.h>
 #include <string.h>
-#include <syscall.h>
+#include <sys/syscall.h>
 #include <sys/stat.h>
 #include <sys/utsname.h>
 #include <time.h>

@@ -8,7 +8,7 @@ stat(const char *path, struct stat *buf)
 
   if ((fd = open(path, O_RDONLY)) < 0)
     return fd;
-  
+
   r = fstat(fd, buf);
 
   close(fd);

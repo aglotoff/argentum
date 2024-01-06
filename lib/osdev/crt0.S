@@ -30,8 +30,3 @@ _start:
 
   // Should not return.
   b       .         
-
-.data
-  .globl __progname
-__progname:
-  .long   0

@@ -54,22 +54,17 @@ $(OBJ)/.vars.%: .FORCE
 .PRECIOUS: $(OBJ)/.vars.%
 .PHONY: .FORCE
 
-all: kernel user
+all: all-lib all-kernel all-user
 
 include lib/lib.mk
 include kernel/kernel.mk
 include user/user.mk
 
-kernel: $(KERNEL)
-user: $(USER_APPS)
-
 $(OBJ)/fs.img: $(SYSROOT) $(USER_APPS)
 	@echo "+ GEN $@"
 	$(V)mkdir -p $@.d/{,dev,etc,home/{,root,guest},tmp}
-	$(V)cp -R $(SYSROOT)/usr $@.d/
-	$(V)(pushd $(OBJ)/user; cp --parent $(patsubst $(OBJ)/user/%, %, $(USER_APPS)) $(PWD)/$@.d; popd)
+	$(V)cp -aR $(SYSROOT)/* $@.d/
 	$(V)mke2fs -E root_owner=0:0 -F -b 1K -d $@.d -t ext2 $@ 64M
-#
 
 ifndef CPUS
   CPUS := 2
@@ -81,7 +76,7 @@ QEMUOPTS += -drive if=sd,format=raw,file=$(OBJ)/fs.img
 QEMUOPTS += -nic user,hostfwd=tcp::8080-:80
 QEMUOPTS += -serial mon:stdio
 
-qemu: $(SYSROOT) $(KERNEL) $(OBJ)/fs.img
+qemu: $(KERNEL) $(OBJ)/fs.img
 	$(QEMU) $(QEMUOPTS)
 
 qemu-gdb: $(KERNEL) $(OBJ)/fs.img
@@ -94,5 +89,8 @@ clean:
 	rm -rf $(OBJ) $(SYSROOT)
 
 .PRECIOUS: $(OBJ)/user/%.o
-.PHONY: all kernel user lib qemu clean clean-kernel clean-user clean-lib \
-	install-headers install-lib
+
+.PHONY: all all-kernel all-lib all-user \
+	clean clean-kernel clean-user clean-lib \
+	install-headers install-lib \
+	qemu qemu-gdb

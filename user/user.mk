@@ -1,5 +1,4 @@
 USER_CFLAGS  := $(CFLAGS) -Wno-return-local-addr -Wno-char-subscripts -D__OSDEV__
-USER_LDFLAGS := $(LDFLAGS)
 
 USER_SRCFILES :=
 
@@ -20,17 +19,30 @@ USER_SRCFILES += \
 	user/bin/pwd.c \
 	user/bin/rm.c
 
-USER_APPS := $(patsubst %.c, $(OBJ)/%, $(USER_SRCFILES))
+USER_APPS := $(patsubst user/%.c, $(SYSROOT)/%, $(USER_SRCFILES))
 
-$(OBJ)/user/%: user/%.c $(OBJ)/.vars.USER_CFLAGS $(SYSROOT)/usr/lib/libc.a
+$(OBJ)/user/%.o: user/%.c $(OBJ)/.vars.USER_CFLAGS
 	@echo "+ CC [USER] $<"
 	@mkdir -p $(@D)
-	$(V)$(CC) $(USER_CFLAGS) -o $@ $<
+	$(V)$(CC) $(USER_CFLAGS) -c -o $@ $<
 
-$(OBJ)/user/%: user/%.S $(OBJ)/.vars.USER_CFLAGS $(SYSROOT)/usr/lib/libc.a
+$(OBJ)/user/%.o: user/%.S $(OBJ)/.vars.USER_CFLAGS
 	@echo "+ AS [USER] $<"
 	@mkdir -p $(@D)
-	$(V)$(CC) $(USER_CFLAGS) -o $@ $<
+	$(V)$(CC) $(USER_CFLAGS) -c -o $@ $<
+
+$(OBJ)/user/%: $(OBJ)/user/%.o $(OBJ)/.vars.USER_LDFLAGS $(SYSROOT)/usr/lib/libc.a
+	@echo "+ LD [USER] $@"
+	@mkdir -p $(@D)
+	$(V)$(CC) $(CFLAGS) -o $@ $<
+	$(V)$(OBJDUMP) -S $@ > $@.asm
+	$(V)$(NM) -n $@ > $@.sym
+
+$(SYSROOT)/%: $(OBJ)/user/%
+	@mkdir -p $(@D)
+	cp $< $@
+
+all-user: $(USER_APPS)
 
 clean-user:
 	rm -rf $(OBJ)/user

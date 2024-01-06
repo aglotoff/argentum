@@ -1,5 +1,5 @@
-#ifndef __SYSCALL_H__
-#define __SYSCALL_H__
+#ifndef _SYS_SYSCALL_H
+ #define _SYS_SYSCALL_H
 
 #include <errno.h>
 #include <stdint.h>
@@ -60,4 +60,4 @@ __syscall(uint8_t num, uint32_t a1, uint32_t a2, uint32_t a3)
   return r0;
 }
 
-#endif  // !__SYSCALL_H__
+#endif  // !_SYS_SYSCALL_H

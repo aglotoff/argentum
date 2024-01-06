@@ -121,11 +121,6 @@ $(OBJ)/kernel/%.o: kernel/%.S $(OBJ)/.vars.KERNEL_CFLAGS
 	@mkdir -p $(@D)
 	$(V)$(CC) $(KERNEL_CFLAGS) -c -o $@ $<
 
-$(OBJ)/kernel/%.o: lib/%.c $(OBJ)/.vars.KERNEL_CFLAGS
-	@echo "+ CC [KERNEL] $<"
-	@mkdir -p $(@D)
-	$(V)$(CC) $(KERNEL_CFLAGS) -c -o $@ $<
-
 # Rebuild main.c when the initial process name changes
 $(OBJ)/kernel/main.o: override KERNEL_CFLAGS += $(KERNEL_MAIN_CFLAGS)
 $(OBJ)/kernel/main.o: $(OBJ)/.vars.KERNEL_MAIN_CFLAGS
@@ -136,6 +131,8 @@ $(OBJ)/kernel/kernel: $(KERNEL_OBJFILES) $(KERNEL_BINFILES) kernel/kernel.ld
 		-b binary $(KERNEL_BINFILES)
 	$(V)$(OBJDUMP) -S $@ > $@.asm
 	$(V)$(NM) -n $@ > $@.sym
+
+all-kernel: $(OBJ)/kernel/kernel
 
 clean-kernel:
 	rm -rf $(OBJ)/kernel
