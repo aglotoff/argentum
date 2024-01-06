@@ -76,10 +76,10 @@ QEMUOPTS += -drive if=sd,format=raw,file=$(OBJ)/fs.img
 QEMUOPTS += -nic user,hostfwd=tcp::8080-:80
 QEMUOPTS += -serial mon:stdio
 
-qemu: $(KERNEL) $(OBJ)/fs.img
+qemu: $(OBJ)/fs.img $(KERNEL)
 	$(QEMU) $(QEMUOPTS)
 
-qemu-gdb: $(KERNEL) $(OBJ)/fs.img
+qemu-gdb: $(OBJ)/fs.img $(KERNEL)
 	$(QEMU) $(QEMUOPTS) -s -S
 
 $(SYSROOT):

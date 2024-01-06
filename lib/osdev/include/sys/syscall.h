@@ -31,6 +31,11 @@
 #define __SYS_UNAME       24
 #define __SYS_CHMOD       25
 #define __SYS_CLOCK_TIME  26
+#define __SYS_SOCKET      27
+#define __SYS_BIND        28
+#define __SYS_LISTEN      29
+#define __SYS_CONNECT     30
+#define __SYS_ACCEPT      31
 
 // Generic system call: pass system call number as an immediate operand of the
 // SVC instruction, and up to three parameters in R0, R1, R2.

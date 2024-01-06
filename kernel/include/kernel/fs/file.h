@@ -12,6 +12,7 @@ struct stat;
 
 #define FD_INODE    0
 #define FD_PIPE     1
+#define FD_SOCKET   2
 
 struct File {
   int           type;         ///< File type (inode, console, or pipe)
@@ -19,8 +20,10 @@ struct File {
   int           flags;
   off_t         offset;       ///< Current offset within the file
   struct Inode *inode;        ///< Pointer to the corresponding inode
+  int           socket;       ///< Socket ID
 };
 
+int          file_alloc(struct File **);
 void         file_init(void);
 int          file_open(const char *, int, mode_t, struct File **);
 struct File *file_dup(struct File *);

@@ -23,7 +23,6 @@ static struct KMemCache *sem_cache;
 static struct KMemCache *task_cache;
 
 /* Mutex functions: */
-
 err_t
 sys_mutex_new(sys_mutex_t *mutex)
 {
@@ -122,12 +121,6 @@ sys_sem_set_invalid(sys_sem_t *sem)
 {
   *sem = NULL;
 }
-
-// void
-// sys_msleep(u32_t ms)
-// {
-//   task_sleep(ms / 10);
-// }
 
 /* Mailbox functions. */
 
@@ -229,6 +222,12 @@ sys_thread_new(const char *name, void (*thread)(void *), void *arg,
   task_resume(task);
 
   return task;
+}
+
+int *
+__errno(void)
+{
+  return &task_current()->err;
 }
 
 void

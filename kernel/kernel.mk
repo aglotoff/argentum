@@ -78,6 +78,7 @@ KERNEL_SRCFILES += \
 	kernel/lib/memcpy.c \
 	kernel/lib/memmove.c \
 	kernel/lib/memset.c \
+	kernel/lib/snprintf.c \
 	kernel/lib/strchr.c \
 	kernel/lib/strcmp.c \
 	kernel/lib/strcpy.c \

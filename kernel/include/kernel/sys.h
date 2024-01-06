@@ -34,5 +34,10 @@ int32_t sys_sbrk(void);
 int32_t sys_mknod(void);
 int32_t sys_uname(void);
 int32_t sys_chmod(void);
+int32_t sys_socket(void);
+int32_t sys_bind(void);
+int32_t sys_connect(void);
+int32_t sys_listen(void);
+int32_t sys_accept(void);
 
 #endif  // !__KERNEL_INCLUDE_KERNEL_SYSCALL_H__

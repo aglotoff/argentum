@@ -10,6 +10,7 @@
 #include <kernel/fs/fs.h>
 #include <kernel/mm/kmem.h>
 #include <kernel/spinlock.h>
+#include <kernel/net.h>
 
 #include "ext2.h"
 
@@ -26,24 +27,39 @@ file_init(void)
 }
 
 int
+file_alloc(struct File **fstore)
+{
+  struct File *f;
+
+  if ((f = (struct File *) kmem_alloc(file_cache)) == NULL)
+    return -ENOMEM;
+
+  f->type      = 0;
+  f->ref_count = 0;
+  f->flags     = 0;
+  f->offset    = 0;
+  f->inode     = NULL;
+  f->socket    = 0;
+  
+  if (fstore != NULL)
+    *fstore = f;
+  
+  return 0;
+}
+
+int
 file_open(const char *path, int oflag, mode_t mode, struct File **fstore)
 {
   struct File *f;
+  struct Inode *ip;
   int r;
 
   // TODO: ENFILE
-  if ((f = (struct File *) kmem_alloc(file_cache)) == NULL)
-    return -ENOMEM;
-  
-  f->type      = 0;
-  f->ref_count = 0;
-  f->flags     = oflag;
-  f->offset    = 0;
-  f->inode     = NULL;
+  if ((r = file_alloc(&f)) != 0)
+    return r;
 
-  struct Inode *ip;
-
-  f->type = FD_INODE;
+  f->flags = oflag;
+  f->type  = FD_INODE;
 
   // TODO: the check and the file creation should be atomic
   if ((r = fs_name_lookup(path, 0, &ip)) < 0)
@@ -150,8 +166,12 @@ file_close(struct File *f)
     case FD_INODE:
       assert(f->inode != NULL);
       fs_inode_put(f->inode);
+      break;
     case FD_PIPE:
-      // TODO: close pipe
+      panic("TODO: close pipe");
+      break;
+    case FD_SOCKET:
+      net_close(f->socket);
       break;
     default:
       panic("Invalid type");
@@ -194,6 +214,7 @@ file_seek(struct File *f, off_t offset, int whence)
     return new_offset;
 
   case FD_PIPE:
+  case FD_SOCKET:
     return -ESPIPE;
 
   default:
@@ -229,9 +250,11 @@ file_read(struct File *f, void *buf, size_t nbytes)
 
     return r;
 
+  case FD_SOCKET:
+    return net_recv(f->socket, buf, nbytes, 0);
+
   case FD_PIPE:
     // TODO: read from a pipe
-
   default:
     panic("Invalid type");
     return 0;
@@ -269,8 +292,8 @@ ssize_t
 file_write(struct File *f, const void *buf, size_t nbytes)
 {
   int r;
-  
-  if (!(f->flags & O_WRONLY))
+
+  if (!((f->flags & O_WRONLY) || (f->flags & O_RDWR)))
     return -EBADF;
 
   switch (f->type) {
@@ -291,6 +314,10 @@ file_write(struct File *f, const void *buf, size_t nbytes)
     fs_inode_unlock(f->inode);
 
     return r;
+  
+  case FD_SOCKET:
+    return net_send(f->socket, buf, nbytes, 0);
+
   case FD_PIPE:
     // TODO: write to a pipe
   default:

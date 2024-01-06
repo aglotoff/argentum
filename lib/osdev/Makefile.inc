@@ -1,10 +1,16 @@
 libc_a_SOURCES += \
+  %D%/arpa/inet/inet_pton.c \
   %D%/fcntl/fcntl.c \
   %D%/fcntl/open.c \
   %D%/signal/kill.c \
   %D%/signal/sigaction.c \
   %D%/signal/sigprocmask.c \
   %D%/sys/resource/getrlimit.c \
+  %D%/sys/socket/accept.c \
+  %D%/sys/socket/bind.c \
+  %D%/sys/socket/connect.c \
+  %D%/sys/socket/listen.c \
+  %D%/sys/socket/socket.c \
   %D%/sys/stat/chmod.c \
   %D%/sys/stat/fstat.c \
   %D%/sys/stat/mkdir.c \

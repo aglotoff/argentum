@@ -17,7 +17,9 @@ USER_SRCFILES += \
 	user/bin/rmdir.c \
 	user/bin/link.c \
 	user/bin/pwd.c \
-	user/bin/rm.c
+	user/bin/rm.c \
+	user/bin/server.c \
+	user/bin/client.c
 
 USER_APPS := $(patsubst user/%.c, $(SYSROOT)/%, $(USER_SRCFILES))
 

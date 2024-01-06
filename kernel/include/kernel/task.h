@@ -89,6 +89,7 @@ struct Task {
   int               protect_count;
   /** Count to keep track of nested task_lock() calls */
   int               lock_count;
+  int               err;
 
   /** State-specific information */
   union {

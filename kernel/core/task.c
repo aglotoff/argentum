@@ -550,6 +550,7 @@ task_create(struct Task *task, void (*entry)(void *), void *arg, int priority,
   task->destroyer     = NULL;
   task->lock_count    = 0;
   task->protect_count = 0;
+  task->err           = 0;
 
   ktimer_create(&task->sleep_timer, task_sleep_callback, task, 0, 0, 0);
 

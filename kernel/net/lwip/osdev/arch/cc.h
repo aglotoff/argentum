@@ -5,6 +5,8 @@
 #include <kernel/cprintf.h>
 #include <sys/time.h>
 #include <stdlib.h>
+#include <errno.h>
+#include <fcntl.h>
 
 #define LWIP_NO_CTYPE_H         1
 

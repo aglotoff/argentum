@@ -14,9 +14,12 @@
 #include <kernel/fs/file.h>
 #include <kernel/fs/fs.h>
 #include <kernel/vmspace.h>
+#include <kernel/net.h>
 #include <kernel/process.h>
 #include <kernel/sys.h>
 #include <kernel/types.h>
+
+#include <lwip/sockets.h>
 
 static int     sys_get_num(void);
 static int32_t sys_get_arg(int);
@@ -47,6 +50,11 @@ static int32_t (*syscalls[])(void) = {
   [__SYS_UNAME]      = sys_uname,
   [__SYS_CHMOD]      = sys_chmod,
   [__SYS_CLOCK_TIME] = sys_clock_time,
+  [__SYS_SOCKET]     = sys_socket,
+  [__SYS_BIND]       = sys_bind,
+  [__SYS_LISTEN]     = sys_listen,
+  [__SYS_ACCEPT]     = sys_accept,
+  [__SYS_CONNECT]    = sys_connect,
 };
 
 int32_t
@@ -166,10 +174,13 @@ sys_arg_long(int n, long *ip)
  * @retval -EFAULT if the arguments doesn't point to a valid memory region.
  */
 static int32_t
-sys_arg_buf(int n, void **pp, size_t len, int perm)
+sys_arg_buf(int n, void **pp, size_t len, int perm, int can_be_null)
 { 
   void *ptr = (void *) sys_get_arg(n);
   int r;
+
+  if (ptr == NULL)
+    return can_be_null ? 0 : -EFAULT;
 
   if ((r = vm_space_check_buf(process_current()->vm, ptr, len, perm)) < 0)
     return r;
@@ -302,7 +313,7 @@ sys_wait(void)
   if ((r = sys_arg_int(0, &pid)) < 0)
     return r;
 
-  if ((r = sys_arg_buf(1, (void **) &stat_loc, sizeof(int), VM_WRITE)) < 0)
+  if ((r = sys_arg_buf(1, (void **) &stat_loc, sizeof(int), VM_WRITE, 0)) < 0)
     return r;
 
   return process_wait(pid, stat_loc, 0);
@@ -346,7 +357,7 @@ sys_clock_time(void)
   if ((r = sys_arg_long(0, (long *) &clock_id)) < 0)
     return r;
   
-  if ((r = sys_arg_buf(1, (void **) &prev, sizeof(*prev), VM_WRITE)) < 0)
+  if ((r = sys_arg_buf(1, (void **) &prev, sizeof(*prev), VM_WRITE, 0)) < 0)
     return r;
 
   if (clock_id != CLOCK_REALTIME)
@@ -372,7 +383,7 @@ sys_getdents(void)
   if ((r = sys_arg_int(2, (int *) &n)) < 0)
     return r;
 
-  if ((r = sys_arg_buf(1, &buf, n, VM_READ)) < 0)
+  if ((r = sys_arg_buf(1, &buf, n, VM_READ, 0)) < 0)
     return r;
 
   return file_getdents(f, buf, n);
@@ -537,7 +548,7 @@ sys_stat(void)
   if ((r = sys_arg_fd(0, NULL, &f)) < 0)
     return r;
 
-  if ((r = sys_arg_buf(1, (void **) &buf, sizeof(*buf), VM_WRITE)) < 0)
+  if ((r = sys_arg_buf(1, (void **) &buf, sizeof(*buf), VM_WRITE, 0)) < 0)
     return r;
 
   return file_stat(f, buf);
@@ -572,7 +583,7 @@ sys_read(void)
   if ((r = sys_arg_int(2, (int *) &n)) < 0)
     return r;
 
-  if ((r = sys_arg_buf(1, &buf, n, VM_READ)) < 0)
+  if ((r = sys_arg_buf(1, &buf, n, VM_READ, 0)) < 0)
     return r;
 
   return file_read(f, buf, n);
@@ -626,7 +637,7 @@ sys_write(void)
   if ((r = sys_arg_int(2, (int *) &n)) < 0)
     return r;
 
-  if ((r = sys_arg_buf(1, &buf, n, VM_WRITE)) < 0)
+  if ((r = sys_arg_buf(1, &buf, n, VM_WRITE, 0)) < 0)
     return r;
 
   return file_write(f, buf, n);
@@ -652,10 +663,121 @@ sys_uname(void)
   struct utsname *name;
   int r;
 
-  if ((r = sys_arg_buf(0, (void **) &name, sizeof(*name), VM_WRITE)) < 0)
+  if ((r = sys_arg_buf(0, (void **) &name, sizeof(*name), VM_WRITE, 0)) < 0)
     return r;
   
   memcpy(name, &utsname, sizeof (*name));
 
   return 0;
+}
+
+int32_t
+sys_socket(void)
+{
+  int r;
+  int domain;
+  int type;
+  int protocol;
+  struct File *f;
+
+  if ((r = sys_arg_int(0, &domain)) < 0)
+    return r;
+  if ((r = sys_arg_int(1, &type)) < 0)
+    return r;
+  if ((r = sys_arg_int(2, &protocol)) < 0)
+    return r;
+
+  if ((r = net_socket(domain, type, protocol, &f)) != 0)
+    return r;
+
+  if ((r = fd_alloc(f)) < 0)
+    file_close(f);
+
+  return r;
+}
+
+int32_t
+sys_bind(void)
+{
+  struct File *f;
+  struct sockaddr *address;
+  socklen_t address_len;
+  int r;
+
+  if ((r = sys_arg_fd(0, NULL, &f)) < 0)
+    return r;
+  if ((r = sys_arg_buf(1, (void **) &address, sizeof(*address), VM_READ, 0)) < 0)
+    return r;
+  if ((r = sys_arg_long(2, (long *) &address_len)) < 0)
+    return r;
+
+  if (f->type != FD_SOCKET)
+    return -EBADF;
+
+  return net_bind(f->socket, address, address_len);
+}
+
+int32_t
+sys_connect(void)
+{
+  struct File *f;
+  struct sockaddr *address;
+  socklen_t address_len;
+  int r;
+
+  if ((r = sys_arg_fd(0, NULL, &f)) < 0)
+    return r;
+  if ((r = sys_arg_buf(1, (void **) &address, sizeof(*address), VM_READ, 0)) < 0)
+    return r;
+  if ((r = sys_arg_long(2, (long *) &address_len)) < 0)
+    return r;
+
+  if (f->type != FD_SOCKET)
+    return -EBADF;
+
+  return net_connect(f->socket, address, address_len);
+}
+
+int32_t
+sys_listen(void)
+{
+  struct File *f;
+  int backlog, r;
+
+  if ((r = sys_arg_fd(0, NULL, &f)) < 0)
+    return r;
+  if ((r = sys_arg_int(1, &backlog)) < 0)
+    return r;
+
+  if (f->type != FD_SOCKET)
+    return -EBADF;
+
+  return net_listen(f->socket, backlog);
+}
+
+int32_t
+sys_accept(void)
+{
+  struct File *sockf, *connf;
+  struct sockaddr *address;
+  socklen_t *address_len;
+  int r;
+
+  if ((r = sys_arg_fd(0, NULL, &sockf)) < 0)
+    return r;
+  if ((r = sys_arg_buf(1, (void **) &address, sizeof(*address), VM_WRITE, 1)) < 0)
+    return r;
+  if ((r = sys_arg_buf(2, (void **) &address_len, sizeof(socklen_t), VM_WRITE, 1)) < 0)
+    return r;
+
+  if (sockf->type != FD_SOCKET)
+    return -EBADF;
+
+  if ((r = net_accept(sockf->socket, address, address_len, &connf)) < 0)
+    return r;
+
+  if ((r = fd_alloc(connf)) < 0)
+    file_close(connf);
+
+  return r;
 }

@@ -4,10 +4,14 @@ NEWLIB := lib/newlib-4.4.0.20231231
 NEWLIB_TARBALL := tarballs/newlib-4.4.0.20231231.tar.gz
 
 LIB_SRCFILES := \
+	lib/osdev/arpa/inet/inet_pton.c \
 	lib/osdev/fcntl/fcntl.c \
 	lib/osdev/fcntl/open.c \
+	lib/osdev/include/arpa/inet.h \
+	lib/osdev/include/netinet/in.h \
 	lib/osdev/include/sys/dirent.h \
 	lib/osdev/include/sys/resource.h \
+	lib/osdev/include/sys/socket.h \
 	lib/osdev/include/sys/syscall.h \
 	lib/osdev/include/sys/utime.h \
 	lib/osdev/include/sys/utsname.h \
@@ -16,6 +20,11 @@ LIB_SRCFILES := \
 	lib/osdev/signal/sigaction.c \
 	lib/osdev/signal/sigprocmask.c \
 	lib/osdev/sys/resource/getrlimit.c \
+	lib/osdev/sys/socket/accept.c \
+	lib/osdev/sys/socket/bind.c \
+	lib/osdev/sys/socket/connect.c \
+	lib/osdev/sys/socket/listen.c \
+	lib/osdev/sys/socket/socket.c \
 	lib/osdev/sys/stat/chmod.c \
 	lib/osdev/sys/stat/fstat.c \
 	lib/osdev/sys/stat/mkdir.c \
