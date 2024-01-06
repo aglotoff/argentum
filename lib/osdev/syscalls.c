@@ -11,6 +11,8 @@
 #include <stdarg.h>
 #include <dirent.h>
 #include <limits.h>
+#include <unistd.h>
+#include <signal.h>
 
 int
 fcntl(int fildes, int cmd, ...)
@@ -53,10 +55,10 @@ _kill(pid_t pid, int sig)
   return -1;
 }
 
-caddr_t
-_sbrk(int increment)
+void *
+_sbrk(ptrdiff_t increment)
 {
-  return (caddr_t) __syscall(__SYS_SBRK, increment, 0, 0);
+  return (void *) __syscall(__SYS_SBRK, increment, 0, 0);
 }
 
 int
@@ -117,6 +119,19 @@ int
 fstat(int fildes, struct stat *buf)
 {
   return _fstat(fildes, buf);
+}
+
+int 
+_fsync(int fd)
+{
+  (void) fd;
+  return 0;
+}
+
+int
+fsync(int fd)
+{
+  return _fsync(fd);
 }
 
 pid_t
@@ -390,6 +405,12 @@ _gettimeofday (struct timeval *tp, void *tzp)
 }
 
 int
+gettimeofday (struct timeval *tp, void *tzp)
+{
+  return _gettimeofday(tp, tzp);
+}
+
+int
 rmdir(const char *path)
 {
   return __syscall(__SYS_RMDIR, (uint32_t) path, 0, 0);
@@ -423,3 +444,85 @@ unlink(const char *path)
 
 //   return -1;
 // }
+
+int
+pipe(int fildes[2])
+{
+  (void) fildes;
+
+  fprintf(stderr, "TODO: pipe");
+  abort();
+
+  return -1;
+}
+
+int
+sigaction(int sig, const struct sigaction *act, struct sigaction *oact)
+{
+  (void) sig;
+  (void) act;
+  (void) oact;
+
+  // fprintf(stderr, "TODO: sigaction\n");
+
+  return 0;
+}
+
+int
+sigprocmask(int how, const sigset_t *set, sigset_t *oset)
+{
+  (void) how;
+  (void) set;
+  (void) oset;
+
+  // fprintf(stderr, "TODO: sigprocmask\n");
+
+  return 0;
+}
+
+int
+utime(const char *path, const struct utimbuf *times)
+{
+  (void) path;
+  (void) times;
+  
+  // fprintf(stderr, "TODO: utime\n");
+
+  return 0;
+}
+
+int
+dup2(int oldfd, int newfd)
+{
+  (void) oldfd;
+  (void) newfd;
+
+  fprintf(stderr, "TODO: dup2");
+  abort();
+
+  return -1;
+}
+
+int
+access(const char *path, int amode)
+{
+  (void) path;
+  (void) amode;
+
+  fprintf(stderr, "TODO: access");
+  abort();
+
+  return -1;
+}
+
+int
+getrlimit(int resource, struct rlimit *rlim)
+{
+  (void) resource;
+  (void) rlim;
+
+  fprintf(stderr, "TODO: getrlimit");
+  abort();
+
+  return -1;
+}

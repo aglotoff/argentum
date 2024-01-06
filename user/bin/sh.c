@@ -149,7 +149,7 @@ main(void)
 
   umask(S_IWGRP | S_IWOTH);
 
-  setenv("PATH", "/bin", 1);
+  
 
   if (getcwd(cwd, sizeof(cwd)) == NULL) {
     perror("getcwd");

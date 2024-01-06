@@ -6,9 +6,21 @@
 _start:
   // Clear the frame pointer register (R11) so that stack backtraces will be
   // terminated properly.
-#ifndef __thumb__
   mov     r11, #0
-#endif
+
+  // Save program name into the global variable
+  ldr     r3, =__progname
+  cmp     r1, #0
+  beq     1f
+  ldr     r4, [r1]
+  cmp     r4, #0
+  strne   r4, [r3]
+1:
+
+  // Save environment into the global variable
+  ldr     r3, =environ
+  cmp     r2, #0
+  strne   r2, [r3]
 
   // Call the user main routine.
   bl      main
@@ -18,3 +30,8 @@ _start:
 
   // Should not return.
   b       .         
+
+.data
+  .globl __progname
+__progname:
+  .long   0

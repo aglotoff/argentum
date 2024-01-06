@@ -45,6 +45,9 @@ main(void)
       perror("chdir");
       exit(EXIT_FAILURE);
     }
+
+    setenv("PATH", "/bin:/usr/bin", 1);
+
     execve("/bin/sh", argv, envp);
   }
 

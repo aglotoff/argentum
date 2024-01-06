@@ -5,6 +5,8 @@ NEWLIB_TARBALL := tarballs/newlib-4.4.0.20231231.tar.gz
 
 LIB_SRCFILES := \
 	lib/osdev/include/sys/dirent.h \
+	lib/osdev/include/sys/resource.h \
+	lib/osdev/include/sys/utime.h \
 	lib/osdev/include/sys/utsname.h \
 	lib/osdev/include/limits.h \
 	lib/osdev/include/syscall.h \
