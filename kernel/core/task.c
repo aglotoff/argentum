@@ -159,25 +159,11 @@ sched_isr_exit(void)
 
     // Before resuming the current task, check whether it must give up the CPU
     // or exit.
-    if (my_task != NULL) {
-      if ((my_task->flags & TASK_FLAGS_DESTROY) &&
-          (my_task->protect_count == 0)) {
-        task_cleanup(my_task);
+    if ((my_task != NULL) && (my_task->flags & TASK_FLAGS_RESCHEDULE)) {
+      my_task->flags &= ~TASK_FLAGS_RESCHEDULE;
 
-        if (my_task->destroyer != NULL)
-          sched_enqueue(my_task->destroyer);
-
-        sched_yield();
-        panic("should not return");
-      }
-
-      if ((my_task->flags & TASK_FLAGS_RESCHEDULE) &&
-          (my_task->lock_count == 0)) {
-        my_task->flags &= ~TASK_FLAGS_RESCHEDULE;
-
-        sched_enqueue(my_task);
-        sched_yield();
-      }
+      sched_enqueue(my_task);
+      sched_yield();
     }
   }
 
@@ -209,7 +195,7 @@ sched_may_yield(struct Task *candidate)
   my_task = my_cpu->task;
 
   if ((my_task != NULL) && (task_priority_cmp(candidate, my_task) > 0)) {
-    if ((my_cpu->isr_nesting > 0) || (my_task->lock_count > 0)) {
+    if (my_cpu->isr_nesting > 0) {
       // Cannot yield right now, delay until the last call to sched_isr_exit()
       // or task_unlock().
       my_task->flags |= TASK_FLAGS_RESCHEDULE;
@@ -263,6 +249,8 @@ sched_wakeup_one(struct ListLink *queue, int result)
   }
 
   if (highest != NULL) {
+    // cprintf("wakeup %p from %p\n", highest, queue);
+
     list_remove(&highest->link);
     highest->sleep_result = result;
 
@@ -278,8 +266,8 @@ sched_wakeup_one(struct ListLink *queue, int result)
  * @param state The state indicating a kind of sleep.
  * @param lock  An optional spinlock to release while going to sleep.
  */
-void
-sched_sleep(struct ListLink *queue, int state, unsigned long timeout,
+int
+sched_sleep(struct ListLink *queue, unsigned long timeout,
             struct SpinLock *lock)
 {
   struct Task *my_task = task_current();
@@ -297,7 +285,7 @@ sched_sleep(struct ListLink *queue, int state, unsigned long timeout,
     ktimer_start(&my_task->sleep_timer);
   }
 
-  my_task->state = state;
+  my_task->state = TASK_STATE_SLEEPING;
 
   if (queue != NULL)
     list_add_back(queue, &my_task->link);
@@ -312,110 +300,15 @@ sched_sleep(struct ListLink *queue, int state, unsigned long timeout,
     sched_unlock();
     spin_lock(lock);
   }
-}
 
-int
-task_lock(struct Task *task)
-{
-  if ((task == NULL) && ((task = task_current()) == NULL))
-    return -EINVAL;
-
-  sched_lock();
-
-  task->lock_count++;
-
-  sched_unlock();
-  return 0;
-}
-
-int
-task_unlock(struct Task *task)
-{
-  struct Task *my_task = task_current();
-
-  if ((task == NULL) && ((task = my_task) == NULL))
-    return -EINVAL;
-
-  sched_lock();
-
-  if ((--task->lock_count == 0) && (task->flags & TASK_FLAGS_RESCHEDULE)) {
-    if (task == my_task) {
-      if (cpu_current()->isr_nesting == 0) {
-        sched_enqueue(task);
-        sched_yield();
-      }
-    } else if (task->state == TASK_STATE_RUNNING) {
-      irq_ipi();
-    }
-  }
-
-  sched_unlock();
-  return 0;
-}
-
-int
-task_protect(struct Task *task)
-{
-  if ((task == NULL) && ((task = task_current()) == NULL))
-    return -EINVAL;
-
-  sched_lock();
-
-  task->protect_count++;
-
-  sched_unlock();
-  return 0;
+  return my_task->sleep_result;
 }
 
 void
 task_cleanup(struct Task *task)
 {
-  switch (task->state) {
-  case TASK_STATE_DESTROY:
-    task->u.destroy.task->destroyer = NULL;
-    break;
-  case TASK_STATE_SLEEPING:
-    break;
-  // TODO: other states
-  default:
-    break;
-  }
-
   ktimer_destroy(&task->sleep_timer);
-
   task->state = TASK_STATE_DESTROYED;
-}
-
-int
-task_unprotect(struct Task *task)
-{
-  struct Task *my_task = task_current();
-
-  if ((task == NULL) && ((task = my_task) == NULL))
-    return -EINVAL;
-
-  sched_lock();
-
-  if ((--task->protect_count > 0) || !(task->flags & TASK_FLAGS_DESTROY)) {
-    // Nothing to do
-    sched_unlock();
-    return 0;
-  }
-
-  task_cleanup(task);
-
-  if (task->destroyer != NULL)
-    sched_enqueue(task->destroyer);
-
-  if (task == my_task) {
-    sched_yield();
-    panic("should not return");
-  } else if (task->destroyer != NULL) {
-    sched_may_yield(task->destroyer);
-  }
-
-  sched_unlock();
-  return 0;
 }
 
 static void
@@ -425,41 +318,16 @@ task_sleep_callback(void *arg)
 
   sched_lock();
 
-  switch (task->state) {
-  // TODO: other functions here
-  case TASK_STATE_SEMAPHORE:
+  if (task->state == TASK_STATE_SLEEPING) {
     task->sleep_result = -ETIMEDOUT;
-    // fall through
-  case TASK_STATE_SLEEPING:
+
+    list_remove(&task->link);
     sched_enqueue(task);
+
     sched_may_yield(task);
-    break;
-  default:
-    break;
   }
 
   sched_unlock();
-}
-
-int
-task_sleep(unsigned long timeout)
-{
-  struct Task *my_task = task_current();
-
-  if (my_task == NULL)
-    return -EINVAL;
-
-  sched_lock();
-
-  if ((my_task->lock_count > 0) || (cpu_current()->isr_nesting > 0)) {
-    sched_unlock();
-    return -EINVAL;
-  }
-
-  sched_sleep(NULL, TASK_STATE_SLEEPING, timeout, NULL);
-
-  sched_unlock();
-  return 0;
 }
 
 /**
@@ -521,7 +389,7 @@ task_run(void)
   my_task->entry(my_task->arg);
 
   // Destroy the task on exit
-  task_destroy(NULL);
+  task_exit();
 }
 
 /**
@@ -548,8 +416,6 @@ task_create(struct Task *task, void (*entry)(void *), void *arg, int priority,
   task->arg           = arg;
   task->hooks         = hooks;
   task->destroyer     = NULL;
-  task->lock_count    = 0;
-  task->protect_count = 0;
   task->err           = 0;
 
   ktimer_create(&task->sleep_timer, task_sleep_callback, task, 0, 0, 0);
@@ -566,61 +432,19 @@ task_create(struct Task *task, void (*entry)(void *), void *arg, int priority,
  * Destroy the specified task
  */
 void
-task_destroy(struct Task *task)
+task_exit(void)
 {
-  struct Task *my_task = task_current();
-  struct TaskHooks *hooks;
+  struct Task *task = task_current();
 
   if (task == NULL)
-    task = my_task;
+    panic("currnet task is NULL");
 
   sched_lock();
 
-  if ((task == NULL) || (task->flags & TASK_FLAGS_DESTROY)) {
-    // TODO: report an error if task is NULL
-    sched_unlock();
-    return;
-  }
+  task_cleanup(task);
 
-  if (task == my_task) {
-    // TODO: what if protect_lock > 0?
-
-    task_cleanup(task);
-
-    sched_yield();
-    panic("should not return");
-  }
-
-  if ((task->state == TASK_STATE_RUNNING) || (task->protect_count > 0)) {
-    task->flags |= TASK_FLAGS_DESTROY;
-
-    if (task->protect_count == 0)
-      irq_ipi();
-
-    if (my_task == NULL) {
-      sched_unlock();
-      return;
-    }
-
-    task->destroyer = my_task;
-
-    my_task->state = TASK_STATE_DESTROY;
-    my_task->u.destroy.task = task;
-
-    sched_yield();
-  } else {
-    task_cleanup(task);
-  }
-
-  task->state = TASK_STATE_NONE;
-
-  hooks = task->hooks;
-
-  sched_unlock();
-
-  // Execute the "destroy" hook in the context of the current task
-  if ((hooks != NULL) && (hooks->destroy != NULL))
-    hooks->destroy(task);
+  sched_yield();
+  panic("should not return");
 }
 
 /**

@@ -5,6 +5,7 @@
 #include <kernel/kqueue.h>
 #include <kernel/task.h>
 #include <kernel/types.h>
+#include <kernel/cprintf.h>
 
 int
 kqueue_init(struct KQueue *queue, size_t msg_size, void *start, size_t size)
@@ -38,7 +39,7 @@ kqueue_receive(struct KQueue *queue, void *msg, unsigned long timeout,
                int blocking)
 {
   struct Task *my_task = task_current();
-  int ret;
+  int r;
 
   if ((my_task == NULL) && blocking)
     // TODO: choose another value to indicate an error?
@@ -49,17 +50,15 @@ kqueue_receive(struct KQueue *queue, void *msg, unsigned long timeout,
   while (queue->size == 0) {
     struct Cpu *my_cpu = cpu_current();
 
-    if (!blocking || (my_task->lock_count > 0) || (my_cpu->isr_nesting > 0)) {
+    if (!blocking || (my_cpu->isr_nesting > 0)) {
       // Can't block
       sched_unlock();
       return -EAGAIN;
     }
 
-    sched_sleep(&queue->receive_list, TASK_STATE_QUEUE_RECEIVE, timeout, NULL);
-
-    if ((ret = my_task->sleep_result) != 0) {
+    if ((r = sched_sleep(&queue->receive_list, timeout, NULL)) != 0) {
       sched_unlock();
-      return ret;
+      return r;
     }
   }
 
@@ -73,7 +72,7 @@ kqueue_receive(struct KQueue *queue, void *msg, unsigned long timeout,
     sched_wakeup_one(&queue->send_list, 0);
 
   sched_unlock();
-  return ret;
+  return r;
 }
 
 int
@@ -92,13 +91,13 @@ kqueue_send(struct KQueue *queue, const void *msg, unsigned long timeout,
   while (queue->size == queue->max_size) {
     struct Cpu *my_cpu = cpu_current();
 
-    if (!blocking || (my_task->lock_count > 0) || (my_cpu->isr_nesting > 0)) {
+    if (!blocking || (my_cpu->isr_nesting > 0)) {
       // Can't block
       sched_unlock();
       return -EAGAIN;
     }
 
-    sched_sleep(&queue->send_list, TASK_STATE_QUEUE_SEND, timeout, NULL);
+    sched_sleep(&queue->send_list, timeout, NULL);
 
     if ((ret = my_task->sleep_result) != 0) {
       sched_unlock();

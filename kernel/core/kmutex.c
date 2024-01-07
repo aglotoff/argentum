@@ -29,6 +29,7 @@ int
 kmutex_lock(struct KMutex *mutex)
 {
   struct Task *my_task = task_current();
+  int r;
 
   sched_lock();
 
@@ -41,7 +42,10 @@ kmutex_lock(struct KMutex *mutex)
 
     // TODO: priority inheritance
 
-    sched_sleep(&mutex->queue, TASK_STATE_MUTEX, 0, NULL);
+    if ((r = sched_sleep(&mutex->queue, 0, NULL)) != 0) {
+      sched_unlock();
+      return r;
+    }
   }
 
   mutex->owner = my_task;

@@ -28,7 +28,7 @@ int
 ksem_get(struct KSemaphore *sem, unsigned long timeout, int blocking)
 {
   struct Task *my_task = task_current();
-  int ret;
+  int r;
 
   if ((my_task == NULL) && blocking)
     // TODO: choose another value to indicate an error?
@@ -39,24 +39,22 @@ ksem_get(struct KSemaphore *sem, unsigned long timeout, int blocking)
   while (sem->count == 0) {
     struct Cpu *my_cpu = cpu_current();
 
-    if (!blocking || (my_task->lock_count > 0) || (my_cpu->isr_nesting > 0)) {
+    if (!blocking || (my_cpu->isr_nesting > 0)) {
       // Can't block
       sched_unlock();
       return -EAGAIN;
     }
 
-    sched_sleep(&sem->queue, TASK_STATE_SEMAPHORE, timeout, NULL);
-
-    if ((ret = my_task->sleep_result) != 0) {
+    if ((r = sched_sleep(&sem->queue, timeout, NULL)) != 0) {
       sched_unlock();
-      return ret;
+      return r;
     }
   }
 
-  ret = --sem->count;
+  r = --sem->count;
 
   sched_unlock();
-  return ret;
+  return r;
 }
 
 int

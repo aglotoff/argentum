@@ -18,14 +18,8 @@ enum {
   TASK_STATE_NONE = 0,
   TASK_STATE_READY,
   TASK_STATE_RUNNING,
-  TASK_STATE_MUTEX,
-  TASK_STATE_SLEEPING_WCHAN,
-  TASK_STATE_SLEEPING,    
-  TASK_STATE_SEMAPHORE,
-  TASK_STATE_QUEUE_RECEIVE,
-  TASK_STATE_QUEUE_SEND,
+  TASK_STATE_SLEEPING,
   TASK_STATE_SUSPENDED,
-  TASK_STATE_DESTROY,
   TASK_STATE_DESTROYED,
 };
 
@@ -85,10 +79,6 @@ struct Task {
   struct KTimer     sleep_timer;
   /** Value that indicated sleep result */
   int               sleep_result;
-  /** Count to keep track of nested task_protect() calls */
-  int               protect_count;
-  /** Count to keep track of nested task_lock() calls */
-  int               lock_count;
   int               err;
 
   /** State-specific information */
@@ -105,17 +95,11 @@ struct Task {
 struct Task *task_current(void);
 int          task_create(struct Task *, void (*)(void *), void *, int, uint8_t *,
                        struct TaskHooks *);
-void         task_destroy(struct Task *);
+void         task_exit(void);
 int          task_resume(struct Task *);
 void         task_yield(void);
-void         sched_sleep(struct ListLink *, int, unsigned long,
-                         struct SpinLock *lock);
-int          task_lock(struct Task *);
-int          task_unlock(struct Task *);
-int          task_protect(struct Task *);
-int          task_unprotect(struct Task *);
+int          sched_sleep(struct ListLink *, unsigned long, struct SpinLock *);
 void         task_cleanup(struct Task *);
-int          task_sleep(unsigned long);
 
 void         sched_wakeup_all(struct ListLink *, int);
 void         sched_wakeup_one(struct ListLink *, int);

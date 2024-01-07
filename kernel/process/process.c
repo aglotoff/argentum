@@ -356,7 +356,7 @@ process_destroy(int status)
 
   spin_unlock(&process_lock);
 
-  task_destroy(NULL);
+  task_exit();
 }
 
 pid_t

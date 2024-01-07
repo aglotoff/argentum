@@ -20,10 +20,10 @@ wchan_init(struct WaitChannel *chan)
  * @param chan A pointer to the wait channel to sleep on.
  * @param lock A pointer to the spinlock to be released.
  */
-void
+int
 wchan_sleep(struct WaitChannel *chan, struct SpinLock *lock)
 {
-  sched_sleep(&chan->head, TASK_STATE_SLEEPING_WCHAN, 0, lock);
+  return sched_sleep(&chan->head, 0, lock);
 }
 
 /**

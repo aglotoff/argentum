@@ -24,7 +24,7 @@ struct WaitChannel {
 #define WCHAN_INITIALIZER { .head = LIST_INITIALIZER }
 
 void wchan_init(struct WaitChannel *);
-void wchan_sleep(struct WaitChannel *, struct SpinLock *);
+int  wchan_sleep(struct WaitChannel *, struct SpinLock *);
 void wchan_wakeup_one(struct WaitChannel *);
 void wchan_wakeup_all(struct WaitChannel *);
 
