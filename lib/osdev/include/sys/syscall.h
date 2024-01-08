@@ -36,6 +36,7 @@
 #define __SYS_LISTEN      29
 #define __SYS_CONNECT     30
 #define __SYS_ACCEPT      31
+#define __SYS_TEST        32
 
 // Generic system call: pass system call number as an immediate operand of the
 // SVC instruction, and up to three parameters in R0, R1, R2.
@@ -43,18 +44,25 @@
 //
 // If a negative value is returned, set the errno variable and return -1.
 static inline int32_t
-__syscall(uint8_t num, uint32_t a1, uint32_t a2, uint32_t a3)
+__syscall(uint8_t num, uint32_t a1, uint32_t a2, uint32_t a3, uint32_t a4,
+          uint32_t a5, uint32_t a6)
 {
   register int32_t r0 asm("r0") = a1;
   register int32_t r1 asm("r1") = a2;
   register int32_t r2 asm("r2") = a3;
+  register int32_t r3 asm("r3") = a4;
+  register int32_t r4 asm("r4") = a5;
+  register int32_t r5 asm("r5") = a6;
 
   asm volatile("svc %1\n"
                : "=r"(r0)
                : "I" (num),
                  "r" (r0),
                  "r" (r1),
-                 "r" (r2)
+                 "r" (r2),
+                 "r" (r3),
+                 "r" (r4),
+                 "r" (r5)
                : "memory", "cc");
 
   if (r0 < 0) {

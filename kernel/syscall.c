@@ -55,6 +55,7 @@ static int32_t (*syscalls[])(void) = {
   [__SYS_LISTEN]     = sys_listen,
   [__SYS_ACCEPT]     = sys_accept,
   [__SYS_CONNECT]    = sys_connect,
+  [__SYS_TEST]       = sys_test,
 };
 
 int32_t
@@ -113,6 +114,10 @@ sys_get_arg(int n)
     return current->thread->tf->r2;
   case 3:
     return current->thread->tf->r3;
+  case 4:
+    return current->thread->tf->r4;
+  case 5:
+    return current->thread->tf->r5;
   default:
     if (n < 0)
       panic("Invalid argument number: %d", n);
@@ -792,4 +797,19 @@ sys_accept(void)
     file_close(connf);
 
   return r;
+}
+
+int32_t
+sys_test(void)
+{
+  int i, r;
+
+  for (i = 0; i < 6; i++) {
+    int arg;
+
+    if ((r = sys_arg_int(i, &arg)) < 0)
+      return r;
+    cprintf("[%d]: %d\n", i, arg);
+  }
+  return 0;
 }

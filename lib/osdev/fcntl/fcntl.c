@@ -20,5 +20,5 @@ fcntl(int fildes, int cmd, ...)
     break;
   }
 
-  return __syscall(__SYS_FCNTL, fildes, cmd, arg);
+  return __syscall(__SYS_FCNTL, fildes, cmd, arg, 0, 0, 0);
 }

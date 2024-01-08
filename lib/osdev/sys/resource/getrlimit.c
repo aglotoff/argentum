@@ -8,7 +8,7 @@ getrlimit(int resource, struct rlimit *rlim)
   (void) resource;
   (void) rlim;
 
-  fprintf(stderr, "TODO: getrlimit(%d)\n");
+  fprintf(stderr, "TODO: getrlimit(%d)\n", resource);
   // abort();
 
   return -1;

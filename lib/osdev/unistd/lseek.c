@@ -4,7 +4,7 @@
 off_t
 _lseek(int fildes, off_t offset, int whence)
 {
-  return __syscall(__SYS_SEEK, fildes, offset, whence);
+  return __syscall(__SYS_SEEK, fildes, offset, whence, 0, 0, 0);
 }
 
 off_t

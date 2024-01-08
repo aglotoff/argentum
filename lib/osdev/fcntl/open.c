@@ -17,7 +17,7 @@ _open(const char *path, int flags, ...)
     // TODO: umask
   }
 
-  return __syscall(__SYS_OPEN, (uint32_t) path, flags, mode);
+  return __syscall(__SYS_OPEN, (uint32_t) path, flags, mode, 0, 0, 0);
 }
 
 int
@@ -35,5 +35,5 @@ open(const char *path, int flags, ...)
     // TODO: umask
   }
 
-  return __syscall(__SYS_OPEN, (uint32_t) path, flags, mode);
+  return __syscall(__SYS_OPEN, (uint32_t) path, flags, mode, 0, 0, 0);
 }
