@@ -359,17 +359,8 @@ file_chdir(struct File *file)
 }
 
 int
-file_cntl(struct File *file, int cmd, long arg)
+file_get_flags(struct File *file)
 {
-  (void) arg;
-
-  switch (cmd) { 
-  case F_GETFL:
-    return file->flags & (O_ACCMODE | O_APPEND);
-  case F_SETFD:
-    // TODO: close on exec
-    return 0;
-  default:
-    return -EINVAL;
-  }
+  return file->flags & (O_ACCMODE | O_APPEND);
 }
+

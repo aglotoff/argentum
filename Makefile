@@ -32,11 +32,10 @@ OBJDUMP := $(TOOLPREFIX)objdump
 
 # Common compiler flags
 #CFLAGS := -ffreestanding -nostdlib -fno-builtin
-CFLAGS += -Wall -Wextra -Werror  -Wno-address-of-packed-member
+CFLAGS += -Wall -Wextra -Werror -Wno-address-of-packed-member -Wno-maybe-uninitialized
 CFLAGS += --std=gnu11
 CFLAGS += -O1 -mapcs-frame -fno-omit-frame-pointer
 CFLAGS += -mcpu=cortex-a9 -mhard-float -mfpu=vfp
-CFLAGS += -gdwarf-3
 
 # Common linker flags
 LDFLAGS := -z max-page-size=0x1000
@@ -64,7 +63,7 @@ $(OBJ)/fs.img: $(SYSROOT) $(USER_APPS)
 	@echo "+ GEN $@"
 	$(V)mkdir -p $@.d/{,dev,etc,home/{,root,guest},tmp}
 	$(V)cp -aR $(SYSROOT)/* $@.d/
-	$(V)mke2fs -E root_owner=0:0 -F -b 1K -d $@.d -t ext2 $@ 64M
+	$(V)mke2fs -E root_owner=0:0 -F -b 1K -d $@.d -t ext2 $@ 128M
 
 ifndef CPUS
   CPUS := 2

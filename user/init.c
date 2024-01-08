@@ -5,7 +5,7 @@
 #include <sys/stat.h>
 #include <sys/wait.h>
 #include <unistd.h>
-
+//
 struct DevFile {
   const char *name;
   mode_t      mode;
@@ -24,7 +24,7 @@ main(void)
   int status;
 
   char *const argv[] = { "/bin/sh", NULL };
-  char *const envp[] = { "PATH=/bin:/usr/bin", NULL };
+  char *const envp[] = { "PATH=/usr/local/bin:/usr/bin:/bin", NULL };
 
   // Create the directory for special device files.
   mkdir("/dev", 0755);

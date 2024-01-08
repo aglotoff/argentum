@@ -2,7 +2,7 @@
 #include <unistd.h>
 
 int
-stat(const char *path, struct stat *buf)
+_stat(const char *path, struct stat *buf)
 {
   int fd, r;
 
@@ -14,4 +14,10 @@ stat(const char *path, struct stat *buf)
   close(fd);
 
   return r;
+}
+
+int
+stat(const char *path, struct stat *buf)
+{
+  return _stat(path, buf);
 }

@@ -30,6 +30,7 @@ struct Page {
 
 extern struct Page *pages;
 extern unsigned pages_length;
+extern unsigned pages_free;
 
 /**
  * Given a page info structure, return the starting physical address.

@@ -164,6 +164,7 @@ process_exec(const char *path, char *const argv[], char *const envp[])
   vm_space_destroy(proc->vm);
 
   proc->vm        = vm;
+  proc->brk       = (void *) heap;
 
   // Stack must be aligned to an 8-byte boundary in order for variadic args
   // to properly work!

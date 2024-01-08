@@ -10,6 +10,7 @@ struct Page *pages;
 
 /** The maximum number of available physical pages. */
 unsigned pages_length;
+unsigned pages_free = 0;
 
 //
 // Page allocator implements the binary buddy algorithm.
@@ -33,6 +34,7 @@ static struct {
 } free_list[PAGE_ORDER_MAX + 1];
 
 static int pages_inited = 0;
+// static int high_inited = 0;
 static struct SpinLock page_lock;
 
 static void        *boot_alloc(size_t);
@@ -89,6 +91,7 @@ void
 page_init_high(void)
 {
   page_free_region(PHYS_ENTRY_LIMIT, PHYS_LIMIT);
+  // high_inited = 1;
 }
 
 /**
@@ -163,6 +166,8 @@ page_alloc_block(unsigned order, int flags)
   page = LIST_CONTAINER(free_list[curr_order].link.next, struct Page, link);
 
   page_list_remove(page, curr_order);
+  pages_free -= 1U << order;
+  // if (high_inited) cprintf("[pages_free %d]\n", pages_free);
 
   // Split
   while (curr_order > order) {
@@ -211,6 +216,8 @@ page_free_block(struct Page *page, unsigned order)
   }
 
   page_list_add(page, order);
+  pages_free += 1U << order;
+  // if (high_inited) cprintf("[pages_free %d]\n", pages_free);
 
   spin_unlock(&page_lock);
 }

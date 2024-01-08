@@ -81,6 +81,7 @@ trap_handle_abort(struct TrapFrame *tf)
     return;
 
   // If unsuccessfull, kill the process
+  print_trapframe(tf);
   cprintf("user fault va %p status %#x\n", address, status);
   process_destroy(-1);
 }

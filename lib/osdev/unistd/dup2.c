@@ -1,15 +1,9 @@
-#include <stdio.h>
-#include <stdlib.h>
+#include <fcntl.h>
 #include <unistd.h>
 
 int
-dup2(int oldfd, int newfd)
+dup2(int fildes, int fildes2)
 {
-  (void) oldfd;
-  (void) newfd;
-
-  fprintf(stderr, "TODO: dup2\n");
-  abort();
-
-  return -1;
+  close(fildes2);
+  return fcntl(fildes, F_DUPFD, fildes2);
 }

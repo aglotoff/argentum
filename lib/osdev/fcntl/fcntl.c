@@ -9,6 +9,7 @@ fcntl(int fildes, int cmd, ...)
   va_list ap;
 
   switch (cmd) {
+  case F_DUPFD:
   case F_SETFD:
     va_start(ap, cmd);
     arg = va_arg(ap, int);

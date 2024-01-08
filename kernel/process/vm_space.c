@@ -353,6 +353,9 @@ vm_handle_fault(struct VMSpace *vm, uintptr_t va)
   struct Page *fault_page, *page;
   int flags;
 
+  if (va >= VIRT_KERNEL_BASE)
+    return -EFAULT;
+
   fault_page = vm_page_lookup(vm->pgdir, va, &flags);
 
   if ((flags & VM_COW) && ((page = page_alloc_one(0)) != NULL)) {
@@ -378,7 +381,7 @@ vm_space_alloc(struct VMSpace *vm, void *addr, size_t n, int flags)
 
   if ((va >= VIRT_KERNEL_BASE) || ((va + n) > VIRT_KERNEL_BASE) || ((va + n) <= va))
     return (void *) -EINVAL;
-  
+
   // Find Vm area to insert before
   for (l = vm->areas.next; l != &vm->areas; l = l->next) {
     area = LIST_CONTAINER(l, struct VMSpaceMapEntry, link);
@@ -437,6 +440,8 @@ vm_space_alloc(struct VMSpace *vm, void *addr, size_t n, int flags)
 
     list_add_back(l, &area->link);
   }
+
+  // cprintf("[pages_free %d]\n", pages_free);
 
   return (void *) va;
 }

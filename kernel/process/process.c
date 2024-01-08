@@ -217,6 +217,7 @@ process_load_binary(struct Process *proc, const void *binary)
     if ((r = vm_space_copy_out(proc->vm, (void *) ph->vaddr,
                          (uint8_t *) elf + ph->offset, ph->filesz)) < 0)
       return r;
+    proc->brk = (char *) a + ROUND_UP(ph->memsz, PAGE_SIZE);
   }
 
   if ((r = (int) vm_space_alloc(proc->vm, (void *) (VIRT_USTACK_TOP - USTACK_SIZE), USTACK_SIZE,
@@ -372,6 +373,7 @@ process_copy(void)
     process_free(child);
     return -ENOMEM;
   }
+  child->brk = current->brk;
 
   child->parent    = current;
   *child->thread->tf       = *current->thread->tf;
@@ -498,6 +500,24 @@ void *
 process_grow(ptrdiff_t increment)
 {
   struct Process *current = process_current();
+  void *r;
 
-  return vm_space_alloc(current->vm, (void *) 0, increment, VM_READ | VM_WRITE | VM_USER);
+  if (increment < 0) {
+    cprintf("sbrk(%ld) -> %p\n", increment, (void *) -EINVAL);
+    return (void *) -EINVAL;
+  }
+
+  if (increment == 0) {
+    cprintf("sbrk(%ld) -> %p\n", increment, current->brk);
+    return current->brk;
+  }
+
+  r = vm_space_alloc(current->vm, current->brk, increment, VM_READ | VM_WRITE | VM_USER);
+  cprintf("sbrk(%ld) -> %p\n", increment, r);
+  
+  if ((ptrdiff_t) r < 0)
+    return r;
+
+  current->brk = (char *) r + ROUND_UP(increment, PAGE_SIZE);
+  return r;
 }

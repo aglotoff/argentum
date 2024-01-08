@@ -12,3 +12,9 @@ _kill(pid_t pid, int sig)
  
   return -1;
 }
+
+int
+kill(pid_t pid, int sig)
+{
+  return _kill(pid, sig);
+}

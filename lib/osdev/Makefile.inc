@@ -12,12 +12,15 @@ libc_a_SOURCES += \
   %D%/sys/socket/listen.c \
   %D%/sys/socket/socket.c \
   %D%/sys/stat/chmod.c \
+  %D%/sys/stat/fchmod.c \
   %D%/sys/stat/fstat.c \
+  %D%/sys/stat/lstat.c \
   %D%/sys/stat/mkdir.c \
   %D%/sys/stat/mknod.c \
   %D%/sys/stat/stat.c \
   %D%/sys/stat/umask.c \
   %D%/sys/time/gettimeofday.c \
+  %D%/sys/times/times.c \
   %D%/sys/utsname/uname.c \
   %D%/sys/wait/wait.c \
   %D%/sys/wait/waitpid.c \
@@ -25,6 +28,7 @@ libc_a_SOURCES += \
   %D%/unistd/access.c \
   %D%/unistd/chdir.c \
   %D%/unistd/close.c \
+  %D%/unistd/dup.c \
   %D%/unistd/dup2.c \
   %D%/unistd/execve.c \
   %D%/unistd/fork.c \
@@ -39,6 +43,7 @@ libc_a_SOURCES += \
   %D%/unistd/rmdir.c \
   %D%/unistd/sbrk.c \
   %D%/unistd/sleep.c \
+  %D%/unistd/sysconf.c \
   %D%/unistd/unlink.c \
   %D%/unistd/write.c \
   %D%/utime/utime.c \

@@ -34,6 +34,6 @@ ssize_t      file_getdents(struct File *, void *, size_t);
 int          file_stat(struct File *, struct stat *);
 int          file_chdir(struct File *);
 off_t        file_seek(struct File *, off_t, int);
-int          file_cntl(struct File *, int, long);
+int          file_get_flags(struct File *);
 
 #endif  // !__KERNEL_INCLUDE_KERNEL_FS_FILE__

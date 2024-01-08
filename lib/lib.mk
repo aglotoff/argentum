@@ -1,4 +1,4 @@
-LIB_CFLAGS := -mcpu=cortex-a9 -mhard-float -mfpu=vfp -nostdlib
+LIB_CFLAGS := -O2 -mcpu=cortex-a9 -mhard-float -mfpu=vfp -nostdlib
 
 NEWLIB := lib/newlib-4.4.0.20231231
 NEWLIB_TARBALL := tarballs/newlib-4.4.0.20231231.tar.gz
@@ -26,12 +26,15 @@ LIB_SRCFILES := \
 	lib/osdev/sys/socket/listen.c \
 	lib/osdev/sys/socket/socket.c \
 	lib/osdev/sys/stat/chmod.c \
+	lib/osdev/sys/stat/fchmod.c \
 	lib/osdev/sys/stat/fstat.c \
+	lib/osdev/sys/stat/lstat.c \
 	lib/osdev/sys/stat/mkdir.c \
 	lib/osdev/sys/stat/mknod.c \
 	lib/osdev/sys/stat/stat.c \
 	lib/osdev/sys/stat/umask.c \
 	lib/osdev/sys/time/gettimeofday.c \
+	lib/osdev/sys/times/times.c \
 	lib/osdev/sys/utsname/uname.c \
 	lib/osdev/sys/wait/wait.c \
 	lib/osdev/sys/wait/waitpid.c \
@@ -39,6 +42,7 @@ LIB_SRCFILES := \
 	lib/osdev/unistd/access.c \
 	lib/osdev/unistd/chdir.c \
 	lib/osdev/unistd/close.c \
+	lib/osdev/unistd/dup.c \
 	lib/osdev/unistd/dup2.c \
 	lib/osdev/unistd/execve.c \
 	lib/osdev/unistd/fork.c \
@@ -53,6 +57,7 @@ LIB_SRCFILES := \
 	lib/osdev/unistd/rmdir.c \
 	lib/osdev/unistd/sbrk.c \
 	lib/osdev/unistd/sleep.c \
+	lib/osdev/unistd/sysconf.c \
 	lib/osdev/unistd/unlink.c \
 	lib/osdev/unistd/write.c \
 	lib/osdev/utime/utime.c \

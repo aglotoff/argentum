@@ -429,12 +429,12 @@ sys_fchdir(void)
 }
 
 static int
-fd_alloc(struct File *f)
+fd_alloc(struct File *f, int start)
 {
   struct Process *current = process_current();
   int i;
 
-  for (i = 0; i < OPEN_MAX; i++)
+  for (i = start; i < OPEN_MAX; i++)
     if (current->files[i] == NULL) {
       current->files[i] = f;
       return i;
@@ -460,7 +460,7 @@ sys_open(void)
   if ((r = file_open(path, oflag, mode, &f)) < 0)
     return r;
 
-  if ((r = fd_alloc(f)) < 0)
+  if ((r = fd_alloc(f, 0)) < 0)
     file_close(f);
 
   return r;
@@ -610,17 +610,29 @@ int32_t
 sys_fcntl(void)
 {
   struct File *f;
-  int cmd, r;
-  long arg;
+  int cmd, r, arg;
 
   if ((r = sys_arg_fd(0, NULL, &f)) < 0)
     return r;
   if ((r = sys_arg_int(1, &cmd)) < 0)
     return r;
-  if ((r = sys_arg_long(2, &arg)) < 0)
+  if ((r = sys_arg_int(1, &arg)) < 0)
     return r;
 
-  return file_cntl(f, cmd, arg);
+  switch (cmd) {
+  case F_GETFL:
+    return file_get_flags(f);
+  case F_SETFD:
+    // TODO
+    return 0;
+  case F_DUPFD:
+    if ((r = fd_alloc(f, arg)) < 0)
+      return r;
+    file_dup(f);
+    return 0;
+  default:
+    return -EINVAL;
+  }
 }
 
 int32_t
@@ -690,7 +702,7 @@ sys_socket(void)
   if ((r = net_socket(domain, type, protocol, &f)) != 0)
     return r;
 
-  if ((r = fd_alloc(f)) < 0)
+  if ((r = fd_alloc(f, 0)) < 0)
     file_close(f);
 
   return r;
@@ -776,7 +788,7 @@ sys_accept(void)
   if ((r = net_accept(sockf->socket, address, address_len, &connf)) < 0)
     return r;
 
-  if ((r = fd_alloc(connf)) < 0)
+  if ((r = fd_alloc(connf, 0)) < 0)
     file_close(connf);
 
   return r;
