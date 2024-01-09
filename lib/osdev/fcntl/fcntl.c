@@ -5,20 +5,30 @@
 int
 fcntl(int fildes, int cmd, ...)
 {
-  int arg;
+  long arg;
   va_list ap;
 
+  va_start(ap, cmd);
+
+  // Fetch the third argument for operations that require it
   switch (cmd) {
   case F_DUPFD:
   case F_SETFD:
-    va_start(ap, cmd);
+  case F_SETFL:
+  case F_SETOWN:
     arg = va_arg(ap, int);
-    va_end(ap);
+    break;
+  case F_GETLK:
+  case F_SETLK:
+  case F_SETLKW:
+    arg = va_arg(ap, uintptr_t);
     break;
   default:
     arg = 0;
     break;
   }
+
+  va_end(ap);
 
   return __syscall(__SYS_FCNTL, fildes, cmd, arg, 0, 0, 0);
 }

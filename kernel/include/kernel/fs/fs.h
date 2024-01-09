@@ -74,6 +74,7 @@ int           fs_inode_stat(struct Inode *, struct stat *);
 int           fs_create(const char *, mode_t, dev_t, struct Inode **);
 void          fs_inode_cache_init(void);
 int           fs_inode_truncate(struct Inode *);
+int           fs_inode_chmod(struct Inode *, mode_t);
 int           fs_set_pwd(struct Inode *);
 
 int           fs_unlink(const char *);
@@ -81,6 +82,5 @@ int           fs_rmdir(const char *);
 int           fs_permission(struct Inode *, mode_t, int);
 int           fs_link(char *, char *);
 int           fs_chdir(const char *);
-int           fs_chmod(const char *path, mode_t);
 
 #endif  // !__KERNEL_INCLUDE_KERNEL_FS_FS_H__

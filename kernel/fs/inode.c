@@ -673,24 +673,6 @@ fs_inode_chmod(struct Inode *ip, mode_t mode)
 }
 
 int
-fs_chmod(const char *path, mode_t mode)
-{
-  struct Inode *ip;
-  int r;
-
-  if ((r = fs_name_lookup(path, 0, &ip)) < 0)
-    return r;
-  
-  fs_inode_lock(ip);
-
-  r = fs_inode_chmod(ip, mode);
-
-  fs_inode_unlock_put(ip);
-
-  return r;
-}
-
-int
 fs_permission(struct Inode *inode, mode_t mode, int real)
 {
   struct Process *my_process = process_current();

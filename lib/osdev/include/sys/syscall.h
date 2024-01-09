@@ -5,38 +5,41 @@
 #include <stdint.h>
 
 // System call numbers
-#define __SYS_FORK        1
-#define __SYS_EXEC        2
-#define __SYS_WAIT        3
-#define __SYS_EXIT        4
-#define __SYS_ALARM       5
-#define __SYS_GETPID      6
-#define __SYS_GETPPID     7
-#define __SYS_GETDENTS    8
-#define __SYS_CHDIR       9
-#define __SYS_FCHDIR      10
-#define __SYS_OPEN        11
-#define __SYS_FCNTL       12
-#define __SYS_SEEK        13
-#define __SYS_UMASK       14
-#define __SYS_LINK        15
-#define __SYS_MKNOD       16
-#define __SYS_UNLINK      17
-#define __SYS_RMDIR       18
-#define __SYS_STAT        19
-#define __SYS_CLOSE       20
-#define __SYS_READ        21
-#define __SYS_WRITE       22
-#define __SYS_SBRK        23
-#define __SYS_UNAME       24
-#define __SYS_CHMOD       25
-#define __SYS_CLOCK_TIME  26
-#define __SYS_SOCKET      27
-#define __SYS_BIND        28
-#define __SYS_LISTEN      29
-#define __SYS_CONNECT     30
-#define __SYS_ACCEPT      31
-#define __SYS_TEST        32
+enum {
+  __SYS_TEST = 0,
+  __SYS_FORK,
+  __SYS_EXEC,
+  __SYS_WAIT,
+  __SYS_EXIT,
+  __SYS_ALARM,
+  __SYS_GETPID,
+  __SYS_GETPPID,
+  __SYS_GETDENTS,
+  __SYS_CHDIR,
+  __SYS_FCHDIR,
+  __SYS_OPEN,
+  __SYS_FCNTL,
+  __SYS_SEEK,
+  __SYS_UMASK,
+  __SYS_LINK,
+  __SYS_MKNOD,
+  __SYS_UNLINK,
+  __SYS_RMDIR,
+  __SYS_STAT,
+  __SYS_CLOSE,
+  __SYS_READ,
+  __SYS_WRITE,
+  __SYS_SBRK,
+  __SYS_UNAME,
+  __SYS_CHMOD,
+  __SYS_FCHMOD,
+  __SYS_CLOCK_TIME,
+  __SYS_SOCKET,
+  __SYS_BIND,
+  __SYS_LISTEN,
+  __SYS_CONNECT,
+  __SYS_ACCEPT,
+};
 
 // Generic system call: pass system call number as an immediate operand of the
 // SVC instruction, and up to three parameters in R0, R1, R2.

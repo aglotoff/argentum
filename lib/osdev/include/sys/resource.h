@@ -12,6 +12,12 @@ struct rlimit {
 #define RLIM_SAVED_MAX  1
 #define RLIM_SAVED_CUR  2
 
-#define RLIMIT_NOFILE   0
+#define RLIMIT_CORE     0
+#define RLIMIT_CPU      1
+#define RLIMIT_DATA     2
+#define RLIMIT_FSIZE    3
+#define RLIMIT_NOFILE   4
+#define RLIMIT_STACK    5
+#define RLIMIT_AS       6
 
 #endif  // !__SYS_RESOURCE_H__

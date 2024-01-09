@@ -35,5 +35,6 @@ int          file_stat(struct File *, struct stat *);
 int          file_chdir(struct File *);
 off_t        file_seek(struct File *, off_t, int);
 int          file_get_flags(struct File *);
+int          file_chmod(struct File *, mode_t);
 
 #endif  // !__KERNEL_INCLUDE_KERNEL_FS_FILE__

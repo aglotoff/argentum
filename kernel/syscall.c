@@ -56,6 +56,7 @@ static int32_t (*syscalls[])(void) = {
   [__SYS_ACCEPT]     = sys_accept,
   [__SYS_CONNECT]    = sys_connect,
   [__SYS_TEST]       = sys_test,
+  [__SYS_FCHMOD]     = sys_fchmod,
 };
 
 int32_t
@@ -410,6 +411,7 @@ int32_t
 sys_chmod(void)
 {
   const char *path;
+  struct Inode *inode;
   mode_t mode;
   int r;
 
@@ -418,7 +420,14 @@ sys_chmod(void)
   if ((r = sys_arg_short(1, (short *) &mode)) < 0)
     return r;
 
-  return fs_chmod(path, mode);
+  if ((r = fs_name_lookup(path, 0, &inode)) < 0)
+    return r;
+
+  fs_inode_lock(inode);
+  r = fs_inode_chmod(inode, mode);
+  fs_inode_unlock_put(inode);
+
+  return r;
 }
 
 int32_t
@@ -438,6 +447,9 @@ fd_alloc(struct File *f, int start)
 {
   struct Process *current = process_current();
   int i;
+
+  if (start < 0 || start >= OPEN_MAX)
+    return -EINVAL;
 
   for (i = start; i < OPEN_MAX; i++)
     if (current->files[i] == NULL) {
@@ -625,16 +637,23 @@ sys_fcntl(void)
     return r;
 
   switch (cmd) {
-  case F_GETFL:
-    return file_get_flags(f);
-  case F_SETFD:
-    // TODO
-    return 0;
   case F_DUPFD:
     if ((r = fd_alloc(f, arg)) < 0)
       return r;
     file_dup(f);
     return 0;
+  case F_GETFL:
+    return file_get_flags(f);
+  case F_GETFD:
+  case F_SETFD:
+  case F_SETFL:
+  case F_GETOWN:
+  case F_SETOWN:
+  case F_GETLK:
+  case F_SETLK:
+  case F_SETLKW:
+    // TODO: implement
+    return -ENOSYS;
   default:
     return -EINVAL;
   }
@@ -812,4 +831,19 @@ sys_test(void)
     cprintf("[%d]: %d\n", i, arg);
   }
   return 0;
+}
+
+int32_t
+sys_fchmod(void)
+{
+  struct File *file;
+  mode_t mode;
+  int r;
+
+  if ((r = sys_arg_fd(0, NULL, &file)) < 0)
+    return r;
+  if ((r = sys_arg_short(1, (short *) &mode)) < 0)
+    return r;
+
+  return file_chmod(file, mode);
 }

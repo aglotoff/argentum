@@ -40,5 +40,6 @@ int32_t sys_connect(void);
 int32_t sys_listen(void);
 int32_t sys_accept(void);
 int32_t sys_test(void);
+int32_t sys_fchmod(void);
 
 #endif  // !__KERNEL_INCLUDE_KERNEL_SYSCALL_H__

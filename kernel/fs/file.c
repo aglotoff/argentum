@@ -364,3 +364,19 @@ file_get_flags(struct File *file)
   return file->flags & (O_ACCMODE | O_APPEND);
 }
 
+int
+file_chmod(struct File *file, mode_t mode)
+{
+  int r;
+  
+  if (file->type != FD_INODE) 
+    return -EINVAL;
+
+  assert(file->inode != NULL);
+
+  fs_inode_lock(file->inode);
+  r = fs_inode_chmod(file->inode, mode);
+  fs_inode_unlock(file->inode);
+
+  return r;
+}
