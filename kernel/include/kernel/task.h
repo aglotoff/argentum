@@ -61,41 +61,35 @@ struct Task {
   int               state;
   /** Task priority value */
   int               priority;
-  /** Saved kernel context */
-  struct Context   *context;
-  /** Entry point */
-  void            (*entry)(void *);
-  void             *arg;
   /** Various flags */
   int               flags;
-  /** Task waiting for this task to exit */
-  struct Task      *destroyer;
+  /** CPU */
+  struct Cpu       *cpu;
+
+  /** Bottom of the kernel-mode stack */
+  void             *kstack;
+  /** Address of the current trap frame on the stack */
+  struct TrapFrame *tf;
+  /** Saved kernel context */
+  struct Context   *context;
+
+  /** Entry point function */
+  void            (*entry)(void *);
+  /** The argument for the entry function*/
+  void             *arg;
+
   /** Timer for timeouts */
   struct KTimer     sleep_timer;
   /** Value that indicated sleep result */
   int               sleep_result;
   int               err;
-    /** Tne process this thread belongs to */
+
+  /** Tne process this thread belongs to */
   struct Process   *process;
-
-  /** Bottom of the kernel-mode thread stack */
-  uint8_t              *kstack;
-  /** Address of the current trap frame on the stack */
-  struct TrapFrame     *tf;
-
-  /** State-specific information */
-  union {
-    struct {
-      struct Cpu *cpu;
-    } running;
-    struct {
-      struct Task *task;
-    } destroy;
-  } u;
 };
 
 struct Task *task_current(void);
-int          task_create(struct Task *, struct Process *, void (*)(void *), void *, int, uint8_t *);
+struct Task *task_create(struct Process *, void (*)(void *), void *, int);
 void         task_exit(void);
 int          task_resume(struct Task *);
 void         task_yield(void);

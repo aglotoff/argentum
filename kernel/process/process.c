@@ -60,9 +60,6 @@ process_init(void)
   process_cache = kmem_cache_create("process_cache", sizeof(struct Process), 0, process_ctor, NULL);
   if (process_cache == NULL)
     panic("cannot allocate process_cache");
-  thread_cache = kmem_cache_create("thread_cache", sizeof(struct Task), 0, NULL, NULL);
-  if (thread_cache == NULL)
-    panic("cannot allocate thread cache");
 
   HASH_INIT(pid_hash.table);
   spin_init(&pid_hash.lock, "pid_hash");
@@ -79,41 +76,16 @@ process_alloc(void)
 {
   static pid_t next_pid;
   int i;
-
-  struct Page *page;
   struct Process *process;
-  struct Task *thread;
-  uint8_t *kstack, *sp;
 
   if ((process = (struct Process *) kmem_alloc(process_cache)) == NULL)
     return NULL;
-  
-  if ((thread = (struct Task *) kmem_alloc(thread_cache)) == NULL)
-    goto fail1;
 
-  
-
-  // Allocate per-process kernel stack
-  if ((page = page_alloc_one(0)) == NULL)
-    goto fail2;
-
-  kstack = (uint8_t *) page2kva(page);
-  page->ref_count++;
-
-  sp = kstack + PAGE_SIZE;
-
-  // Leave room for the trapframe
-  sp -= sizeof (struct TrapFrame);
-
-  // Setup new context to start executing at thread_run.
-  if (task_create(thread, process, process_run, NULL, NZERO, sp))
-    goto fail3;
-
-  process->thread = thread;
-
-  process->thread->kstack = kstack;
-  // The user-mode trapframe will always be on the same stack address
-  process->thread->tf = (struct TrapFrame *) sp;
+  process->thread = task_create(process, process_run, process, NZERO);
+  if (process->thread == NULL) {
+    kmem_free(process_cache, process);
+    return NULL;
+  }
 
   process->parent = NULL;
   process->zombie = 0;
@@ -133,15 +105,6 @@ process_alloc(void)
     process->files[i] = NULL;
 
   return process;
-
-fail3:
-  page->ref_count--;
-  page_free_one(page);
-fail2:
-  kmem_free(thread_cache, thread);
-fail1:
-  kmem_free(process_cache, process);
-  return NULL;
 }
 
 int
@@ -151,6 +114,18 @@ process_setup_vm(struct Process *proc)
     return -ENOMEM;
 
   return 0;
+}
+
+void 
+process_setup_main(struct Process *process, uintptr_t entry, uintptr_t arg1,
+                   uintptr_t arg2, uintptr_t arg3, uintptr_t sp)
+{
+  process->thread->tf->r0  = arg1;              // argc
+  process->thread->tf->r1  = arg2;              // argv
+  process->thread->tf->r2  = arg3;              // environ
+  process->thread->tf->sp  = sp;                // stack pointer
+  process->thread->tf->psr = PSR_M_USR | PSR_F; // user mode, interrupts enabled
+  process->thread->tf->pc  = entry;             // process entry point
 }
 
 static int
@@ -193,12 +168,7 @@ process_load_binary(struct Process *proc, const void *binary)
                            VM_READ | VM_WRITE | VM_USER) < 0))
     return r;
 
-  proc->thread->tf->r0  = 0;                   // argc
-  proc->thread->tf->r1  = 0;                   // argv
-  proc->thread->tf->r2  = 0;                   // environ
-  proc->thread->tf->sp  = VIRT_USTACK_TOP;     // stack pointer
-  proc->thread->tf->psr = PSR_M_USR | PSR_F;   // user mode, interrupts enabled
-  proc->thread->tf->pc  = elf->entry;          // process entry point
+  process_setup_main(proc, elf->entry, 0, 0, 0, VIRT_USTACK_TOP);
 
   return 0;
 }
@@ -344,9 +314,9 @@ process_copy(void)
   }
   child->brk = current->brk;
 
-  child->parent    = current;
-  *child->thread->tf       = *current->thread->tf;
-  child->thread->tf->r0    = 0;
+  child->parent         = current;
+  *child->thread->tf    = *current->thread->tf;
+  child->thread->tf->r0 = 0;
 
   for (fd = 0; fd < OPEN_MAX; fd++) {
     child->files[fd] = current->files[fd] ? file_dup(current->files[fd]) : NULL;
@@ -434,21 +404,19 @@ process_run(void *arg)
 {
   static int first;
 
-  struct Process *proc = process_current();
-
-  (void) arg;
+  struct Process *process = (struct Process *) arg;
 
   if (!first) {
     first = 1;
 
     fs_init();
 
-    if ((proc->cwd == NULL) && (fs_name_lookup("/", 0, &proc->cwd) < 0))
+    if ((process->cwd == NULL) && (fs_name_lookup("/", 0, &process->cwd) < 0))
       panic("root not found");
   }
 
   // "Return" to the user space.
-  process_pop_tf(proc->thread->tf);
+  process_pop_tf(process->thread->tf);
 }
 
 // Load the user-mode registers from the trap frame.
@@ -472,17 +440,17 @@ process_grow(ptrdiff_t increment)
   void *r;
 
   if (increment < 0) {
-    cprintf("sbrk(%ld) -> %p\n", increment, (void *) -EINVAL);
+    // cprintf("sbrk(%ld) -> %p\n", increment, (void *) -EINVAL);
     return (void *) -EINVAL;
   }
 
   if (increment == 0) {
-    cprintf("sbrk(%ld) -> %p\n", increment, current->brk);
+    // cprintf("sbrk(%ld) -> %p\n", increment, current->brk);
     return current->brk;
   }
 
   r = vm_space_alloc(current->vm, current->brk, increment, VM_READ | VM_WRITE | VM_USER);
-  cprintf("sbrk(%ld) -> %p\n", increment, r);
+  // cprintf("sbrk(%ld) -> %p\n", increment, r);
   
   if ((ptrdiff_t) r < 0)
     return r;

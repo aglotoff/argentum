@@ -81,6 +81,6 @@ pid_t process_copy(void);
 pid_t process_wait(pid_t, int *, int);
 int   process_exec(const char *, char *const[], char *const[]);
 void *process_grow(ptrdiff_t);
-void  process_thread_free(struct Task *);
+void  process_setup_main(struct Process *, uintptr_t, uintptr_t, uintptr_t, uintptr_t, uintptr_t);
 
 #endif  // __KERNEL_INCLUDE_KERNEL_PROCESS_H__

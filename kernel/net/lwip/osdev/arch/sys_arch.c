@@ -20,7 +20,6 @@
 static struct KMemCache *mutex_cache;
 static struct KMemCache *queue_cache;
 static struct KMemCache *sem_cache;
-static struct KMemCache *task_cache;
 
 /* Mutex functions: */
 err_t
@@ -206,19 +205,13 @@ sys_thread_new(const char *name, void (*thread)(void *), void *arg,
                int stacksize, int prio)
 {
   struct Task *task;
-  struct Page *stack_page;
-
-  if ((task = (struct Task *) kmem_alloc(task_cache)) == NULL)
-    panic("kmem_alloc");
-  if ((stack_page = page_alloc_one(0)) == NULL)
-    panic("page_alloc");
 
   // TODO: priority!
   (void) name;
   (void) prio;
   (void) stacksize;
 
-  task_create(task, NULL, thread, arg, 0, page2kva(stack_page + 1));
+  task = task_create(NULL, thread, arg, 0);
   task_resume(task);
 
   return task;
@@ -236,7 +229,6 @@ sys_init(void)
   mutex_cache = kmem_cache_create("mutex", sizeof(struct KMutex), 0, NULL, NULL);
   queue_cache = kmem_cache_create("queue", sizeof(struct KQueue), 0, NULL, NULL);
   sem_cache   = kmem_cache_create("sem", sizeof(struct KSemaphore), 0, NULL, NULL);
-  task_cache  = kmem_cache_create("task", sizeof(struct Task), 0, NULL, NULL);
 }
 
 #endif

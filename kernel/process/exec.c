@@ -170,17 +170,13 @@ process_exec(const char *path, char *const argv[], char *const envp[])
   // to properly work!
   usp = ROUND_DOWN(usp, 8);
 
-  proc->thread->tf->r0 = argc;                // arg #0: argc
-  proc->thread->tf->r1 = (uint32_t) uargv;    // arg #1: argv
-  proc->thread->tf->r2 = (uint32_t) uenvp;    // arg #2: environ
-  proc->thread->tf->sp = (uint32_t) usp;      // stack pointer
-  proc->thread->tf->pc = elf.entry;           // process entry point
+  process_setup_main(proc, elf.entry, argc, (uint32_t) uargv, (uint32_t) uenvp,
+                     (uint32_t) usp);
 
   return argc;
 
 out2:
   vm_space_destroy(vm);
-
 out1:
   fs_inode_unlock_put(ip);
 

@@ -32,6 +32,10 @@ sched_init(void)
 {
   int i;
 
+  thread_cache = kmem_cache_create("thread_cache", sizeof(struct Task), 0, NULL, NULL);
+  if (thread_cache == NULL)
+    panic("cannot allocate thread cache");
+
   for (i = 0; i < TASK_MAX_PRIORITIES; i++)
     list_init(&sched_queue[i]);
 }
@@ -90,34 +94,33 @@ sched_start(void)
 
       next->state = TASK_STATE_RUNNING;
 
-      next->u.running.cpu = my_cpu;
+      next->cpu = my_cpu;
       my_cpu->task = next;
 
       context_switch(&my_cpu->scheduler, next->context);
 
       my_cpu->task = NULL;
+      next->cpu = NULL;
 
       if (next->process != NULL)
         vm_load_kernel();
 
       // Perform cleanup for the exited task
-      if ((next->state == TASK_STATE_DESTROYED) && (next->destroyer == NULL)) {
+      if (next->state == TASK_STATE_DESTROYED) {
+        struct Page *kstack_page;
+
         next->state = TASK_STATE_NONE;
+  
+        sched_unlock();
 
-        if (next->process != NULL) {
-          struct Page *kstack_page;
+        // Free the kernel stack
+        kstack_page = kva2page(next->kstack);
+        kstack_page->ref_count--;
+        page_free_one(kstack_page);
 
-          sched_unlock();
+        kmem_free(thread_cache, next);
 
-          // Free the kernel stack
-          kstack_page = kva2page(next->kstack);
-          kstack_page->ref_count--;
-          page_free_one(kstack_page);
-
-          kmem_free(thread_cache, next);
-
-          sched_lock();
-        }
+        sched_lock();
       }
     } else {
       sched_unlock();
@@ -418,29 +421,51 @@ task_run(void)
  * 
  * @return 0 on success.
  */
-int
-task_create(struct Task *task, struct Process *process, void (*entry)(void *), void *arg, int priority,
-            uint8_t *stack)
+struct Task *
+task_create(struct Process *process, void (*entry)(void *), void *arg,
+            int priority)
 {
+  struct Page *stack_page;
+  struct Task *task;
+  uint8_t *stack, *sp;
+
+  if ((task = (struct Task *) kmem_alloc(thread_cache)) == NULL)
+    return NULL;
+
+  if ((stack_page = page_alloc_one(0)) == NULL) {
+    kmem_free(thread_cache, task);
+    return NULL;
+  }
+
+  stack = (uint8_t *) page2kva(stack_page);
+  stack_page->ref_count++;
+
   task->flags         = 0;
   task->priority      = priority;
   task->state         = TASK_STATE_SUSPENDED;
   task->entry         = entry;
   task->arg           = arg;
-  task->destroyer     = NULL;
   task->err           = 0;
   task->process       = process;
-  task->kstack        = NULL;
+  task->kstack        = stack;
   task->tf            = NULL;
 
   ktimer_create(&task->sleep_timer, task_sleep_callback, task, 0, 0, 0);
 
-  stack -= sizeof *task->context;
-  task->context = (struct Context *) stack;
+  sp = (uint8_t *) stack + PAGE_SIZE;
+
+  if (process != NULL) {
+    sp -= sizeof(struct TrapFrame);
+    task->tf = (struct TrapFrame *) sp;
+    memset(task->tf, 0, sizeof(struct TrapFrame));
+  }
+
+  sp -= sizeof *task->context;
+  task->context = (struct Context *) sp;
   memset(task->context, 0, sizeof *task->context);
   task->context->lr = (uint32_t) task_run;
 
-  return 0;
+  return task;
 }
 
 /**
