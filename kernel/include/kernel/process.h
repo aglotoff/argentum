@@ -20,31 +20,21 @@ struct SpinLock;
 struct Inode;
 struct Process;
 
-struct ProcessThread {
-  /** Kernel task associated with this process thread */
-  struct Task           task;
-  /** Tne process this thread belongs to */
-  struct Process       *process;
-  /** Unique thread identifier */
-  pid_t                 pid;
-  /** Link into the PID hash table */
-  struct ListLink       pid_link;
-  /** Bottom of the kernel-mode thread stack */
-  uint8_t              *kstack;
-  /** Address of the current trap frame on the stack */
-  struct TrapFrame     *tf;
-};
-
 /**
  * Process descriptor.
  */
 struct Process {
   /** The process' address space */
-  struct VMSpace            *vm;
-  void                      *brk;
+  struct VMSpace       *vm;
+  void                 *brk;
 
   /** Main process thread */
-  struct ProcessThread *thread;
+  struct Task          *thread;
+
+  /** Unique thread identifier */
+  pid_t                 pid;
+  /** Link into the PID hash table */
+  struct ListLink       pid_link;
   
   /** The parent process */
   struct Process       *parent;
@@ -80,7 +70,7 @@ static inline struct Process *
 process_current(void)
 {
   struct Task *task = task_current();
-  return task != NULL ? ((struct ProcessThread *) task)->process : NULL;
+  return task != NULL ? task->process : NULL;
 }
 
 void  process_init(void);

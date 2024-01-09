@@ -341,7 +341,7 @@ sys_exit(void)
 int32_t
 sys_getpid(void)
 {
-  return process_current()->thread->pid;
+  return process_current()->pid;
 }
 
 int32_t
@@ -350,7 +350,7 @@ sys_getppid(void)
   struct Process *current = process_current(),
                  *parent  = current->parent;
 
-  return parent ? parent->thread->pid : current->thread->pid;
+  return parent ? parent->pid : current->pid;
 }
 
 int32_t

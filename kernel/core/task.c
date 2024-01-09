@@ -7,6 +7,12 @@
 #include <kernel/irq.h>
 #include <kernel/task.h>
 #include <kernel/spinlock.h>
+#include <kernel/process.h>
+#include <kernel/vmspace.h>
+#include <kernel/mm/vm.h>
+#include <kernel/mm/mmu.h>
+#include <kernel/mm/kmem.h>
+#include <kernel/mm/page.h>
 
 static void task_run(void);
 void context_switch(struct Context **, struct Context *);
@@ -77,12 +83,10 @@ sched_start(void)
     struct Task *next = sched_dequeue();
 
     if (next != NULL) {
-      struct TaskHooks *hooks = next->hooks;
-
       assert(next->state == TASK_STATE_READY);
 
-      if ((hooks != NULL) && (hooks->prepare_switch != NULL))
-        hooks->prepare_switch(next);
+      if (next->process != NULL)
+        vm_load(next->process->vm->pgdir);
 
       next->state = TASK_STATE_RUNNING;
 
@@ -93,16 +97,25 @@ sched_start(void)
 
       my_cpu->task = NULL;
 
-      if ((hooks != NULL) && (hooks->finish_switch != NULL))
-        hooks->finish_switch(next);
+      if (next->process != NULL)
+        vm_load_kernel();
 
       // Perform cleanup for the exited task
       if ((next->state == TASK_STATE_DESTROYED) && (next->destroyer == NULL)) {
         next->state = TASK_STATE_NONE;
 
-        if ((hooks != NULL) && (hooks->destroy != NULL)) {
+        if (next->process != NULL) {
+          struct Page *kstack_page;
+
           sched_unlock();
-          hooks->destroy(next);
+
+          // Free the kernel stack
+          kstack_page = kva2page(next->kstack);
+          kstack_page->ref_count--;
+          page_free_one(kstack_page);
+
+          kmem_free(thread_cache, next);
+
           sched_lock();
         }
       }
@@ -406,17 +419,19 @@ task_run(void)
  * @return 0 on success.
  */
 int
-task_create(struct Task *task, void (*entry)(void *), void *arg, int priority,
-            uint8_t *stack, struct TaskHooks *hooks)
+task_create(struct Task *task, struct Process *process, void (*entry)(void *), void *arg, int priority,
+            uint8_t *stack)
 {
   task->flags         = 0;
   task->priority      = priority;
   task->state         = TASK_STATE_SUSPENDED;
   task->entry         = entry;
   task->arg           = arg;
-  task->hooks         = hooks;
   task->destroyer     = NULL;
   task->err           = 0;
+  task->process       = process;
+  task->kstack        = NULL;
+  task->tf            = NULL;
 
   ktimer_create(&task->sleep_timer, task_sleep_callback, task, 0, 0, 0);
 

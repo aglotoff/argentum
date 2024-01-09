@@ -60,7 +60,7 @@ process_init(void)
   process_cache = kmem_cache_create("process_cache", sizeof(struct Process), 0, process_ctor, NULL);
   if (process_cache == NULL)
     panic("cannot allocate process_cache");
-  thread_cache = kmem_cache_create("thread_cache", sizeof(struct ProcessThread), 0, NULL, NULL);
+  thread_cache = kmem_cache_create("thread_cache", sizeof(struct Task), 0, NULL, NULL);
   if (thread_cache == NULL)
     panic("cannot allocate thread cache");
 
@@ -74,39 +74,6 @@ process_init(void)
     panic("Cannot create the init process");
 }
 
-static void
-process_thread_prepare_switch(struct Task *task)
-{
-  vm_load(((struct ProcessThread *) task)->process->vm->pgdir);
-}
-
-static void
-process_thread_finish_switch(struct Task *task)
-{
-  (void) task;
-  vm_load_kernel();
-}
-
-static void
-process_thread_destroy(struct Task *task)
-{
-  struct ProcessThread *thread = (struct ProcessThread *) task;
-  struct Page *kstack_page;
-
-  // Free the kernel stack
-  kstack_page = kva2page(thread->kstack);
-  kstack_page->ref_count--;
-  page_free_one(kstack_page);
-
-  kmem_free(thread_cache, thread);
-}
-
-static struct TaskHooks process_thread_hooks = {
-  .prepare_switch = process_thread_prepare_switch,
-  .finish_switch  = process_thread_finish_switch,
-  .destroy        = process_thread_destroy,
-};
-
 struct Process *
 process_alloc(void)
 {
@@ -115,36 +82,38 @@ process_alloc(void)
 
   struct Page *page;
   struct Process *process;
-  struct ProcessThread *thread;
-  uint8_t *sp;
+  struct Task *thread;
+  uint8_t *kstack, *sp;
 
   if ((process = (struct Process *) kmem_alloc(process_cache)) == NULL)
     return NULL;
   
-  if ((thread = (struct ProcessThread *) kmem_alloc(thread_cache)) == NULL)
+  if ((thread = (struct Task *) kmem_alloc(thread_cache)) == NULL)
     goto fail1;
 
-  thread->process = process;
-  process->thread = thread;
+  
 
   // Allocate per-process kernel stack
   if ((page = page_alloc_one(0)) == NULL)
     goto fail2;
 
-  process->thread->kstack = (uint8_t *) page2kva(page);
+  kstack = (uint8_t *) page2kva(page);
   page->ref_count++;
 
-  sp = process->thread->kstack + PAGE_SIZE;
+  sp = kstack + PAGE_SIZE;
 
   // Leave room for the trapframe
-  sp -= sizeof *process->thread->tf;
-  // The user-mode trapframe will always be on the same stack address
-  process->thread->tf = (struct TrapFrame *) sp;
+  sp -= sizeof (struct TrapFrame);
 
   // Setup new context to start executing at thread_run.
-  if (task_create(&thread->task, process_run, NULL, NZERO, sp,
-      &process_thread_hooks))
+  if (task_create(thread, process, process_run, NULL, NZERO, sp))
     goto fail3;
+
+  process->thread = thread;
+
+  process->thread->kstack = kstack;
+  // The user-mode trapframe will always be on the same stack address
+  process->thread->tf = (struct TrapFrame *) sp;
 
   process->parent = NULL;
   process->zombie = 0;
@@ -153,10 +122,10 @@ process_alloc(void)
 
   spin_lock(&pid_hash.lock);
 
-  if ((thread->pid = ++next_pid) < 0)
+  if ((process->pid = ++next_pid) < 0)
     panic("pid overflow");
 
-  HASH_PUT(pid_hash.table, &thread->pid_link, thread->pid);
+  HASH_PUT(pid_hash.table, &process->pid_link, process->pid);
 
   spin_unlock(&pid_hash.lock);
 
@@ -227,7 +196,7 @@ process_load_binary(struct Process *proc, const void *binary)
   proc->thread->tf->r0  = 0;                   // argc
   proc->thread->tf->r1  = 0;                   // argv
   proc->thread->tf->r2  = 0;                   // environ
-  proc->thread->tf->sp  = VIRT_USTACK_TOP;          // stack pointer
+  proc->thread->tf->sp  = VIRT_USTACK_TOP;     // stack pointer
   proc->thread->tf->psr = PSR_M_USR | PSR_F;   // user mode, interrupts enabled
   proc->thread->tf->pc  = elf->entry;          // process entry point
 
@@ -255,7 +224,7 @@ process_create(const void *binary, struct Process **pstore)
   proc->rgid = proc->egid = 0;
   proc->cmask = 0;
 
-  task_resume(&proc->thread->task);
+  task_resume(proc->thread);
 
   if (pstore != NULL)
     *pstore = proc;
@@ -286,15 +255,15 @@ struct Process *
 pid_lookup(pid_t pid)
 {
   struct ListLink *l;
-  struct ProcessThread *proc;
+  struct Process *proc;
 
   spin_lock(&pid_hash.lock);
 
   HASH_FOREACH_ENTRY(pid_hash.table, l, pid) {
-    proc = LIST_CONTAINER(l, struct ProcessThread, pid_link);
+    proc = LIST_CONTAINER(l, struct Process, pid_link);
     if (proc->pid == pid) {
       spin_unlock(&pid_hash.lock);
-      return proc->process;
+      return proc;
     }
   }
 
@@ -314,7 +283,7 @@ process_destroy(int status)
   // Remove the pid hash link
   // TODO: place this code somewhere else?
   spin_lock(&pid_hash.lock);
-  HASH_REMOVE(&current->thread->pid_link);
+  HASH_REMOVE(&current->pid_link);
   spin_unlock(&pid_hash.lock);
 
   vm_space_destroy(current->vm);
@@ -394,9 +363,9 @@ process_copy(void)
   list_add_back(&current->children, &child->sibling_link);
   spin_unlock(&process_lock);
 
-  task_resume(&child->thread->task);
+  task_resume(child->thread);
 
-  return child->thread->pid;
+  return child->pid;
 }
 
 pid_t
@@ -418,7 +387,7 @@ process_wait(pid_t pid, int *stat_loc, int options)
       p = LIST_CONTAINER(l, struct Process, sibling_link);
 
       // Check whether the current child satisifies the criteria.
-      if ((pid > 0) && (p->thread->pid != pid)) {
+      if ((pid > 0) && (p->pid != pid)) {
         continue;
       } else if (pid == 0) {
         // TODO: compare the child group ID to the parent group ID
@@ -428,7 +397,7 @@ process_wait(pid_t pid, int *stat_loc, int options)
         break;
       }
 
-      found = p->thread->pid;
+      found = p->pid;
 
       if (p->zombie) {
         list_remove(&p->sibling_link);

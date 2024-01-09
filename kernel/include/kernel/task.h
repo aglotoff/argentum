@@ -46,13 +46,10 @@ struct Context {
   uint32_t lr;
 };
 
-struct Task;
+struct KMemCache;
+extern struct KMemCache *thread_cache;
 
-struct TaskHooks {
-  void (*prepare_switch)(struct Task *);
-  void (*finish_switch)(struct Task *);
-  void (*destroy)(struct Task *);
-};
+struct Process;
 
 /**
  * Scheduler task state.
@@ -71,8 +68,6 @@ struct Task {
   void             *arg;
   /** Various flags */
   int               flags;
-  /** Hooks to be called for this task */
-  struct TaskHooks *hooks;
   /** Task waiting for this task to exit */
   struct Task      *destroyer;
   /** Timer for timeouts */
@@ -80,6 +75,13 @@ struct Task {
   /** Value that indicated sleep result */
   int               sleep_result;
   int               err;
+    /** Tne process this thread belongs to */
+  struct Process   *process;
+
+  /** Bottom of the kernel-mode thread stack */
+  uint8_t              *kstack;
+  /** Address of the current trap frame on the stack */
+  struct TrapFrame     *tf;
 
   /** State-specific information */
   union {
@@ -93,8 +95,7 @@ struct Task {
 };
 
 struct Task *task_current(void);
-int          task_create(struct Task *, void (*)(void *), void *, int, uint8_t *,
-                       struct TaskHooks *);
+int          task_create(struct Task *, struct Process *, void (*)(void *), void *, int, uint8_t *);
 void         task_exit(void);
 int          task_resume(struct Task *);
 void         task_yield(void);

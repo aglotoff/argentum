@@ -218,7 +218,7 @@ sys_thread_new(const char *name, void (*thread)(void *), void *arg,
   (void) prio;
   (void) stacksize;
 
-  task_create(task, thread, arg, 0, page2kva(stack_page + 1), NULL);
+  task_create(task, NULL, thread, arg, 0, page2kva(stack_page + 1));
   task_resume(task);
 
   return task;
