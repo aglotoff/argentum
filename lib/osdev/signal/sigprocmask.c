@@ -1,15 +1,8 @@
-#include <stdio.h>
-#include <stdlib.h>
 #include <signal.h>
+#include <sys/syscall.h>
 
 int
 sigprocmask(int how, const sigset_t *set, sigset_t *oset)
 {
-  (void) how;
-  (void) set;
-  (void) oset;
-
-  fprintf(stderr, "TODO: sigprocmask\n");
-
-  return 0;
+  return __syscall(__SYS_SIGPROCMASK, how, (uint32_t) set, (uint32_t) oset, 0, 0, 0);
 }

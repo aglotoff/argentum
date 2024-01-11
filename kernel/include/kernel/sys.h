@@ -41,5 +41,7 @@ int32_t sys_listen(void);
 int32_t sys_accept(void);
 int32_t sys_test(void);
 int32_t sys_fchmod(void);
+int32_t sys_sigaction(void);
+int32_t sys_sigreturn(void);
 
 #endif  // !__KERNEL_INCLUDE_KERNEL_SYSCALL_H__

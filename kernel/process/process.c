@@ -23,6 +23,7 @@
 
 struct KMemCache *process_cache;
 struct KMemCache *thread_cache;
+struct KMemCache *signal_cache;
 
 // Size of PID hash table
 #define NBUCKET   256
@@ -48,6 +49,7 @@ process_ctor(void *buf, size_t size)
 
   wchan_init(&proc->wait_queue);
   list_init(&proc->children);
+  list_init(&proc->pending_signals);
 
   (void) size;
 }
@@ -60,6 +62,10 @@ process_init(void)
   process_cache = kmem_cache_create("process_cache", sizeof(struct Process), 0, process_ctor, NULL);
   if (process_cache == NULL)
     panic("cannot allocate process_cache");
+  
+  signal_cache = kmem_cache_create("signal_cache", sizeof(struct Signal), 0, NULL, NULL);
+  if (signal_cache == NULL)
+    panic("cannot allocate signal_cache");
 
   HASH_INIT(pid_hash.table);
   spin_init(&pid_hash.lock, "pid_hash");
@@ -86,6 +92,10 @@ process_alloc(void)
     kmem_free(process_cache, process);
     return NULL;
   }
+
+  list_init(&process->pending_signals);
+  for (i = 0; i < NSIG; i++)
+    process->signal_handlers[i].sa_handler = SIG_DFL;
 
   process->parent = NULL;
   process->zombie = 0;
@@ -303,7 +313,7 @@ pid_t
 process_copy(void)
 {
   struct Process *child, *current = process_current();
-  int fd;
+  int i;
 
   if ((child = process_alloc()) == NULL)
     return -ENOMEM;
@@ -318,9 +328,11 @@ process_copy(void)
   *child->thread->tf    = *current->thread->tf;
   child->thread->tf->r0 = 0;
 
-  for (fd = 0; fd < OPEN_MAX; fd++) {
-    child->files[fd] = current->files[fd] ? file_dup(current->files[fd]) : NULL;
-  }
+  for (i = 0; i < OPEN_MAX; i++)
+    child->files[i] = current->files[i] ? file_dup(current->files[i]) : NULL;
+
+  for (i = 0; i < NSIG; i++)
+    child->signal_handlers[i] = current->signal_handlers[i];
 
   child->ruid  = current->ruid;
   child->euid  = current->euid;
@@ -338,12 +350,30 @@ process_copy(void)
   return child->pid;
 }
 
+int
+process_wait_check(struct Process *current, struct Process *process, pid_t pid)
+{
+  (void) current;
+
+  if (pid == process->pid)
+    return 1;
+  if (pid == -1)
+    return 1;
+  if (pid == 0)
+    // TODO: compare the child group ID to the parent group ID
+    return 0;
+  if (pid < 0)
+    // TODO: compare the child group ID to (-pid)
+    return 0;
+  return 0;
+}
+
 pid_t
 process_wait(pid_t pid, int *stat_loc, int options)
 {
-  struct Process *p, *current = process_current();
+  struct Process *current = process_current();
   struct ListLink *l;
-  int r, found;
+  int r, has_match;
 
   if (options & ~(WNOHANG | WUNTRACED))
     return -EINVAL;
@@ -351,47 +381,41 @@ process_wait(pid_t pid, int *stat_loc, int options)
   spin_lock(&process_lock);
 
   for (;;) {
-    found = 0;
+    has_match = 0;
 
     LIST_FOREACH(&current->children, l) {
-      p = LIST_CONTAINER(l, struct Process, sibling_link);
+      struct Process *process = LIST_CONTAINER(l, struct Process, sibling_link);
 
-      // Check whether the current child satisifies the criteria.
-      if ((pid > 0) && (p->pid != pid)) {
-        continue;
-      } else if (pid == 0) {
-        // TODO: compare the child group ID to the parent group ID
-        break;
-      } else if (pid < -1) {
-        // TODO: compare the child group ID to (-pid)
-        break;
-      }
+      if (process_wait_check(current, process, pid))
+        has_match = process->pid;
 
-      found = p->pid;
-
-      if (p->zombie) {
-        list_remove(&p->sibling_link);
+      // Return immediately
+      if (process->zombie) {
+        list_remove(&process->sibling_link);
 
         spin_unlock(&process_lock);
 
         if (stat_loc)
-          *stat_loc = p->exit_code;
+          *stat_loc = process->exit_code;
 
-        process_free(p);
+        process_free(process);
 
-        return found;
+        return has_match;
       }
     }
 
-    if (!found) {
+    if (!has_match) {
       r = -ECHILD;
       break;
-    } else if (options & WNOHANG) {
+    }
+
+    if (options & WNOHANG) {
       r = 0;
       break;
     }
 
-    wchan_sleep(&current->wait_queue, &process_lock);
+    if ((r = wchan_sleep(&current->wait_queue, &process_lock)) != 0)
+      break;
   }
 
   spin_unlock(&process_lock);
@@ -457,4 +481,246 @@ process_grow(ptrdiff_t increment)
 
   current->brk = (char *) r + ROUND_UP(increment, PAGE_SIZE);
   return r;
+}
+
+struct Signal *
+process_signal_create(int sig)
+{
+  struct Signal *signal;
+
+  if ((signal = (struct Signal *) kmem_alloc(signal_cache)) == NULL)
+    panic("out of memory");
+  
+  signal->link.next = NULL;
+  signal->link.prev = NULL;
+  signal->info.si_signo = sig;
+  signal->info.si_code = 0;
+  signal->info.si_value.sival_int = 0;
+
+  return signal;
+}
+
+void
+process_signal_send(struct Process *process, struct Signal *signal)
+{
+  struct sigaction *handler;
+
+  spin_lock(&process_lock);
+
+  handler = &process->signal_handlers[signal->info.si_signo];
+  if (handler->sa_handler == SIG_IGN) {
+    spin_unlock(&process_lock);
+    kmem_free(signal_cache, signal);
+    return;
+  }
+
+  list_add_back(&process->pending_signals, &signal->link);
+  // TODO: interrupt waiting
+
+  spin_unlock(&process_lock);
+}
+
+int
+process_signal_action(int sig, uintptr_t stub, struct sigaction *act,
+                      struct sigaction *oact)
+{
+  struct Process *current = process_current();
+  struct sigaction *handler;
+
+  if (stub >= VIRT_KERNEL_BASE)
+    return -EFAULT;
+  
+  if (sig < 0 || sig >= NSIG)
+    return -EINVAL;
+  if (sig == SIGKILL || sig == SIGSTOP)
+    return -EINVAL;
+  
+  if (stub != 0)
+    current->signal_stub = stub;
+
+  handler = &current->signal_handlers[sig];
+
+  if (oact != NULL)
+    *oact = *handler;
+
+  if (act != NULL)
+    *handler = *act;
+  
+  return 0;
+}
+
+void
+process_signal_default(struct Process *current, struct Signal *signal)
+{
+  int terminate = 0;
+
+  (void) current;
+  
+  switch (signal->info.si_signo) {
+  case SIGABRT:
+  case SIGBUS:
+  case SIGFPE:
+  case SIGILL:
+  case SIGQUIT:
+  case SIGSEGV:
+  case SIGSYS:
+  case SIGTRAP:
+  case SIGXCPU:
+  case SIGXFSZ:
+    // TODO: abnormal terminatio with additional actions
+    // fall through
+
+  case SIGALRM:
+  case SIGHUP:
+  case SIGINT:
+  case SIGKILL:
+  case SIGPIPE:
+  case SIGTERM:
+  case SIGUSR1:
+  case SIGUSR2:
+    // Abnormal termination
+    terminate = signal->info.si_signo;
+    break;
+
+  case SIGCHLD:
+  case SIGURG:
+    // Ignore
+    break;
+
+  case SIGSTOP:
+  case SIGTSTP:
+  case SIGTTIN:
+  case SIGTTOU:
+    // Stop
+    panic("not implemented");
+    break;
+
+  case SIGCONT:
+    // Continue
+    panic("not implemented");
+    break;
+  }
+
+  spin_unlock(&process_lock);
+
+  kmem_free(signal_cache, signal);
+
+  if (terminate)
+    process_destroy(terminate);
+}
+
+struct SignalContext {
+  // Saved by user:
+  uint32_t s[32];
+  uint32_t fpscr;
+  uint32_t r1;
+  uint32_t r2;
+  uint32_t r3;
+  uint32_t r4;
+  uint32_t r5;
+  uint32_t r6;
+  uint32_t r7;
+  uint32_t r8;
+  uint32_t r9;
+  uint32_t r10;
+  uint32_t r11;
+  uint32_t r12;
+
+  // Saved by kernel:
+  uint32_t signo;
+  uint32_t handler;
+
+  uint32_t r0;
+  uint32_t sp;
+  uint32_t lr;
+  uint32_t pc;
+  uint32_t psr;
+  uint32_t trapno;
+};
+
+void
+process_signal_handle(struct Process *current, struct sigaction *handler, struct Signal *signal)
+{
+  int r;
+  struct SignalContext *ctx;
+
+  ctx = ((struct SignalContext *) current->thread->tf->sp) - 1;
+  if ((r = vm_space_check_buf(current->vm, ctx, sizeof(*ctx), VM_WRITE)) < 0) {
+    spin_unlock(&process_lock);
+    kmem_free(signal_cache, signal);
+    process_destroy(SIGSEGV);
+  }
+
+  ctx->r0     = current->thread->tf->r0;
+  ctx->sp     = current->thread->tf->sp;
+  ctx->lr     = current->thread->tf->lr;
+  ctx->pc     = current->thread->tf->pc;
+  ctx->psr    = current->thread->tf->psr;
+  ctx->trapno = current->thread->tf->trapno;
+  
+  ctx->signo = signal->info.si_signo;
+  ctx->handler = (uint32_t) handler->sa_handler;
+
+  current->thread->tf->r0 = (uint32_t) &ctx->signo;
+  current->thread->tf->sp = (uintptr_t) ctx;
+  current->thread->tf->pc = (uintptr_t) current->signal_stub;
+
+  spin_unlock(&process_lock);
+  kmem_free(signal_cache, signal);
+}
+
+void
+process_signal_check(void)
+{
+  struct Process *current = process_current();
+  struct ListLink *link;
+
+  spin_lock(&process_lock);
+
+  link = current->pending_signals.next;
+  while (link != &current->pending_signals) {
+    struct Signal *signal;
+    struct sigaction *handler;
+
+    signal = LIST_CONTAINER(current->pending_signals.next, struct Signal, link);
+    handler = &current->signal_handlers[signal->info.si_signo];
+
+    // TODO: if blocked, continue
+
+    list_remove(&signal->link);
+
+    if (handler->sa_handler == SIG_DFL)
+      return process_signal_default(current, signal);
+
+    return process_signal_handle(current, handler, signal);
+  }
+
+  spin_unlock(&process_lock);
+}
+
+int
+process_signal_return(void)
+{
+  int r;
+  struct Process *current = process_current();
+  struct SignalContext *ctx;
+
+  spin_lock(&process_lock);
+
+  ctx = (struct SignalContext *) current->thread->tf->sp;
+  if ((r = vm_space_check_buf(current->vm, ctx, sizeof(*ctx), VM_WRITE)) < 0) {
+    spin_unlock(&process_lock);
+    process_destroy(SIGSEGV);
+  }
+
+  current->thread->tf->r0 = ctx->r0;
+  current->thread->tf->sp = ctx->sp;
+  current->thread->tf->lr = ctx->lr;
+  current->thread->tf->pc = ctx->pc;
+  current->thread->tf->psr = ctx->psr;
+  current->thread->tf->trapno = ctx->trapno;
+  
+  spin_unlock(&process_lock);
+  
+  return current->thread->tf->r0;
 }

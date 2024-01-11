@@ -6,6 +6,7 @@
 #endif
 
 #include <limits.h>
+#include <signal.h>
 #include <sys/types.h>
 
 #include <kernel/cpu.h>
@@ -50,6 +51,10 @@ struct Process {
   /** Exit code */
   int                   exit_code;
 
+  struct ListLink       pending_signals;
+  uintptr_t             signal_stub;
+  struct sigaction      signal_handlers[NSIG];
+
   /** Real user ID */
   uid_t                 ruid;
   /** Effective user ID */
@@ -66,6 +71,11 @@ struct Process {
   struct Inode         *cwd;
 };
 
+struct Signal {
+  struct ListLink link;
+  siginfo_t       info;
+};
+
 static inline struct Process *
 process_current(void)
 {
@@ -73,14 +83,19 @@ process_current(void)
   return task != NULL ? task->process : NULL;
 }
 
-void  process_init(void);
-int   process_create(const void *, struct Process **);
-void  process_destroy(int);
-void  process_free(struct Process *);
-pid_t process_copy(void);
-pid_t process_wait(pid_t, int *, int);
-int   process_exec(const char *, char *const[], char *const[]);
-void *process_grow(ptrdiff_t);
-void  process_setup_main(struct Process *, uintptr_t, uintptr_t, uintptr_t, uintptr_t, uintptr_t);
+void           process_init(void);
+int            process_create(const void *, struct Process **);
+void           process_destroy(int);
+void           process_free(struct Process *);
+pid_t          process_copy(void);
+pid_t          process_wait(pid_t, int *, int);
+int            process_exec(const char *, char *const[], char *const[]);
+void          *process_grow(ptrdiff_t);
+void           process_setup_main(struct Process *, uintptr_t, uintptr_t, uintptr_t, uintptr_t, uintptr_t);
+struct Signal *process_signal_create(int sig);
+void           process_signal_send(struct Process *, struct Signal *);
+void           process_signal_check(void);
+int            process_signal_action(int, uintptr_t, struct sigaction *, struct sigaction *);
+int            process_signal_return(void);
 
 #endif  // __KERNEL_INCLUDE_KERNEL_PROCESS_H__

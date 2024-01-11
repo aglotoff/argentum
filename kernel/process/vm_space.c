@@ -353,8 +353,10 @@ vm_handle_fault(struct VMSpace *vm, uintptr_t va)
   struct Page *fault_page, *page;
   int flags;
 
-  if (va >= VIRT_KERNEL_BASE)
+  if (va < PAGE_SIZE || va >= VIRT_KERNEL_BASE)
     return -EFAULT;
+
+  // cprintf("%p\n",)
 
   fault_page = vm_page_lookup(vm->pgdir, va, &flags);
 

@@ -1,3 +1,5 @@
+#include <signal.h>
+
 #include <kernel/armv7/regs.h>
 #include <kernel/cprintf.h>
 #include <kernel/mm/page.h>
@@ -45,14 +47,19 @@ trap(struct TrapFrame *tf)
   case T_IRQ:
     irq_dispatch();
     break;
+  case T_UNDEF:
+    if ((tf->psr & PSR_M_MASK) == PSR_M_USR) {
+      process_signal_send(my_process, process_signal_create(SIGILL));
+      break;
+    }
+    // fall through
   default:
-    // Either the user process misbehaved or the kernel has a bug.
-    if ((tf->psr & PSR_M_MASK) == PSR_M_USR)
-      process_destroy(-1);
-
     print_trapframe(tf);
     panic("unhandled trap in kernel");
   }
+
+  if ((tf->psr & PSR_M_MASK) == PSR_M_USR)
+    process_signal_check();
 }
 
 // Handle data or prefetch abort
@@ -82,8 +89,9 @@ trap_handle_abort(struct TrapFrame *tf)
 
   // If unsuccessfull, kill the process
   print_trapframe(tf);
-  cprintf("user fault va %p status %#x\n", address, status);
-  process_destroy(-1);
+  // cprintf("user fault va %p status %#x\n", address, status);
+
+  process_signal_send(process, process_signal_create(SIGSEGV));
 }
 
 // Returns a human-readable name for the given trap number

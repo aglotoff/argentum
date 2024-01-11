@@ -57,6 +57,8 @@ static int32_t (*syscalls[])(void) = {
   [__SYS_CONNECT]    = sys_connect,
   [__SYS_TEST]       = sys_test,
   [__SYS_FCHMOD]     = sys_fchmod,
+  [__SYS_SIGACTION]  = sys_sigaction,
+  [__SYS_SIGRETURN]  = sys_sigreturn,
 };
 
 int32_t
@@ -67,15 +69,12 @@ sys_dispatch(void)
   if ((num = sys_get_num()) < 0)
     return num;
 
-  // cprintf("  incoming %d\n", num);
-
   if ((num < (int) ARRAY_SIZE(syscalls)) && syscalls[num]) {
     int r = syscalls[num]();
-    //cprintf("%d -> %d\n", num, r);
     return r;
   }
 
-  cprintf("Unknown system call %d\n", cpu_id(), num);
+  cprintf("Unknown system call %d\n", num);
   return -ENOSYS;
 }
 
@@ -185,8 +184,13 @@ sys_arg_buf(int n, void **pp, size_t len, int perm, int can_be_null)
   void *ptr = (void *) sys_get_arg(n);
   int r;
 
-  if (ptr == NULL)
-    return can_be_null ? 0 : -EFAULT;
+  if (ptr == NULL) {
+    if (can_be_null) {
+      *pp = NULL;
+      return 0;
+    }
+    return -EFAULT;
+  }
 
   if ((r = vm_space_check_buf(process_current()->vm, ptr, len, perm)) < 0)
     return r;
@@ -333,8 +337,8 @@ sys_exit(void)
   if ((r = sys_arg_int(0, &status)) < 0)
     return r;
 
-  process_destroy(status);
-
+  process_destroy((status & 0xFF) << 8);
+  // Should not return
   return 0;
 }
 
@@ -846,4 +850,30 @@ sys_fchmod(void)
     return r;
 
   return file_chmod(file, mode);
+}
+
+int32_t
+sys_sigaction(void)
+{
+  int sig;
+  uintptr_t stub;
+  struct sigaction *act, *oact;
+  int r;
+
+  if ((r = sys_arg_int(0, &sig)) < 0)
+    return r;
+  if ((r = sys_arg_long(1, (long *) &stub)) < 0)
+    return r;
+  if ((r = sys_arg_buf(2, (void **) &act, sizeof(*act), VM_READ, 1)) < 0)
+    return r;
+  if ((r = sys_arg_buf(3, (void **) &oact, sizeof(*oact), VM_WRITE, 1)) < 0)
+    return r;
+
+  return process_signal_action(sig, stub, act, oact);
+}
+
+int32_t
+sys_sigreturn(void)
+{
+  return process_signal_return();
 }

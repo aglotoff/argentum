@@ -5,6 +5,7 @@ libc_a_SOURCES += \
   %D%/signal/kill.c \
   %D%/signal/sigaction.c \
   %D%/signal/sigprocmask.c \
+  %D%/signal/sigstub.S \
   %D%/sys/resource/getrlimit.c \
   %D%/sys/socket/accept.c \
   %D%/sys/socket/bind.c \

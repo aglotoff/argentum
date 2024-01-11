@@ -19,6 +19,7 @@ LIB_SRCFILES := \
 	lib/osdev/signal/kill.c \
 	lib/osdev/signal/sigaction.c \
 	lib/osdev/signal/sigprocmask.c \
+	lib/osdev/signal/sigstub.S \
 	lib/osdev/sys/resource/getrlimit.c \
 	lib/osdev/sys/socket/accept.c \
 	lib/osdev/sys/socket/bind.c \
