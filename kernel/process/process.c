@@ -20,6 +20,8 @@
 #include <kernel/spinlock.h>
 #include <kernel/vmspace.h>
 #include <kernel/trap.h>
+#include <kernel/ktime.h>
+#include <kernel/ksemaphore.h>
 
 struct KMemCache *process_cache;
 struct KMemCache *thread_cache;
@@ -723,4 +725,30 @@ process_signal_return(void)
   spin_unlock(&process_lock);
   
   return current->thread->tf->r0;
+}
+
+int
+process_nanosleep(const struct timespec *rqtp, struct timespec *rmtp)
+{
+  unsigned long rq_timeout, rm_timeout, start;
+  struct KSemaphore sem;
+  int r;
+
+  start = ktime_get();
+
+  rq_timeout = rqtp->tv_sec * TICKS_PER_S + rqtp->tv_nsec / NS_PER_TICK;
+
+  ksem_create(&sem, 0);
+  r = ksem_get(&sem, rq_timeout, 1);
+
+  rm_timeout = MIN(ktime_get() - start, rq_timeout);
+
+  if (rmtp != NULL) {
+    rmtp->tv_sec  = rm_timeout / TICKS_PER_S;
+    rmtp->tv_nsec = (rm_timeout % TICKS_PER_S) * NS_PER_TICK;
+  }
+
+  ksem_destroy(&sem);
+
+  return r;
 }

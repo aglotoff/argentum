@@ -15,6 +15,7 @@
 #include <kernel/task.h>
 #include <kernel/trap.h>
 #include <kernel/wchan.h>
+#include <time.h>
 
 struct File;
 struct SpinLock;
@@ -97,5 +98,6 @@ void           process_signal_send(struct Process *, struct Signal *);
 void           process_signal_check(void);
 int            process_signal_action(int, uintptr_t, struct sigaction *, struct sigaction *);
 int            process_signal_return(void);
+int            process_nanosleep(const struct timespec *, struct timespec *);
 
 #endif  // __KERNEL_INCLUDE_KERNEL_PROCESS_H__

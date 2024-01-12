@@ -40,6 +40,7 @@
 #define __SYS_KILL        34
 #define __SYS_SIGACTION   35
 #define __SYS_SIGRETURN   36
+#define __SYS_NANOSLEEP   37
 
 #ifndef __ASSEMBLER__
 

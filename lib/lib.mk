@@ -39,6 +39,7 @@ LIB_SRCFILES := \
 	lib/osdev/sys/utsname/uname.c \
 	lib/osdev/sys/wait/wait.c \
 	lib/osdev/sys/wait/waitpid.c \
+	lib/osdev/time/nanosleep.c \
 	lib/osdev/unistd/_exit.c \
 	lib/osdev/unistd/access.c \
 	lib/osdev/unistd/chdir.c \
@@ -57,7 +58,6 @@ LIB_SRCFILES := \
 	lib/osdev/unistd/read.c \
 	lib/osdev/unistd/rmdir.c \
 	lib/osdev/unistd/sbrk.c \
-	lib/osdev/unistd/sleep.c \
 	lib/osdev/unistd/sysconf.c \
 	lib/osdev/unistd/unlink.c \
 	lib/osdev/unistd/write.c \

@@ -1,6 +1,6 @@
-diff -ruN orig/config.sub new/config.sub
---- orig/config.sub	2023-12-31 20:00:18.000000000 +0300
-+++ new/config.sub	2024-01-04 15:28:39.105286679 +0300
+diff -ruN old/config.sub new/config.sub
+--- old/config.sub	2023-12-31 20:00:18.000000000 +0300
++++ new/config.sub	2024-01-08 15:01:15.665836537 +0300
 @@ -1725,7 +1725,7 @@
  	     | skyos* | haiku* | rdos* | toppers* | drops* | es* \
  	     | onefs* | tirtos* | phoenix* | fuchsia* | redox* | bme* \
@@ -10,9 +10,9 @@ diff -ruN orig/config.sub new/config.sub
  		;;
  	# This one is extra strict with allowed versions
  	sco3.2v2 | sco3.2v[4-9]* | sco5v6*)
-diff -ruN orig/newlib/configure.host new/newlib/configure.host
---- orig/newlib/configure.host	2023-12-31 20:00:18.000000000 +0300
-+++ new/newlib/configure.host	2024-01-04 15:57:24.974874523 +0300
+diff -ruN old/newlib/configure.host new/newlib/configure.host
+--- old/newlib/configure.host	2023-12-31 20:00:18.000000000 +0300
++++ new/newlib/configure.host	2024-01-12 13:59:23.163394964 +0300
 @@ -439,6 +439,10 @@
  	posix_dir=posix
  	unix_dir=unix
@@ -29,14 +29,14 @@ diff -ruN orig/newlib/configure.host new/newlib/configure.host
  	newlib_cflags="${newlib_cflags} -D_NO_GETLOGIN -D_NO_GETPWENT -D_NO_GETUT -D_NO_GETPASS -D_NO_SIGSET -D_NO_WORDEXP -D_NO_POPEN -D_NO_POSIX_SPAWN"
  	;;
 +	*-*-osdev*)
-+  newlib_cflags="${newlib_cflags} -mcpu=cortex-a9 -mhard-float"
++  newlib_cflags="${newlib_cflags} -nostdlib -mcpu=cortex-a9 -mhard-float -DHAVE_NANOSLEEP -D__OSDEV__"
 +	;;
  # VxWorks supplies its own version of malloc, and the newlib one
  # doesn't work because VxWorks does not have sbrk.
    *-wrs-vxworks*)
-diff -ruN orig/newlib/libc/acinclude.m4 new/newlib/libc/acinclude.m4
---- orig/newlib/libc/acinclude.m4	2023-12-31 20:00:18.000000000 +0300
-+++ new/newlib/libc/acinclude.m4	2024-01-04 16:00:53.594879116 +0300
+diff -ruN old/newlib/libc/acinclude.m4 new/newlib/libc/acinclude.m4
+--- old/newlib/libc/acinclude.m4	2023-12-31 20:00:18.000000000 +0300
++++ new/newlib/libc/acinclude.m4	2024-01-08 15:01:15.665836537 +0300
 @@ -25,6 +25,7 @@
    w65
    xtensa
@@ -45,9 +45,51 @@ diff -ruN orig/newlib/libc/acinclude.m4 new/newlib/libc/acinclude.m4
  ], [AM_CONDITIONAL([HAVE_LIBC_SYS_]m4_toupper(SYS_DIR)[_DIR], test "${sys_dir}" = SYS_DIR)])
  
  AC_TYPE_LONG_DOUBLE
-diff -ruN orig/newlib/libc/include/sys/stat.h new/newlib/libc/include/sys/stat.h
---- orig/newlib/libc/include/sys/stat.h	2023-12-31 20:00:18.000000000 +0300
-+++ new/newlib/libc/include/sys/stat.h	2024-01-04 16:29:26.082987728 +0300
+diff -ruN old/newlib/libc/include/sys/features.h new/newlib/libc/include/sys/features.h
+--- old/newlib/libc/include/sys/features.h	2023-12-31 20:00:18.000000000 +0300
++++ new/newlib/libc/include/sys/features.h	2024-01-11 18:53:17.757061345 +0300
+@@ -545,6 +545,12 @@
+ 
+ #endif /* __CYGWIN__ */
+ 
++#ifdef __OSDEV__
++
++#define _POSIX_TIMERS			1
++
++#endif /* __OSDEV__ */
++
+ #ifdef __cplusplus
+ }
+ #endif
+diff -ruN old/newlib/libc/include/sys/signal.h new/newlib/libc/include/sys/signal.h
+--- old/newlib/libc/include/sys/signal.h	2023-12-31 20:00:18.000000000 +0300
++++ new/newlib/libc/include/sys/signal.h	2024-01-10 14:12:57.047081080 +0300
+@@ -113,6 +113,22 @@
+ #define sa_sigaction  _signal_handlers._sigaction
+ #endif
+ 
++#elif defined(__OSDEV__)
++
++typedef void (*_sig_func_ptr)(int);
++
++struct sigaction {
++  union {
++    _sig_func_ptr _sa_handler;
++    void (*_sa_sigaction)(int, struct siginfo *, void *);
++  } _u;
++	sigset_t sa_mask;
++	int sa_flags;
++};
++
++#define sa_handler    _u._sa_handler
++#define sa_sigaction  _u._sa_sigaction
++
+ #else /* defined(__rtems__) */
+ 
+ #define SA_NOCLDSTOP 1  /* only value supported now for sa_flags */
+diff -ruN old/newlib/libc/include/sys/stat.h new/newlib/libc/include/sys/stat.h
+--- old/newlib/libc/include/sys/stat.h	2023-12-31 20:00:18.000000000 +0300
++++ new/newlib/libc/include/sys/stat.h	2024-01-08 15:01:15.665836537 +0300
 @@ -142,7 +142,7 @@
  int	stat (const char *__restrict __path, struct stat *__restrict __sbuf );
  mode_t	umask (mode_t __mask );
@@ -57,9 +99,9 @@ diff -ruN orig/newlib/libc/include/sys/stat.h new/newlib/libc/include/sys/stat.h
  int	lstat (const char *__restrict __path, struct stat *__restrict __buf );
  int	mknod (const char *__path, mode_t __mode, dev_t __dev );
  #endif
-diff -ruN orig/newlib/libc/posix/posix_spawn.c new/newlib/libc/posix/posix_spawn.c
---- orig/newlib/libc/posix/posix_spawn.c	2023-12-31 20:00:18.000000000 +0300
-+++ new/newlib/libc/posix/posix_spawn.c	2024-01-04 16:12:02.024877156 +0300
+diff -ruN old/newlib/libc/posix/posix_spawn.c new/newlib/libc/posix/posix_spawn.c
+--- old/newlib/libc/posix/posix_spawn.c	2023-12-31 20:00:18.000000000 +0300
++++ new/newlib/libc/posix/posix_spawn.c	2024-01-08 15:01:15.665836537 +0300
 @@ -258,8 +258,8 @@
  		if (fchdir (fae->fae_dirfd) == -1)
  			return (errno);
@@ -70,9 +112,9 @@ diff -ruN orig/newlib/libc/posix/posix_spawn.c new/newlib/libc/posix/posix_spawn
  	return (0);
  }
  
-diff -ruN orig/newlib/libc/sys/Makefile.inc new/newlib/libc/sys/Makefile.inc
---- orig/newlib/libc/sys/Makefile.inc	2023-12-31 20:00:18.000000000 +0300
-+++ new/newlib/libc/sys/Makefile.inc	2024-01-04 15:58:45.924879126 +0300
+diff -ruN old/newlib/libc/sys/Makefile.inc new/newlib/libc/sys/Makefile.inc
+--- old/newlib/libc/sys/Makefile.inc	2023-12-31 20:00:18.000000000 +0300
++++ new/newlib/libc/sys/Makefile.inc	2024-01-08 15:01:15.669169870 +0300
 @@ -70,3 +70,6 @@
  if HAVE_LIBC_SYS_Z8KSIM_DIR
  include %D%/z8ksim/Makefile.inc

@@ -59,6 +59,7 @@ static int32_t (*syscalls[])(void) = {
   [__SYS_FCHMOD]     = sys_fchmod,
   [__SYS_SIGACTION]  = sys_sigaction,
   [__SYS_SIGRETURN]  = sys_sigreturn,
+  [__SYS_NANOSLEEP]  = sys_nanosleep,
 };
 
 int32_t
@@ -876,4 +877,18 @@ int32_t
 sys_sigreturn(void)
 {
   return process_signal_return();
+}
+
+int32_t
+sys_nanosleep(void)
+{
+  struct timespec *rqtp, *rmtp;
+  int r;
+
+  if ((r = sys_arg_buf(0, (void **) &rqtp, sizeof(*rqtp), VM_READ, 0)) < 0)
+    return r;
+  if ((r = sys_arg_buf(1, (void **) &rmtp, sizeof(*rmtp), VM_WRITE, 1)) < 0)
+    return r;
+
+  return process_nanosleep(rqtp, rmtp);
 }

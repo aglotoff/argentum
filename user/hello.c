@@ -1,42 +1,16 @@
-#include <fnmatch.h>
 #include <stdio.h>
-#include <signal.h>
-#include <sys/syscall.h>
-
-char *testp = NULL;
-char buf[34];
-
-void
-handler(int sig)
-{
-  printf("Signal %d\n", sig);
-}
-
-int
-test(int a, int b, int c, int d, int e, int f)
-{
-  return __syscall(__SYS_TEST, a, b, c, d, e, f);
-}
+#include <unistd.h>
+#include <time.h>
 
 int
 main(void)
 {
-  struct sigaction act;
-  (void) act;
+  do {
+    time_t t = time(NULL);
+    printf("%s", asctime(gmtime(&t)));
 
-  act.sa_handler = handler;
-  act.sa_flags = 0;
-  act.sa_mask = 0;
-
-  test(20, 50, 60, 700, 980, 1100);
-
-  sigaction(SIGSEGV, &act, NULL);
-
- 
-  *testp = 9;
-
-  printf("ok\n");
+    sleep(1);
+  } while (1);
 
   return 0;
 }
-

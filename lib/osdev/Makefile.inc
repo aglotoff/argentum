@@ -25,6 +25,7 @@ libc_a_SOURCES += \
   %D%/sys/utsname/uname.c \
   %D%/sys/wait/wait.c \
   %D%/sys/wait/waitpid.c \
+  %D%/time/nanosleep.c \
   %D%/unistd/_exit.c \
   %D%/unistd/access.c \
   %D%/unistd/chdir.c \
@@ -43,7 +44,6 @@ libc_a_SOURCES += \
   %D%/unistd/read.c \
   %D%/unistd/rmdir.c \
   %D%/unistd/sbrk.c \
-  %D%/unistd/sleep.c \
   %D%/unistd/sysconf.c \
   %D%/unistd/unlink.c \
   %D%/unistd/write.c \
