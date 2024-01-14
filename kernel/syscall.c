@@ -60,6 +60,9 @@ static int32_t (*syscalls[])(void) = {
   [__SYS_SIGACTION]  = sys_sigaction,
   [__SYS_SIGRETURN]  = sys_sigreturn,
   [__SYS_NANOSLEEP]  = sys_nanosleep,
+  [__SYS_RECVFROM]   = sys_recvfrom,
+  [__SYS_SENDTO]     = sys_sendto,
+  [__SYS_SETSOCKOPT] = sys_setsockopt,
 };
 
 int32_t
@@ -601,10 +604,8 @@ sys_read(void)
 
   if ((r = sys_arg_fd(0, NULL, &f)) < 0)
     return r;
-
   if ((r = sys_arg_int(2, (int *) &n)) < 0)
     return r;
-
   if ((r = sys_arg_buf(1, &buf, n, VM_READ, 0)) < 0)
     return r;
 
@@ -891,4 +892,91 @@ sys_nanosleep(void)
     return r;
 
   return process_nanosleep(rqtp, rmtp);
+}
+
+int32_t
+sys_recvfrom(void)
+{
+  struct File *f;
+  void *buffer;
+  size_t length;
+  int flags;
+  struct sockaddr *address;
+  socklen_t *address_len;
+  int r;
+
+  if ((r = sys_arg_fd(0, NULL, &f)) < 0)
+    return r;
+  if ((r = sys_arg_int(2, (int *) &length)) < 0)
+    return r;
+  if ((r = sys_arg_buf(1, &buffer, length, VM_WRITE, 0)) < 0)
+    return r;
+  if ((r = sys_arg_int(3, (int *) &flags)) < 0)
+    return r;
+  if ((r = sys_arg_buf(4, (void **) &address, sizeof(*address), VM_WRITE, 1)) < 0)
+    return r;
+  if ((r = sys_arg_buf(5, (void **) &address_len, sizeof(*address_len), VM_WRITE, 1)) < 0)
+    return r;
+
+  if (f->type != FD_SOCKET)
+    return -EBADF;
+
+  return net_recvfrom(f->socket, buffer, length, flags, address, address_len);
+}
+
+int32_t
+sys_sendto(void)
+{
+  struct File *f;
+  void *message;
+  size_t length;
+  int flags;
+  struct sockaddr *dest_addr;
+  socklen_t dest_len;
+  int r;
+
+  if ((r = sys_arg_fd(0, NULL, &f)) < 0)
+    return r;
+  if ((r = sys_arg_int(2, (int *) &length)) < 0)
+    return r;
+  if ((r = sys_arg_buf(1, &message, length, VM_READ, 0)) < 0)
+    return r;
+  if ((r = sys_arg_int(3, (int *) &flags)) < 0)
+    return r;
+  if ((r = sys_arg_buf(4, (void **) &dest_addr, sizeof(*dest_addr), VM_READ, 1)) < 0)
+    return r;
+  if ((r = sys_arg_int(5, (int *) &dest_len)) < 0)
+    return r;
+
+  if (f->type != FD_SOCKET)
+    return -EBADF;
+
+  return net_sendto(f->socket, message, length, flags, dest_addr, dest_len);
+}
+
+int32_t
+sys_setsockopt(void)
+{
+  struct File *f;
+  int level;
+  int option_name;
+  void *option_value;
+  socklen_t option_len;
+  int r;
+
+  if ((r = sys_arg_fd(0, NULL, &f)) < 0)
+    return r;
+  if ((r = sys_arg_int(1, (int *) &level)) < 0)
+    return r;
+  if ((r = sys_arg_int(2, (int *) &option_name)) < 0)
+    return r;
+  if ((r = sys_arg_int(4, (int *) &option_len)) < 0)
+    return r;
+  if ((r = sys_arg_buf(3, &option_value, option_len, VM_READ, 0)) < 0)
+    return r;
+
+  if (f->type != FD_SOCKET)
+    return -EBADF;
+
+  return net_setsockopt(f->socket, level, option_name, option_value, option_len);
 }

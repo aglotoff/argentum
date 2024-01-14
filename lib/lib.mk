@@ -25,6 +25,11 @@ LIB_SRCFILES := \
 	lib/osdev/sys/socket/bind.c \
 	lib/osdev/sys/socket/connect.c \
 	lib/osdev/sys/socket/listen.c \
+	lib/osdev/sys/socket/recv.c \
+	lib/osdev/sys/socket/recvfrom.c \
+	lib/osdev/sys/socket/send.c \
+	lib/osdev/sys/socket/sendto.c \
+	lib/osdev/sys/socket/setsockopt.c \
 	lib/osdev/sys/socket/socket.c \
 	lib/osdev/sys/stat/chmod.c \
 	lib/osdev/sys/stat/fchmod.c \

@@ -41,6 +41,9 @@
 #define __SYS_SIGACTION   35
 #define __SYS_SIGRETURN   36
 #define __SYS_NANOSLEEP   37
+#define __SYS_SENDTO      38
+#define __SYS_RECVFROM    39
+#define __SYS_SETSOCKOPT  40
 
 #ifndef __ASSEMBLER__
 

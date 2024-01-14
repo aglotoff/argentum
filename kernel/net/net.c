@@ -10,6 +10,8 @@
 #include <lwip/etharp.h>
 #include <lwip/sockets.h>
 #include <lwip/tcpip.h>
+#include <lwip/icmp.h>
+#include <lwip/inet_chksum.h>
 
 static struct netif eth_netif;
 
@@ -84,6 +86,8 @@ net_init_done(void *arg)
   netif_set_up(&eth_netif);
 
   dhcp_start(&eth_netif);
+
+  //sys_thread_new("ping_thread", ping_thread, NULL, DEFAULT_THREAD_STACKSIZE, DEFAULT_THREAD_PRIO);
 }
 
 void
@@ -175,21 +179,35 @@ net_close(int socket)
 }
 
 ssize_t
-net_recv(int socket, void *buf, size_t nbytes, int flags)
+net_recvfrom(int socket, void *buf, size_t nbytes, int flags,
+             struct sockaddr *address, socklen_t *address_len)
 {
   ssize_t r;
 
-  if ((r = lwip_recv(socket, buf, nbytes, flags)) < 0)
+  if ((r = lwip_recvfrom(socket, buf, nbytes, flags, address, address_len)) < 0)
     return -errno;
   return r;
 }
 
 ssize_t
-net_send(int socket, const void *buf, size_t nbytes, int flags)
+net_sendto(int socket, const void *buf, size_t nbytes, int flags,
+           const struct sockaddr *dest_addr, socklen_t dest_len)
 {
   ssize_t r;
 
-  if ((r = lwip_send(socket, buf, nbytes, flags)) < 0)
+  if ((r = lwip_sendto(socket, buf, nbytes, flags, dest_addr, dest_len)) < 0)
+    return -errno;
+  return r;
+}
+
+int
+net_setsockopt(int socket, int level, int option_name, const void *option_value,
+               socklen_t option_len)
+{
+  ssize_t r;
+
+  if ((r = lwip_setsockopt(socket, level, option_name, option_value,
+                           option_len)) < 0)
     return -errno;
   return r;
 }

@@ -25,4 +25,11 @@ struct sockaddr_in {
 #define INADDR_ANY          ((in_addr_t) 0x00000000UL)
 #define INADDR_BROADCAST    ((in_addr_t) 0xFFFFFFFFUL)
 
+#define IPPROTO_IP      0
+#define IPPROTO_ICMP    1
+#define IPPROTO_TCP     6
+#define IPPROTO_UDP     17
+#define IPPROTO_IPV6    41
+#define IPPROTO_RAW     255
+
 #endif

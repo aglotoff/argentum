@@ -96,11 +96,11 @@ sys_arch_sem_wait(sys_sem_t *sem, u32_t timeout)
   unsigned long start, end;
 
   start = ktime_get();
-  if (ksem_get(*sem, timeout * TICKS_PER_MS, 1) < 0)
+  if (ksem_get(*sem, timeout / TICKS_PER_MS, 1) < 0)
     return SYS_ARCH_TIMEOUT;
   end = ktime_get();
   
-  return MIN(timeout, (end - start) / TICKS_PER_MS);
+  return MIN(timeout, (end - start) * TICKS_PER_MS);
 }
 
 void

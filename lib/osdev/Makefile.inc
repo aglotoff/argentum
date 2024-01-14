@@ -11,6 +11,11 @@ libc_a_SOURCES += \
   %D%/sys/socket/bind.c \
   %D%/sys/socket/connect.c \
   %D%/sys/socket/listen.c \
+  %D%/sys/socket/recv.c \
+  %D%/sys/socket/recvfrom.c \
+  %D%/sys/socket/send.c \
+  %D%/sys/socket/sendto.c \
+  %D%/sys/socket/setsockopt.c \
   %D%/sys/socket/socket.c \
   %D%/sys/stat/chmod.c \
   %D%/sys/stat/fchmod.c \

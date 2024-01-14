@@ -44,5 +44,8 @@ int32_t sys_fchmod(void);
 int32_t sys_sigaction(void);
 int32_t sys_sigreturn(void);
 int32_t sys_nanosleep(void);
+int32_t sys_recvfrom(void);
+int32_t sys_sendto(void);
+int32_t sys_setsockopt(void);
 
 #endif  // !__KERNEL_INCLUDE_KERNEL_SYSCALL_H__

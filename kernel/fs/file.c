@@ -251,7 +251,7 @@ file_read(struct File *f, void *buf, size_t nbytes)
     return r;
 
   case FD_SOCKET:
-    return net_recv(f->socket, buf, nbytes, 0);
+    return net_recvfrom(f->socket, buf, nbytes, 0, NULL, NULL);
 
   case FD_PIPE:
     // TODO: read from a pipe
@@ -316,7 +316,7 @@ file_write(struct File *f, const void *buf, size_t nbytes)
     return r;
   
   case FD_SOCKET:
-    return net_send(f->socket, buf, nbytes, 0);
+    return net_sendto(f->socket, buf, nbytes, 0, NULL, 0);
 
   case FD_PIPE:
     // TODO: write to a pipe

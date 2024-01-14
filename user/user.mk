@@ -16,6 +16,7 @@ USER_SRCFILES += \
 	user/bin/uname.c \
 	user/bin/rmdir.c \
 	user/bin/link.c \
+	user/bin/ping.c \
 	user/bin/pwd.c \
 	user/bin/rm.c \
 	user/bin/server.c \
