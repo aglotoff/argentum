@@ -22,6 +22,12 @@ _start:
   cmp     r2, #0
   strne   r2, [r3]
 
+  stmdb   sp!,{r0-r2}
+
+  bl      __libc_init_array
+
+  ldmia   sp!,{r0-r2}
+
   // Call the user main routine.
   bl      main
 

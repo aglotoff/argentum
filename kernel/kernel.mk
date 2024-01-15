@@ -6,7 +6,8 @@ LWIPDIR := kernel/net/lwip
 include kernel/net/lwip/Filelists.mk
 
 KERNEL_CFLAGS  := $(CFLAGS) $(INIT_CFLAGS) -Ikernel/include -D__OSDEV_KERNEL__
-KERNEL_CFLAGS += -ffreestanding -nostdlib -fno-builtin -gdwarf-3
+KERNEL_CFLAGS  += -O1 -mapcs-frame -fno-omit-frame-pointer -gdwarf-3
+KERNEL_CFLAGS  += -ffreestanding -nostdlib -fno-builtin 
 KERNEL_CFLAGS  += -I$(LWIPDIR)/include -I$(LWIPDIR)/osdev -Wno-type-limits
 KERNEL_LDFLAGS := $(LDFLAGS) -T kernel/kernel.ld -nostdlib
 

@@ -8,18 +8,24 @@ PATCH_FILE=gzip-1.12.patch
 if [ ! -d ${BUILD_DIR} ]; then
   if [ ! -f ${TARBALL_NAME} ]; then
     wget ${DOWNLOAD_URL}
-  fi
+  fi || exit 1
 
   tar xf ${TARBALL_NAME}
   pushd ${BUILD_DIR} &&
   patch -p1 -i "../${PATCH_FILE}" &&
   popd
-fi
+fi || exit 1
 
-export CFLAGS="-mcpu=cortex-a9 -mhard-float"
+export CFLAGS="-O2 -mcpu=cortex-a9 -mhard-float"
+
+if [ ! -f ${BUILD_DIR}/Makefile ]; then
+  pushd ${BUILD_DIR} &&
+  ./configure --host=arm-none-osdev \
+              --prefix=/usr &&
+  popd
+fi || exit 1
 
 pushd ${BUILD_DIR} &&
-./configure --host=arm-none-osdev --prefix=/usr &&
 make &&
-make DESTDIR="../../../sysroot" install &&
-popd
+make DESTDIR=${HOME}/osdev/sysroot install &&
+popd || exit 1

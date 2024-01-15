@@ -24,6 +24,7 @@ QEMU := qemu-system-arm
 
 AR      := $(TOOLPREFIX)ar
 CC      := $(TOOLPREFIX)gcc
+CXX     := $(TOOLPREFIX)g++
 GDB     := $(TOOLPREFIX)gdb
 LD      := $(TOOLPREFIX)ld
 NM      := $(TOOLPREFIX)nm
@@ -31,11 +32,11 @@ OBJCOPY := $(TOOLPREFIX)objcopy
 OBJDUMP := $(TOOLPREFIX)objdump
 
 # Common compiler flags
-#CFLAGS := -ffreestanding -nostdlib -fno-builtin
-CFLAGS += -Wall -Wextra -Werror -Wno-address-of-packed-member -Wno-maybe-uninitialized
-CFLAGS += --std=gnu11
-CFLAGS += -O1 -mapcs-frame -fno-omit-frame-pointer
-CFLAGS += -mcpu=cortex-a9 -mhard-float -mfpu=vfp
+BASE_FLAGS := -Wall -Wextra -Werror
+BASE_FLAGS += -Wno-address-of-packed-member -Wno-maybe-uninitialized
+BASE_FLAGS += -mcpu=cortex-a9 -mhard-float -mfpu=vfp
+CFLAGS     := $(BASE_FLAGS) --std=gnu11
+CXXFLAGS   := $(BASE_FLAGS)
 
 # Common linker flags
 LDFLAGS := -z max-page-size=0x1000

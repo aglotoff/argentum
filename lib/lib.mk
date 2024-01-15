@@ -1,5 +1,4 @@
-LIB_CFLAGS := -mcpu=cortex-a9 -mhard-float -mfpu=vfp -nostdlib
-LIB_CFLAGS += -O1
+LIB_CFLAGS := -O2 -mcpu=cortex-a9 -mhard-float -mfpu=vfp -nostdlib
 
 NEWLIB := lib/newlib-4.4.0.20231231
 NEWLIB_TARBALL := tarballs/newlib-4.4.0.20231231.tar.gz
@@ -49,6 +48,7 @@ LIB_SRCFILES := \
 	lib/osdev/time/nanosleep.c \
 	lib/osdev/unistd/_exit.c \
 	lib/osdev/unistd/access.c \
+	lib/osdev/unistd/alarm.c \
 	lib/osdev/unistd/chdir.c \
 	lib/osdev/unistd/close.c \
 	lib/osdev/unistd/dup.c \

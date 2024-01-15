@@ -34,6 +34,7 @@ libc_a_SOURCES += \
   %D%/time/nanosleep.c \
   %D%/unistd/_exit.c \
   %D%/unistd/access.c \
+  %D%/unistd/alarm.c \
   %D%/unistd/chdir.c \
   %D%/unistd/close.c \
   %D%/unistd/dup.c \
