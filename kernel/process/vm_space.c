@@ -16,7 +16,7 @@ static struct KMemCache *vmcache;
 static struct KMemCache *vm_areacache;
 
 int
-vm_range_alloc(struct VMSpace *vm, void *va, size_t n, int prot)
+vm_range_alloc(struct VMSpace *vm, uintptr_t va, size_t n, int prot)
 {
   struct Page *page;
   uint8_t *a, *start, *end;
@@ -30,13 +30,13 @@ vm_range_alloc(struct VMSpace *vm, void *va, size_t n, int prot)
 
   for (a = start; a < end; a += PAGE_SIZE) {
     if ((page = page_alloc_one(PAGE_ALLOC_ZERO)) == NULL) {
-      vm_range_free(vm, start, a - start);
+      vm_range_free(vm, (uintptr_t) start, a - start);
       return -ENOMEM;
     }
 
     if ((r = (vm_page_insert(vm->pgdir, page, (uintptr_t) a, prot)) != 0)) {
       page_free_one(page);
-      vm_range_free(vm, start, a - start);
+      vm_range_free(vm, (uintptr_t) start, a - start);
       return r;
     }
   }
@@ -45,7 +45,7 @@ vm_range_alloc(struct VMSpace *vm, void *va, size_t n, int prot)
 }
 
 void
-vm_range_free(struct VMSpace *vm, void *va, size_t n)
+vm_range_free(struct VMSpace *vm, uintptr_t va, size_t n)
 {
   uint8_t *a, *end;
 
@@ -60,7 +60,7 @@ vm_range_free(struct VMSpace *vm, void *va, size_t n)
 }
 
 int
-vm_range_clone(struct VMSpace *src, struct VMSpace *dst, void *va, size_t n)
+vm_range_clone(struct VMSpace *src, struct VMSpace *dst, uintptr_t va, size_t n)
 {
   struct Page *src_page, *dst_page;
   uint8_t *a, *end;
@@ -286,7 +286,9 @@ vm_space_create(void)
     return NULL;
   }
 
-  list_init(&vm->areas);
+  // list_init(&vm->areas);
+  vm->heap  = 0;
+  vm->stack = 0;
 
   return vm;
 }
@@ -294,13 +296,16 @@ vm_space_create(void)
 void
 vm_space_destroy(struct VMSpace *vm)
 {
-  struct VMSpaceMapEntry *area;
+  // struct VMSpaceMapEntry *area;
+
+  vm_range_free(vm, 0, ROUND_UP(vm->heap, PAGE_SIZE));
+  vm_range_free(vm, vm->stack, USTACK_SIZE);
   
-  while (!list_empty(&vm->areas)) {
-    area = LIST_CONTAINER(vm->areas.next, struct VMSpaceMapEntry, link);
-    vm_range_free(vm, (void *) area->start, area->length);
-    list_remove(&area->link);
-  }
+  // while (!list_empty(&vm->areas)) {
+  //   area = LIST_CONTAINER(vm->areas.next, struct VMSpaceMapEntry, link);
+  //   vm_range_free(vm, area->start, area->length);
+  //   list_remove(&area->link);
+  // }
 
   vm_destroy(vm->pgdir);
 
@@ -311,31 +316,43 @@ struct VMSpace   *
 vm_space_clone(struct VMSpace *vm)
 {
   struct VMSpace *new_vm;
-  struct ListLink *l;
-  struct VMSpaceMapEntry *area, *new_area;
+  // struct ListLink *l;
+  // struct VMSpaceMapEntry *area, *new_area;
 
   if ((new_vm = vm_space_create()) == NULL)
     return NULL;
 
-  LIST_FOREACH(&vm->areas, l) {
-    area = LIST_CONTAINER(l, struct VMSpaceMapEntry, link);
-
-    new_area = (struct VMSpaceMapEntry *) kmem_alloc(vm_areacache);
-    if (new_area == NULL) {
-      vm_space_destroy(new_vm);
-      return NULL;
-    }
-
-    new_area->start  = area->start;
-    new_area->length = area->length;
-    new_area->flags  = area->flags;
-    list_add_front(&new_vm->areas, &new_area->link);
-
-    if (vm_range_clone(vm, new_vm, (void *) area->start, area->length) < 0) {
-      vm_space_destroy(new_vm);
-      return NULL;
-    }
+  if (vm_range_clone(vm, new_vm, 0, ROUND_UP(vm->heap, PAGE_SIZE)) < 0) {
+    vm_space_destroy(new_vm);
+    return NULL;
   }
+  new_vm->heap = vm->heap;
+
+  if (vm_range_clone(vm, new_vm, vm->stack, USTACK_SIZE) < 0) {
+    vm_space_destroy(new_vm);
+    return NULL;
+  }
+  new_vm->stack = vm->stack;
+
+  // LIST_FOREACH(&vm->areas, l) {
+  //   area = LIST_CONTAINER(l, struct VMSpaceMapEntry, link);
+
+  //   new_area = (struct VMSpaceMapEntry *) kmem_alloc(vm_areacache);
+  //   if (new_area == NULL) {
+  //     vm_space_destroy(new_vm);
+  //     return NULL;
+  //   }
+
+  //   new_area->start  = area->start;
+  //   new_area->length = area->length;
+  //   new_area->flags  = area->flags;
+  //   list_add_front(&new_vm->areas, &new_area->link);
+
+  //   if (vm_range_clone(vm, new_vm, area->start, area->length) < 0) {
+  //     vm_space_destroy(new_vm);
+  //     return NULL;
+  //   }
+  // }
 
   return new_vm;
 }
@@ -356,6 +373,9 @@ vm_handle_fault(struct VMSpace *vm, uintptr_t va)
   if (va < PAGE_SIZE || va >= VIRT_KERNEL_BASE)
     return -EFAULT;
 
+  if (va >= vm->heap && va < vm->stack)
+    return -EFAULT;
+
   // cprintf("%p\n",)
 
   fault_page = vm_page_lookup(vm->pgdir, va, &flags);
@@ -370,83 +390,83 @@ vm_handle_fault(struct VMSpace *vm, uintptr_t va)
   return -EFAULT;
 }
 
-void *
-vm_space_alloc(struct VMSpace *vm, void *addr, size_t n, int flags)
-{
-  uintptr_t va;
-  struct ListLink *l;
-  struct VMSpaceMapEntry *area, *prev, *next;
-  int r;
+// intptr_t
+// vm_space_alloc(struct VMSpace *vm, uintptr_t addr, size_t n, int flags)
+// {
+//   uintptr_t va;
+//   struct ListLink *l;
+//   struct VMSpaceMapEntry *area, *prev, *next;
+//   int r;
 
-  va = (addr == NULL) ? PAGE_SIZE : ROUND_UP((uintptr_t) addr, PAGE_SIZE);
-  n  = ROUND_UP(n, PAGE_SIZE);
+//   va = addr ? ROUND_UP((uintptr_t) addr, PAGE_SIZE) : PAGE_SIZE;
+//   n  = ROUND_UP(n, PAGE_SIZE);
 
-  if ((va >= VIRT_KERNEL_BASE) || ((va + n) > VIRT_KERNEL_BASE) || ((va + n) <= va))
-    return (void *) -EINVAL;
+//   if ((va >= VIRT_KERNEL_BASE) || ((va + n) > VIRT_KERNEL_BASE) || ((va + n) <= va))
+//     return -EINVAL;
 
-  // Find Vm area to insert before
-  for (l = vm->areas.next; l != &vm->areas; l = l->next) {
-    area = LIST_CONTAINER(l, struct VMSpaceMapEntry, link);
+//   // Find Vm area to insert before
+//   for (l = vm->areas.next; l != &vm->areas; l = l->next) {
+//     area = LIST_CONTAINER(l, struct VMSpaceMapEntry, link);
 
-    // Can insert before
-    if ((va + n) <= area->start)
-      break;
+//     // Can insert before
+//     if ((va + n) <= area->start)
+//       break;
 
-    if (va < (area->start + area->length))
-      va = area->start + area->length;
-  }
+//     if (va < (area->start + area->length))
+//       va = area->start + area->length;
+//   }
 
-  if ((va + n) > VIRT_KERNEL_BASE)
-    return (void *) -ENOMEM;
+//   if ((va + n) > VIRT_KERNEL_BASE)
+//     return -ENOMEM;
 
-  if ((r = vm_range_alloc(vm, (void *) va, n, flags)) < 0) {
-    vm_range_free(vm, (void *) va, n);
-    return (void *) r;
-  }
+//   if ((r = vm_range_alloc(vm, va, n, flags)) < 0) {
+//     vm_range_free(vm, va, n);
+//     return r;
+//   }
 
-  // Can merge with previous?
-  prev = NULL;
-  if (l->prev != &vm->areas) {
-    prev = LIST_CONTAINER(l->prev, struct VMSpaceMapEntry, link);
-    if (((prev->start + prev->length) != va) || (prev->flags != flags))
-      prev = NULL;
-  }
+//   // Can merge with previous?
+//   prev = NULL;
+//   if (l->prev != &vm->areas) {
+//     prev = LIST_CONTAINER(l->prev, struct VMSpaceMapEntry, link);
+//     if (((prev->start + prev->length) != va) || (prev->flags != flags))
+//       prev = NULL;
+//   }
 
-  // Can merge with next?
-  next = NULL;
-  if (l != &vm->areas) {
-    next = LIST_CONTAINER(l, struct VMSpaceMapEntry, link);
-    if ((next->start != (va + n)) || (next->flags != flags))
-      next = NULL;
-  }
+//   // Can merge with next?
+//   next = NULL;
+//   if (l != &vm->areas) {
+//     next = LIST_CONTAINER(l, struct VMSpaceMapEntry, link);
+//     if ((next->start != (va + n)) || (next->flags != flags))
+//       next = NULL;
+//   }
 
-  if ((prev != NULL) && (next != NULL)) {
-    prev->length += next->length + n;
+//   if ((prev != NULL) && (next != NULL)) {
+//     prev->length += next->length + n;
 
-    list_remove(&next->link);
-    kmem_free(vm_areacache, next);
-  } else if (prev != NULL) {
-    prev->length += n;
-  } else if (next != NULL) {
-    next->start = va;
-  } else {
-    area = (struct VMSpaceMapEntry *) kmem_alloc(vm_areacache);
-    if (area == NULL) {
-      vm_range_free(vm, (void *) va, n);
-      return (void *) -ENOMEM;
-    }
+//     list_remove(&next->link);
+//     kmem_free(vm_areacache, next);
+//   } else if (prev != NULL) {
+//     prev->length += n;
+//   } else if (next != NULL) {
+//     next->start = va;
+//   } else {
+//     area = (struct VMSpaceMapEntry *) kmem_alloc(vm_areacache);
+//     if (area == NULL) {
+//       vm_range_free(vm, va, n);
+//       return -ENOMEM;
+//     }
 
-    area->start  = va;
-    area->length = n;
-    area->flags  = flags;
+//     area->start  = va;
+//     area->length = n;
+//     area->flags  = flags;
 
-    list_add_back(l, &area->link);
-  }
+//     list_add_back(l, &area->link);
+//   }
 
-  // cprintf("[pages_free %d]\n", pages_free);
+//   // cprintf("[pages_free %d]\n", pages_free);
 
-  return (void *) va;
-}
+//   return va;
+// }
 
 // void
 // vm_print_areas(struct VMSpace *vm)

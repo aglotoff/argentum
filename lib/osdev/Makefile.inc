@@ -6,6 +6,7 @@ libc_a_SOURCES += \
   %D%/signal/sigaction.c \
   %D%/signal/sigprocmask.c \
   %D%/signal/sigstub.S \
+  %D%/stdlib/realpath.c \
   %D%/sys/resource/getrlimit.c \
   %D%/sys/socket/accept.c \
   %D%/sys/socket/bind.c \

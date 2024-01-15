@@ -28,7 +28,6 @@ struct Process;
 struct Process {
   /** The process' address space */
   struct VMSpace       *vm;
-  void                 *brk;
 
   /** Main process thread */
   struct Task          *thread;

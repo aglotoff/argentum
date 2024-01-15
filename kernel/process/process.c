@@ -146,7 +146,6 @@ process_load_binary(struct Process *proc, const void *binary)
   Elf32_Ehdr *elf;
   Elf32_Phdr *ph, *eph;
   int r;
-  void *a;
 
   elf = (Elf32_Ehdr *) binary;
   if (memcmp(elf->ident, "\x7f""ELF", 4) != 0)
@@ -161,24 +160,22 @@ process_load_binary(struct Process *proc, const void *binary)
 
     if (ph->filesz > ph->memsz)
       return -EINVAL;
-    
-    a = vm_space_alloc(proc->vm, (void *) ph->vaddr, ph->memsz,
-                VM_READ | VM_WRITE | VM_EXEC | VM_USER);
-    if ((int) a < 0)
-      return (int) a;
 
-    if ((void *) ph->vaddr != a)
-      return -EINVAL;
+    if ((r = vm_range_alloc(proc->vm, ph->vaddr, ph->memsz,
+                            VM_READ | VM_WRITE | VM_EXEC | VM_USER)) < 0)
+      return r;
 
     if ((r = vm_space_copy_out(proc->vm, (void *) ph->vaddr,
                          (uint8_t *) elf + ph->offset, ph->filesz)) < 0)
       return r;
-    proc->brk = (char *) a + ROUND_UP(ph->memsz, PAGE_SIZE);
+
+    proc->vm->heap = ROUND_UP(ph->vaddr + ph->memsz, PAGE_SIZE);
   }
 
-  if ((r = (int) vm_space_alloc(proc->vm, (void *) (VIRT_USTACK_TOP - USTACK_SIZE), USTACK_SIZE,
-                           VM_READ | VM_WRITE | VM_USER) < 0))
+  if ((r = vm_range_alloc(proc->vm, (VIRT_USTACK_TOP - USTACK_SIZE),
+                          USTACK_SIZE, VM_READ | VM_WRITE | VM_USER)) < 0)
     return r;
+  proc->vm->stack = VIRT_USTACK_TOP - USTACK_SIZE;
 
   process_setup_main(proc, elf->entry, 0, 0, 0, VIRT_USTACK_TOP);
 
@@ -260,7 +257,7 @@ process_destroy(int status)
   struct Process *child, *current = process_current();
   int fd, has_zombies;
 
-  // cprintf("[k] process %d dies with %d\n", current->thread->pid, status);
+  cprintf("[k] process %d dies with %d\n", current->pid, status >> 8);
 
   // Remove the pid hash link
   // TODO: place this code somewhere else?
@@ -324,7 +321,6 @@ process_copy(void)
     process_free(child);
     return -ENOMEM;
   }
-  child->brk = current->brk;
 
   child->parent         = current;
   *child->thread->tf    = *current->thread->tf;
@@ -463,26 +459,51 @@ void *
 process_grow(ptrdiff_t increment)
 {
   struct Process *current = process_current();
-  void *r;
-
-  if (increment < 0) {
-    // cprintf("sbrk(%ld) -> %p\n", increment, (void *) -EINVAL);
-    return (void *) -EINVAL;
-  }
+  uintptr_t prev_heap = current->vm->heap;
+  uintptr_t prev_limit = ROUND_UP(prev_heap, PAGE_SIZE);
+  intptr_t r;
 
   if (increment == 0) {
-    // cprintf("sbrk(%ld) -> %p\n", increment, current->brk);
-    return current->brk;
+    r = prev_heap;
+  } else if (increment > 0) {
+    uintptr_t next_heap = prev_heap + increment;
+
+    if ((next_heap < prev_heap) || (next_heap > current->vm->stack)) {
+      r = -ENOMEM;
+    } else {
+      uintptr_t next_limit = ROUND_UP(next_heap, PAGE_SIZE);
+
+      if (next_limit != prev_limit) {
+        if ((r = vm_range_alloc(current->vm, prev_limit, next_limit - prev_limit, VM_WRITE | VM_READ | VM_USER)) == 0) {
+          current->vm->heap = next_heap;
+          r = prev_heap;
+        }
+      } else {
+        current->vm->heap = next_heap;
+        r = prev_heap;
+      }
+    }
+  } else if (increment < 0) {
+    uintptr_t next_heap = prev_heap + increment;
+
+    if ((next_heap > prev_heap) || (next_heap < PAGE_SIZE)) {
+      r = -ENOMEM;
+    } else {
+      uintptr_t next_limit = ROUND_UP(next_heap, PAGE_SIZE);
+
+      if (next_limit != prev_limit) {
+        vm_range_free(current->vm, next_limit, prev_limit - next_limit);
+        current->vm->heap = next_heap;
+        r = prev_heap;
+      } else {
+        current->vm->heap = next_heap;
+        r = prev_heap;
+      }
+    }
   }
 
-  r = vm_space_alloc(current->vm, current->brk, increment, VM_READ | VM_WRITE | VM_USER);
-  // cprintf("sbrk(%ld) -> %p\n", increment, r);
-  
-  if ((ptrdiff_t) r < 0)
-    return r;
-
-  current->brk = (char *) r + ROUND_UP(increment, PAGE_SIZE);
-  return r;
+ // cprintf("sbrk(%ld) -> %p, new = %p\n", increment, (void *) r, current->vm->heap);
+  return (void *) r;
 }
 
 struct Signal *

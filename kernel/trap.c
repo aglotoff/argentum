@@ -9,6 +9,7 @@
 #include <kernel/trap.h>
 #include <kernel/types.h>
 #include <kernel/irq.h>
+#include <kernel/monitor.h>
 
 static void trap_handle_abort(struct TrapFrame *);
 
@@ -89,7 +90,10 @@ trap_handle_abort(struct TrapFrame *tf)
 
   // If unsuccessfull, kill the process
   print_trapframe(tf);
-  // cprintf("user fault va %p status %#x\n", address, status);
+  cprintf("user fault va %p status %#x\n", address, status);
+
+  cpu_irq_disable();
+  monitor(tf);
 
   process_signal_send(process, process_signal_create(SIGSEGV));
 }

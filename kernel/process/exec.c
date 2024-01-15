@@ -54,7 +54,6 @@ copy_args(struct VMSpace *vm, char *const args[], uintptr_t limit, char **sp)
 int
 process_exec(const char *path, char *const argv[], char *const envp[])
 {
-  struct Page *vm_page;
   struct Process *proc;
   struct Inode *ip;
   Elf32_Ehdr elf;
@@ -64,7 +63,7 @@ process_exec(const char *path, char *const argv[], char *const envp[])
   uintptr_t heap, ustack;
   char *usp, *uargv, *uenvp;
   int r, argc;
-  void *a;
+  intptr_t a;
 
   if ((r = fs_name_lookup(path, 0, &ip)) < 0)
     return r;
@@ -80,11 +79,6 @@ process_exec(const char *path, char *const argv[], char *const envp[])
 
   if (!fs_permission(ip, FS_PERM_EXEC, 0)) {
     r = -EPERM;
-    goto out1;
-  }
-
-  if ((vm_page = page_alloc_block(1, PAGE_ALLOC_ZERO)) == NULL) {
-    r = -ENOMEM;
     goto out1;
   }
 
@@ -120,27 +114,21 @@ process_exec(const char *path, char *const argv[], char *const envp[])
       goto out2;
     }
 
-    a = vm_space_alloc(vm, (void *) ph.vaddr, ph.memsz,
-                VM_READ | VM_WRITE | VM_EXEC | VM_USER);
-    if ((int) a < 0) {
+    a = vm_range_alloc(vm, ph.vaddr, ph.memsz, VM_READ | VM_WRITE | VM_EXEC | VM_USER);
+    if (a < 0) {
       r = (int) a;
       goto out2;
     }
 
-    if ((void *) ph.vaddr != a) {
-      r = -EINVAL;
-      goto out2;
-    }
+    heap = MAX(heap, ph.vaddr + ph.memsz);
+    vm->heap = heap;
 
     if ((r = vm_space_load_inode(vm, (void *) ph.vaddr, ip, ph.filesz, ph.offset)) < 0)
       goto out2;
-
-    heap = MAX(heap, ph.vaddr + ph.memsz);
   }
 
   // Allocate user stack.
-  if ((r = (int) vm_space_alloc(vm, (void *) ustack, USTACK_SIZE,
-                           VM_READ | VM_WRITE | VM_USER)) < 0)
+  if ((r = (int) vm_range_alloc(vm, ustack, USTACK_SIZE, VM_READ | VM_WRITE | VM_USER)) < 0)
     return r;
 
   // Copy args and environment.
@@ -160,11 +148,13 @@ process_exec(const char *path, char *const argv[], char *const envp[])
 
   proc = process_current();
 
+  vm->heap  = heap;
+  vm->stack = ustack;
+
   vm_load(vm->pgdir);
   vm_space_destroy(proc->vm);
 
-  proc->vm        = vm;
-  proc->brk       = (void *) heap;
+  proc->vm = vm;
 
   // Stack must be aligned to an 8-byte boundary in order for variadic args
   // to properly work!

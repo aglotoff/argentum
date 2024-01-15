@@ -1,4 +1,5 @@
-LIB_CFLAGS := -O2 -mcpu=cortex-a9 -mhard-float -mfpu=vfp -nostdlib
+LIB_CFLAGS := -mcpu=cortex-a9 -mhard-float -mfpu=vfp -nostdlib
+LIB_CFLAGS += -O1
 
 NEWLIB := lib/newlib-4.4.0.20231231
 NEWLIB_TARBALL := tarballs/newlib-4.4.0.20231231.tar.gz
@@ -20,6 +21,7 @@ LIB_SRCFILES := \
 	lib/osdev/signal/sigaction.c \
 	lib/osdev/signal/sigprocmask.c \
 	lib/osdev/signal/sigstub.S \
+	lib/osdev/stdlib/realpath.c \
 	lib/osdev/sys/resource/getrlimit.c \
 	lib/osdev/sys/socket/accept.c \
 	lib/osdev/sys/socket/bind.c \
@@ -102,7 +104,9 @@ $(OBJ)/lib/Makefile: $(NEWLIB)/newlib/Makefile.in
 		--target=arm-none-osdev \
 		--prefix=/usr \
 		--with-newlib \
-		--disable-multilib
+		--disable-multilib \
+		--disable-newlib-nano-formatted-io \
+		--enable-newlib-io-c99-formats
 
 $(SYSROOT)/usr/lib/libc.a: $(OBJ)/lib/Makefile $(LIB_SRCFILES)
 	$(V)cp -ar lib/osdev $(NEWLIB)/newlib/libc/sys/
