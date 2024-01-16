@@ -1,6 +1,6 @@
 diff -ruN old/config.sub new/config.sub
 --- old/config.sub	2023-12-31 20:00:18.000000000 +0300
-+++ new/config.sub	2024-01-08 15:01:15.665836537 +0300
++++ new/config.sub	2024-01-16 08:47:19.385170352 +0300
 @@ -1725,7 +1725,7 @@
  	     | skyos* | haiku* | rdos* | toppers* | drops* | es* \
  	     | onefs* | tirtos* | phoenix* | fuchsia* | redox* | bme* \
@@ -12,19 +12,20 @@ diff -ruN old/config.sub new/config.sub
  	sco3.2v2 | sco3.2v[4-9]* | sco5v6*)
 diff -ruN old/newlib/configure.host new/newlib/configure.host
 --- old/newlib/configure.host	2023-12-31 20:00:18.000000000 +0300
-+++ new/newlib/configure.host	2024-01-12 13:59:23.163394964 +0300
-@@ -439,6 +439,10 @@
++++ new/newlib/configure.host	2024-01-16 08:49:31.998509464 +0300
+@@ -439,6 +439,11 @@
  	posix_dir=posix
  	unix_dir=unix
  	;;
 +	*-*-osdev*)
 +	sys_dir=osdev
 +	posix_dir=posix
++	unix_dir=unix
 +	;;
    *-*-tirtos*)
  	sys_dir=tirtos
  	have_crt0="no"
-@@ -615,6 +619,9 @@
+@@ -615,6 +620,9 @@
          # turn off unsupported items in posix directory 
  	newlib_cflags="${newlib_cflags} -D_NO_GETLOGIN -D_NO_GETPWENT -D_NO_GETUT -D_NO_GETPASS -D_NO_SIGSET -D_NO_WORDEXP -D_NO_POPEN -D_NO_POSIX_SPAWN"
  	;;
@@ -36,7 +37,7 @@ diff -ruN old/newlib/configure.host new/newlib/configure.host
    *-wrs-vxworks*)
 diff -ruN old/newlib/libc/acinclude.m4 new/newlib/libc/acinclude.m4
 --- old/newlib/libc/acinclude.m4	2023-12-31 20:00:18.000000000 +0300
-+++ new/newlib/libc/acinclude.m4	2024-01-08 15:01:15.665836537 +0300
++++ new/newlib/libc/acinclude.m4	2024-01-16 08:47:19.385170352 +0300
 @@ -25,6 +25,7 @@
    w65
    xtensa
@@ -47,7 +48,7 @@ diff -ruN old/newlib/libc/acinclude.m4 new/newlib/libc/acinclude.m4
  AC_TYPE_LONG_DOUBLE
 diff -ruN old/newlib/libc/include/sys/features.h new/newlib/libc/include/sys/features.h
 --- old/newlib/libc/include/sys/features.h	2023-12-31 20:00:18.000000000 +0300
-+++ new/newlib/libc/include/sys/features.h	2024-01-11 18:53:17.757061345 +0300
++++ new/newlib/libc/include/sys/features.h	2024-01-16 08:47:19.385170352 +0300
 @@ -545,6 +545,12 @@
  
  #endif /* __CYGWIN__ */
@@ -63,7 +64,7 @@ diff -ruN old/newlib/libc/include/sys/features.h new/newlib/libc/include/sys/fea
  #endif
 diff -ruN old/newlib/libc/include/sys/signal.h new/newlib/libc/include/sys/signal.h
 --- old/newlib/libc/include/sys/signal.h	2023-12-31 20:00:18.000000000 +0300
-+++ new/newlib/libc/include/sys/signal.h	2024-01-10 14:12:57.047081080 +0300
++++ new/newlib/libc/include/sys/signal.h	2024-01-16 08:47:19.385170352 +0300
 @@ -113,6 +113,22 @@
  #define sa_sigaction  _signal_handlers._sigaction
  #endif
@@ -89,7 +90,7 @@ diff -ruN old/newlib/libc/include/sys/signal.h new/newlib/libc/include/sys/signa
  #define SA_NOCLDSTOP 1  /* only value supported now for sa_flags */
 diff -ruN old/newlib/libc/include/sys/stat.h new/newlib/libc/include/sys/stat.h
 --- old/newlib/libc/include/sys/stat.h	2023-12-31 20:00:18.000000000 +0300
-+++ new/newlib/libc/include/sys/stat.h	2024-01-08 15:01:15.665836537 +0300
++++ new/newlib/libc/include/sys/stat.h	2024-01-16 08:47:19.385170352 +0300
 @@ -142,7 +142,7 @@
  int	stat (const char *__restrict __path, struct stat *__restrict __sbuf );
  mode_t	umask (mode_t __mask );
@@ -101,7 +102,7 @@ diff -ruN old/newlib/libc/include/sys/stat.h new/newlib/libc/include/sys/stat.h
  #endif
 diff -ruN old/newlib/libc/posix/posix_spawn.c new/newlib/libc/posix/posix_spawn.c
 --- old/newlib/libc/posix/posix_spawn.c	2023-12-31 20:00:18.000000000 +0300
-+++ new/newlib/libc/posix/posix_spawn.c	2024-01-08 15:01:15.665836537 +0300
++++ new/newlib/libc/posix/posix_spawn.c	2024-01-16 08:47:19.385170352 +0300
 @@ -258,8 +258,8 @@
  		if (fchdir (fae->fae_dirfd) == -1)
  			return (errno);
@@ -114,7 +115,7 @@ diff -ruN old/newlib/libc/posix/posix_spawn.c new/newlib/libc/posix/posix_spawn.
  
 diff -ruN old/newlib/libc/sys/Makefile.inc new/newlib/libc/sys/Makefile.inc
 --- old/newlib/libc/sys/Makefile.inc	2023-12-31 20:00:18.000000000 +0300
-+++ new/newlib/libc/sys/Makefile.inc	2024-01-08 15:01:15.669169870 +0300
++++ new/newlib/libc/sys/Makefile.inc	2024-01-16 08:47:19.385170352 +0300
 @@ -70,3 +70,6 @@
  if HAVE_LIBC_SYS_Z8KSIM_DIR
  include %D%/z8ksim/Makefile.inc

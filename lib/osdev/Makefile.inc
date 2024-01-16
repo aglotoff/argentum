@@ -42,7 +42,6 @@ libc_a_SOURCES += \
   %D%/unistd/execve.c \
   %D%/unistd/fork.c \
   %D%/unistd/fsync.c \
-  %D%/unistd/getcwd.c \
   %D%/unistd/getdents.c \
   %D%/unistd/getpid.c \
   %D%/unistd/link.c \

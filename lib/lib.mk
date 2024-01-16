@@ -13,7 +13,9 @@ LIB_SRCFILES := \
 	lib/osdev/include/sys/resource.h \
 	lib/osdev/include/sys/socket.h \
 	lib/osdev/include/sys/syscall.h \
+	lib/osdev/include/sys/termios.h \
 	lib/osdev/include/sys/utime.h \
+	lib/osdev/include/sys/utmp.h \
 	lib/osdev/include/sys/utsname.h \
 	lib/osdev/include/limits.h \
 	lib/osdev/signal/kill.c \
@@ -56,7 +58,6 @@ LIB_SRCFILES := \
 	lib/osdev/unistd/execve.c \
 	lib/osdev/unistd/fork.c \
 	lib/osdev/unistd/fsync.c \
-	lib/osdev/unistd/getcwd.c \
 	lib/osdev/unistd/getdents.c \
 	lib/osdev/unistd/getpid.c \
 	lib/osdev/unistd/link.c \
