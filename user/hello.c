@@ -3,38 +3,29 @@
 #include <stdlib.h>
 #include <limits.h>
 #include <inttypes.h>
+#include <sys/wait.h>
 
-int
-bug(void)
+int n = 10;
+
+int main()
 {
-  int *p = (int *) 80000000;
-  *p = 678;
-  return 9;
-}
-
-int bog(void)
-{
-  return bug();
-}
-
-int big(void)
-{
-  int j = 0;
-  for (int i = 10; i < 20; i++) {
-    j += bog();
-  }
-  return bog();
-}
-
-int
-main(void)
-{
- 
-  uint64_t parsed_size;
-
-  int scan = sscanf ("930      fdfd", "%" SCNu64, &parsed_size);
-
-  printf("%d\n", scan);
-
-  return 0;
+    
+    pid_t pid = vfork(); //creating the child process
+    if (pid == 0)          //if this is a chile process
+    {
+        write(1, "Child process started\n", 23);
+        n = 121;
+    }
+    else//parent process execution
+    {
+      waitpid(pid, NULL, 0);
+      write(1, "Now i am coming back to parent process\n", 40);
+      
+    }
+    //fprintf(pid ? stderr : stdout, "value of n: %d \n",n); //sample printing to check "n" value
+    
+    //write(1, "Rett\n", 5);
+    exit(n);
+    
+    return 0;
 }

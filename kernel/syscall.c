@@ -63,6 +63,12 @@ static int32_t (*syscalls[])(void) = {
   [__SYS_RECVFROM]   = sys_recvfrom,
   [__SYS_SENDTO]     = sys_sendto,
   [__SYS_SETSOCKOPT] = sys_setsockopt,
+  [__SYS_GETUID]     = sys_getuid,
+  [__SYS_GETEUID]    = sys_geteuid,
+  [__SYS_GETGID]     = sys_getgid,
+  [__SYS_GETEGID]    = sys_getegid,
+  [__SYS_GETPGID]    = sys_getpgid,
+  [__SYS_SETPGID]    = sys_setpgid,
 };
 
 int32_t
@@ -78,7 +84,7 @@ sys_dispatch(void)
     return r;
   }
 
-  cprintf("Unknown system call %d\n", num);
+ // cprintf("Unknown system call %d\n", num);
   return -ENOSYS;
 }
 
@@ -297,7 +303,12 @@ sys_arg_args(int n, char ***store)
 int32_t
 sys_fork(void)
 {
-  return process_copy();
+  int r, shared;
+
+  if ((r = sys_arg_int(0, &shared)) < 0)
+    return r;
+
+  return process_copy(shared);
 }
 
 int32_t
@@ -327,7 +338,7 @@ sys_wait(void)
   if ((r = sys_arg_int(0, &pid)) < 0)
     return r;
 
-  if ((r = sys_arg_buf(1, (void **) &stat_loc, sizeof(int), VM_WRITE, 0)) < 0)
+  if ((r = sys_arg_buf(1, (void **) &stat_loc, sizeof(int), VM_WRITE, 1)) < 0)
     return r;
 
   return process_wait(pid, stat_loc, 0);
@@ -350,6 +361,30 @@ int32_t
 sys_getpid(void)
 {
   return process_current()->pid;
+}
+
+int32_t
+sys_getuid(void)
+{
+  return process_current()->ruid;
+}
+
+int32_t
+sys_geteuid(void)
+{
+  return process_current()->euid;
+}
+
+int32_t
+sys_getgid(void)
+{
+  return process_current()->rgid;
+}
+
+int32_t
+sys_getegid(void)
+{
+  return process_current()->egid;
 }
 
 int32_t
@@ -979,4 +1014,30 @@ sys_setsockopt(void)
     return -EBADF;
 
   return net_setsockopt(f->socket, level, option_name, option_value, option_len);
+}
+
+int32_t
+sys_getpgid(void)
+{
+  pid_t pid;
+  int r;
+  
+  if ((r = sys_arg_int(0, &pid)) < 0)
+    return r;
+
+  return process_get_gid(pid);
+}
+
+int32_t
+sys_setpgid(void)
+{
+  pid_t pid, pgid;
+  int r;
+  
+  if ((r = sys_arg_int(0, &pid)) < 0)
+    return r;
+  if ((r = sys_arg_int(1, &pgid)) < 0)
+    return r;
+
+  return process_set_gid(pid, pgid);
 }

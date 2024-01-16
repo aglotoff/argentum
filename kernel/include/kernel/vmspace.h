@@ -33,7 +33,7 @@ struct VMSpace {
 void              vm_space_init(void);
 struct VMSpace   *vm_space_create(void);
 void              vm_space_destroy(struct VMSpace *);
-struct VMSpace   *vm_space_clone(struct VMSpace *);
+struct VMSpace   *vm_space_clone(struct VMSpace *, int);
 int               vm_space_copy_out(struct VMSpace *, void *, const void *, 
                                     size_t);
 int               vm_space_copy_in(struct VMSpace *, void *, const void *,

@@ -3,11 +3,14 @@ libc_a_SOURCES += \
   %D%/fcntl/fcntl.c \
   %D%/fcntl/open.c \
   %D%/signal/kill.c \
+  %D%/signal/killpg.c \
   %D%/signal/sigaction.c \
   %D%/signal/sigprocmask.c \
   %D%/signal/sigstub.S \
+  %D%/signal/sigsuspend.c \
   %D%/stdlib/realpath.c \
   %D%/sys/resource/getrlimit.c \
+  %D%/sys/resource/setrlimit.c \
   %D%/sys/socket/accept.c \
   %D%/sys/socket/bind.c \
   %D%/sys/socket/connect.c \
@@ -30,6 +33,7 @@ libc_a_SOURCES += \
   %D%/sys/times/times.c \
   %D%/sys/utsname/uname.c \
   %D%/sys/wait/wait.c \
+  %D%/sys/wait/wait3.c \
   %D%/sys/wait/waitpid.c \
   %D%/time/nanosleep.c \
   %D%/unistd/_exit.c \
@@ -43,15 +47,27 @@ libc_a_SOURCES += \
   %D%/unistd/fork.c \
   %D%/unistd/fsync.c \
   %D%/unistd/getdents.c \
+  %D%/unistd/getegid.c \
+  %D%/unistd/geteuid.c \
+  %D%/unistd/getgid.c \
+  %D%/unistd/getgroups.c \
+  %D%/unistd/getpgid.c \
+  %D%/unistd/getpgrp.c \
   %D%/unistd/getpid.c \
+  %D%/unistd/getppid.c \
+  %D%/unistd/getuid.c \
   %D%/unistd/link.c \
   %D%/unistd/lseek.c \
   %D%/unistd/pipe.c \
   %D%/unistd/read.c \
   %D%/unistd/rmdir.c \
   %D%/unistd/sbrk.c \
+  %D%/unistd/setpgid.c \
   %D%/unistd/sysconf.c \
+  %D%/unistd/tcgetpgrp.c \
+  %D%/unistd/tcsetpgrp.c \
   %D%/unistd/unlink.c \
+  %D%/unistd/vfork.c \
   %D%/unistd/write.c \
   %D%/utime/utime.c \
   %D%/progname.c

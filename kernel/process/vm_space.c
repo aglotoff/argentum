@@ -60,7 +60,7 @@ vm_range_free(struct VMSpace *vm, uintptr_t va, size_t n)
 }
 
 int
-vm_range_clone(struct VMSpace *src, struct VMSpace *dst, uintptr_t va, size_t n)
+vm_range_clone(struct VMSpace *src, struct VMSpace *dst, uintptr_t va, size_t n, int share)
 {
   struct Page *src_page, *dst_page;
   uint8_t *a, *end;
@@ -75,7 +75,10 @@ vm_range_clone(struct VMSpace *src, struct VMSpace *dst, uintptr_t va, size_t n)
     src_page = vm_page_lookup(src->pgdir, (uintptr_t) a, &perm);
 
     if (src_page != NULL) {
-      if ((perm & VM_WRITE) || (perm & VM_COW)) {
+      if (share) {
+        if ((r = vm_page_insert(dst->pgdir, src_page, (uintptr_t) a, perm)) < 0)
+          return r;
+      } else if ((perm & VM_WRITE) || (perm & VM_COW)) {
         perm &= ~VM_WRITE;
         perm |= VM_COW;
 
@@ -313,7 +316,7 @@ vm_space_destroy(struct VMSpace *vm)
 }
 
 struct VMSpace   *
-vm_space_clone(struct VMSpace *vm)
+vm_space_clone(struct VMSpace *vm, int share)
 {
   struct VMSpace *new_vm;
   // struct ListLink *l;
@@ -322,13 +325,13 @@ vm_space_clone(struct VMSpace *vm)
   if ((new_vm = vm_space_create()) == NULL)
     return NULL;
 
-  if (vm_range_clone(vm, new_vm, 0, ROUND_UP(vm->heap, PAGE_SIZE)) < 0) {
+  if (vm_range_clone(vm, new_vm, 0, ROUND_UP(vm->heap, PAGE_SIZE), share) < 0) {
     vm_space_destroy(new_vm);
     return NULL;
   }
   new_vm->heap = vm->heap;
 
-  if (vm_range_clone(vm, new_vm, vm->stack, USTACK_SIZE) < 0) {
+  if (vm_range_clone(vm, new_vm, vm->stack, USTACK_SIZE, 0) < 0) {
     vm_space_destroy(new_vm);
     return NULL;
   }

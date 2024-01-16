@@ -199,6 +199,7 @@ process_create(const void *binary, struct Process **pstore)
   if ((r = process_load_binary(proc, binary)) < 0)
     goto fail3;
 
+  proc->pgid = 0;
   proc->ruid = proc->euid = 0;
   proc->rgid = proc->egid = 0;
   proc->cmask = 0;
@@ -257,7 +258,8 @@ process_destroy(int status)
   struct Process *child, *current = process_current();
   int fd, has_zombies;
 
-  // cprintf("[k] process %d dies with %d\n", current->pid, status >> 8);
+  if(status)
+    cprintf("[k] process %d dies with %d\n", current->pid, status >> 8);
 
   // Remove the pid hash link
   // TODO: place this code somewhere else?
@@ -309,7 +311,7 @@ process_destroy(int status)
 }
 
 pid_t
-process_copy(void)
+process_copy(int share_vm)
 {
   struct Process *child, *current = process_current();
   int i;
@@ -317,7 +319,7 @@ process_copy(void)
   if ((child = process_alloc()) == NULL)
     return -ENOMEM;
 
-  if ((child->vm = vm_space_clone(current->vm)) == NULL) {
+  if ((child->vm = vm_space_clone(current->vm, share_vm)) == NULL) {
     process_free(child);
     return -ENOMEM;
   }
@@ -332,6 +334,7 @@ process_copy(void)
   for (i = 0; i < NSIG; i++)
     child->signal_handlers[i] = current->signal_handlers[i];
 
+  child->pgid  = current->pgid;
   child->ruid  = current->ruid;
   child->euid  = current->euid;
   child->rgid  = current->rgid;
@@ -372,6 +375,8 @@ process_wait(pid_t pid, int *stat_loc, int options)
   struct Process *current = process_current();
   struct ListLink *l;
   int r, has_match;
+
+  //cprintf("[k] process %d waits for %d\n", current->pid, pid);
 
   if (options & ~(WNOHANG | WUNTRACED))
     return -EINVAL;
@@ -770,6 +775,59 @@ process_nanosleep(const struct timespec *rqtp, struct timespec *rmtp)
   }
 
   ksem_destroy(&sem);
+
+  return r;
+}
+
+pid_t
+process_get_gid(pid_t pid)
+{
+  struct Process *process, *current = process_current();
+  int r;
+
+  if (pid == 0)
+    return current->pgid;
+
+  if (pid < 0)
+    return -EINVAL;
+
+  spin_lock(&process_lock);
+
+  if ((process = pid_lookup(pid)) == NULL) {
+    r = -ESRCH;
+  } else {
+    // TODO: restrict access?
+    r = process->pgid;
+  }
+
+  spin_unlock(&process_lock);
+
+  return r;
+}
+
+int
+process_set_gid(pid_t pid, pid_t pgid)
+{
+  struct Process *process, *current = process_current();
+  int r;
+
+  if (pgid == 0)
+    pgid = current->pgid;
+
+  if (pgid < 0)
+    return -EINVAL;
+
+  spin_lock(&process_lock);
+
+  if ((process = pid_lookup(pid)) == NULL) {
+    r = -ESRCH;
+  } else {
+    // TODO: restrict access?
+    process->pgid = pgid;
+    r = 0;
+  }
+
+  spin_unlock(&process_lock);
 
   return r;
 }

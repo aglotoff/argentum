@@ -44,6 +44,16 @@
 #define __SYS_SENDTO      38
 #define __SYS_RECVFROM    39
 #define __SYS_SETSOCKOPT  40
+#define __SYS_GETUID      41
+#define __SYS_GETEUID     42
+#define __SYS_GETGID      43
+#define __SYS_GETEGID     44
+#define __SYS_GETPGID     45
+#define __SYS_SETUID      46
+#define __SYS_SETEUID     47
+#define __SYS_SETGID      48
+#define __SYS_SETEGID     49
+#define __SYS_SETPGID     50
 
 #ifndef __ASSEMBLER__
 

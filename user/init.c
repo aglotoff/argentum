@@ -48,8 +48,16 @@ main(void)
 
     setenv("PATH", "/bin:/usr/bin", 1);
 
-    execve("/bin/sh", argv, envp);
+    for (;;) {
+      if (fork() == 0) {
+        execve("/usr/bin/dash", argv, envp);
+        execve("/bin/sh", argv, envp);
+      } else {
+        wait(NULL);
+      }
+    }
   }
+
 
   for (;;)
     wait(&status);

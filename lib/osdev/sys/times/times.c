@@ -11,3 +11,9 @@ _times(struct tms *buffer)
 
   return -1;
 }
+
+clock_t
+times(struct tms *buffer)
+{
+  return _times(buffer);
+}

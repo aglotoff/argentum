@@ -10,6 +10,7 @@ LIB_SRCFILES := \
 	lib/osdev/include/arpa/inet.h \
 	lib/osdev/include/netinet/in.h \
 	lib/osdev/include/sys/dirent.h \
+	lib/osdev/include/sys/ioctl.h \
 	lib/osdev/include/sys/resource.h \
 	lib/osdev/include/sys/socket.h \
 	lib/osdev/include/sys/syscall.h \
@@ -19,11 +20,14 @@ LIB_SRCFILES := \
 	lib/osdev/include/sys/utsname.h \
 	lib/osdev/include/limits.h \
 	lib/osdev/signal/kill.c \
+	lib/osdev/signal/killpg.c \
 	lib/osdev/signal/sigaction.c \
 	lib/osdev/signal/sigprocmask.c \
 	lib/osdev/signal/sigstub.S \
+	lib/osdev/signal/sigsuspend.c \
 	lib/osdev/stdlib/realpath.c \
 	lib/osdev/sys/resource/getrlimit.c \
+	lib/osdev/sys/resource/setrlimit.c \
 	lib/osdev/sys/socket/accept.c \
 	lib/osdev/sys/socket/bind.c \
 	lib/osdev/sys/socket/connect.c \
@@ -59,15 +63,27 @@ LIB_SRCFILES := \
 	lib/osdev/unistd/fork.c \
 	lib/osdev/unistd/fsync.c \
 	lib/osdev/unistd/getdents.c \
+	lib/osdev/unistd/getegid.c \
+	lib/osdev/unistd/geteuid.c \
+	lib/osdev/unistd/getgid.c \
+	lib/osdev/unistd/getgroups.c \
+	lib/osdev/unistd/getpgid.c \
+	lib/osdev/unistd/getpgrp.c \
 	lib/osdev/unistd/getpid.c \
+	lib/osdev/unistd/getppid.c \
+	lib/osdev/unistd/getuid.c \
 	lib/osdev/unistd/link.c \
 	lib/osdev/unistd/lseek.c \
 	lib/osdev/unistd/pipe.c \
 	lib/osdev/unistd/read.c \
 	lib/osdev/unistd/rmdir.c \
 	lib/osdev/unistd/sbrk.c \
+	lib/osdev/unistd/setpgid.c \
 	lib/osdev/unistd/sysconf.c \
+	lib/osdev/unistd/tcgetpgrp.c \
+	lib/osdev/unistd/tcsetpgrp.c \
 	lib/osdev/unistd/unlink.c \
+	lib/osdev/unistd/vfork.c \
 	lib/osdev/unistd/write.c \
 	lib/osdev/utime/utime.c \
 	lib/osdev/crt0.S \

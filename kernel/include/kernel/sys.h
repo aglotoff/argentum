@@ -47,5 +47,11 @@ int32_t sys_nanosleep(void);
 int32_t sys_recvfrom(void);
 int32_t sys_sendto(void);
 int32_t sys_setsockopt(void);
+int32_t sys_getuid(void);
+int32_t sys_geteuid(void);
+int32_t sys_getgid(void);
+int32_t sys_getegid(void);
+int32_t sys_getpgid(void);
+int32_t sys_setpgid(void);
 
 #endif  // !__KERNEL_INCLUDE_KERNEL_SYSCALL_H__
