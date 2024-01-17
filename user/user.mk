@@ -1,12 +1,12 @@
 USER_FLAGS    := -O2 -Wno-return-local-addr -Wno-char-subscripts -D__OSDEV__
 USER_CFLAGS   := $(CFLAGS) $(USER_FLAGS)
-USER_CXXFLAGS := $(CXXFLAGS) $(USER_FLAGS)
+USER_CFLAGS := $(CFLAGS) $(USER_FLAGS)
 
 USER_SRCFILES :=
 
 USER_SRCFILES += \
  	user/hello.c \
-	user/hello2.cc
+	#user/hello2.cc
 
 USER_SRCFILES += \
 	user/bin/sh.c \
@@ -34,10 +34,10 @@ $(OBJ)/user/%.o: user/%.c $(OBJ)/.vars.USER_CFLAGS
 	@mkdir -p $(@D)
 	$(V)$(CC) $(USER_CFLAGS) -c -o $@ $<
 
-$(OBJ)/user/%.o: user/%.cc $(OBJ)/.vars.USER_CXXFLAGS
-	@echo "+ CXX [USER] $<"
+$(OBJ)/user/%.o: user/%.cc $(OBJ)/.vars.USER_CFLAGS
+	@echo "+ CC [USER] $<"
 	@mkdir -p $(@D)
-	$(V)$(CXX) $(USER_CXXFLAGS) -c -o $@ $<
+	$(V)$(CC) $(USER_CFLAGS) -c -o $@ $<
 
 $(OBJ)/user/%.o: user/%.S $(OBJ)/.vars.USER_CFLAGS
 	@echo "+ AS [USER] $<"
@@ -47,7 +47,7 @@ $(OBJ)/user/%.o: user/%.S $(OBJ)/.vars.USER_CFLAGS
 $(OBJ)/user/%: $(OBJ)/user/%.o $(OBJ)/.vars.USER_LDFLAGS $(SYSROOT)/usr/lib/libc.a
 	@echo "+ LD [USER] $@"
 	@mkdir -p $(@D)
-	$(V)$(CXX) $(USER_CXXFLAGS) -o $@ $<
+	$(V)$(CC) $(USER_CFLAGS) -o $@ $<
 	$(V)$(OBJDUMP) -S $@ > $@.asm
 	$(V)$(NM) -n $@ > $@.sym
 

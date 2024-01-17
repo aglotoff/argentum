@@ -34,7 +34,7 @@ OBJDUMP := $(TOOLPREFIX)objdump
 # Common compiler flags
 BASE_FLAGS := -Wall -Wextra -Werror
 BASE_FLAGS += -Wno-address-of-packed-member -Wno-maybe-uninitialized
-BASE_FLAGS += -mcpu=cortex-a9 -mhard-float -mfpu=vfp
+# BASE_FLAGS += -mcpu=cortex-a9 -mhard-float -mfpu=vfp
 CFLAGS     := $(BASE_FLAGS) --std=gnu11
 CXXFLAGS   := $(BASE_FLAGS)
 
@@ -59,9 +59,7 @@ all: all-lib all-kernel all-user
 include lib/lib.mk
 include kernel/kernel.mk
 include user/user.mk
-
-port-%:
-	make -C ports/$* install
+include ports/ports.mk
 
 clean-fs:
 	rm -rf $(OBJ)/fs.img
@@ -72,7 +70,7 @@ $(OBJ)/fs.img: $(SYSROOT) $(USER_APPS)
 	@echo "+ GEN $@"
 	$(V)mkdir -p $@.d/{,dev,etc,home/{,root,guest},tmp}
 	$(V)cp -aR $(SYSROOT)/* $@.d/
-	$(V)mke2fs -E root_owner=0:0 -F -b 1K -d $@.d -t ext2 $@ 128M
+	$(V)mke2fs -E root_owner=0:0 -F -b 1K -d $@.d -t ext2 $@ 256M
 
 ifndef CPUS
   CPUS := 2

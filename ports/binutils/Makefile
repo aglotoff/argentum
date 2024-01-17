@@ -4,17 +4,15 @@ BUILD_DIR    := build
 TARBALL_NAME := $(PACKAGE_NAME).tar.xz
 PATCH_FILE   := $(PACKAGE_NAME).patch
 
-CFLAGS := -O2 -mcpu=cortex-a9 -mhard-float
-
 SYSROOT := $(HOME)/osdev/sysroot
 
 all: config
-	make -C $(BUILD_DIR) CFLAGS="$(CFLAGS)"
+	make -C $(BUILD_DIR)
 
 config: $(BUILD_DIR)/Makefile
 
 install: all
-	make -C $(BUILD_DIR) CFLAGS="$(CFLAGS)" DESTDIR=$(SYSROOT) install
+	make -C $(BUILD_DIR) DESTDIR=$(SYSROOT) install
 	ln -f $(SYSROOT)/usr/bin/dash $(SYSROOT)/bin/sh
 
 $(TARBALL_NAME):
@@ -27,7 +25,7 @@ $(SRC_DIR): $(TARBALL_NAME)
 $(BUILD_DIR)/Makefile: $(SRC_DIR)
 	mkdir -p $(@D)
 	cd $(@D) && \
-	  CFLAGS="$(CFLAGS)" ../$(SRC_DIR)/configure --target=arm-none-osdev \
+	 ../$(SRC_DIR)/configure --target=arm-none-osdev \
 	                                             --host=arm-none-osdev \
 	                                             --prefix=/usr \
 																							 --disable-nls \

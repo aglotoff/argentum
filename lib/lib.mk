@@ -1,4 +1,4 @@
-LIB_CFLAGS := -O2 -mcpu=cortex-a9 -mhard-float -mfpu=vfp -nostdlib
+LIB_CFLAGS := -nostdlib
 
 NEWLIB := lib/newlib-4.4.0.20231231
 NEWLIB_TARBALL := tarballs/newlib-4.4.0.20231231.tar.gz

@@ -2,30 +2,26 @@ PACKAGE_NAME := dash-0.5.12
 SRC_DIR      := $(PACKAGE_NAME)
 TARBALL_NAME := $(PACKAGE_NAME).tar.gz
 
-CFLAGS := -O2 -mcpu=cortex-a9 -mhard-float
-
 SYSROOT := $(HOME)/osdev/sysroot
 
 all: config
-	make -C $(SRC_DIR) CFLAGS="$(CFLAGS)"
+	make -C $(SRC_DIR) 
 
 config: $(SRC_DIR)/Makefile
 
 install: all
-	make -C $(SRC_DIR) CFLAGS="$(CFLAGS)" DESTDIR=$(SYSROOT) install
+	make -C $(SRC_DIR) DESTDIR=$(SYSROOT) install
 	ln -f $(SYSROOT)/usr/bin/dash $(SYSROOT)/bin/sh
 
 $(TARBALL_NAME):
-	wget "https://ftp.gnu.org/gnu/binutils/${TARBALL_NAME}"
+	wget "http://gondor.apana.org.au/~herbert/dash/files/${TARBALL_NAME}"
 
 $(SRC_DIR): $(TARBALL_NAME)
 	tar xf $<
-	cd $@ && patch -p1 -i ../$(PATCH_FILE)
 
 $(SRC_DIR)/Makefile: | $(SRC_DIR)
-	cd $(@D) && \
-	  CFLAGS="$(CFLAGS)" ./configure --host=arm-none-osdev \
-	                                 --prefix=/usr
+	cd $(@D) && ./configure --host=arm-none-osdev \
+	                        --prefix=/usr
 
 clean:
 	rm -rf $(SRC_DIR)

@@ -36,10 +36,13 @@ if [ ! -f ${PACKAGE_NAME}.configured ]; then
                              --with-sysroot=${HOME}/osdev/sysroot \
                              --without-headers \
                              --enable-languages=c,c++ \
+                             --with-cpu=cortex-a9 \
+                             --with-float=hard \
+                             --with-fpu=vfp \
+                             --with-newlib \
                              --disable-nls \
                              --disable-werror \
-                             --with-multilib-list=rmprofile \
-                             --with-newlib \
+                             --disable-multilib \
                              --disable-decimal-float \
                              --disable-libffi \
                              --disable-libgomp \
@@ -68,4 +71,20 @@ if [ ! -f ${PACKAGE_NAME}.installed ]; then
   sudo make install-gcc install-target-libgcc &&
   popd &&
   touch ${PACKAGE_NAME}.installed
+fi
+
+# Build the package
+if [ ! -f ${PACKAGE_NAME}.libstdc++-v3.built ]; then
+  pushd ${BUILD_DIR} &&
+  make all-target-libstdc++-v3 &&
+  popd &&
+  touch ${PACKAGE_NAME}.libstdc++-v3.built
+fi || exit 1
+
+# Install the package
+if [ ! -f ${PACKAGE_NAME}.libstdc++-v3.installed ]; then
+  pushd ${BUILD_DIR} &&
+  sudo make install-target-libstdc++-v3 &&
+  popd &&
+  touch ${PACKAGE_NAME}.libstdc++-v3.installed
 fi
