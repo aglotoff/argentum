@@ -60,6 +60,14 @@ include lib/lib.mk
 include kernel/kernel.mk
 include user/user.mk
 
+port-%:
+	make -C ports/$* install
+
+clean-fs:
+	rm -rf $(OBJ)/fs.img
+
+fs: clean-fs $(OBJ)/fs.img
+
 $(OBJ)/fs.img: $(SYSROOT) $(USER_APPS)
 	@echo "+ GEN $@"
 	$(V)mkdir -p $@.d/{,dev,etc,home/{,root,guest},tmp}
@@ -91,6 +99,6 @@ clean:
 .PRECIOUS: $(OBJ)/user/%.o
 
 .PHONY: all all-kernel all-lib all-user \
-	clean clean-kernel clean-user clean-lib \
+	clean clean-fs clean-kernel clean-user clean-lib \
 	install-headers install-lib \
-	qemu qemu-gdb
+	fs qemu qemu-gdb

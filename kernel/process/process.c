@@ -259,7 +259,7 @@ process_destroy(int status)
   int fd, has_zombies;
 
   if(status)
-    cprintf("[k] process %d dies with %d\n", current->pid, status >> 8);
+    cprintf("[k] process #%d destroyed with code 0x%x\n", current->pid, status);
 
   // Remove the pid hash link
   // TODO: place this code somewhere else?

@@ -4,6 +4,6 @@
 pid_t
 tcgetpgrp(int fildes)
 {
-  fprintf(stderr, "TODO: tcgetpgrp(%d)\n", fildes);
+  // fprintf(stderr, "TODO: tcgetpgrp(%d)\n", fildes);
   return 0;
 }
