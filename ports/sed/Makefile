@@ -1,4 +1,4 @@
-PACKAGE_NAME := gzip-1.12
+PACKAGE_NAME := sed-4.9
 SRC_DIR      := $(PACKAGE_NAME)
 TARBALL_NAME := $(PACKAGE_NAME).tar.xz
 PATCH_FILE   := $(PACKAGE_NAME).patch
@@ -17,7 +17,7 @@ install: all
 	ln -f $(SYSROOT)/usr/bin/dash $(SYSROOT)/bin/sh
 
 $(TARBALL_NAME):
-	wget "https://ftp.gnu.org/gnu/binutils/${TARBALL_NAME}"
+	wget "https://ftp.gnu.org/gnu/sed/${TARBALL_NAME}"
 
 $(SRC_DIR): $(TARBALL_NAME)
 	tar xf $<
