@@ -15,6 +15,7 @@
 #include <kernel/fs/fs.h>
 #include <kernel/vmspace.h>
 #include <kernel/net.h>
+#include <kernel/pipe.h>
 #include <kernel/process.h>
 #include <kernel/sys.h>
 #include <kernel/types.h>
@@ -69,6 +70,8 @@ static int32_t (*syscalls[])(void) = {
   [__SYS_GETEGID]    = sys_getegid,
   [__SYS_GETPGID]    = sys_getpgid,
   [__SYS_SETPGID]    = sys_setpgid,
+  [__SYS_ACCESS]     = sys_access,
+  [__SYS_PIPE]       = sys_pipe,
 };
 
 int32_t
@@ -1040,4 +1043,46 @@ sys_setpgid(void)
     return r;
 
   return process_set_gid(pid, pgid);
+}
+
+int32_t
+sys_access(void)
+{
+  const char *path;
+  int r, amode;
+
+  if ((r = sys_arg_str(0, &path, VM_READ)) < 0)
+    return r;
+  if ((r = sys_arg_int(1, &amode)) < 0)
+    return r;
+  
+  return fs_access(path, amode);
+}
+
+int32_t
+sys_pipe(void)
+{
+  int r;
+  int *fildes;
+  struct File *read, *write;
+
+  if ((r = sys_arg_buf(0, (void **) &fildes, sizeof(int)*2, VM_WRITE, 0)) < 0)
+    return r;
+
+  if ((r = pipe_alloc(&read, &write)) < 0)
+    return r;
+
+  if ((fildes[0] = r = fd_alloc(read, 0)) < 0) {
+    file_close(read);
+    file_close(write);
+    return r;
+  }
+
+  if ((fildes[1] = r = fd_alloc(write, 0)) < 0) {
+    file_close(read);
+    file_close(write);
+    return r;
+  }
+
+  return 0;
 }

@@ -76,8 +76,27 @@ vm_range_clone(struct VMSpace *src, struct VMSpace *dst, uintptr_t va, size_t n,
 
     if (src_page != NULL) {
       if (share) {
-        if ((r = vm_page_insert(dst->pgdir, src_page, (uintptr_t) a, perm)) < 0)
-          return r;
+        if (perm & VM_COW) {
+          if ((dst_page = page_alloc_one(0)) == NULL)
+            return -ENOMEM;
+
+          perm |= VM_WRITE;
+          perm &= ~VM_COW;
+
+          memmove(page2kva(dst_page), page2kva(src_page), PAGE_SIZE);
+
+          if ((r = vm_page_insert(src->pgdir, dst_page, (uintptr_t) va, perm)) < 0) {
+            page_free_one(dst_page);
+            return r;
+          }
+
+          if ((r = vm_page_insert(dst->pgdir, dst_page, (uintptr_t) va, perm)) < 0) {
+            return r;
+          }
+        } else {
+          if ((r = vm_page_insert(dst->pgdir, src_page, (uintptr_t) a, perm)) < 0)
+            return r;
+        }
       } else if ((perm & VM_WRITE) || (perm & VM_COW)) {
         perm &= ~VM_WRITE;
         perm |= VM_COW;

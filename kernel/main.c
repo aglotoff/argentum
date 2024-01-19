@@ -18,6 +18,7 @@
 #include <kernel/mm/mmu.h>
 #include <kernel/mm/page.h>
 #include <kernel/vmspace.h>
+#include <kernel/pipe.h>
 #include <kernel/process.h>
 #include <kernel/sd.h>
 #include <kernel/net.h>
@@ -29,11 +30,11 @@ int bsp_started;
 
 // For uname()
 struct utsname utsname = {
-    .sysname = "OSDev",
-    .nodename = "localhost",
-    .release = "0.1.0",
-    .version = __DATE__ " " __TIME__,
-    .machine = "arm",
+  .sysname = "OSDev",
+  .nodename = "localhost",
+  .release = "0.1.0",
+  .version = __DATE__ " " __TIME__,
+  .machine = "arm",
 };
 
 /**
@@ -66,6 +67,7 @@ void main(void)
   file_init();    // File table
   sched_init();   // Scheduler
   net_init();     // Network
+  pipe_init();
   process_init(); // Process table
 
   // Unblock other CPUs

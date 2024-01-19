@@ -13,7 +13,7 @@ config: $(BUILD_DIR)/Makefile
 
 install: all
 	make -C $(BUILD_DIR) DESTDIR=$(SYSROOT) install
-	ln -f $(SYSROOT)/usr/bin/dash $(SYSROOT)/bin/sh
+	rm -v $(SYSROOT)/usr/lib/lib{bfd,ctf,ctf-nobfd,opcodes,sframe}.la
 
 $(TARBALL_NAME):
 	wget "https://ftp.gnu.org/gnu/binutils/${TARBALL_NAME}"
@@ -24,12 +24,12 @@ $(SRC_DIR): $(TARBALL_NAME)
 
 $(BUILD_DIR)/Makefile: $(SRC_DIR)
 	mkdir -p $(@D)
-	cd $(@D) && \
-	 ../$(SRC_DIR)/configure --target=arm-none-osdev \
-	                                             --host=arm-none-osdev \
-	                                             --prefix=/usr \
-																							 --disable-nls \
-                                               --disable-werror
+	cd $(@D) && ../$(SRC_DIR)/configure --prefix=/usr \
+	                                    --build=$(shell $(SRC_DIR)/config.guess) \
+																			--host=arm-none-osdev \
+																		  --disable-nls \
+                                      --disable-werror \
+																		  --disable-shared \
 
 clean:
 	rm -rf $(SRC_DIR) $(BUILD_DIR)

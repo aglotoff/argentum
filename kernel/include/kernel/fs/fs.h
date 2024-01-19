@@ -82,5 +82,6 @@ int           fs_rmdir(const char *);
 int           fs_permission(struct Inode *, mode_t, int);
 int           fs_link(char *, char *);
 int           fs_chdir(const char *);
+int           fs_access(const char *, int);
 
 #endif  // !__KERNEL_INCLUDE_KERNEL_FS_FS_H__

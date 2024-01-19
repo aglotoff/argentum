@@ -62,6 +62,7 @@ KERNEL_SRCFILES :=	\
 	kernel/irq.c \
 	kernel/kdebug.c \
 	kernel/monitor.c \
+	kernel/pipe.c \
 	kernel/ptimer.c \
 	kernel/syscall.c \
 	kernel/trapentry.S \

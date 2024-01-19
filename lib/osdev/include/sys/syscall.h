@@ -54,6 +54,8 @@
 #define __SYS_SETGID      48
 #define __SYS_SETEGID     49
 #define __SYS_SETPGID     50
+#define __SYS_ACCESS      51
+#define __SYS_PIPE        52
 
 #ifndef __ASSEMBLER__
 

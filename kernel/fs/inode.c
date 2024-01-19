@@ -4,6 +4,7 @@
 #include <fcntl.h>
 #include <limits.h>
 #include <string.h>
+#include <unistd.h>
 
 #include <kernel/cprintf.h>
 #include <kernel/drivers/console.h>
@@ -691,4 +692,37 @@ fs_permission(struct Inode *inode, mode_t mode, int real)
     mode <<= 3;
 
   return (inode->mode & mode) == mode;
+}
+
+
+int
+fs_access(const char *path, int amode)
+{
+  struct Inode *ip;
+  int r;
+
+  if ((r = fs_name_lookup(path, 0, &ip)) < 0)
+    return r;
+
+  if (ip == NULL)
+    return -ENOENT;
+
+  r = 0;
+
+  if (amode != F_OK) {
+    fs_inode_lock(ip);
+
+    if ((amode & R_OK) && !fs_permission(ip, FS_PERM_READ, 1))
+      r = -EPERM;
+    if ((amode & W_OK) && !fs_permission(ip, FS_PERM_WRITE, 1))
+      r = -EPERM;
+    if ((amode & X_OK) && !fs_permission(ip, FS_PERM_EXEC, 1))
+      r = -EPERM;
+
+    fs_inode_unlock(ip);
+  }
+
+  fs_inode_put(ip);
+
+  return r;
 }

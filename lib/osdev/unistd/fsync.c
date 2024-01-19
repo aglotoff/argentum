@@ -8,7 +8,7 @@ _fsync(int fd)
   (void) fd;
 
   fprintf(stderr, "TODO: fsync()\n");
-  abort();
+  // abort();
 
   return 0;
 }

@@ -7,25 +7,44 @@
 
 int n = 10;
 
-int main()
+int main(void)
 {
-    
-    pid_t pid = vfork(); //creating the child process
-    if (pid == 0)          //if this is a chile process
-    {
-        write(1, "Child process started\n", 23);
-        n = 121;
+  int fd[2];
+  ssize_t r;
+
+  if (pipe(fd) < 0) {
+    perror("pipe");
+    exit(1);
+  }
+
+  if (fork() == 0) {
+    char buf[128];
+
+    close(0);
+    dup(fd[0]);
+
+    close(fd[0]);
+    close(fd[1]);
+
+    if ((r = read(0, buf, sizeof(buf))) < 0) {
+      perror("read");
+      exit(1);
     }
-    else//parent process execution
-    {
-      waitpid(pid, NULL, 0);
-      write(1, "Now i am coming back to parent process\n", 40);
-      
+
+    buf[r] = '\0';
+    printf("Got: %s\n", buf);
+  } else {
+    close(1);
+    dup(fd[1]);
+
+    close(fd[0]);
+    close(fd[1]);
+
+    if ((r = write(1, "djhhdfdfjhfd5", 14)) < 0) {
+      perror("write");
+      exit(1);
     }
-    //fprintf(pid ? stderr : stdout, "value of n: %d \n",n); //sample printing to check "n" value
-    
-    //write(1, "Rett\n", 5);
-    exit(n);
-    
-    return 0;
+  }
+
+  return 0;
 }

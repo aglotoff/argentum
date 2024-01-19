@@ -11,7 +11,6 @@ config: $(SRC_DIR)/Makefile
 
 install: all
 	make -C $(SRC_DIR) DESTDIR=$(SYSROOT) install
-	ln -f $(SYSROOT)/usr/bin/dash $(SYSROOT)/bin/sh
 
 $(TARBALL_NAME):
 	wget "https://ftp.gnu.org/gnu/gzip/${TARBALL_NAME}"

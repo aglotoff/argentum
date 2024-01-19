@@ -1,14 +1,8 @@
-#include <stdio.h>
-#include <stdlib.h>
 #include <unistd.h>
+#include <sys/syscall.h>
 
 int
 pipe(int fildes[2])
 {
-  (void) fildes;
-
-  fprintf(stderr, "TODO: pipe\n");
-  abort();
-
-  return -1;
+  return __syscall(__SYS_PIPE, (uintptr_t) fildes, 0, 0, 0, 0, 0);
 }

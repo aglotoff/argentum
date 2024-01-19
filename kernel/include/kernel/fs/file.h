@@ -9,6 +9,7 @@
 
 struct Inode;
 struct stat;
+struct Pipe;
 
 #define FD_INODE    0
 #define FD_PIPE     1
@@ -21,6 +22,7 @@ struct File {
   off_t         offset;       ///< Current offset within the file
   struct Inode *inode;        ///< Pointer to the corresponding inode
   int           socket;       ///< Socket ID
+  struct Pipe  *pipe;         ///< Pointer to the correspondig pipe
 };
 
 int          file_alloc(struct File **);

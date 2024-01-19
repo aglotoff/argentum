@@ -1,15 +1,8 @@
-#include <stdio.h>
-#include <stdlib.h>
 #include <unistd.h>
+#include <sys/syscall.h>
 
 int
 access(const char *path, int amode)
 {
-  (void) path;
-  (void) amode;
-
-  fprintf(stderr, "TODO: access\n");
-  abort();
-
-  return -1;
+  return __syscall(__SYS_ACCESS, (uintptr_t) path, amode, 0, 0, 0, 0);
 }

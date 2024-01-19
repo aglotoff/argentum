@@ -376,7 +376,7 @@ process_wait(pid_t pid, int *stat_loc, int options)
   struct ListLink *l;
   int r, has_match;
 
-  //cprintf("[k] process %d waits for %d\n", current->pid, pid);
+  // cprintf("[k] process #%d waits for #%d\n", current->pid, pid);
 
   if (options & ~(WNOHANG | WUNTRACED))
     return -EINVAL;

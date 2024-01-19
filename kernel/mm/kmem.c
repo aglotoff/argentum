@@ -303,7 +303,7 @@ kmem_free_one(struct KMemCache *cache, struct KMemSlab *slab, void *obj)
 {
   struct KMemBufCtl *bufctl;
   
-  assert(slab->in_use < cache->slab_capacity);
+  assert(slab->in_use > 0);
 
   bufctl = kmem_object_to_bufctl(cache, obj);
 

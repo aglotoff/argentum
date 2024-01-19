@@ -11,6 +11,7 @@
 #include <kernel/mm/kmem.h>
 #include <kernel/spinlock.h>
 #include <kernel/net.h>
+#include <kernel/pipe.h>
 
 #include "ext2.h"
 
@@ -40,7 +41,8 @@ file_alloc(struct File **fstore)
   f->offset    = 0;
   f->inode     = NULL;
   f->socket    = 0;
-  
+  f->pipe      = NULL;
+
   if (fstore != NULL)
     *fstore = f;
   
@@ -168,7 +170,8 @@ file_close(struct File *f)
       fs_inode_put(f->inode);
       break;
     case FD_PIPE:
-      panic("TODO: close pipe");
+      assert(f->pipe != NULL);
+      pipe_close(f->pipe, (f->flags & O_WRONLY) || (f->flags & O_RDWR));
       break;
     case FD_SOCKET:
       net_close(f->socket);
@@ -254,7 +257,9 @@ file_read(struct File *f, void *buf, size_t nbytes)
     return net_recvfrom(f->socket, buf, nbytes, 0, NULL, NULL);
 
   case FD_PIPE:
-    // TODO: read from a pipe
+    assert(f->pipe != NULL);
+    return pipe_read(f->pipe, buf, nbytes);
+
   default:
     panic("Invalid type");
     return 0;
@@ -319,7 +324,9 @@ file_write(struct File *f, const void *buf, size_t nbytes)
     return net_sendto(f->socket, buf, nbytes, 0, NULL, 0);
 
   case FD_PIPE:
-    // TODO: write to a pipe
+    assert(f->pipe != NULL);
+    return pipe_write(f->pipe, buf, nbytes);
+
   default:
     panic("Invalid type");
     return 0;

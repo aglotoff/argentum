@@ -7,8 +7,8 @@ alarm(unsigned int seconds)
 {
   (void) seconds;
 
-  fprintf(stderr, "TODO: access\n");
-  abort();
+  fprintf(stderr, "TODO: alarm\n");
+  // abort();
 
   return -1;
 }

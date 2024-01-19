@@ -25,6 +25,7 @@ static char cwd[PATH_MAX];
 #define CMD_REDIR   2
 #define CMD_BG      3
 #define CMD_LIST    4
+#define CMD_PIPE    5
 
 struct Cmd {
   int   type;
@@ -38,21 +39,27 @@ struct ExecCmd {
 };
 
 struct BgCmd {
-  int    type;
+  int         type;
   struct Cmd *cmd;
 };
 
 struct RedirCmd {
-  int    type;
+  int         type;
   struct Cmd *cmd;
-  int    fd;
-  char  *name;
-  char  *ename;
-  int    oflag;
+  int         fd;
+  char       *name;
+  char       *ename;
+  int         oflag;
 };
 
 struct ListCmd {
-  int   type;
+  int         type;
+  struct Cmd *left;
+  struct Cmd *right;
+};
+
+struct PipeCmd {
+  int         type;
   struct Cmd *left;
   struct Cmd *right;
 };
@@ -171,7 +178,7 @@ main(void)
 static void
 cmd_run(const struct Cmd * cmd)
 {
-  pid_t pid;
+  pid_t pid, pid2;
   int fd;
   int status;
   struct ExecCmd *ecmd;
@@ -179,6 +186,8 @@ cmd_run(const struct Cmd * cmd)
   struct BgCmd *bcmd;
   struct RedirCmd *rcmd;
   struct BuiltinCmd *builtin;
+  struct PipeCmd *pcmd;
+  int fildes[2];
 
   switch (cmd->type) {
   case CMD_EXEC:
@@ -245,6 +254,51 @@ cmd_run(const struct Cmd * cmd)
       perror("fork");
     }
     break;
+
+  case CMD_PIPE:
+    pcmd = (struct PipeCmd *) cmd;
+
+    if (pipe(fildes) != 0) {
+      perror("pipe");
+      return;
+    }
+
+    if ((pid = fork()) == 0) {
+      close(1);
+      dup(fildes[1]);
+
+      close(fildes[0]);
+      close(fildes[1]);
+
+      cmd_run(pcmd->left);
+      exit(0);
+    } else if (pid < 0) {
+      perror("fork");
+      return;
+    }
+
+    if ((pid2 = fork()) == 0) {
+      close(0);
+      dup(fildes[0]);
+
+      close(fildes[0]);
+      close(fildes[1]);
+
+      cmd_run(pcmd->right);
+      exit(0);
+    } else if (pid2 < 0) {
+      perror("fork");
+      waitpid(pid, &status, 0);
+      return;
+    }
+
+    close(fildes[0]);
+    close(fildes[1]);
+
+    waitpid(pid, &status, 0);
+    waitpid(pid2, &status, 0);
+
+    break;
   }
 }
 
@@ -256,6 +310,7 @@ cmd_null_terminate(struct Cmd *cmd)
   struct ListCmd *lcmd;
   struct BgCmd *bcmd;
   struct RedirCmd *rcmd;
+  struct PipeCmd *pcmd;
 
   switch (cmd->type) {
   case CMD_EXEC:
@@ -275,6 +330,14 @@ cmd_null_terminate(struct Cmd *cmd)
       lcmd->left = cmd_null_terminate(lcmd->left);
     if (lcmd->right != NULL)
     lcmd->right = cmd_null_terminate(lcmd->right);
+    break;
+
+  case CMD_PIPE:
+    pcmd = (struct PipeCmd *) cmd;
+    if (pcmd->left != NULL)
+      pcmd->left = cmd_null_terminate(pcmd->left);
+    if (pcmd->right != NULL)
+    pcmd->right = cmd_null_terminate(pcmd->right);
     break;
 
   case CMD_REDIR:
@@ -305,7 +368,7 @@ peek(char *s, char *tokens, char **p)
   return strchr(tokens, *s) != NULL;
 }
 
-static const char *symbols = "&;<>";
+static const char *symbols = "&;<>|";
 
 static int
 get_token(char *s, char **p, char **ep)
@@ -324,6 +387,7 @@ get_token(char *s, char **p, char **ep)
   case '&':
   case ';':
   case '<':
+  case '|':
     ret = *s++;
     break;
   case '>':
@@ -352,8 +416,6 @@ cmd_parse_redir(struct Cmd *cmd, char *s, char **ep)
 {
   struct RedirCmd *rcmd;
 
-  // printf("rest %s\n", s);
-  
   while (peek(s, "<>", &s)) {
     rcmd = (struct RedirCmd *) malloc(sizeof(struct RedirCmd));
 
@@ -404,7 +466,7 @@ cmd_parse_exec(char *s, char **ep)
   ret = (struct Cmd *) cmd;
   ret = cmd_parse_redir(ret, s, &s);
 
-  for (argc = 0; !peek(s, "&;", &s); argc++) {
+  for (argc = 0; !peek(s, "&;|", &s); argc++) {
     if (get_token(s, &cmd->argv[argc], &s) == '\0')
       break;
 
@@ -459,11 +521,37 @@ cmd_parse_bg(char *s, char **p)
 }
 
 static struct Cmd *
-cmd_parse_list(char *s)
+cmd_parse_pipe(char *s, char **p)
 {
   struct Cmd *cmd;
 
   cmd = cmd_parse_bg(s, &s);
+  
+  if (peek(s, "|", &s)) {
+    struct PipeCmd *pcmd;
+
+    get_token(s, NULL, &s);
+
+    pcmd = (struct PipeCmd *) malloc(sizeof(struct PipeCmd));
+    pcmd->type  = CMD_PIPE;
+    pcmd->left  = cmd;
+    pcmd->right = cmd_parse_pipe(s, &s);
+
+    cmd = (struct Cmd *) pcmd;
+  }
+
+  if (p != NULL)
+    *p = s;
+
+  return cmd;
+}
+
+static struct Cmd *
+cmd_parse_list(char *s)
+{
+  struct Cmd *cmd;
+
+  cmd = cmd_parse_pipe(s, &s);
 
   if (peek(s, ";", &s)) {
     struct ListCmd *lcmd;
