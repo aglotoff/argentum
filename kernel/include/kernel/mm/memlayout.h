@@ -37,6 +37,9 @@
 /** Maximum available physical memory */
 #define PHYS_LIMIT        0x10000000
 
+#define PHYS_EXTRA_BASE   0x20000000
+#define PHYS_EXTRA_LIMIT  0x40000000
+
 #define PHYS_CON0         0x10002000    ///< 3-Wire Serial Bus Control
 #define PHYS_MMCI         0x10005000    ///< MultiMedia Card Interface
 #define PHYS_KMI0         0x10006000    ///< Keyboard/Mouse Interface 0

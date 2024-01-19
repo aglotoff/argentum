@@ -1,0 +1,12 @@
+diff -ruN old/config.sub new/config.sub
+--- old/config.sub	2020-07-10 14:59:02.000000000 +0300
++++ new/config.sub	2024-01-19 15:35:42.686267075 +0300
+@@ -1390,7 +1390,7 @@
+ 	      | -powermax* | -dnix* | -nx6 | -nx7 | -sei* | -dragonfly* \
+ 	      | -skyos* | -haiku* | -rdos* | -toppers* | -drops* | -es* \
+ 	      | -onefs* | -tirtos* | -phoenix* | -fuchsia* | -redox* | -bme* \
+-	      | -midnightbsd*)
++	      | -midnightbsd* | -osdev*)
+ 	# Remember, each alternative MUST END IN *, to match a version number.
+ 		;;
+ 	-qnx*)

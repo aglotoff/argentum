@@ -507,7 +507,7 @@ process_grow(ptrdiff_t increment)
     }
   }
 
- // cprintf("sbrk(%ld) -> %p, new = %p\n", increment, (void *) r, current->vm->heap);
+  // cprintf("sbrk(%ld) -> %p, new = %p, %u pages left\n", increment, (void *) r, current->vm->heap, pages_free);
   return (void *) r;
 }
 

@@ -1,6 +1,6 @@
-diff -ruN orig/config.sub new/config.sub
---- orig/config.sub	2023-07-27 11:13:03.000000000 +0300
-+++ new/config.sub	2024-01-01 17:52:54.892876292 +0300
+diff -ruN old/config.sub new/config.sub
+--- old/config.sub	2023-07-27 11:13:03.000000000 +0300
++++ new/config.sub	2024-01-19 14:30:50.176149372 +0300
 @@ -1749,7 +1749,7 @@
  	     | onefs* | tirtos* | phoenix* | fuchsia* | redox* | bme* \
  	     | midnightbsd* | amdhsa* | unleashed* | emscripten* | wasi* \
@@ -10,9 +10,9 @@ diff -ruN orig/config.sub new/config.sub
  		;;
  	# This one is extra strict with allowed versions
  	sco3.2v2 | sco3.2v[4-9]* | sco5v6*)
-diff -ruN orig/fixincludes/mkfixinc.sh new/fixincludes/mkfixinc.sh
---- orig/fixincludes/mkfixinc.sh	2023-07-27 11:13:03.000000000 +0300
-+++ new/fixincludes/mkfixinc.sh	2024-01-01 17:52:51.602876301 +0300
+diff -ruN old/fixincludes/mkfixinc.sh new/fixincludes/mkfixinc.sh
+--- old/fixincludes/mkfixinc.sh	2023-07-27 11:13:03.000000000 +0300
++++ new/fixincludes/mkfixinc.sh	2024-01-19 14:30:50.176149372 +0300
 @@ -11,6 +11,8 @@
  
  # Check for special fix rules for particular targets
@@ -22,9 +22,9 @@ diff -ruN orig/fixincludes/mkfixinc.sh new/fixincludes/mkfixinc.sh
      i?86-*-cygwin* | \
      i?86-*-mingw32* | \
      x86_64-*-mingw32* | \
-diff -ruN orig/gcc/config.gcc new/gcc/config.gcc
---- orig/gcc/config.gcc	2023-07-27 11:13:04.000000000 +0300
-+++ new/gcc/config.gcc	2024-01-01 17:52:53.912876294 +0300
+diff -ruN old/gcc/config.gcc new/gcc/config.gcc
+--- old/gcc/config.gcc	2023-07-27 11:13:04.000000000 +0300
++++ new/gcc/config.gcc	2024-01-19 14:30:50.176149372 +0300
 @@ -962,6 +962,11 @@
    d_target_objs="${d_target_objs} openbsd-d.o"
    target_has_targetdm=yes
@@ -51,9 +51,22 @@ diff -ruN orig/gcc/config.gcc new/gcc/config.gcc
  arm*-*-phoenix*)
  	tm_file="elfos.h arm/unknown-elf.h arm/elf.h arm/bpabi.h"
  	tm_file="${tm_file} newlib-stdint.h phoenix.h"
-diff -ruN orig/libgcc/config.host new/libgcc/config.host
---- orig/libgcc/config.host	2023-07-27 11:13:07.000000000 +0300
-+++ new/libgcc/config.host	2024-01-01 17:52:52.442876297 +0300
+diff -ruN old/gcc/config.host new/gcc/config.host
+--- old/gcc/config.host	2023-07-27 11:13:04.000000000 +0300
++++ new/gcc/config.host	2024-01-19 14:55:03.206193273 +0300
+@@ -108,7 +108,8 @@
+ 	;;
+     esac
+     ;;
+-  arm*-*-freebsd* | arm*-*-netbsd* | arm*-*-linux* | arm*-*-fuchsia*)
++  arm*-*-freebsd* | arm*-*-netbsd* | arm*-*-linux* | arm*-*-fuchsia* |\
++  arm*-*-osdev*)
+     case ${target} in
+       arm*-*-*)
+ 	host_extra_gcc_objs="driver-arm.o"
+diff -ruN old/libgcc/config.host new/libgcc/config.host
+--- old/libgcc/config.host	2023-07-27 11:13:07.000000000 +0300
++++ new/libgcc/config.host	2024-01-19 14:30:50.196149373 +0300
 @@ -520,6 +520,13 @@
  	unwind_header=config/arm/unwind-arm.h
  	extra_parts="$extra_parts crti.o crtn.o"

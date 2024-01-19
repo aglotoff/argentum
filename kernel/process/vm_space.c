@@ -277,8 +277,9 @@ vm_space_load_inode(struct VMSpace *vm, void *va, struct Inode *ip, size_t n, of
 
   while (n != 0) {
     page = vm_page_lookup(vm->pgdir, (uintptr_t) dst, NULL);
-    if (page == NULL)
+    if (page == NULL) {
       return -EFAULT;
+    }
 
     kva = (uint8_t *) page2kva(page);
 
@@ -397,8 +398,6 @@ vm_handle_fault(struct VMSpace *vm, uintptr_t va)
 
   if (va >= vm->heap && va < vm->stack)
     return -EFAULT;
-
-  // cprintf("%p\n",)
 
   fault_page = vm_page_lookup(vm->pgdir, va, &flags);
 

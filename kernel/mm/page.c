@@ -64,6 +64,7 @@ page_init_low(void)
   spin_init(&page_lock, "page_lock");
 
   // TODO: detect the actual amount of physical memory!
+  // pages_length = PHYS_EXTRA_LIMIT / PAGE_SIZE;
   pages_length = PHYS_LIMIT / PAGE_SIZE;
 
   // Allocate the 'pages' array.
@@ -91,6 +92,7 @@ void
 page_init_high(void)
 {
   page_free_region(PHYS_ENTRY_LIMIT, PHYS_LIMIT);
+  // page_free_region(PHYS_EXTRA_BASE, PHYS_EXTRA_LIMIT);
   // high_inited = 1;
 }
 

@@ -6,6 +6,13 @@ sysconf(int name)
 {
   (void) name;
 
-  fprintf(stderr, "TODO: sysconf(%d)\n", name);
-  return 20;
+  switch (name) {
+  case _SC_PAGE_SIZE:
+    return 4096;
+  case _SC_OPEN_MAX:
+    return 20;
+  default:
+    //fprintf(stderr, "TODO: sysconf(%d)\n", name);
+    return -1;
+  }
 }

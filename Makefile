@@ -91,8 +91,8 @@ qemu-gdb: $(OBJ)/fs.img $(KERNEL)
 $(SYSROOT):
 	@mkdir -p $@{,/usr{,/lib,/include}}
 
-clean:
-	rm -rf $(OBJ) $(SYSROOT)
+# clean:
+# 	rm -rf $(OBJ) $(SYSROOT)
 
 .PRECIOUS: $(OBJ)/user/%.o
 
