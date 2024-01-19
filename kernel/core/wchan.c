@@ -1,4 +1,4 @@
-#include <kernel/task.h>
+#include <kernel/thread.h>
 #include <kernel/spinlock.h>
 #include <kernel/wchan.h>
 

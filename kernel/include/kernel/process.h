@@ -12,7 +12,7 @@
 #include <kernel/cpu.h>
 #include <kernel/list.h>
 #include <kernel/mm/vm.h>
-#include <kernel/task.h>
+#include <kernel/thread.h>
 #include <kernel/trap.h>
 #include <kernel/wchan.h>
 #include <time.h>
@@ -30,7 +30,7 @@ struct Process {
   struct VMSpace       *vm;
 
   /** Main process thread */
-  struct Task          *thread;
+  struct Thread          *thread;
 
   /** Unique thread identifier */
   pid_t                 pid;
@@ -81,7 +81,7 @@ struct Signal {
 static inline struct Process *
 process_current(void)
 {
-  struct Task *task = task_current();
+  struct Thread *task = thread_current();
   return task != NULL ? task->process : NULL;
 }
 
@@ -93,7 +93,7 @@ pid_t          process_copy(int);
 pid_t          process_wait(pid_t, int *, int);
 int            process_exec(const char *, char *const[], char *const[]);
 void          *process_grow(ptrdiff_t);
-void           process_setup_main(struct Process *, uintptr_t, uintptr_t, uintptr_t, uintptr_t, uintptr_t);
+void           arch_trap_frame_init(struct Process *, uintptr_t, uintptr_t, uintptr_t, uintptr_t, uintptr_t);
 struct Signal *process_signal_create(int sig);
 void           process_signal_send(struct Process *, struct Signal *);
 void           process_signal_check(void);

@@ -3,7 +3,7 @@
 
 #include <kernel/cpu.h>
 #include <kernel/kqueue.h>
-#include <kernel/task.h>
+#include <kernel/thread.h>
 #include <kernel/types.h>
 #include <kernel/cprintf.h>
 
@@ -38,7 +38,7 @@ int
 kqueue_receive(struct KQueue *queue, void *msg, unsigned long timeout,
                int blocking)
 {
-  struct Task *my_task = task_current();
+  struct Thread *my_task = thread_current();
   int r;
 
   if ((my_task == NULL) && blocking)
@@ -79,7 +79,7 @@ int
 kqueue_send(struct KQueue *queue, const void *msg, unsigned long timeout,
             int blocking)
 {
-  struct Task *my_task = task_current();
+  struct Thread *my_task = thread_current();
   int ret;
 
   if ((my_task == NULL) && blocking)

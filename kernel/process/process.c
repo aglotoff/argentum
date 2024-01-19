@@ -40,7 +40,7 @@ static struct {
 static struct SpinLock process_lock;
 
 static void process_run(void *);
-static void process_pop_tf(struct TrapFrame *);
+static void arch_trap_frame_pop(struct TrapFrame *);
 
 static struct Process *init_process;
 
@@ -89,7 +89,7 @@ process_alloc(void)
   if ((process = (struct Process *) kmem_alloc(process_cache)) == NULL)
     return NULL;
 
-  process->thread = task_create(process, process_run, process, NZERO);
+  process->thread = thread_create(process, process_run, process, NZERO);
   if (process->thread == NULL) {
     kmem_free(process_cache, process);
     return NULL;
@@ -129,7 +129,7 @@ process_setup_vm(struct Process *proc)
 }
 
 void 
-process_setup_main(struct Process *process, uintptr_t entry, uintptr_t arg1,
+arch_trap_frame_init(struct Process *process, uintptr_t entry, uintptr_t arg1,
                    uintptr_t arg2, uintptr_t arg3, uintptr_t sp)
 {
   process->thread->tf->r0  = arg1;              // argc
@@ -177,7 +177,7 @@ process_load_binary(struct Process *proc, const void *binary)
     return r;
   proc->vm->stack = VIRT_USTACK_TOP - USTACK_SIZE;
 
-  process_setup_main(proc, elf->entry, 0, 0, 0, VIRT_USTACK_TOP);
+  arch_trap_frame_init(proc, elf->entry, 0, 0, 0, VIRT_USTACK_TOP);
 
   return 0;
 }
@@ -204,7 +204,7 @@ process_create(const void *binary, struct Process **pstore)
   proc->rgid = proc->egid = 0;
   proc->cmask = 0;
 
-  task_resume(proc->thread);
+  thread_resume(proc->thread);
 
   if (pstore != NULL)
     *pstore = proc;
@@ -307,7 +307,7 @@ process_destroy(int status)
 
   spin_unlock(&process_lock);
 
-  task_exit();
+  thread_exit();
 }
 
 pid_t
@@ -346,7 +346,7 @@ process_copy(int share_vm)
   list_add_back(&current->children, &child->sibling_link);
   spin_unlock(&process_lock);
 
-  task_resume(child->thread);
+  thread_resume(child->thread);
 
   return child->pid;
 }
@@ -443,13 +443,13 @@ process_run(void *arg)
   }
 
   // "Return" to the user space.
-  process_pop_tf(process->thread->tf);
+  arch_trap_frame_pop(process->thread->tf);
 }
 
 // Load the user-mode registers from the trap frame.
 // Doesn't return.
 static void
-process_pop_tf(struct TrapFrame *tf)
+arch_trap_frame_pop(struct TrapFrame *tf)
 {
   asm volatile(
     "mov     sp, %0\n"

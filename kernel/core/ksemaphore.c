@@ -3,7 +3,7 @@
 
 #include <kernel/cpu.h>
 #include <kernel/ksemaphore.h>
-#include <kernel/task.h>
+#include <kernel/thread.h>
 
 int
 ksem_create(struct KSemaphore *sem, unsigned long initial_count)
@@ -27,7 +27,7 @@ ksem_destroy(struct KSemaphore *sem)
 int
 ksem_get(struct KSemaphore *sem, unsigned long timeout, int blocking)
 {
-  struct Task *my_task = task_current();
+  struct Thread *my_task = thread_current();
   int r;
 
   if ((my_task == NULL) && blocking)

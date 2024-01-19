@@ -3,7 +3,7 @@
 #include <kernel/fs/file.h>
 #include <kernel/mm/page.h>
 #include <kernel/net.h>
-#include <kernel/task.h>
+#include <kernel/thread.h>
 
 #include <lwip/api.h>
 #include <lwip/dhcp.h>

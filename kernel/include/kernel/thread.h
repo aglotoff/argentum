@@ -1,5 +1,5 @@
-#ifndef __KERNEL_INCLUDE_KERNEL_TASK_H__
-#define __KERNEL_INCLUDE_KERNEL_TASK_H__
+#ifndef __KERNEL_INCLUDE_KERNEL_THREAD_H__
+#define __KERNEL_INCLUDE_KERNEL_THREAD_H__
 
 #ifndef __OSDEV_KERNEL__
 #error "This is a kernel header; user programs should not #include it"
@@ -12,20 +12,20 @@
 #include <kernel/list.h>
 #include <kernel/spinlock.h>
 
-#define TASK_MAX_PRIORITIES  (2 * NZERO)
+#define THREAD_MAX_PRIORITIES  (2 * NZERO)
 
 enum {
-  TASK_STATE_NONE = 0,
-  TASK_STATE_READY,
-  TASK_STATE_RUNNING,
-  TASK_STATE_SLEEPING,
-  TASK_STATE_SUSPENDED,
-  TASK_STATE_DESTROYED,
+  THREAD_STATE_NONE = 0,
+  THREAD_STATE_READY,
+  THREAD_STATE_RUNNING,
+  THREAD_STATE_SLEEPING,
+  THREAD_STATE_SUSPENDED,
+  THREAD_STATE_DESTROYED,
 };
 
 enum {
-  TASK_FLAGS_RESCHEDULE = (1 << 0),
-  TASK_FLAGS_DESTROY    = (1 << 1),
+  THREAD_FLAG_RESCHEDULE = (1 << 0),
+  THREAD_FLAG_DESTROY    = (1 << 1),
 };
 
 /**
@@ -54,7 +54,7 @@ struct Process;
 /**
  * Scheduler task state.
  */
-struct Task {
+struct Thread {
   /** Link into the list containing this task */
   struct ListLink   link;
   /** Current task state */
@@ -79,7 +79,7 @@ struct Task {
   void             *arg;
 
   /** Timer for timeouts */
-  struct KTimer     sleep_timer;
+  struct KTimer     timer;
   /** Value that indicated sleep result */
   int               sleep_result;
   int               err;
@@ -88,14 +88,17 @@ struct Task {
   struct Process   *process;
 };
 
-struct Task *task_current(void);
-struct Task *task_create(struct Process *, void (*)(void *), void *, int);
-void         task_exit(void);
-int          task_resume(struct Task *);
-void         task_yield(void);
+struct Thread *thread_current(void);
+struct Thread *thread_create(struct Process *, void (*)(void *), void *, int);
+void         thread_exit(void);
+int          thread_resume(struct Thread *);
+void         thread_yield(void);
 int          sched_sleep(struct ListLink *, unsigned long, struct SpinLock *);
-void         task_cleanup(struct Task *);
+void         thread_cleanup(struct Thread *);
 
+void         sched_may_yield(struct Thread *);
+void         sched_yield(void);
+void         sched_enqueue(struct Thread *);
 void         sched_wakeup_all(struct ListLink *, int);
 void         sched_wakeup_one(struct ListLink *, int);
 void         sched_init(void);
@@ -118,4 +121,4 @@ sched_unlock(void)
   spin_unlock(&__sched_lock);
 }
 
-#endif  // __KERNEL_INCLUDE_KERNEL_TASK_H__
+#endif  // __KERNEL_INCLUDE_KERNEL_THREAD_H__

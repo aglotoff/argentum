@@ -2,7 +2,7 @@
 #include <kernel/ktime.h>
 #include <kernel/ktimer.h>
 #include <kernel/spinlock.h>
-#include <kernel/task.h>
+#include <kernel/thread.h>
 
 static struct SpinLock ktime_lock = SPIN_INITIALIZER("ktime");
 static unsigned long ktime_ticks;
@@ -13,13 +13,13 @@ static unsigned long ktime_ticks;
 void
 ktime_tick(void)
 {
-  struct Task *current_task = task_current();
+  struct Thread *current_task = thread_current();
 
   // Tell the scheduler that the current task has used up its time slice
   // TODO: add support for more complex sheculing policies
   if (current_task != NULL) {
     sched_lock();
-    current_task->flags |= TASK_FLAGS_RESCHEDULE;
+    current_task->flags |= THREAD_FLAG_RESCHEDULE;
     sched_unlock();
   }
 

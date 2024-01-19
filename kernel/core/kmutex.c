@@ -2,7 +2,7 @@
 #include <errno.h>
 
 #include <kernel/kmutex.h>
-#include <kernel/task.h>
+#include <kernel/thread.h>
 
 /**
  * Initialize a mutex.
@@ -28,7 +28,7 @@ kmutex_init(struct KMutex *mutex, const char *name)
 int
 kmutex_lock(struct KMutex *mutex)
 {
-  struct Task *my_task = task_current();
+  struct Thread *my_task = thread_current();
   int r;
 
   sched_lock();
@@ -85,11 +85,11 @@ kmutex_unlock(struct KMutex *mutex)
 int
 kmutex_holding(struct KMutex *mutex)
 {
-  struct Task *owner;
+  struct Thread *owner;
 
   sched_lock();
   owner = mutex->owner;
   sched_unlock();
 
-  return (owner != NULL) && (owner == task_current());
+  return (owner != NULL) && (owner == thread_current());
 }

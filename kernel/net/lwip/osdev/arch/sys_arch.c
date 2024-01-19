@@ -5,13 +5,11 @@
 #include <kernel/kqueue.h>
 #include <kernel/ksemaphore.h>
 #include <kernel/ktime.h>
-#include <kernel/task.h>
+#include <kernel/thread.h>
 #include <kernel/types.h>
 
 #include "lwip/sys.h"
 #include "cc.h"
-
-#if !NO_SYS
 
 #include "sys_arch.h"
 
@@ -204,15 +202,15 @@ sys_thread_t
 sys_thread_new(const char *name, void (*thread)(void *), void *arg,
                int stacksize, int prio)
 {
-  struct Task *task;
+  struct Thread *task;
 
   // TODO: priority!
   (void) name;
   (void) prio;
   (void) stacksize;
 
-  task = task_create(NULL, thread, arg, 0);
-  task_resume(task);
+  task = thread_create(NULL, thread, arg, 0);
+  thread_resume(task);
 
   return task;
 }
@@ -220,7 +218,7 @@ sys_thread_new(const char *name, void (*thread)(void *), void *arg,
 int *
 __errno(void)
 {
-  return &task_current()->err;
+  return &thread_current()->err;
 }
 
 void
@@ -230,8 +228,6 @@ sys_init(void)
   queue_cache = kmem_cache_create("queue", sizeof(struct KQueue), 0, NULL, NULL);
   sem_cache   = kmem_cache_create("sem", sizeof(struct KSemaphore), 0, NULL, NULL);
 }
-
-#endif
 
 int errno;
 

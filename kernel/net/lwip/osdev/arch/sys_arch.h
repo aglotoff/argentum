@@ -4,11 +4,11 @@
 #include <kernel/kmutex.h>
 #include <kernel/kqueue.h>
 #include <kernel/ksemaphore.h>
-#include <kernel/task.h>
+#include <kernel/thread.h>
 
 typedef struct KQueue *sys_mbox_t;
 typedef struct KMutex *sys_mutex_t;
 typedef struct KSemaphore *sys_sem_t;
-typedef struct Task *sys_thread_t;
+typedef struct Thread *sys_thread_t;
 
 #endif  /* __LWIP_OSDEV_ARCH_SYS_ARCH_H__ */

@@ -1,6 +1,6 @@
 #include <stdint.h>
 
-#include <kernel/task.h>
+#include <kernel/thread.h>
 #include <kernel/spinlock.h>
 #include <kernel/mm/memlayout.h>
 #include <kernel/mm/vm.h>

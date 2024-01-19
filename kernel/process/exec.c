@@ -160,7 +160,7 @@ process_exec(const char *path, char *const argv[], char *const envp[])
   // to properly work!
   usp = ROUND_DOWN(usp, 8);
 
-  process_setup_main(proc, elf.entry, argc, (uint32_t) uargv, (uint32_t) uenvp,
+  arch_trap_frame_init(proc, elf.entry, argc, (uint32_t) uargv, (uint32_t) uenvp,
                      (uint32_t) usp);
 
   return argc;

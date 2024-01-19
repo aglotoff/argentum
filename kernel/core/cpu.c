@@ -5,7 +5,7 @@
 #include <kernel/cprintf.h>
 #include <kernel/cpu.h>
 #include <kernel/irq.h>
-#include <kernel/task.h>
+#include <kernel/thread.h>
 
 struct Cpu _cpus[NCPU];
 

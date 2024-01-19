@@ -10,7 +10,7 @@
 #include <kernel/list.h>
 #include <kernel/spinlock.h>
 
-struct Task;
+struct Thread;
 
 /**
  * Mutex is a sleeping lock, i.e. when a task tries to acquire a mutex that
@@ -21,7 +21,7 @@ struct Task;
  */
 struct KMutex {
   /** The task currently holding the mutex. */
-  struct Task      *owner;
+  struct Thread      *owner;
   /** List of tasks waiting for this mutex to be released. */
   struct ListLink   queue;
   /** Mutex name (for debugging purposes). */

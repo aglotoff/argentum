@@ -8,15 +8,15 @@
 #include <kernel/armv7/regs.h>
 
 struct Context;
-struct Task;
+struct Thread;
 
 /**
  * The kernel maintains a special structure for each processor, which
  * records the per-CPU information.
  */
 struct Cpu {
-  struct Context *scheduler;      ///< Saved scheduler context
-  struct Task    *task;           ///< The currently running kernel task
+  struct Context *sched_context;  ///< Saved scheduler context
+  struct Thread  *thread;         ///< The currently running kernel task
   int             isr_nesting;    ///< ISR nesting level
   int             irq_save_count; ///< Nesting level of cpu_irq_save() calls
   int             irq_flags;      ///< IRQ state before the first cpu_irq_save()

@@ -1,6 +1,6 @@
 /*
  * ----------------------------------------------------------------------------
- * void context_switch(struct Context **old, struct Context *new);
+ * void arch_context_switch(struct Context **old, struct Context *new);
  * ----------------------------------------------------------------------------
  *
  * Save the current registers on the stack, effectively creating a
@@ -8,8 +8,8 @@
  * 'old'. Then switch to new stack and restore previously saved registers.
  *
  */
-  .globl context_switch
-context_switch:
+  .globl arch_context_switch
+arch_context_switch:
   // Save old registers
   stmdb   sp!, {r4-r11,lr}  // save R4-R11 and LR
   vmrs    lr, fpscr         // FPSCR -> LR

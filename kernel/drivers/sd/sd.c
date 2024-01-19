@@ -7,7 +7,7 @@
 #include <kernel/fs/buf.h>
 #include <kernel/irq.h>
 #include <kernel/mm/memlayout.h>
-#include <kernel/task.h>
+#include <kernel/thread.h>
 #include <kernel/sd.h>
 #include <kernel/spinlock.h>
 

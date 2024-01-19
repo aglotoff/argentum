@@ -16,13 +16,15 @@ ifdef PROCESS_NAME
 endif
 
 KERNEL_SRCFILES :=	\
+	kernel/core/context.S \
 	kernel/core/cpu.c \
 	kernel/core/kmutex.c \
 	kernel/core/ksemaphore.c \
 	kernel/core/kqueue.c \
 	kernel/core/ktime.c \
 	kernel/core/ktimer.c \
-	kernel/core/task.c \
+	kernel/core/thread.c \
+	kernel/core/sched.c \
 	kernel/core/spinlock.c \
 	kernel/core/wchan.c \
 	kernel/drivers/console/kbd.c \
@@ -56,7 +58,6 @@ KERNEL_SRCFILES :=	\
 	kernel/process/exec.c \
 	kernel/process/process.c \
 	kernel/process/vm_space.c \
-	kernel/context.S \
 	kernel/cprintf.c \
 	kernel/entry.S \
 	kernel/irq.c \
