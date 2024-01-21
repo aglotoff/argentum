@@ -11,8 +11,10 @@ sysconf(int name)
     return 4096;
   case _SC_OPEN_MAX:
     return 20;
+  case _SC_LINE_MAX:
+    return 256;
   default:
-    //fprintf(stderr, "TODO: sysconf(%d)\n", name);
+    fprintf(stderr, "TODO: sysconf(%d)\n", name);
     return -1;
   }
 }

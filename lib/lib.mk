@@ -47,10 +47,15 @@ LIB_SRCFILES := \
 	lib/osdev/sys/stat/stat.c \
 	lib/osdev/sys/stat/umask.c \
 	lib/osdev/sys/time/gettimeofday.c \
+	lib/osdev/sys/time/select.c \
 	lib/osdev/sys/times/times.c \
 	lib/osdev/sys/utsname/uname.c \
 	lib/osdev/sys/wait/wait.c \
 	lib/osdev/sys/wait/waitpid.c \
+	lib/osdev/termios/cfgetospeed.c \
+	lib/osdev/termios/tcflush.c \
+	lib/osdev/termios/tcgetattr.c \
+	lib/osdev/termios/tcsetattr.c \
 	lib/osdev/time/nanosleep.c \
 	lib/osdev/unistd/_exit.c \
 	lib/osdev/unistd/access.c \

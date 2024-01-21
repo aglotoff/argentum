@@ -30,11 +30,16 @@ libc_a_SOURCES += \
   %D%/sys/stat/stat.c \
   %D%/sys/stat/umask.c \
   %D%/sys/time/gettimeofday.c \
+  %D%/sys/time/select.c \
   %D%/sys/times/times.c \
   %D%/sys/utsname/uname.c \
   %D%/sys/wait/wait.c \
   %D%/sys/wait/wait3.c \
   %D%/sys/wait/waitpid.c \
+  %D%/termios/cfgetospeed.c \
+  %D%/termios/tcflush.c \
+  %D%/termios/tcgetattr.c \
+  %D%/termios/tcsetattr.c \
   %D%/time/nanosleep.c \
   %D%/unistd/_exit.c \
   %D%/unistd/access.c \
