@@ -16,6 +16,8 @@ int ext2_sb_dirty;
 struct Ext2Superblock ext2_sb;
 struct KMutex ext2_sb_mutex;
 
+uint32_t ext2_block_size;
+
 /*
  * ----------------------------------------------------------------------------
  * Inode allocator
@@ -287,10 +289,10 @@ ext2_inode_link(struct Inode *dir, char *name, struct Inode *ip)
     }
   }
 
-  assert(off % BLOCK_SIZE == 0);
+  assert(off % ext2_block_size == 0);
 
-  new_de.rec_len = BLOCK_SIZE;
-  dir->size = off + BLOCK_SIZE;
+  new_de.rec_len = ext2_block_size;
+  dir->size = off + ext2_block_size;
 
   ip->ctime = rtc_get_time();
   ip->nlink++;
@@ -403,19 +405,23 @@ ext2_delete_inode(struct Inode *ip)
  * ----------------------------------------------------------------------------
  */
 
+#define EXT2_SB_NO            0
+#define EXT2_SB_OFFSET        1024
+#define EXT2_LOG_BLOCK_SIZE   2
+
 void
-ext2_sb_sync(void)
+ext2_sb_sync(dev_t dev)
 {
   struct Buf *buf;
 
   kmutex_lock(&ext2_sb_mutex);
 
-  if ((buf = buf_read(1, 0)) == NULL)
+  if ((buf = buf_read(EXT2_SB_NO, dev)) == NULL)
     panic("cannot read the superblock");
 
   ext2_sb.wtime = rtc_get_time();
 
-  memcpy(buf->data, &ext2_sb, sizeof(ext2_sb));
+  memcpy(&buf->data[EXT2_SB_OFFSET], &ext2_sb, sizeof(ext2_sb));
   buf->flags = BUF_DIRTY;
 
   buf_release(buf);
@@ -424,28 +430,31 @@ ext2_sb_sync(void)
 }
 
 struct Inode *
-ext2_mount(void)
+ext2_mount(dev_t dev)
 {
   struct Buf *buf;
 
   kmutex_init(&ext2_sb_mutex, "ext2_sb_mutex");
   
-  if ((buf = buf_read(1, 0)) == NULL)
+  if ((buf = buf_read(EXT2_SB_NO, dev)) == NULL)
     panic("cannot read the superblock");
 
-  memcpy(&ext2_sb, buf->data, sizeof(ext2_sb));
+  memcpy(&ext2_sb, &buf->data[EXT2_SB_OFFSET], sizeof(ext2_sb));
+
   buf_release(buf);
 
-  if (ext2_sb.log_block_size != 0)
-    panic("only block sizes of 1024 are supported!");
+  if (ext2_sb.log_block_size != EXT2_LOG_BLOCK_SIZE)
+    panic("only block sizes of 4096 are supported!");
+
+  ext2_block_size = 1024 << ext2_sb.log_block_size;
 
   cprintf("Filesystem size = %dM, inodes_count = %d, block_count = %d\n",
-          ext2_sb.block_count * BLOCK_SIZE / (1024 * 1024),
+          ext2_sb.block_count * ext2_block_size / (1024 * 1024),
           ext2_sb.inodes_count, ext2_sb.block_count);
 
   // TODO: update mtime, mnt_count, state, last_mounted
 
-  return fs_inode_get(2, 0);
+  return fs_inode_get(2, dev);
 }
 
 ssize_t

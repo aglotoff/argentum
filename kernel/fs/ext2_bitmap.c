@@ -42,7 +42,7 @@ bit_clear(uint32_t *bmap, size_t n)
 int
 ext2_bitmap_alloc(uint32_t bstart, size_t blen, dev_t dev, uint32_t *bstore)
 {
-  uint32_t bits_per_block = (1024U << ext2_sb.log_block_size) * BITS_PER_BYTE;
+  uint32_t bits_per_block = ext2_block_size * BITS_PER_BYTE;
   uint32_t b, bi;
 
   for (b = 0; b < blen; b += bits_per_block) {
@@ -88,7 +88,7 @@ ext2_bitmap_alloc(uint32_t bstart, size_t blen, dev_t dev, uint32_t *bstore)
 int
 ext2_bitmap_free(uint32_t bstart, dev_t dev, uint32_t bit_no)
 {
-  uint32_t bits_per_block = (1024U << ext2_sb.log_block_size) * BITS_PER_BYTE;
+  uint32_t bits_per_block = ext2_block_size * BITS_PER_BYTE;
   uint32_t b, bi;
   struct Buf *buf;
   uint32_t *bmap;

@@ -27,7 +27,7 @@ ext2_block_zero(uint32_t block_id, uint32_t dev)
   if ((buf = buf_read(block_id, dev)) == NULL)
     panic("cannot read block %d", block_id);
 
-  memset(buf->data, 0, 1024U << ext2_sb.log_block_size);
+  memset(buf->data, 0, ext2_block_size);
   buf->flags |= BUF_DIRTY;
 
   buf_release(buf);
@@ -74,11 +74,9 @@ ext2_block_alloc(dev_t dev, uint32_t *bstore)
 {
   struct Process *my_process = process_current();
   
-  size_t block_size = 1024U << ext2_sb.log_block_size;
-
-  uint32_t gd_start      = block_size > 1024U ? 1 : 2;
+  uint32_t gd_start      = ext2_block_size > 1024U ? 1 : 2;
   uint32_t gds_total     = ext2_sb.block_count / ext2_sb.blocks_per_group;
-  uint32_t gds_per_block = block_size / sizeof(struct Ext2BlockGroup);
+  uint32_t gds_per_block = ext2_block_size / sizeof(struct Ext2BlockGroup);
 
   uint32_t g, gi;
 
@@ -156,12 +154,13 @@ ext2_block_free(dev_t dev, uint32_t bno)
   struct Ext2BlockGroup *gd;
   uint32_t gds_per_block, gd_idx, g, gi;
 
-  gds_per_block = BLOCK_SIZE / sizeof(struct Ext2BlockGroup);
+  uint32_t gd_start = ext2_block_size > 1024U ? 1 : 2;
+  gds_per_block = ext2_block_size / sizeof(struct Ext2BlockGroup);
   gd_idx = bno / ext2_sb.blocks_per_group;
   g  = gd_idx / gds_per_block;
   gi = gd_idx % gds_per_block;
 
-  buf = buf_read(2 + g, dev);
+  buf = buf_read(gd_start + g, dev);
 
   gd = (struct Ext2BlockGroup *) buf->data + gi;
 

@@ -33,9 +33,8 @@ ext2_inode_init(dev_t dev, uint32_t table, uint32_t inum, uint16_t mode,
   unsigned inodes_per_block, itab_idx, inode_block_idx, inode_block;
   struct Ext2Inode *raw;
   struct Buf *buf;
-  size_t block_size = (1024U << ext2_sb.log_block_size);
 
-  inodes_per_block = block_size / ext2_sb.inode_size;
+  inodes_per_block = ext2_block_size / ext2_sb.inode_size;
   itab_idx  = (inum - 1) % ext2_sb.inodes_per_group;
   inode_block      = table + itab_idx / inodes_per_block;
   inode_block_idx  = itab_idx % inodes_per_block;
@@ -86,15 +85,16 @@ ext2_inode_alloc(mode_t mode, dev_t rdev, dev_t dev, uint32_t *istore,
   struct Ext2BlockGroup *gd;
   uint32_t gds_per_block, g, gi;
   uint32_t inum;
+  uint32_t gd_start      = ext2_block_size > 1024U ? 1 : 2;
 
-  gds_per_block = BLOCK_SIZE / sizeof(struct Ext2BlockGroup);
+  gds_per_block = ext2_block_size / sizeof(struct Ext2BlockGroup);
 
   // First try to find a free block in the same group as the specified inode
   g  = (parent - 1) / ext2_sb.inodes_per_group;
   gi = g % gds_per_block;
   g  = g - gi;
 
-  if ((buf = buf_read(2 + (g / gds_per_block), dev)) == NULL)
+  if ((buf = buf_read(gd_start + (g / gds_per_block), dev)) == NULL)
     panic("cannot read the group descriptor table");
 
   gd = (struct Ext2BlockGroup *) buf->data + gi;
@@ -161,13 +161,14 @@ ext2_inode_free(dev_t dev, uint32_t ino)
   struct Buf *buf;
   struct Ext2BlockGroup *gd;
   uint32_t gds_per_block, gd_idx, g, gi;
+  uint32_t gd_start = ext2_block_size > 1024U ? 1 : 2;
 
-  gds_per_block = BLOCK_SIZE / sizeof(struct Ext2BlockGroup);
+  gds_per_block = ext2_block_size / sizeof(struct Ext2BlockGroup);
   gd_idx = ino / ext2_sb.inodes_per_group;
   g  = gd_idx / gds_per_block;
   gi = gd_idx % gds_per_block;
 
-  buf = buf_read(2 + g, dev);
+  buf = buf_read(gd_start + g, dev);
 
   gd = (struct Ext2BlockGroup *) buf->data + gi;
 

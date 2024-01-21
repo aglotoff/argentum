@@ -137,6 +137,7 @@ struct Inode;
 
 extern struct Ext2Superblock ext2_sb;
 extern struct KMutex ext2_sb_mutex;
+extern uint32_t ext2_block_size;
 
 typedef int (*FillDirFunc)(void *, ino_t, const char *, size_t);
 
@@ -148,8 +149,8 @@ int           ext2_block_zero(uint32_t, uint32_t);
 int           ext2_inode_alloc(mode_t, dev_t, dev_t, uint32_t *, uint32_t);
 void          ext2_inode_free(dev_t, uint32_t);
 
-void          ext2_sb_sync(void);
-struct Inode *ext2_mount(void);
+void          ext2_sb_sync(dev_t);
+struct Inode *ext2_mount(dev_t);
 int           ext2_read_inode(struct Inode *);
 int           ext2_write_inode(struct Inode *);
 void          ext2_delete_inode(struct Inode *);

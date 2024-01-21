@@ -6,6 +6,7 @@
 #include <kernel/list.h>
 #include <kernel/mm/kmem.h>
 #include <kernel/spinlock.h>
+#include <kernel/mm/page.h>
 
 struct KMemCache *buf_desc_cache;
 
@@ -48,6 +49,7 @@ static struct Buf *
 buf_alloc(void)
 {
   struct Buf *buf;
+  struct Page *page;
 
   assert(spin_holding(&buf_cache.lock));
   assert(buf_cache.size < BUF_CACHE_MAX_SIZE);
@@ -55,11 +57,19 @@ buf_alloc(void)
   if ((buf = (struct Buf *) kmem_alloc(buf_desc_cache)) == NULL)
     return NULL;
 
+  if ((page = page_alloc_one(0)) == NULL) {
+    kmem_free(buf_desc_cache, buf);
+    return NULL;
+  }
+
+  buf->data = (uint8_t *) page2kva(page);
+  page->ref_count++;
+
   buf->block_no   = 0;
   buf->dev        = 0;
   buf->flags      = 0;
   buf->ref_count  = 0;
-  
+
   list_add_front(&buf_cache.head, &buf->cache_link);
   buf_cache.size++;
 

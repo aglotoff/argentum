@@ -111,9 +111,11 @@ fs_name_lookup(const char *path, int real, struct Inode **ip)
   return fs_path_lookup(path, name_buf, real, ip, NULL);
 }
 
+#define FS_ROOT_DEV 0
+
 void
 fs_init(void)
 {
   fs_inode_cache_init();
-  fs_root = ext2_mount();
+  fs_root = ext2_mount(FS_ROOT_DEV);
 }
