@@ -4,7 +4,7 @@
 #include <kernel/drivers/console.h>
 #include <kernel/cprintf.h>
 #include <kernel/kdebug.h>
-#include <kernel/mm/kmem.h>
+#include <kernel/object_pool.h>
 #include <kernel/mm/memlayout.h>
 #include <kernel/monitor.h>
 #include <kernel/trap.h>

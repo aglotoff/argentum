@@ -6,14 +6,14 @@
 #include <kernel/drivers/console.h>
 #include <kernel/fs/fs.h>
 #include <kernel/types.h>
-#include <kernel/mm/kmem.h>
+#include <kernel/object_pool.h>
 #include <kernel/mm/mmu.h>
 #include <kernel/mm/page.h>
 #include <kernel/vmspace.h>
 #include <kernel/process.h>
 
-static struct KMemCache *vmcache;
-static struct KMemCache *vm_areacache;
+static struct ObjectPool *vmcache;
+static struct ObjectPool *vm_areacache;
 
 int
 vm_range_alloc(struct VMSpace *vm, uintptr_t va, size_t n, int prot)
@@ -301,11 +301,11 @@ vm_space_create(void)
 {
   struct VMSpace *vm;
 
-  if ((vm = (struct VMSpace *) kmem_alloc(vmcache)) == NULL)
+  if ((vm = (struct VMSpace *) object_pool_get(vmcache)) == NULL)
     return NULL;
 
   if ((vm->pgdir = vm_create()) == NULL) {
-    kmem_free(vmcache, vm);
+    object_pool_put(vmcache, vm);
     return NULL;
   }
 
@@ -332,7 +332,7 @@ vm_space_destroy(struct VMSpace *vm)
 
   vm_destroy(vm->pgdir);
 
-  kmem_free(vmcache, vm);
+  object_pool_put(vmcache, vm);
 }
 
 struct VMSpace   *
@@ -360,7 +360,7 @@ vm_space_clone(struct VMSpace *vm, int share)
   // LIST_FOREACH(&vm->areas, l) {
   //   area = LIST_CONTAINER(l, struct VMSpaceMapEntry, link);
 
-  //   new_area = (struct VMSpaceMapEntry *) kmem_alloc(vm_areacache);
+  //   new_area = (struct VMSpaceMapEntry *) object_pool_get(vm_areacache);
   //   if (new_area == NULL) {
   //     vm_space_destroy(new_vm);
   //     return NULL;
@@ -383,8 +383,8 @@ vm_space_clone(struct VMSpace *vm, int share)
 void
 vm_space_init(void)
 {
-  vmcache = kmem_cache_create("vmcache", sizeof(struct VMSpace), 0, NULL, NULL);
-  vm_areacache = kmem_cache_create("vm_areacache", sizeof(struct VMSpaceMapEntry), 0, NULL, NULL);
+  vmcache = object_pool_create("vmcache", sizeof(struct VMSpace), 0, NULL, NULL);
+  vm_areacache = object_pool_create("vm_areacache", sizeof(struct VMSpaceMapEntry), 0, NULL, NULL);
 }
 
 int
@@ -465,13 +465,13 @@ vm_handle_fault(struct VMSpace *vm, uintptr_t va)
 //     prev->length += next->length + n;
 
 //     list_remove(&next->link);
-//     kmem_free(vm_areacache, next);
+//     object_pool_put(vm_areacache, next);
 //   } else if (prev != NULL) {
 //     prev->length += n;
 //   } else if (next != NULL) {
 //     next->start = va;
 //   } else {
-//     area = (struct VMSpaceMapEntry *) kmem_alloc(vm_areacache);
+//     area = (struct VMSpaceMapEntry *) object_pool_get(vm_areacache);
 //     if (area == NULL) {
 //       vm_range_free(vm, va, n);
 //       return -ENOMEM;

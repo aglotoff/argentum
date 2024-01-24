@@ -12,7 +12,7 @@
 #include <kernel/fs/file.h>
 #include <kernel/fs/fs.h>
 #include <kernel/hash.h>
-#include <kernel/mm/kmem.h>
+#include <kernel/object_pool.h>
 #include <kernel/mm/mmu.h>
 #include <kernel/mm/page.h>
 #include <kernel/monitor.h>
@@ -23,9 +23,9 @@
 #include <kernel/ktime.h>
 #include <kernel/ksemaphore.h>
 
-struct KMemCache *process_cache;
-struct KMemCache *thread_cache;
-struct KMemCache *signal_cache;
+struct ObjectPool *process_cache;
+struct ObjectPool *thread_cache;
+struct ObjectPool *signal_cache;
 
 // Size of PID hash table
 #define NBUCKET   256
@@ -61,11 +61,11 @@ process_init(void)
 {
   extern uint8_t _binary_obj_user_init_start[];
 
-  process_cache = kmem_cache_create("process_cache", sizeof(struct Process), 0, process_ctor, NULL);
+  process_cache = object_pool_create("process_cache", sizeof(struct Process), 0, process_ctor, NULL);
   if (process_cache == NULL)
     panic("cannot allocate process_cache");
   
-  signal_cache = kmem_cache_create("signal_cache", sizeof(struct Signal), 0, NULL, NULL);
+  signal_cache = object_pool_create("signal_cache", sizeof(struct Signal), 0, NULL, NULL);
   if (signal_cache == NULL)
     panic("cannot allocate signal_cache");
 
@@ -86,12 +86,12 @@ process_alloc(void)
   int i;
   struct Process *process;
 
-  if ((process = (struct Process *) kmem_alloc(process_cache)) == NULL)
+  if ((process = (struct Process *) object_pool_get(process_cache)) == NULL)
     return NULL;
 
   process->thread = thread_create(process, process_run, process, NZERO);
   if (process->thread == NULL) {
-    kmem_free(process_cache, process);
+    object_pool_put(process_cache, process);
     return NULL;
   }
 
@@ -228,7 +228,7 @@ void
 process_free(struct Process *process)
 {
   // Return the process descriptor to the cache
-  kmem_free(process_cache, process);
+  object_pool_put(process_cache, process);
 }
 
 struct Process *
@@ -516,7 +516,7 @@ process_signal_create(int sig)
 {
   struct Signal *signal;
 
-  if ((signal = (struct Signal *) kmem_alloc(signal_cache)) == NULL)
+  if ((signal = (struct Signal *) object_pool_get(signal_cache)) == NULL)
     panic("out of memory");
   
   signal->link.next = NULL;
@@ -538,7 +538,7 @@ process_signal_send(struct Process *process, struct Signal *signal)
   handler = &process->signal_handlers[signal->info.si_signo];
   if (handler->sa_handler == SIG_IGN) {
     spin_unlock(&process_lock);
-    kmem_free(signal_cache, signal);
+    object_pool_put(signal_cache, signal);
     return;
   }
 
@@ -631,7 +631,7 @@ process_signal_default(struct Process *current, struct Signal *signal)
 
   spin_unlock(&process_lock);
 
-  kmem_free(signal_cache, signal);
+  object_pool_put(signal_cache, signal);
 
   if (terminate)
     process_destroy(terminate);
@@ -675,7 +675,7 @@ process_signal_handle(struct Process *current, struct sigaction *handler, struct
   ctx = ((struct SignalContext *) current->thread->tf->sp) - 1;
   if ((r = vm_space_check_buf(current->vm, ctx, sizeof(*ctx), VM_WRITE)) < 0) {
     spin_unlock(&process_lock);
-    kmem_free(signal_cache, signal);
+    object_pool_put(signal_cache, signal);
     process_destroy(SIGSEGV);
   }
 
@@ -694,7 +694,7 @@ process_signal_handle(struct Process *current, struct sigaction *handler, struct
   current->thread->tf->pc = (uintptr_t) current->signal_stub;
 
   spin_unlock(&process_lock);
-  kmem_free(signal_cache, signal);
+  object_pool_put(signal_cache, signal);
 }
 
 void

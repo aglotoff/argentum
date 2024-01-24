@@ -4,11 +4,11 @@
 #include <kernel/sd.h>
 #include <kernel/fs/buf.h>
 #include <kernel/list.h>
-#include <kernel/mm/kmem.h>
+#include <kernel/object_pool.h>
 #include <kernel/spinlock.h>
 #include <kernel/mm/page.h>
 
-struct KMemCache *buf_desc_cache;
+struct ObjectPool *buf_desc_cache;
 
 // Maximum size of the buffer cache
 #define BUF_CACHE_MAX_SIZE   32
@@ -37,7 +37,7 @@ buf_ctor(void *ptr, size_t size)
 void
 buf_init(void)
 {
-  buf_desc_cache = kmem_cache_create("buf_desc_cache", sizeof(struct Buf), 0, buf_ctor, NULL);
+  buf_desc_cache = object_pool_create("buf_desc_cache", sizeof(struct Buf), 0, buf_ctor, NULL);
   if (buf_desc_cache == NULL)
     panic("cannot allocate buf_desc_cache");
 
@@ -54,11 +54,11 @@ buf_alloc(void)
   assert(spin_holding(&buf_cache.lock));
   assert(buf_cache.size < BUF_CACHE_MAX_SIZE);
 
-  if ((buf = (struct Buf *) kmem_alloc(buf_desc_cache)) == NULL)
+  if ((buf = (struct Buf *) object_pool_get(buf_desc_cache)) == NULL)
     return NULL;
 
   if ((page = page_alloc_one(0)) == NULL) {
-    kmem_free(buf_desc_cache, buf);
+    object_pool_put(buf_desc_cache, buf);
     return NULL;
   }
 

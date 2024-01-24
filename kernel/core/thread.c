@@ -11,7 +11,7 @@
 #include <kernel/vmspace.h>
 #include <kernel/mm/vm.h>
 #include <kernel/mm/mmu.h>
-#include <kernel/mm/kmem.h>
+#include <kernel/object_pool.h>
 #include <kernel/mm/page.h>
 
 static void thread_run(void);
@@ -137,11 +137,11 @@ thread_create(struct Process *process, void (*entry)(void *), void *arg,
   struct Thread *thread;
   uint8_t *stack;
 
-  if ((thread = (struct Thread *) kmem_alloc(thread_cache)) == NULL)
+  if ((thread = (struct Thread *) object_pool_get(thread_cache)) == NULL)
     return NULL;
 
   if ((stack_page = page_alloc_one(0)) == NULL) {
-    kmem_free(thread_cache, thread);
+    object_pool_put(thread_cache, thread);
     return NULL;
   }
 

@@ -14,7 +14,7 @@
 #include <kernel/kqueue.h>
 #include <kernel/ksemaphore.h>
 #include <kernel/ktimer.h>
-#include <kernel/mm/kmem.h>
+#include <kernel/object_pool.h>
 #include <kernel/mm/mmu.h>
 #include <kernel/mm/page.h>
 #include <kernel/vmspace.h>
@@ -54,7 +54,7 @@ void main(void)
 
   // Complete the memory manager initialization
   page_init_high(); // Physical page allocator (higher memory)
-  kmem_init();      // Object allocator
+  object_pool_init();      // Object allocator
   vm_space_init();  // Virtual memory manager
 
   // Initialize the device drivers

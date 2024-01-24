@@ -1,5 +1,5 @@
 #include <kernel/cpu.h>
-#include <kernel/mm/kmem.h>
+#include <kernel/object_pool.h>
 #include <kernel/mm/page.h>
 #include <kernel/kmutex.h>
 #include <kernel/kqueue.h>
@@ -15,9 +15,9 @@
 
 // Not good in multithreaded environment!
 
-static struct KMemCache *mutex_cache;
-static struct KMemCache *queue_cache;
-static struct KMemCache *sem_cache;
+static struct ObjectPool *mutex_cache;
+static struct ObjectPool *queue_cache;
+static struct ObjectPool *sem_cache;
 
 /* Mutex functions: */
 err_t
@@ -25,8 +25,8 @@ sys_mutex_new(sys_mutex_t *mutex)
 {
   struct KMutex *kmutex;
 
-  if ((kmutex = (struct KMutex *) kmem_alloc(mutex_cache)) == NULL)
-    panic("kmem_alloc");
+  if ((kmutex = (struct KMutex *) object_pool_get(mutex_cache)) == NULL)
+    panic("object_pool_get");
   if (kmutex_init(kmutex, "lwip") != 0)
     panic("kmutex_init");
 
@@ -50,7 +50,7 @@ sys_mutex_unlock(sys_mutex_t *mutex)
 void
 sys_mutex_free(sys_mutex_t *mutex)
 {
-  kmem_free(mutex_cache, *mutex);
+  object_pool_put(mutex_cache, *mutex);
 }
 
 int
@@ -72,8 +72,8 @@ sys_sem_new(sys_sem_t *sem, u8_t count)
 {
   struct KSemaphore *ksem;
 
-  if ((ksem = (struct KSemaphore *) kmem_alloc(sem_cache)) == NULL)
-    panic("kmem_alloc");
+  if ((ksem = (struct KSemaphore *) object_pool_get(sem_cache)) == NULL)
+    panic("object_pool_get");
   if (ksem_create(ksem, count) != 0)
     panic("ksem_create");
 
@@ -104,7 +104,7 @@ sys_arch_sem_wait(sys_sem_t *sem, u32_t timeout)
 void
 sys_sem_free(sys_sem_t *sem)
 {
-  kmem_free(sem_cache, *sem);
+  object_pool_put(sem_cache, *sem);
 }
 
 int
@@ -129,8 +129,8 @@ sys_mbox_new(sys_mbox_t *mbox, int size)
 
   (void) size;
 
-  if ((queue = (struct KQueue *) kmem_alloc(queue_cache)) == NULL)
-    panic("kmem_alloc");
+  if ((queue = (struct KQueue *) object_pool_get(queue_cache)) == NULL)
+    panic("object_pool_get");
   if ((page = page_alloc_one(0)) == NULL)
     panic("page_alloc");
   if (kqueue_init(queue, sizeof(void *), page2kva(page), PAGE_SIZE) < 0)
@@ -183,7 +183,7 @@ sys_arch_mbox_tryfetch(sys_mbox_t *mbox, void **msg)
 void
 sys_mbox_free(sys_mbox_t *mbox)
 {
-  kmem_free(queue_cache, *mbox);
+  object_pool_put(queue_cache, *mbox);
 }
 
 int
@@ -224,9 +224,9 @@ __errno(void)
 void
 sys_init(void)
 {
-  mutex_cache = kmem_cache_create("mutex", sizeof(struct KMutex), 0, NULL, NULL);
-  queue_cache = kmem_cache_create("queue", sizeof(struct KQueue), 0, NULL, NULL);
-  sem_cache   = kmem_cache_create("sem", sizeof(struct KSemaphore), 0, NULL, NULL);
+  mutex_cache = object_pool_create("mutex", sizeof(struct KMutex), 0, NULL, NULL);
+  queue_cache = object_pool_create("queue", sizeof(struct KQueue), 0, NULL, NULL);
+  sem_cache   = object_pool_create("sem", sizeof(struct KSemaphore), 0, NULL, NULL);
 }
 
 int errno;

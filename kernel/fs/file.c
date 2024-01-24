@@ -8,7 +8,7 @@
 #include <kernel/cprintf.h>
 #include <kernel/fs/file.h>
 #include <kernel/fs/fs.h>
-#include <kernel/mm/kmem.h>
+#include <kernel/object_pool.h>
 #include <kernel/spinlock.h>
 #include <kernel/net.h>
 #include <kernel/pipe.h>
@@ -16,12 +16,12 @@
 #include "ext2.h"
 
 static struct SpinLock file_lock;
-static struct KMemCache *file_cache;
+static struct ObjectPool *file_cache;
 
 void
 file_init(void)
 {
-  if (!(file_cache = kmem_cache_create("file_cache", sizeof(struct File), 0, NULL, NULL)))
+  if (!(file_cache = object_pool_create("file_cache", sizeof(struct File), 0, NULL, NULL)))
     panic("Cannot allocate file cache");
 
   spin_init(&file_lock, "file_lock");
@@ -32,7 +32,7 @@ file_alloc(struct File **fstore)
 {
   struct File *f;
 
-  if ((f = (struct File *) kmem_alloc(file_cache)) == NULL)
+  if ((f = (struct File *) object_pool_get(file_cache)) == NULL)
     return -ENOMEM;
 
   f->type      = 0;
@@ -133,7 +133,7 @@ file_open(const char *path, int oflag, mode_t mode, struct File **fstore)
 out2:
   fs_inode_unlock_put(ip);
 out1:
-  kmem_free(file_cache, f);
+  object_pool_put(file_cache, f);
   return r;
 }
 
@@ -180,7 +180,7 @@ file_close(struct File *f)
       panic("Invalid type");
   }
 
-  kmem_free(file_cache, f);
+  object_pool_put(file_cache, f);
 }
 
 off_t

@@ -46,8 +46,8 @@ struct Context {
   uint32_t lr;
 };
 
-struct KMemCache;
-extern struct KMemCache *thread_cache;
+struct ObjectPool;
+extern struct ObjectPool *thread_cache;
 
 struct Process;
 

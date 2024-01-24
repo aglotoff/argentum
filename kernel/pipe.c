@@ -3,17 +3,17 @@
 
 #include <kernel/cprintf.h>
 #include <kernel/fs/file.h>
-#include <kernel/mm/kmem.h>
+#include <kernel/object_pool.h>
 #include <kernel/mm/page.h>
 #include <kernel/pipe.h>
 #include <kernel/wchan.h>
 
-static struct KMemCache *pipe_cache;
+static struct ObjectPool *pipe_cache;
 
 void
 pipe_init(void)
 {
-  pipe_cache = kmem_cache_create("pipe", sizeof(struct Pipe), 0, NULL, NULL);
+  pipe_cache = object_pool_create("pipe", sizeof(struct Pipe), 0, NULL, NULL);
   if (pipe_cache == NULL)
     panic("cannot allocate pipe cache");
 }
@@ -26,7 +26,7 @@ pipe_alloc(struct File **read_store, struct File **write_store)
   struct File *read, *write;
   int r;
 
-  if ((pipe = (struct Pipe *) kmem_alloc(pipe_cache)) == NULL) {
+  if ((pipe = (struct Pipe *) object_pool_get(pipe_cache)) == NULL) {
     r = -ENOMEM;
     goto fail1;
   }
@@ -75,7 +75,7 @@ fail3:
   page->ref_count--;
   page_free_one(page);
 fail2:
-  kmem_free(pipe_cache, pipe);
+  object_pool_put(pipe_cache, pipe);
 fail1:
   return r;
 }
@@ -110,7 +110,7 @@ pipe_close(struct Pipe *pipe, int write)
   page->ref_count--;
   page_free_one(page);
 
-  //kmem_free(pipe_cache, pipe);
+  //object_pool_put(pipe_cache, pipe);
 }
 
 ssize_t
