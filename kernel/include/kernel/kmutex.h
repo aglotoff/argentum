@@ -21,7 +21,7 @@ struct Thread;
  */
 struct KMutex {
   /** The task currently holding the mutex. */
-  struct Thread      *owner;
+  struct Thread    *owner;
   /** List of tasks waiting for this mutex to be released. */
   struct ListLink   queue;
   /** Mutex name (for debugging purposes). */

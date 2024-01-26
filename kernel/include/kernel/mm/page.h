@@ -17,15 +17,17 @@
 #include <kernel/list.h>
 #include <kernel/mm/memlayout.h>
 
-struct ObjectPoolSlab;
+struct ObjectSlab;
 
 /**
  * Physical page block info.
  */
 struct Page {
-  struct ListLink  link;         ///< Link into the free list
+  union {
+    struct ListLink        link;  ///< Link into the free list
+    struct ObjectSlab *slab;  ///< The slab this page block belongs to
+  };
   int              ref_count;    ///< Reference counter
-  struct ObjectPoolSlab *slab;         ///< The slab this page block belongs to
 };
 
 extern struct Page *pages;

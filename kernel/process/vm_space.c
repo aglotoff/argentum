@@ -383,8 +383,8 @@ vm_space_clone(struct VMSpace *vm, int share)
 void
 vm_space_init(void)
 {
-  vmcache = object_pool_create("vmcache", sizeof(struct VMSpace), 0, NULL, NULL);
-  vm_areacache = object_pool_create("vm_areacache", sizeof(struct VMSpaceMapEntry), 0, NULL, NULL);
+  vmcache = object_pool_create("vmcache", sizeof(struct VMSpace), 0, 0, NULL, NULL);
+  vm_areacache = object_pool_create("vm_areacache", sizeof(struct VMSpaceMapEntry), 0, 0, NULL, NULL);
 }
 
 int

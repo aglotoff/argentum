@@ -29,7 +29,7 @@ sched_init(void)
 {
   int i;
 
-  thread_cache = object_pool_create("thread_cache", sizeof(struct Thread), 0,
+  thread_cache = object_pool_create("thread_cache", sizeof(struct Thread), 0, 0,
                                    NULL, NULL);
   if (thread_cache == NULL)
     panic("cannot allocate thread cache");

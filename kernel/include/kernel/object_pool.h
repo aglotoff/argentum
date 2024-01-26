@@ -22,6 +22,8 @@
 struct ObjectPool {
   /** Spinlock protecting this pool. */
   struct SpinLock   lock;
+  /** Various flags */
+  int               flags;
 
   /** Empty slabs (all blocks allocated). */
   struct ListLink   slabs_empty;
@@ -40,9 +42,9 @@ struct ObjectPool {
   /** Byte alignment of a single block. */
   size_t            block_align;
 
-  /** Single of a single object. */
+  /** Size of a single object in bytes. */
   size_t            obj_size;
-  /** Function to construct objects in the cache. */
+  /** Function to construct objects in the pool. */
   void            (*obj_ctor)(void *, size_t);
   /** Function to undo object construction. */
   void            (*obj_dtor)(void *, size_t);
@@ -52,43 +54,46 @@ struct ObjectPool {
   /** The color offset to be used by the next slab. */
   size_t            color_next;
 
-  /** Link into the global list of cache descriptors. */
+  /** Link into the global list of pool descriptors. */
   struct ListLink   link;
 
-  /** Human-readable cache name (for debugging purposes). */
+  /** Human-readable pool name (for debugging purposes). */
   char              name[OBJECT_POOL_NAME_MAX + 1];
 };
 
-struct ObjectPoolTag {
-  void                 *object;
-  struct ObjectPoolTag *next;
+enum {
+  OBJECT_POOL_OFF_SLAB = (1 << 0)
+};
+
+struct ObjectTag {
+  struct ObjectTag *next;
 };
 
 /**
  * Object slab descriptor.
  */
-struct ObjectPoolSlab {
-  /** Linkage in the cache. */
-  struct ListLink         link;
+struct ObjectSlab {
+  /** Linkage in the pool. */
+  struct ListLink    link;
   /** The pool this slab belongs to. */
-  struct ObjectPool      *pool;
+  struct ObjectPool *pool;
   /** Address of the buffer containing all memory blocks. */
-  void                   *data;
-  /** Address of the bufers containing all block tags. */
-  struct ObjectPoolTag   *tags;
+  void              *data;
   /** Linked list of free block tags. */
-  struct ObjectPoolTag   *free;
+  struct ObjectTag  *free;
   /** Reference count for allocated blocks. */       
-  unsigned                used_count;
+  unsigned           used_count;
+    /** Address of the bufers containing all block tags. */
+  struct ObjectTag   tags[0];
 };
 
-struct ObjectPool *object_pool_create(const char *, size_t, size_t,
+struct ObjectPool *object_pool_create(const char *, size_t, size_t, int,
                                       void (*)(void *, size_t),
                                       void (*)(void *, size_t));
 int                object_pool_destroy(struct ObjectPool *);
 void              *object_pool_get(struct ObjectPool *);
 void               object_pool_put(struct ObjectPool *, void *);
 
-void               object_pool_init(void);
+void               system_object_pool_init(void);
 
 #endif  // !__KERNEL_INCLUDE_KERNEL_MM_KMEM_H__

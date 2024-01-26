@@ -1,5 +1,6 @@
 #include <kernel/assert.h>
 #include <errno.h>
+#include <stdio.h>
 #include <string.h>
 
 #include <kernel/cprintf.h>
@@ -7,17 +8,16 @@
 #include <kernel/object_pool.h>
 #include <kernel/mm/page.h>
 
-static int                    object_pool_setup(struct ObjectPool *,
-                                                const char *, size_t, size_t,
-                                                void (*)(void *, size_t),
-                                                void (*)(void *, size_t));
-static struct ObjectPoolSlab *object_pool_slab_create(struct ObjectPool *);
-static void                   object_pool_slab_destroy(struct ObjectPoolSlab *);
-static void                  *object_pool_slab_get(struct ObjectPoolSlab *);
-static void                   object_pool_slab_put(struct ObjectPoolSlab *,
-                                                   void *);                            
+static int                object_pool_init(struct ObjectPool *, const char *,
+                                           size_t, size_t, int,
+                                           void (*)(void *, size_t),
+                                           void (*)(void *, size_t));
+static struct ObjectSlab *object_pool_slab_create(struct ObjectPool *);
+static void               object_pool_slab_destroy(struct ObjectSlab *);
+static void              *object_pool_slab_get(struct ObjectSlab *);
+static void               object_pool_slab_put(struct ObjectSlab *, void *);                            
 
-// Linked list of all object caches.
+// Linked list of all object pools.
 static struct {
   struct ListLink head;
   struct SpinLock lock;
@@ -29,13 +29,195 @@ static struct {
 // Pool of pool descriptors
 static struct ObjectPool pool_of_pools;
 
+// Pool of slab descriptors
+static struct ObjectPool *slab_pool;
+
+#define ANON_POOLS_MIN_SIZE   8U
+#define ANON_POOLS_MAX_SIZE   2048U
+#define ANON_POOLS_LENGTH     9
+
+static struct ObjectPool *anon_pools[ANON_POOLS_LENGTH];
+
+/**
+ * Create an object pool.
+ * 
+ * @param name  Identifies the pool for statistics and debugging
+ * @param size  The size of each object in bytes
+ * @param align The alignment of each object (or 0 if no special alignment is
+ *              required).
+ * @param ctor  Function to construct objects in the pool (or NULL)
+ * @param dtor  Function to undo object construction in the pool (or NULL)
+ *
+ * @return Pointer to the pool descriptor or NULL if out of memory.
+ */
+struct ObjectPool *
+object_pool_create(const char *name,
+                   size_t size,
+                   size_t align,
+                   int flags,
+                   void (*ctor)(void *, size_t),
+                   void (*dtor)(void *, size_t))
+{
+  struct ObjectPool *pool;
+  
+  if ((pool = object_pool_get(&pool_of_pools)) == NULL)
+    return NULL;
+
+  if (object_pool_init(pool, name, size, align, flags, ctor, dtor) < 0) {
+    object_pool_put(&pool_of_pools, pool);
+    return NULL;
+  }
+
+  return pool;
+}
+
+/**
+ * Destroy the pool and reclaim all associated resources.
+ * 
+ * @param pool The pool descriptor to be destroyed.
+ */
+int
+object_pool_destroy(struct ObjectPool *pool)
+{
+  spin_lock(&pool->lock);
+
+  if (!list_empty(&pool->slabs_empty) || !list_empty(&pool->slabs_partial)) {
+    spin_unlock(&pool->lock);
+    return -EBUSY;
+  }
+
+  while (!list_empty(&pool->slabs_full)) {
+    struct ObjectSlab *slab;
+
+    slab = LIST_CONTAINER(pool->slabs_full.next, struct ObjectSlab, link);
+    list_remove(&slab->link);
+
+    object_pool_slab_destroy(slab);
+  }
+
+  spin_unlock(&pool->lock);
+
+  spin_lock(&pool_list.lock);
+  list_remove(&pool->link);
+  spin_unlock(&pool_list.lock);
+
+  object_pool_put(&pool_of_pools, pool);
+
+  return 0;
+}
+
+void *
+object_pool_get(struct ObjectPool *pool)
+{
+  struct ObjectSlab *slab;
+  void *obj;
+  
+  spin_lock(&pool->lock);
+
+  if (!list_empty(&pool->slabs_partial)) {
+    slab = LIST_CONTAINER(pool->slabs_partial.next, struct ObjectSlab, link);
+  } else {
+    if (!list_empty(&pool->slabs_full)) {
+      slab = LIST_CONTAINER(pool->slabs_full.next, struct ObjectSlab, link);
+    } else if ((slab = object_pool_slab_create(pool)) == NULL) {
+      spin_unlock(&pool->lock);
+      return NULL;
+    }
+
+    list_remove(&slab->link);
+    list_add_back(&pool->slabs_partial, &slab->link);
+  } 
+
+  obj = object_pool_slab_get(slab);
+
+  spin_unlock(&pool->lock);
+
+  return obj;
+}
+
+void
+object_pool_put(struct ObjectPool *pool, void *obj)
+{
+  struct Page *page;
+  struct ObjectSlab *slab;
+
+  spin_lock(&pool->lock);
+
+  page = kva2page(ROUND_DOWN(obj, PAGE_SIZE << pool->slab_page_order));
+  slab = page->slab;
+
+  object_pool_slab_put(slab, obj);
+
+  spin_unlock(&pool->lock);
+}
+
+void
+system_object_pool_init(void)
+{ 
+  int i;
+
+  // First, solve the "chicken and egg" problem by initializing the static
+  // pool of pool descriptors
+  if (object_pool_init(&pool_of_pools, "pool_of_pools",
+                       sizeof(struct ObjectPool), 0, 0, NULL, NULL) < 0)
+    panic("cannot initialize pool_of_pools");
+
+  // Then initialize the pool of slab descriptors (stored off-slab)
+  slab_pool = object_pool_create("slab", sizeof(struct ObjectSlab),
+                                 0, 0, NULL, NULL);
+  if (slab_pool == NULL)
+    panic("cannot create slab_pool");
+
+  // Finally, initialize the anonymous pools (also used for arrays of off-slab
+  // object tags)
+  for (i = 0; i < ANON_POOLS_LENGTH; i++) {
+    size_t size = ANON_POOLS_MIN_SIZE << i;
+    char name[64];
+
+    snprintf(name, sizeof(name), "anon(%u)", size);
+
+    anon_pools[i] = object_pool_create(name, size, 0, 0, NULL, NULL);
+    if (anon_pools[i] == NULL)
+      panic("cannot initialize %s", name);
+  }
+}
+
+void *
+kmalloc(size_t size)
+{
+  int i;
+
+  for (i = 0; i < ANON_POOLS_LENGTH; i++) {
+    size_t pool_size = ANON_POOLS_MIN_SIZE << i;
+
+    if (size <= pool_size)
+      return object_pool_get(anon_pools[i]);
+  }
+
+  return NULL;
+}
+
+void
+kfree(void *ptr)
+{
+  struct Page *page;
+
+  // Determine the slab (and the pool) this pointer belongs to
+  page = kva2page(ptr);
+  if (page->slab == NULL)
+    panic("bad pointer");
+
+  object_pool_put(page->slab->pool, ptr);
+}
+
 static int
-object_pool_setup(struct ObjectPool *cache,
-                const char *name,
-                size_t size,
-                size_t align,
-                void (*ctor)(void *, size_t),
-                void (*dtor)(void *, size_t))
+object_pool_init(struct ObjectPool *cache,
+                 const char *name,
+                 size_t size,
+                 size_t align,
+                 int flags,
+                 void (*ctor)(void *, size_t),
+                 void (*dtor)(void *, size_t))
 {
   size_t wastage, block_size;
   unsigned slab_page_order, slab_capacity;
@@ -47,32 +229,30 @@ object_pool_setup(struct ObjectPool *cache,
 
   align = align ? ROUND_UP(align, sizeof(uintptr_t)) : sizeof(uintptr_t);
 
-  block_size = ROUND_UP(size + sizeof(struct ObjectPoolTag), align);
+  if (size > (PAGE_SIZE / 8))
+    flags |= OBJECT_POOL_OFF_SLAB;
+
+  block_size = ROUND_UP(size, align);
 
   // Calculate the optimal slab capacity trying to 
   for (slab_page_order = 0; ; slab_page_order++) {
-    size_t used = 0;
     size_t total = (PAGE_SIZE << slab_page_order);
-
-    // TODO: off-slab data structures
-    size_t extra = block_size + sizeof(struct ObjectPoolTag *);
+    size_t extra, extra_per_block;
 
     if (slab_page_order > PAGE_ORDER_MAX)
       return -EINVAL;
 
-    // Determine max slab capacity
-    // TODO: off-slab data structures
-    used = sizeof(struct ObjectPoolSlab);
-    for (slab_capacity = 1; used + extra <= total; slab_capacity++) {
-      used += extra;
+    if (flags & OBJECT_POOL_OFF_SLAB) {
+      extra = 0;
+      extra_per_block = 0;
+    } else {
+      extra = sizeof(struct ObjectSlab);
+      extra_per_block = sizeof(struct ObjectTag);
     }
-    slab_capacity--;
 
-    if (slab_capacity == 0)
-      continue;
+    slab_capacity = (total - extra) / (block_size + extra_per_block);
 
-    // Limit internal fragmentation to 12.5% (1/8).
-    wastage = total - used;
+    wastage = total - slab_capacity * (block_size + extra_per_block) - extra;
     if ((wastage * 8) <= total)
       break;
   }
@@ -83,6 +263,7 @@ object_pool_setup(struct ObjectPool *cache,
   list_init(&cache->slabs_partial);
   list_init(&cache->slabs_full);
 
+  cache->flags           = flags;
   cache->slab_capacity   = slab_capacity;
   cache->slab_page_order = slab_page_order;
   cache->block_size      = block_size;
@@ -103,95 +284,27 @@ object_pool_setup(struct ObjectPool *cache,
   return 0;
 }
 
-/**
- * @brief Create object cache.
- * 
- * Creates a cache for objects, each size obj_size, aligned on a align
- * boundary.
- * 
- * @param name     Identifies the cache for statistics and debugging.
- * @param size     The size of each object in bytes.
- * @param align    The alignment of each object (or 0 if no special alignment)
- *                 is required).
- *
- * @return Pointer to the cache descriptor or NULL if out of memory.
- */
-struct ObjectPool *
-object_pool_create(const char *name,
-                   size_t size,
-                   size_t align,
-                   void (*ctor)(void *, size_t),
-                   void (*dtor)(void *, size_t))
+static struct ObjectTag *
+object_to_tag(struct ObjectSlab *slab, void *obj)
 {
-  struct ObjectPool *cache;
-  
-  if ((cache = object_pool_get(&pool_of_pools)) == NULL)
-    return NULL;
-
-  if (object_pool_setup(cache, name, size, align, ctor, dtor) != 0) {
-    object_pool_put(&pool_of_pools, cache);
-    return NULL;
-  }
-
-  return cache;
-}
-
-/**
- * @brief Destory object cache.
- * 
- * Destroys the cache and reclaims all associated resources.
- * 
- * @param cache The cache descriptor to be destroyed.
- */
-int
-object_pool_destroy(struct ObjectPool *cache)
-{
-  struct ObjectPoolSlab *slab;
-  
-  spin_lock(&cache->lock);
-
-  if (!list_empty(&cache->slabs_empty) || !list_empty(&cache->slabs_partial)) {
-    spin_unlock(&cache->lock);
-    return -EBUSY;
-  }
-
-  while (!list_empty(&cache->slabs_full)) {
-    slab = LIST_CONTAINER(cache->slabs_full.next, struct ObjectPoolSlab, link);
-    list_remove(&slab->link);
-    object_pool_slab_destroy(slab);
-  }
-
-  spin_unlock(&cache->lock);
-
-  spin_lock(&pool_list.lock);
-  list_remove(&cache->link);
-  spin_unlock(&pool_list.lock);
-
-  object_pool_put(&pool_of_pools, cache);
-
-  return 0;
-}
-
-static struct ObjectPoolTag *
-object_to_tag(struct ObjectPoolSlab *slab, void *obj)
-{
-  (void) slab;
-  return (struct ObjectPoolTag *) obj;
+  int i = ((uintptr_t) obj - (uintptr_t) slab->data) / slab->pool->block_size;
+  return &slab->tags[i];
 }
 
 static void *
-tag_to_object(struct ObjectPoolSlab *slab, struct ObjectPoolTag *tag)
+tag_to_object(struct ObjectSlab *slab, struct ObjectTag *tag)
 {
-  (void) slab;
-  return tag;
+  int i = tag - slab->tags;
+  return (uint8_t *) slab->data + slab->pool->block_size * i;
 }
 
-static struct ObjectPoolSlab *
+static struct ObjectSlab *
 object_pool_slab_create(struct ObjectPool *pool)
 {
-  struct ObjectPoolSlab *slab;
+  struct ObjectSlab *slab;
   struct Page *page;
-  uint8_t *data, *object;
+  size_t extra_size;
+  uint8_t *data, *end, *p;
   unsigned i;
 
   assert(spin_holding(&pool->lock));
@@ -200,12 +313,24 @@ object_pool_slab_create(struct ObjectPool *pool)
     return NULL;
 
   data = (uint8_t *) page2kva(page);
-  page->ref_count++;
+  end  = data + (PAGE_SIZE << pool->slab_page_order);
 
-  slab = (struct ObjectPoolSlab *) &data[PAGE_SIZE << pool->slab_page_order] - 1;
+  extra_size = sizeof(struct ObjectSlab);
+  extra_size += (pool->slab_capacity * sizeof(struct ObjectTag));
+
+  if (pool->flags & OBJECT_POOL_OFF_SLAB) {
+    if ((slab = (struct ObjectSlab *) kmalloc(extra_size)) == NULL) {
+      page_free_block(page, pool->slab_page_order);
+      return NULL;
+    }
+  } else {
+    end -= extra_size;
+    slab = (struct ObjectSlab *) end;
+  }
 
   for (i = 0; i < (1U << pool->slab_page_order); i++)
     page[i].slab = slab;
+  page->ref_count++;
 
   data += pool->color_next;
 
@@ -219,32 +344,28 @@ object_pool_slab_create(struct ObjectPool *pool)
   slab->used_count = 0;
   slab->free       = NULL;
 
-  object = data;
+  p = data;
   for (i = 0; i < pool->slab_capacity; i++) {
-    struct ObjectPoolTag *tag = (struct ObjectPoolTag *) object;
-
-    // TODO: off-slab structures
-    tag->object = object;
+    struct ObjectTag *tag = object_to_tag(slab, p);
 
     tag->next  = slab->free;
     slab->free = tag;
 
     if (pool->obj_ctor)
-      pool->obj_ctor(object, pool->obj_size);
+      pool->obj_ctor(p, pool->obj_size);
 
-    object += pool->block_size + sizeof(struct ObjectPoolTag *);
+    p += pool->block_size;
     
-    assert((void *) object <= (void *) slab);
+    assert((void *) p <= (void *) end);
   }
 
-  cprintf("put to full %p\n", slab);
   list_add_back(&pool->slabs_full, &slab->link);
 
   return slab;
 }
 
 static void
-object_pool_slab_destroy(struct ObjectPoolSlab *slab)
+object_pool_slab_destroy(struct ObjectSlab *slab)
 {
   struct ObjectPool *pool = slab->pool;
   struct Page *page;
@@ -255,61 +376,53 @@ object_pool_slab_destroy(struct ObjectPoolSlab *slab)
 
   // Call destructor for all objects
   if (slab->pool->obj_dtor != NULL) {
-    struct ObjectPoolTag *tag;
+    struct ObjectTag *tag;
 
     for (tag = slab->free; tag != NULL; tag = tag->next)
       pool->obj_dtor(tag_to_object(slab, tag), pool->obj_size);
   }
 
   // Free the page containing the data
-  // TODO: off-slab data structures
   page = kva2page(slab->data);
 
   for (i = 0; i < (1U << pool->slab_page_order); i++)
     page[i].slab = NULL;
+
+  if (pool->flags & OBJECT_POOL_OFF_SLAB)
+    kfree(slab);
 
   page->ref_count--;
   page_free_block(page, pool->slab_page_order);
 }
 
 static void *
-object_pool_slab_get(struct ObjectPoolSlab *slab)
+object_pool_slab_get(struct ObjectSlab *slab)
 {
   struct ObjectPool *pool = slab->pool;
-  struct ObjectPoolTag *tag;
+  struct ObjectTag *tag;
 
-  cprintf("get: %s %p %d - ", slab->pool->name, slab, pool->slab_capacity);
-
-  // assert(slab->used_count < pool->slab_capacity);
-  if (slab->used_count >= pool->slab_capacity) {
-    panic("%s, %p, %d %d (%p %p)\n", slab->pool->name, slab, slab->used_count, pool->slab_capacity, 
-    slab->link.prev, slab->link.next);
-  }
+  assert(slab->used_count < pool->slab_capacity);
   assert(slab->free != NULL);
 
   tag = slab->free;
   slab->free = tag->next;
   slab->used_count++;
 
-  cprintf("%d of %d\n", slab->used_count, pool->slab_capacity);
-
   if (slab->used_count == pool->slab_capacity) {
     assert(slab->free == NULL);
 
     list_remove(&slab->link);
     list_add_back(&pool->slabs_empty, &slab->link);
-
-    cprintf("Empty %p of %s: %p %p\n", slab, pool->name, slab->link.prev, slab->link.next);
   }
 
   return tag_to_object(slab, tag);
 }
 
 static void
-object_pool_slab_put(struct ObjectPoolSlab *slab, void *obj)
+object_pool_slab_put(struct ObjectSlab *slab, void *obj)
 {
   struct ObjectPool *pool = slab->pool;
-  struct ObjectPoolTag *tag;
+  struct ObjectTag *tag;
   
   assert(slab->used_count > 0);
 
@@ -322,66 +435,9 @@ object_pool_slab_put(struct ObjectPoolSlab *slab, void *obj)
 
   if (slab->used_count == 0) {
     list_remove(&slab->link);
-     cprintf("put to full putput %p\n", slab);
     list_add_front(&pool->slabs_full, &slab->link);
   } else if (slab->used_count == pool->slab_capacity - 1) {
     list_remove(&slab->link);
     list_add_front(&pool->slabs_partial, &slab->link);
   }
-}
-
-void *
-object_pool_get(struct ObjectPool *cache)
-{
-  struct ObjectPoolSlab *slab;
-  void *obj;
-  
-  spin_lock(&cache->lock);
-
-  if (!list_empty(&cache->slabs_partial)) {
-    slab = LIST_CONTAINER(cache->slabs_partial.next, struct ObjectPoolSlab, link);
-  } else {
-    if (!list_empty(&cache->slabs_full)) {
-      slab = LIST_CONTAINER(cache->slabs_full.next, struct ObjectPoolSlab, link);
-      list_remove(&slab->link);
-    } else if ((slab = object_pool_slab_create(cache)) == NULL) {
-      spin_unlock(&cache->lock);
-      return NULL;
-    }
-
-    list_add_back(&cache->slabs_partial, &slab->link);
-  } 
-
-  obj = object_pool_slab_get(slab);
-
-  spin_unlock(&cache->lock);
-
-  return obj;
-}
-
-void
-object_pool_put(struct ObjectPool *cache, void *obj)
-{
-  struct Page *page;
-  struct ObjectPoolSlab *slab;
-
-  spin_lock(&cache->lock);
-
-  page = kva2page(ROUND_DOWN(obj, PAGE_SIZE << cache->slab_page_order));
-  slab = page->slab;
-
-  object_pool_slab_put(slab, obj);
-
-  spin_unlock(&cache->lock);
-}
-
-void
-object_pool_init(void)
-{
-  object_pool_setup(&pool_of_pools,
-                  "pool_of_pools",
-                  sizeof(struct ObjectPool),
-                  0,
-                  NULL,
-                  NULL);
 }

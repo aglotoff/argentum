@@ -54,7 +54,7 @@ void main(void)
 
   // Complete the memory manager initialization
   page_init_high(); // Physical page allocator (higher memory)
-  object_pool_init();      // Object allocator
+  system_object_pool_init();      // Object allocator
   vm_space_init();  // Virtual memory manager
 
   // Initialize the device drivers
