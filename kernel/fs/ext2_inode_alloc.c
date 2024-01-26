@@ -39,7 +39,7 @@ ext2_inode_init(dev_t dev, uint32_t table, uint32_t inum, uint16_t mode,
   inode_block      = table + itab_idx / inodes_per_block;
   inode_block_idx  = itab_idx % inodes_per_block;
 
-  if ((buf = buf_read(inode_block, 0)) == NULL)
+  if ((buf = buf_read(inode_block, ext2_block_size, dev)) == NULL)
     panic("cannot read the inode table");
 
   raw = (struct Ext2Inode *) &buf->data[ext2_sb.inode_size * inode_block_idx];
@@ -52,7 +52,7 @@ ext2_inode_init(dev_t dev, uint32_t table, uint32_t inum, uint16_t mode,
     ext2_block_alloc(dev, &raw->block[0]);
     struct Buf *block_buf;
 
-    block_buf = buf_read(raw->block[0], dev);
+    block_buf = buf_read(raw->block[0], ext2_block_size, dev);
     *(uint16_t *) block_buf->data = rdev;
     block_buf->flags |= BUF_DIRTY;
     buf_release(block_buf);
@@ -94,7 +94,7 @@ ext2_inode_alloc(mode_t mode, dev_t rdev, dev_t dev, uint32_t *istore,
   gi = g % gds_per_block;
   g  = g - gi;
 
-  if ((buf = buf_read(gd_start + (g / gds_per_block), dev)) == NULL)
+  if ((buf = buf_read(gd_start + (g / gds_per_block), ext2_block_size, dev)) == NULL)
     panic("cannot read the group descriptor table");
 
   gd = (struct Ext2BlockGroup *) buf->data + gi;
@@ -119,7 +119,7 @@ ext2_inode_alloc(mode_t mode, dev_t rdev, dev_t dev, uint32_t *istore,
 
   // Scan all group descriptors for a free inode
   for (g = 0; g < ext2_sb.inodes_count / ext2_sb.inodes_per_group; g += gds_per_block) {
-    if ((buf = buf_read(2 + (g / gds_per_block), 0)) == NULL)
+    if ((buf = buf_read(2 + (g / gds_per_block), ext2_block_size, dev)) == NULL)
       panic("cannot read the group descriptor table");
 
     for (gi = 0; gi < gds_per_block; gi++) {
@@ -168,7 +168,7 @@ ext2_inode_free(dev_t dev, uint32_t ino)
   g  = gd_idx / gds_per_block;
   gi = gd_idx % gds_per_block;
 
-  buf = buf_read(gd_start + g, dev);
+  buf = buf_read(gd_start + g, ext2_block_size, dev);
 
   gd = (struct Ext2BlockGroup *) buf->data + gi;
 

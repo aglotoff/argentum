@@ -24,7 +24,7 @@ ext2_block_zero(uint32_t block_id, uint32_t dev)
 {
   struct Buf *buf;
   
-  if ((buf = buf_read(block_id, dev)) == NULL)
+  if ((buf = buf_read(block_id, ext2_block_size, dev)) == NULL)
     panic("cannot read block %d", block_id);
 
   memset(buf->data, 0, ext2_block_size);
@@ -107,7 +107,7 @@ ext2_block_alloc(dev_t dev, uint32_t *bstore)
   for (g = 0; g < gds_total; g += gds_per_block) {
     struct Buf *buf;
 
-    if ((buf = buf_read(gd_start + (g / gds_per_block), dev)) == NULL)
+    if ((buf = buf_read(gd_start + (g / gds_per_block), ext2_block_size, dev)) == NULL)
       // TODO: recover from I/O errors
       panic("cannot read the group descriptor table");
 
@@ -160,7 +160,7 @@ ext2_block_free(dev_t dev, uint32_t bno)
   g  = gd_idx / gds_per_block;
   gi = gd_idx % gds_per_block;
 
-  buf = buf_read(gd_start + g, dev);
+  buf = buf_read(gd_start + g, ext2_block_size, dev);
 
   gd = (struct Ext2BlockGroup *) buf->data + gi;
 

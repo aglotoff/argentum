@@ -18,9 +18,6 @@
 #include <kernel/kmutex.h>
 #include <kernel/wchan.h>
 
-// #define BLOCK_SIZE      1024        ///< Size of a single filesystem block
-#define BLOCK_SIZE      4096
-
 /**
  * 
  * 
@@ -44,7 +41,7 @@ struct Buf {
 #define BUF_DIRTY   (1 << 1)  ///< Buffer needs to be written to the disk
 
 void        buf_init(void);
-struct Buf *buf_read(unsigned, dev_t);
+struct Buf *buf_read(unsigned, size_t, dev_t);
 void        buf_write(struct Buf *);
 void        buf_release(struct Buf *);
 

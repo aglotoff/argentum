@@ -39,7 +39,7 @@ ext2_locate_inode(struct Inode *inode, uint32_t *offset)
   gd_table_block = gd_start + (block_group / gds_per_block);
   gd_table_idx   = (block_group % gds_per_block);
 
-  if ((buf = buf_read(gd_table_block, inode->dev)) == NULL)
+  if ((buf = buf_read(gd_table_block, ext2_block_size, inode->dev)) == NULL)
     return 0;
 
   gd = (struct Ext2BlockGroup *) buf->data + gd_table_idx;
@@ -65,7 +65,7 @@ ext2_read_inode(struct Inode *inode)
 
   inode_block = ext2_locate_inode(inode, &inode_offset);
 
-  if ((buf = buf_read(inode_block, inode->dev)) == NULL)
+  if ((buf = buf_read(inode_block, ext2_block_size, inode->dev)) == NULL)
     return -EIO;
 
   raw = (struct Ext2Inode *) (buf->data + inode_offset);
@@ -98,7 +98,7 @@ ext2_write_inode(struct Inode *inode)
 
   block = ext2_locate_inode(inode, &offset);
 
-  if ((buf = buf_read(block, inode->dev)) == NULL)
+  if ((buf = buf_read(block, ext2_block_size, inode->dev)) == NULL)
     return -EIO;
 
   raw = (struct Ext2Inode *) (buf->data + offset);
@@ -188,7 +188,7 @@ ext2_inode_get_block(struct Inode *inode, uint32_t n, int alloc)
   for ( ; lvl >= 0; lvl--) {
     struct Buf *buf;
 
-    if ((buf = buf_read(id, inode->dev)) == NULL)
+    if ((buf = buf_read(id, ext2_block_size, inode->dev)) == NULL)
       // TODO: I/O error?
       return 0;
     
@@ -228,7 +228,7 @@ ext2_trunc_indirect(struct Inode *inode, uint32_t *id_store, int lvl, size_t to)
     return;
 
   if (lvl >= 0) {
-    struct Buf *buf = buf_read(id, inode->dev);
+    struct Buf *buf = buf_read(id, ext2_block_size, inode->dev);
     uint32_t *ids = (uint32_t *) buf->data;
     size_t i;
 
@@ -305,7 +305,7 @@ ext2_read(struct Inode *inode, void *buf, size_t nbyte, off_t off)
       // Read the block contents
       struct Buf *buf;
 
-      if ((buf = buf_read(block_id, inode->dev)) == NULL) {
+      if ((buf = buf_read(block_id, ext2_block_size, inode->dev)) == NULL) {
         buf_release(buf);
         return -EIO;
       }
@@ -335,7 +335,7 @@ ext2_write(struct Inode *inode, const void *buf, size_t nbyte, off_t off)
     if (block_id == 0)
       return -ENOMEM;
 
-    if ((buf = buf_read(block_id, inode->dev)) == NULL) {
+    if ((buf = buf_read(block_id, ext2_block_size, inode->dev)) == NULL) {
       buf_release(buf);
       return -EIO;
     }

@@ -405,9 +405,8 @@ ext2_delete_inode(struct Inode *ip)
  * ----------------------------------------------------------------------------
  */
 
-#define EXT2_SB_NO            0
-#define EXT2_SB_OFFSET        1024
-#define EXT2_LOG_BLOCK_SIZE   2
+#define EXT2_SB_NO            1
+#define EXT2_SB_OFFSET        0
 
 void
 ext2_sb_sync(dev_t dev)
@@ -416,7 +415,7 @@ ext2_sb_sync(dev_t dev)
 
   kmutex_lock(&ext2_sb_mutex);
 
-  if ((buf = buf_read(EXT2_SB_NO, dev)) == NULL)
+  if ((buf = buf_read(1, 1024, dev)) == NULL)
     panic("cannot read the superblock");
 
   ext2_sb.wtime = rtc_get_time();
@@ -436,15 +435,12 @@ ext2_mount(dev_t dev)
 
   kmutex_init(&ext2_sb_mutex, "ext2_sb_mutex");
   
-  if ((buf = buf_read(EXT2_SB_NO, dev)) == NULL)
+  if ((buf = buf_read(1, 1024, dev)) == NULL)
     panic("cannot read the superblock");
 
   memcpy(&ext2_sb, &buf->data[EXT2_SB_OFFSET], sizeof(ext2_sb));
 
   buf_release(buf);
-
-  if (ext2_sb.log_block_size != EXT2_LOG_BLOCK_SIZE)
-    panic("only block sizes of 4096 are supported!");
 
   ext2_block_size = 1024 << ext2_sb.log_block_size;
 

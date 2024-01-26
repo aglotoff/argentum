@@ -24,7 +24,6 @@ buf_ctor(void *ptr, size_t size)
 {
   struct Buf *buf = (struct Buf *) ptr;
 
-  buf->block_size = BLOCK_SIZE;
   wchan_init(&buf->wait_queue);
   kmutex_init(&buf->mutex, "buf");
 
@@ -46,11 +45,49 @@ buf_init(void)
   list_init(&buf_cache.head);
 }
 
+static uint8_t *
+buf_alloc_data(size_t block_size)
+{
+  unsigned long page_order;
+  struct Page *page;
+
+  if (block_size < PAGE_SIZE)
+    return (uint8_t *) kmalloc(block_size);
+
+  for (page_order = 0; (PAGE_SIZE << page_order) < block_size; page_order++)
+    ;
+
+  if ((page = page_alloc_block(page_order, 0)) == NULL)
+    return NULL;
+
+  page->ref_count++;
+  return (uint8_t *) page2kva(page);
+}
+
+static void
+buf_free_data(void *data, size_t block_size)
+{
+  unsigned long page_order;
+  struct Page *page;
+
+  if (block_size < PAGE_SIZE) {
+    kfree(data);
+    return;
+  }
+
+  for (page_order = 0; (PAGE_SIZE << page_order) < block_size; page_order++)
+    ;
+
+  page = kva2page(data);
+
+  page->ref_count--;
+  page_free_block(page, page_order);
+}
+
 static struct Buf *
-buf_alloc(void)
+buf_alloc(size_t block_size)
 {
   struct Buf *buf;
-  struct Page *page;
 
   assert(spin_holding(&buf_cache.lock));
   assert(buf_cache.size < BUF_CACHE_MAX_SIZE);
@@ -58,18 +95,16 @@ buf_alloc(void)
   if ((buf = (struct Buf *) object_pool_get(buf_desc_cache)) == NULL)
     return NULL;
 
-  if ((page = page_alloc_one(0)) == NULL) {
+  if ((buf->data = buf_alloc_data(block_size)) == NULL) {
     object_pool_put(buf_desc_cache, buf);
     return NULL;
   }
-
-  buf->data = (uint8_t *) page2kva(page);
-  page->ref_count++;
 
   buf->block_no   = 0;
   buf->dev        = 0;
   buf->flags      = 0;
   buf->ref_count  = 0;
+  buf->block_size = block_size;
 
   list_add_front(&buf_cache.head, &buf->cache_link);
   buf_cache.size++;
@@ -79,7 +114,7 @@ buf_alloc(void)
 
 // Scan the cache for a buffer with the given block number and device.
 static struct Buf *
-buf_get(unsigned block_no, dev_t dev)
+buf_get(unsigned block_no, size_t block_size, dev_t dev)
 {
   struct ListLink *l;
   struct Buf *b, *unused = NULL;
@@ -90,7 +125,9 @@ buf_get(unsigned block_no, dev_t dev)
   LIST_FOREACH(&buf_cache.head, l) {
     b = LIST_CONTAINER(l, struct Buf, cache_link);
 
-    if ((b->block_no == block_no) && (b->dev == dev)) {
+    if ((b->block_no == block_no) &&
+        (b->dev == dev) &&
+        (b->block_size == block_size)) {
       b->ref_count++;
 
       spin_unlock(&buf_cache.lock);
@@ -105,7 +142,8 @@ buf_get(unsigned block_no, dev_t dev)
 
   // Grow the buffer cache. If the maximum cache size is already reached, try
   // to reuse a buffer that held a different block.
-  if ((buf_cache.size >= BUF_CACHE_MAX_SIZE) || ((b = buf_alloc()) == NULL))
+  if ((buf_cache.size >= BUF_CACHE_MAX_SIZE) ||
+      ((b = buf_alloc(block_size)) == NULL))
     b = unused;
 
   if (b == NULL) {
@@ -114,10 +152,27 @@ buf_get(unsigned block_no, dev_t dev)
     return NULL;
   }
 
-  b->block_no  = block_no;
-  b->dev       = dev;
-  b->ref_count = 1;
-  b->flags     = 0;
+  // TODO: realloc
+  if (b->block_size != block_size) {
+    buf_free_data(b->data, b->block_size);
+
+    if ((b->data = buf_alloc_data(block_size)) == NULL) {
+      list_remove(&b->cache_link);
+      object_pool_put(buf_desc_cache, b);
+
+      spin_unlock(&buf_cache.lock);
+
+      return NULL;
+    }
+
+    b->block_size = block_size;
+  }
+
+  b->block_size = block_size;
+  b->block_no   = block_no;
+  b->dev        = dev;
+  b->ref_count  = 1;
+  b->flags      = 0;
 
   spin_unlock(&buf_cache.lock);
 
@@ -133,11 +188,11 @@ buf_get(unsigned block_no, dev_t dev)
  *         a block.
  */
 struct Buf *
-buf_read(unsigned block_no, dev_t dev)
+buf_read(unsigned block_no, size_t block_size, dev_t dev)
 {
   struct Buf *buf;
 
-  if ((buf = buf_get(block_no, dev)) == NULL)
+  if ((buf = buf_get(block_no, block_size, dev)) == NULL)
     return NULL;
 
   kmutex_lock(&buf->mutex);

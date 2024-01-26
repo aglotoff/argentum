@@ -96,4 +96,7 @@ void               object_pool_put(struct ObjectPool *, void *);
 
 void               system_object_pool_init(void);
 
+void              *kmalloc(size_t);
+void               kfree(void *);
+
 #endif  // !__KERNEL_INCLUDE_KERNEL_MM_KMEM_H__
