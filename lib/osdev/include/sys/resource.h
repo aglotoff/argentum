@@ -1,11 +1,18 @@
 #ifndef __SYS_RESOURCE_H__
 #define __SYS_RESOURCE_H__
 
+#include <sys/time.h>
+
 typedef unsigned long rlim_t;
 
 struct rlimit {
   rlim_t rlim_cur; // the current (soft) limit
   rlim_t rlim_max; // the hard limit
+};
+
+struct rusage {
+  struct timeval ru_utime;
+  struct timeval ru_stime;
 };
 
 #define RLIM_INFINITY   0
@@ -19,5 +26,8 @@ struct rlimit {
 #define RLIMIT_NOFILE   4
 #define RLIMIT_STACK    5
 #define RLIMIT_AS       6
+
+#define	RUSAGE_SELF			0
+#define	RUSAGE_CHILDREN -1
 
 #endif  // !__SYS_RESOURCE_H__

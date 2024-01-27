@@ -697,6 +697,7 @@ sys_fcntl(void)
   case F_SETLK:
   case F_SETLKW:
     // TODO: implement
+    cprintf("TODO: fcntl(%d)\n", cmd);
     return -ENOSYS;
   default:
     return -EINVAL;

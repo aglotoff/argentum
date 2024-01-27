@@ -1,6 +1,7 @@
 #include <errno.h>
 #include <limits.h>
 #include <sys/resource.h>
+#include <stdio.h>
 
 int
 getrlimit(int resource, struct rlimit *rlim)
@@ -17,6 +18,7 @@ getrlimit(int resource, struct rlimit *rlim)
   case RLIMIT_STACK:
   case RLIMIT_AS:
     // TODO: implement
+    fprintf(stderr, "TODO: getrlmit(%d)\n", resource);
     errno = ENOSYS;
     return -1;
   default:

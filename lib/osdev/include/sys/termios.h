@@ -38,6 +38,9 @@ struct termios {
 #define CLOCAL		0x0001	/* ignore modem status lines */
 #define CREAD		0x0002	/* enable receiver */
 #define CSIZE		    0x000C
+#define   CS5 0x0000
+#define   CS6 0x0004
+#define   CS7 0x0008
 #define		CS8	0x000C
 #define CSTOPB		0x0010
 #define HUPCL	  	0x0020
@@ -55,16 +58,12 @@ struct termios {
 
 int     tcgetattr(int, struct termios *);
 int     tcsetattr(int, int, const struct termios *);
-// int     tcflush(int, int);
+speed_t cfgetispeed(const struct termios *);
 speed_t cfgetospeed(const struct termios *);
+int     cfsetispeed(struct termios *, speed_t);
+int     cfsetospeed(struct termios *, speed_t);
 
-// struct sgttyb {
-//     // char sg_ispeed; /* input speed */
-//   char sg_ospeed; /* output speed */
-//     // char sg_erase;  /* erase character */
-//     // char sg_kill;   /* kill character */
-//     // int  sg_flags;  /* mode flags */
-// };
+#define IXANY		0x0800	/* allow any key to continue ouptut */
 
 #define VEOF                 0	/* cc_c[VEOF] = EOF char (^D) */
 #define VEOL                 1	/* cc_c[VEOL] = EOL char (undef) */

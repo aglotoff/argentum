@@ -7,6 +7,11 @@ LIB_SRCFILES := \
 	lib/osdev/arpa/inet/inet_pton.c \
 	lib/osdev/fcntl/fcntl.c \
 	lib/osdev/fcntl/open.c \
+	lib/osdev/grp/endgrent.c \
+	lib/osdev/grp/getgrent.c \
+	lib/osdev/grp/getgrgid.c \
+	lib/osdev/grp/getgrnam.c \
+	lib/osdev/grp/setgrent.c \
 	lib/osdev/include/arpa/inet.h \
 	lib/osdev/include/netinet/in.h \
 	lib/osdev/include/sys/dirent.h \
@@ -18,7 +23,13 @@ LIB_SRCFILES := \
 	lib/osdev/include/sys/utime.h \
 	lib/osdev/include/sys/utmp.h \
 	lib/osdev/include/sys/utsname.h \
+	lib/osdev/include/sys/vfs.h \
 	lib/osdev/include/limits.h \
+	lib/osdev/include/mntent.h \
+	lib/osdev/include/netdb.h \
+	lib/osdev/mntent/getmntent.c \
+	lib/osdev/netdb/gethostbyname.c \
+	lib/osdev/netdb/getservbyname.c \
 	lib/osdev/signal/kill.c \
 	lib/osdev/signal/killpg.c \
 	lib/osdev/signal/sigaction.c \
@@ -50,9 +61,13 @@ LIB_SRCFILES := \
 	lib/osdev/sys/time/select.c \
 	lib/osdev/sys/times/times.c \
 	lib/osdev/sys/utsname/uname.c \
+	lib/osdev/sys/vfs/statfs.c \
 	lib/osdev/sys/wait/wait.c \
 	lib/osdev/sys/wait/waitpid.c \
+	lib/osdev/termios/cfgetispeed.c \
 	lib/osdev/termios/cfgetospeed.c \
+	lib/osdev/termios/cfsetispeed.c \
+	lib/osdev/termios/cfsetospeed.c \
 	lib/osdev/termios/tcflush.c \
 	lib/osdev/termios/tcgetattr.c \
 	lib/osdev/termios/tcsetattr.c \
@@ -65,8 +80,11 @@ LIB_SRCFILES := \
 	lib/osdev/unistd/dup.c \
 	lib/osdev/unistd/dup2.c \
 	lib/osdev/unistd/execve.c \
+	lib/osdev/unistd/fchown.c \
 	lib/osdev/unistd/fork.c \
+	lib/osdev/unistd/fpathconf.c \
 	lib/osdev/unistd/fsync.c \
+	lib/osdev/unistd/ftruncate.c \
 	lib/osdev/unistd/getdents.c \
 	lib/osdev/unistd/getegid.c \
 	lib/osdev/unistd/geteuid.c \
@@ -77,13 +95,18 @@ LIB_SRCFILES := \
 	lib/osdev/unistd/getpid.c \
 	lib/osdev/unistd/getppid.c \
 	lib/osdev/unistd/getuid.c \
+	lib/osdev/unistd/lchown.c \
 	lib/osdev/unistd/link.c \
 	lib/osdev/unistd/lseek.c \
+	lib/osdev/unistd/pathconf.c \
 	lib/osdev/unistd/pipe.c \
 	lib/osdev/unistd/read.c \
 	lib/osdev/unistd/rmdir.c \
 	lib/osdev/unistd/sbrk.c \
+	lib/osdev/unistd/sethostname.c \
 	lib/osdev/unistd/setpgid.c \
+	lib/osdev/unistd/setregid.c \
+	lib/osdev/unistd/setreuid.c \
 	lib/osdev/unistd/sysconf.c \
 	lib/osdev/unistd/tcgetpgrp.c \
 	lib/osdev/unistd/tcsetpgrp.c \

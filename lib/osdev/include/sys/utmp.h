@@ -6,6 +6,7 @@
 
 #define UT_NAMESIZE   8
 #define UT_LINESIZE   8
+#define	UT_HOSTSIZE	  16
 
 #define EMPTY         0
 #define RUN_LVL       1
@@ -21,6 +22,8 @@
 struct utmp {
   char  ut_line[UT_LINESIZE];
   char  ut_user[UT_NAMESIZE];
+  char	ut_host[UT_HOSTSIZE];
+  long  ut_time;
   short ut_type;
   char  ut_id[4];
 };

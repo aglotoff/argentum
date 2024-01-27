@@ -2,6 +2,14 @@ libc_a_SOURCES += \
   %D%/arpa/inet/inet_pton.c \
   %D%/fcntl/fcntl.c \
   %D%/fcntl/open.c \
+  %D%/grp/endgrent.c \
+  %D%/grp/getgrent.c \
+  %D%/grp/getgrgid.c \
+  %D%/grp/getgrnam.c \
+  %D%/grp/setgrent.c \
+  %D%/mntent/getmntent.c \
+  %D%/netdb/gethostbyname.c \
+  %D%/netdb/getservbyname.c \
   %D%/signal/kill.c \
   %D%/signal/killpg.c \
   %D%/signal/sigaction.c \
@@ -33,10 +41,14 @@ libc_a_SOURCES += \
   %D%/sys/time/select.c \
   %D%/sys/times/times.c \
   %D%/sys/utsname/uname.c \
+  %D%/sys/vfs/statfs.c \
   %D%/sys/wait/wait.c \
   %D%/sys/wait/wait3.c \
   %D%/sys/wait/waitpid.c \
+  %D%/termios/cfgetispeed.c \
   %D%/termios/cfgetospeed.c \
+  %D%/termios/cfsetispeed.c \
+  %D%/termios/cfsetospeed.c \
   %D%/termios/tcflush.c \
   %D%/termios/tcgetattr.c \
   %D%/termios/tcsetattr.c \
@@ -49,8 +61,11 @@ libc_a_SOURCES += \
   %D%/unistd/dup.c \
   %D%/unistd/dup2.c \
   %D%/unistd/execve.c \
+  %D%/unistd/fchown.c \
   %D%/unistd/fork.c \
   %D%/unistd/fsync.c \
+  %D%/unistd/fpathconf.c \
+  %D%/unistd/ftruncate.c \
   %D%/unistd/getdents.c \
   %D%/unistd/getegid.c \
   %D%/unistd/geteuid.c \
@@ -61,13 +76,18 @@ libc_a_SOURCES += \
   %D%/unistd/getpid.c \
   %D%/unistd/getppid.c \
   %D%/unistd/getuid.c \
+  %D%/unistd/lchown.c \
   %D%/unistd/link.c \
   %D%/unistd/lseek.c \
+  %D%/unistd/pathconf.c \
   %D%/unistd/pipe.c \
   %D%/unistd/read.c \
   %D%/unistd/rmdir.c \
   %D%/unistd/sbrk.c \
+  %D%/unistd/sethostname.c \
   %D%/unistd/setpgid.c \
+  %D%/unistd/setregid.c \
+  %D%/unistd/setreuid.c \
   %D%/unistd/sysconf.c \
   %D%/unistd/tcgetpgrp.c \
   %D%/unistd/tcsetpgrp.c \
