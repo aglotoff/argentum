@@ -1,9 +1,10 @@
 PACKAGE_NAME := sed-4.9
 SRC_DIR      := $(PACKAGE_NAME)
 TARBALL_NAME := $(PACKAGE_NAME).tar.xz
+TARBALL_FILE := ../../tarballs/$(TARBALL_NAME)
 PATCH_FILE   := $(PACKAGE_NAME).patch
 
-SYSROOT := $(HOME)/osdev/sysroot
+SYSROOT := $(HOME)/argentum/sysroot
 
 all: config
 	make -C $(SRC_DIR)
@@ -13,17 +14,16 @@ config: $(SRC_DIR)/Makefile
 install: all
 	make -C $(SRC_DIR) DESTDIR=$(SYSROOT) install
 
-$(TARBALL_NAME):
-	wget "https://ftp.gnu.org/gnu/sed/${TARBALL_NAME}"
+$(TARBALL_FILE):
+	wget "https://ftp.gnu.org/gnu/sed/${TARBALL_NAME}" -O $@
 
-$(SRC_DIR): $(TARBALL_NAME)
+$(SRC_DIR): $(TARBALL_FILE)
 	tar xf $<
 	cd $@ && patch -p1 -i ../$(PATCH_FILE)
 
 $(SRC_DIR)/Makefile: | $(SRC_DIR)
-	cd $(@D) && \
-	 ./configure --host=arm-none-osdev \
-	                                 --prefix=/usr
+	cd $(@D) && ./configure --host=arm-none-argentum \
+	                        --prefix=/usr
 
 clean:
 	rm -rf $(SRC_DIR)

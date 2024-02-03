@@ -1,19 +1,19 @@
 {
   "configurations": [
     {
-      "name": "OSDev",
+      "name": "argentum",
       "defines": [
-        "__OSDEV__",
-        "__OSDEV_KERNEL__"
+        "__ARGENTUM__",
+        "__ARGENTUM_KERNEL__"
       ],
       "includePath": [
         "./sysroot/usr/include",
         "./kernel/include",
-        "./kernel/net/lwip/osdev",
+        "./kernel/net/lwip/argentum",
         "./kernel/net/lwip/include"
       ],
       "intelliSenseMode": "linux-gcc-x64",
-      "compilerPath": "/usr/local/bin/arm-none-osdev-gcc",
+      "compilerPath": "/usr/local/bin/arm-none-argentum-gcc",
       "cStandard": "gnu11",
       "cppStandard": "c++11"
     }

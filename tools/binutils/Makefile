@@ -3,7 +3,7 @@ SRC_DIR      := $(PACKAGE_NAME)
 BUILD_DIR    := build
 TARBALL_NAME := $(PACKAGE_NAME).tar.xz
 TARBALL_FILE := ../../tarballs/$(TARBALL_NAME)
-PATCH_FILE   := $(PACKAGE_NAME).patch
+PATCH_FILE   := ../../ports/binutils/$(PACKAGE_NAME).patch
 
 SYSROOT := $(HOME)/argentum/sysroot
 
@@ -13,8 +13,7 @@ all: config
 config: $(BUILD_DIR)/Makefile
 
 install: all
-	make -C $(BUILD_DIR) DESTDIR=$(SYSROOT) install
-	rm -v $(SYSROOT)/usr/lib/lib{bfd,ctf,ctf-nobfd,opcodes,sframe}.la
+	sudo make -C $(BUILD_DIR) install
 
 $(TARBALL_FILE):
 	wget "https://ftp.gnu.org/gnu/binutils/${TARBALL_NAME}" -O $@
@@ -25,17 +24,16 @@ $(SRC_DIR): $(TARBALL_FILE)
 
 $(BUILD_DIR)/Makefile: $(SRC_DIR)
 	mkdir -p $(@D)
-	cd $(@D) && ../$(SRC_DIR)/configure --prefix=/usr \
-	                                    --build=$(shell $(SRC_DIR)/config.guess) \
-																			--host=arm-none-argentum \
+	cd $(@D) && ../$(SRC_DIR)/configure --prefix=/usr/local \
+	                                    --target=arm-none-argentum \
+	                                    --with-sysroot=$(SYSROOT) \
 																		  --disable-nls \
-                                      --disable-werror \
-																		  --disable-shared \
+                                      --disable-werror
 
 clean:
 	rm -rf $(SRC_DIR) $(BUILD_DIR)
 
 distclean: clean
-	rm -rf $(TARBALL_NAME)
+	rm -rf $(TARBALL_FILE)
 
 .PHONY: all config install clean distclean

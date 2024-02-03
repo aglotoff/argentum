@@ -7,6 +7,9 @@ ports/*/*
 !ports/*/Makefile
 !ports/*/*.patch
 
+tools/*/*
+!tools/*/Makefile
+
 lib/newlib-4.4.0.20231231/
 
 tarballs/

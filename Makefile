@@ -17,7 +17,7 @@ SYSROOT := sysroot
 # The recommended target for the cross-compiler toolchain is "arm-none-eabi-".
 # If you want to use the host tools (i.e. binutils, gcc, gdb, etc.), comment
 # this line out.
-TOOLPREFIX := arm-none-osdev-
+TOOLPREFIX := arm-none-argentum-
 
 # QEMU executable
 QEMU := qemu-system-arm
@@ -60,6 +60,7 @@ include lib/lib.mk
 include kernel/kernel.mk
 include user/user.mk
 include ports/ports.mk
+include tools/tools.mk
 
 clean-fs:
 	rm -rf $(OBJ)/fs.img
@@ -91,8 +92,8 @@ qemu-gdb: $(OBJ)/fs.img $(KERNEL)
 $(SYSROOT):
 	@mkdir -p $@{,/usr{,/lib,/include}}
 
-# clean:
-# 	rm -rf $(OBJ) $(SYSROOT)
+clean:
+	rm -rf $(OBJ) $(SYSROOT)
 
 .PRECIOUS: $(OBJ)/user/%.o
 

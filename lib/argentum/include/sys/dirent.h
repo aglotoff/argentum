@@ -10,7 +10,7 @@ extern "C" {
  * routines, so it looks like it.  But it was written from scratch.
  * Sean Eric Fagan, sef@Kithrup.COM
  *
- *  Copied to OSDEV configuration without modification.
+ *  Copied to ARGENTUM configuration without modification.
  */
 
 typedef struct _dirdesc {

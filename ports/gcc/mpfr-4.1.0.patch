@@ -6,7 +6,7 @@ diff -ruN old/config.sub new/config.sub
  	      | -skyos* | -haiku* | -rdos* | -toppers* | -drops* | -es* \
  	      | -onefs* | -tirtos* | -phoenix* | -fuchsia* | -redox* | -bme* \
 -	      | -midnightbsd*)
-+	      | -midnightbsd* | -osdev*)
++	      | -midnightbsd* | -argentum*)
  	# Remember, each alternative MUST END IN *, to match a version number.
  		;;
  	-qnx*)

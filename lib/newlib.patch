@@ -6,7 +6,7 @@ diff -ruN old/config.sub new/config.sub
  	     | onefs* | tirtos* | phoenix* | fuchsia* | redox* | bme* \
  	     | midnightbsd* | amdhsa* | unleashed* | emscripten* | wasi* \
 -	     | nsk* | powerunix* | genode* | zvmoe* | qnx* | emx*)
-+	     | nsk* | powerunix* | genode* | zvmoe* | qnx* | emx* | osdev* )
++	     | nsk* | powerunix* | genode* | zvmoe* | qnx* | emx* | argentum* )
  		;;
  	# This one is extra strict with allowed versions
  	sco3.2v2 | sco3.2v[4-9]* | sco5v6*)
@@ -17,8 +17,8 @@ diff -ruN old/newlib/configure.host new/newlib/configure.host
  	posix_dir=posix
  	unix_dir=unix
  	;;
-+	*-*-osdev*)
-+	sys_dir=osdev
++	*-*-argentum*)
++	sys_dir=argentum
 +	posix_dir=posix
 +	unix_dir=unix
 +	;;
@@ -29,8 +29,8 @@ diff -ruN old/newlib/configure.host new/newlib/configure.host
          # turn off unsupported items in posix directory 
  	newlib_cflags="${newlib_cflags} -D_NO_GETLOGIN -D_NO_GETPWENT -D_NO_GETUT -D_NO_GETPASS -D_NO_SIGSET -D_NO_WORDEXP -D_NO_POPEN -D_NO_POSIX_SPAWN"
  	;;
-+	*-*-osdev*)
-+  newlib_cflags="${newlib_cflags} -nostdlib -DHAVE_NANOSLEEP -D__OSDEV__"
++	*-*-argentum*)
++  newlib_cflags="${newlib_cflags} -nostdlib -DHAVE_NANOSLEEP -D__ARGENTUM__"
 +	;;
  # VxWorks supplies its own version of malloc, and the newlib one
  # doesn't work because VxWorks does not have sbrk.
@@ -42,7 +42,7 @@ diff -ruN old/newlib/libc/acinclude.m4 new/newlib/libc/acinclude.m4
    w65
    xtensa
    z8ksim
-+  osdev
++  argentum
  ], [AM_CONDITIONAL([HAVE_LIBC_SYS_]m4_toupper(SYS_DIR)[_DIR], test "${sys_dir}" = SYS_DIR)])
  
  AC_TYPE_LONG_DOUBLE
@@ -53,11 +53,11 @@ diff -ruN old/newlib/libc/include/sys/features.h new/newlib/libc/include/sys/fea
  
  #endif /* __CYGWIN__ */
  
-+#ifdef __OSDEV__
++#ifdef __ARGENTUM__
 +
 +#define _POSIX_TIMERS			1
 +
-+#endif /* __OSDEV__ */
++#endif /* __ARGENTUM__ */
 +
  #ifdef __cplusplus
  }
@@ -69,7 +69,7 @@ diff -ruN old/newlib/libc/include/sys/signal.h new/newlib/libc/include/sys/signa
  #define sa_sigaction  _signal_handlers._sigaction
  #endif
  
-+#elif defined(__OSDEV__)
++#elif defined(__ARGENTUM__)
 +
 +typedef void (*_sig_func_ptr)(int);
 +
@@ -96,7 +96,7 @@ diff -ruN old/newlib/libc/include/sys/stat.h new/newlib/libc/include/sys/stat.h
  mode_t	umask (mode_t __mask );
  
 -#if defined (__SPU__) || defined(__rtems__) || defined(__CYGWIN__)
-+#if defined (__SPU__) || defined(__rtems__) || defined(__CYGWIN__) || defined(__OSDEV__)
++#if defined (__SPU__) || defined(__rtems__) || defined(__CYGWIN__) || defined(__ARGENTUM__)
  int	lstat (const char *__restrict __path, struct stat *__restrict __buf );
  int	mknod (const char *__path, mode_t __mode, dev_t __dev );
  #endif
@@ -173,6 +173,6 @@ diff -ruN old/newlib/libc/sys/Makefile.inc new/newlib/libc/sys/Makefile.inc
  if HAVE_LIBC_SYS_Z8KSIM_DIR
  include %D%/z8ksim/Makefile.inc
  endif
-+if HAVE_LIBC_SYS_OSDEV_DIR
-+include %D%/osdev/Makefile.inc
++if HAVE_LIBC_SYS_ARGENTUM_DIR
++include %D%/argentum/Makefile.inc
 +endif

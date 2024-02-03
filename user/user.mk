@@ -1,5 +1,5 @@
-USER_FLAGS    := -O2 -Wno-return-local-addr -Wno-char-subscripts -D__OSDEV__
-USER_CFLAGS   := $(CFLAGS) $(USER_FLAGS)
+USER_FLAGS  := -O2 -Wno-return-local-addr -Wno-char-subscripts -D__ARGENTUM__
+USER_CFLAGS := $(CFLAGS) $(USER_FLAGS)
 USER_CFLAGS := $(CFLAGS) $(USER_FLAGS)
 
 USER_SRCFILES :=

@@ -7,7 +7,7 @@
  * Object allocator.
  */
 
-#ifndef __OSDEV_KERNEL__
+#ifndef __ARGENTUM_KERNEL__
 #error "This is a kernel header; user programs should not #include it"
 #endif
 

@@ -5,10 +5,10 @@
 LWIPDIR := kernel/net/lwip
 include kernel/net/lwip/Filelists.mk
 
-KERNEL_CFLAGS  := $(CFLAGS) $(INIT_CFLAGS) -Ikernel/include -D__OSDEV_KERNEL__
+KERNEL_CFLAGS  := $(CFLAGS) $(INIT_CFLAGS) -Ikernel/include -D__ARGENTUM_KERNEL__
 KERNEL_CFLAGS  += -O1 -mapcs-frame -fno-omit-frame-pointer -gdwarf-3
 KERNEL_CFLAGS  += -ffreestanding -nostdlib -fno-builtin 
-KERNEL_CFLAGS  += -I$(LWIPDIR)/include -I$(LWIPDIR)/osdev -Wno-type-limits
+KERNEL_CFLAGS  += -I$(LWIPDIR)/include -I$(LWIPDIR)/argentum -Wno-type-limits
 KERNEL_LDFLAGS := $(LDFLAGS) -T kernel/kernel.ld -nostdlib
 
 ifdef PROCESS_NAME
@@ -97,8 +97,8 @@ KERNEL_SRCFILES += \
 
 KERNEL_SRCFILES += $(LWIPNOAPPSFILES)
 KERNEL_SRCFILES += \
-	kernel/net/lwip/osdev/arch/sys_arch.c \
-	kernel/net/lwip/osdev/arch/sio.c
+	kernel/net/lwip/argentum/arch/sys_arch.c \
+	kernel/net/lwip/argentum/arch/sio.c
 
 KERNEL_OBJFILES := $(patsubst %.c, $(OBJ)/%.o, $(KERNEL_SRCFILES))
 KERNEL_OBJFILES := $(patsubst %.S, $(OBJ)/%.o, $(KERNEL_OBJFILES))

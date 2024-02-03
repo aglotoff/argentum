@@ -4,118 +4,118 @@ NEWLIB := lib/newlib-4.4.0.20231231
 NEWLIB_TARBALL := tarballs/newlib-4.4.0.20231231.tar.gz
 
 LIB_SRCFILES := \
-	lib/osdev/arpa/inet/inet_pton.c \
-	lib/osdev/fcntl/fcntl.c \
-	lib/osdev/fcntl/open.c \
-	lib/osdev/grp/endgrent.c \
-	lib/osdev/grp/getgrent.c \
-	lib/osdev/grp/getgrgid.c \
-	lib/osdev/grp/getgrnam.c \
-	lib/osdev/grp/setgrent.c \
-	lib/osdev/include/arpa/inet.h \
-	lib/osdev/include/netinet/in.h \
-	lib/osdev/include/sys/dirent.h \
-	lib/osdev/include/sys/ioctl.h \
-	lib/osdev/include/sys/resource.h \
-	lib/osdev/include/sys/socket.h \
-	lib/osdev/include/sys/syscall.h \
-	lib/osdev/include/sys/termios.h \
-	lib/osdev/include/sys/utime.h \
-	lib/osdev/include/sys/utmp.h \
-	lib/osdev/include/sys/utsname.h \
-	lib/osdev/include/sys/vfs.h \
-	lib/osdev/include/limits.h \
-	lib/osdev/include/mntent.h \
-	lib/osdev/include/netdb.h \
-	lib/osdev/mntent/getmntent.c \
-	lib/osdev/netdb/gethostbyname.c \
-	lib/osdev/netdb/getservbyname.c \
-	lib/osdev/signal/kill.c \
-	lib/osdev/signal/killpg.c \
-	lib/osdev/signal/sigaction.c \
-	lib/osdev/signal/sigprocmask.c \
-	lib/osdev/signal/sigstub.S \
-	lib/osdev/signal/sigsuspend.c \
-	lib/osdev/stdlib/realpath.c \
-	lib/osdev/sys/resource/getrlimit.c \
-	lib/osdev/sys/resource/setrlimit.c \
-	lib/osdev/sys/socket/accept.c \
-	lib/osdev/sys/socket/bind.c \
-	lib/osdev/sys/socket/connect.c \
-	lib/osdev/sys/socket/listen.c \
-	lib/osdev/sys/socket/recv.c \
-	lib/osdev/sys/socket/recvfrom.c \
-	lib/osdev/sys/socket/send.c \
-	lib/osdev/sys/socket/sendto.c \
-	lib/osdev/sys/socket/setsockopt.c \
-	lib/osdev/sys/socket/socket.c \
-	lib/osdev/sys/stat/chmod.c \
-	lib/osdev/sys/stat/fchmod.c \
-	lib/osdev/sys/stat/fstat.c \
-	lib/osdev/sys/stat/lstat.c \
-	lib/osdev/sys/stat/mkdir.c \
-	lib/osdev/sys/stat/mknod.c \
-	lib/osdev/sys/stat/stat.c \
-	lib/osdev/sys/stat/umask.c \
-	lib/osdev/sys/time/gettimeofday.c \
-	lib/osdev/sys/time/select.c \
-	lib/osdev/sys/times/times.c \
-	lib/osdev/sys/utsname/uname.c \
-	lib/osdev/sys/vfs/statfs.c \
-	lib/osdev/sys/wait/wait.c \
-	lib/osdev/sys/wait/waitpid.c \
-	lib/osdev/termios/cfgetispeed.c \
-	lib/osdev/termios/cfgetospeed.c \
-	lib/osdev/termios/cfsetispeed.c \
-	lib/osdev/termios/cfsetospeed.c \
-	lib/osdev/termios/tcflush.c \
-	lib/osdev/termios/tcgetattr.c \
-	lib/osdev/termios/tcsetattr.c \
-	lib/osdev/time/nanosleep.c \
-	lib/osdev/unistd/_exit.c \
-	lib/osdev/unistd/access.c \
-	lib/osdev/unistd/alarm.c \
-	lib/osdev/unistd/chdir.c \
-	lib/osdev/unistd/close.c \
-	lib/osdev/unistd/dup.c \
-	lib/osdev/unistd/dup2.c \
-	lib/osdev/unistd/execve.c \
-	lib/osdev/unistd/fchown.c \
-	lib/osdev/unistd/fork.c \
-	lib/osdev/unistd/fpathconf.c \
-	lib/osdev/unistd/fsync.c \
-	lib/osdev/unistd/ftruncate.c \
-	lib/osdev/unistd/getdents.c \
-	lib/osdev/unistd/getegid.c \
-	lib/osdev/unistd/geteuid.c \
-	lib/osdev/unistd/getgid.c \
-	lib/osdev/unistd/getgroups.c \
-	lib/osdev/unistd/getpgid.c \
-	lib/osdev/unistd/getpgrp.c \
-	lib/osdev/unistd/getpid.c \
-	lib/osdev/unistd/getppid.c \
-	lib/osdev/unistd/getuid.c \
-	lib/osdev/unistd/lchown.c \
-	lib/osdev/unistd/link.c \
-	lib/osdev/unistd/lseek.c \
-	lib/osdev/unistd/pathconf.c \
-	lib/osdev/unistd/pipe.c \
-	lib/osdev/unistd/read.c \
-	lib/osdev/unistd/rmdir.c \
-	lib/osdev/unistd/sbrk.c \
-	lib/osdev/unistd/sethostname.c \
-	lib/osdev/unistd/setpgid.c \
-	lib/osdev/unistd/setregid.c \
-	lib/osdev/unistd/setreuid.c \
-	lib/osdev/unistd/sysconf.c \
-	lib/osdev/unistd/tcgetpgrp.c \
-	lib/osdev/unistd/tcsetpgrp.c \
-	lib/osdev/unistd/unlink.c \
-	lib/osdev/unistd/vfork.c \
-	lib/osdev/unistd/write.c \
-	lib/osdev/utime/utime.c \
-	lib/osdev/crt0.S \
-	lib/osdev/progname.c \
+	lib/argentum/arpa/inet/inet_pton.c \
+	lib/argentum/fcntl/fcntl.c \
+	lib/argentum/fcntl/open.c \
+	lib/argentum/grp/endgrent.c \
+	lib/argentum/grp/getgrent.c \
+	lib/argentum/grp/getgrgid.c \
+	lib/argentum/grp/getgrnam.c \
+	lib/argentum/grp/setgrent.c \
+	lib/argentum/include/arpa/inet.h \
+	lib/argentum/include/netinet/in.h \
+	lib/argentum/include/sys/dirent.h \
+	lib/argentum/include/sys/ioctl.h \
+	lib/argentum/include/sys/resource.h \
+	lib/argentum/include/sys/socket.h \
+	lib/argentum/include/sys/syscall.h \
+	lib/argentum/include/sys/termios.h \
+	lib/argentum/include/sys/utime.h \
+	lib/argentum/include/sys/utmp.h \
+	lib/argentum/include/sys/utsname.h \
+	lib/argentum/include/sys/vfs.h \
+	lib/argentum/include/limits.h \
+	lib/argentum/include/mntent.h \
+	lib/argentum/include/netdb.h \
+	lib/argentum/mntent/getmntent.c \
+	lib/argentum/netdb/gethostbyname.c \
+	lib/argentum/netdb/getservbyname.c \
+	lib/argentum/signal/kill.c \
+	lib/argentum/signal/killpg.c \
+	lib/argentum/signal/sigaction.c \
+	lib/argentum/signal/sigprocmask.c \
+	lib/argentum/signal/sigstub.S \
+	lib/argentum/signal/sigsuspend.c \
+	lib/argentum/stdlib/realpath.c \
+	lib/argentum/sys/resource/getrlimit.c \
+	lib/argentum/sys/resource/setrlimit.c \
+	lib/argentum/sys/socket/accept.c \
+	lib/argentum/sys/socket/bind.c \
+	lib/argentum/sys/socket/connect.c \
+	lib/argentum/sys/socket/listen.c \
+	lib/argentum/sys/socket/recv.c \
+	lib/argentum/sys/socket/recvfrom.c \
+	lib/argentum/sys/socket/send.c \
+	lib/argentum/sys/socket/sendto.c \
+	lib/argentum/sys/socket/setsockopt.c \
+	lib/argentum/sys/socket/socket.c \
+	lib/argentum/sys/stat/chmod.c \
+	lib/argentum/sys/stat/fchmod.c \
+	lib/argentum/sys/stat/fstat.c \
+	lib/argentum/sys/stat/lstat.c \
+	lib/argentum/sys/stat/mkdir.c \
+	lib/argentum/sys/stat/mknod.c \
+	lib/argentum/sys/stat/stat.c \
+	lib/argentum/sys/stat/umask.c \
+	lib/argentum/sys/time/gettimeofday.c \
+	lib/argentum/sys/time/select.c \
+	lib/argentum/sys/times/times.c \
+	lib/argentum/sys/utsname/uname.c \
+	lib/argentum/sys/vfs/statfs.c \
+	lib/argentum/sys/wait/wait.c \
+	lib/argentum/sys/wait/waitpid.c \
+	lib/argentum/termios/cfgetispeed.c \
+	lib/argentum/termios/cfgetospeed.c \
+	lib/argentum/termios/cfsetispeed.c \
+	lib/argentum/termios/cfsetospeed.c \
+	lib/argentum/termios/tcflush.c \
+	lib/argentum/termios/tcgetattr.c \
+	lib/argentum/termios/tcsetattr.c \
+	lib/argentum/time/nanosleep.c \
+	lib/argentum/unistd/_exit.c \
+	lib/argentum/unistd/access.c \
+	lib/argentum/unistd/alarm.c \
+	lib/argentum/unistd/chdir.c \
+	lib/argentum/unistd/close.c \
+	lib/argentum/unistd/dup.c \
+	lib/argentum/unistd/dup2.c \
+	lib/argentum/unistd/execve.c \
+	lib/argentum/unistd/fchown.c \
+	lib/argentum/unistd/fork.c \
+	lib/argentum/unistd/fpathconf.c \
+	lib/argentum/unistd/fsync.c \
+	lib/argentum/unistd/ftruncate.c \
+	lib/argentum/unistd/getdents.c \
+	lib/argentum/unistd/getegid.c \
+	lib/argentum/unistd/geteuid.c \
+	lib/argentum/unistd/getgid.c \
+	lib/argentum/unistd/getgroups.c \
+	lib/argentum/unistd/getpgid.c \
+	lib/argentum/unistd/getpgrp.c \
+	lib/argentum/unistd/getpid.c \
+	lib/argentum/unistd/getppid.c \
+	lib/argentum/unistd/getuid.c \
+	lib/argentum/unistd/lchown.c \
+	lib/argentum/unistd/link.c \
+	lib/argentum/unistd/lseek.c \
+	lib/argentum/unistd/pathconf.c \
+	lib/argentum/unistd/pipe.c \
+	lib/argentum/unistd/read.c \
+	lib/argentum/unistd/rmdir.c \
+	lib/argentum/unistd/sbrk.c \
+	lib/argentum/unistd/sethostname.c \
+	lib/argentum/unistd/setpgid.c \
+	lib/argentum/unistd/setregid.c \
+	lib/argentum/unistd/setreuid.c \
+	lib/argentum/unistd/sysconf.c \
+	lib/argentum/unistd/tcgetpgrp.c \
+	lib/argentum/unistd/tcsetpgrp.c \
+	lib/argentum/unistd/unlink.c \
+	lib/argentum/unistd/vfork.c \
+	lib/argentum/unistd/write.c \
+	lib/argentum/utime/utime.c \
+	lib/argentum/crt0.S \
+	lib/argentum/progname.c \
 
 LIB_SRCFILES := $(patsubst lib/%, $(NEWLIB)/newlib/libc/sys/%, $(LIB_SRCFILES))
 
@@ -125,28 +125,28 @@ $(NEWLIB_TARBALL):
 
 $(NEWLIB): $(NEWLIB_TARBALL)
 	$(V)tar xf $^ -C $(@D)
-	cp -ar lib/osdev $@/newlib/libc/sys/
+	cp -ar lib/argentum $@/newlib/libc/sys/
 	$(V)pushd $@ && patch -p1 -i ../newlib.patch
 
 # Install libc headers before building the cross-compiler
 # TODO: probably we just could create a dummy limits.h file
 install-headers: $(NEWLIB) $(SYSROOT)
 	cp -ar $(NEWLIB)/newlib/libc/include/* $(SYSROOT)/usr/include/
-	cp -ar $(NEWLIB)/newlib/libc/sys/osdev/include/* $(SYSROOT)/usr/include/
+	cp -ar $(NEWLIB)/newlib/libc/sys/argentum/include/* $(SYSROOT)/usr/include/
 
-$(NEWLIB)/newlib/libc/sys/osdev/%: lib/osdev/%
+$(NEWLIB)/newlib/libc/sys/argentum/%: lib/argentum/%
 	@mkdir -p $(@D)
 	cp $^ $@
 
-$(NEWLIB)/newlib/Makefile.in: $(NEWLIB) $(NEWLIB)/newlib/libc/sys/osdev/Makefile.inc
+$(NEWLIB)/newlib/Makefile.in: $(NEWLIB) $(NEWLIB)/newlib/libc/sys/argentum/Makefile.inc
 	$(V)cd $(@D) && autoreconf
 
 $(OBJ)/lib/Makefile: $(NEWLIB)/newlib/Makefile.in
 	$(V)rm -rf $(@D)
 	$(V)mkdir -p $(@D)
 	$(V)cd $(@D) && CFLAGS="$(LIB_CFLAGS)" ../../lib/newlib-4.4.0.20231231/configure \
-		--host=arm-none-osdev \
-		--target=arm-none-osdev \
+		--host=arm-none-argentum \
+		--target=arm-none-argentum \
 		--prefix=/usr \
 		--with-newlib \
 		--disable-multilib \
@@ -154,9 +154,9 @@ $(OBJ)/lib/Makefile: $(NEWLIB)/newlib/Makefile.in
 		--enable-newlib-io-c99-formats
 
 $(SYSROOT)/usr/lib/libc.a: $(OBJ)/lib/Makefile $(LIB_SRCFILES)
-	$(V)cp -ar lib/osdev $(NEWLIB)/newlib/libc/sys/
-	$(V)cd $(OBJ)/lib && make CFLAGS="$(LIB_CFLAGS)" DESTDIR=/$(HOME)/osdev/sysroot all install
-	$(V)cp -ar $(SYSROOT)/usr/arm-none-osdev/* $(SYSROOT)/usr/
+	$(V)cp -ar lib/argentum $(NEWLIB)/newlib/libc/sys/
+	$(V)cd $(OBJ)/lib && make CFLAGS="$(LIB_CFLAGS)" DESTDIR=/$(HOME)/argentum/sysroot all install
+	$(V)cp -ar $(SYSROOT)/usr/arm-none-argentum/* $(SYSROOT)/usr/
 
 all-lib: $(SYSROOT)/usr/lib/libc.a
 

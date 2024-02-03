@@ -5,7 +5,7 @@ diff -ruN orig/bfd/config.bfd new/bfd/config.bfd
      targ_defvec=arm_elf32_le_vec
      targ_selvecs=arm_elf32_be_vec
      ;;
-+  arm-*-osdev*)
++  arm-*-argentum*)
 +    targ_defvec=arm_elf32_le_vec
 +    targ_selvecs=arm_elf32_be_vec
 +    ;;
@@ -20,7 +20,7 @@ diff -ruN orig/config.sub new/config.sub
  	     | midnightbsd* | amdhsa* | unleashed* | emscripten* | wasi* \
  	     | nsk* | powerunix* | genode* | zvmoe* | qnx* | emx* | zephyr* \
 -	     | fiwix* | mlibc* )
-+	     | fiwix* | mlibc* | osdev* )
++	     | fiwix* | mlibc* | argentum* )
  		;;
  	# This one is extra strict with allowed versions
  	sco3.2v2 | sco3.2v[4-9]* | sco5v6*)
@@ -31,7 +31,7 @@ diff -ruN orig/gas/configure.tgt new/gas/configure.tgt
    arm-*-pe)				fmt=coff em=pe ;;
    arm-*-fuchsia*)			fmt=elf ;;
    arm-*-haiku*)				fmt=elf em=haiku ;;
-+  arm-*-osdev*)			fmt=elf ;;
++  arm-*-argentum*)			fmt=elf ;;
  
    avr-*-*)				fmt=elf bfd_gas=yes ;;
  
@@ -42,7 +42,7 @@ diff -ruN orig/ld/Makefile.am new/ld/Makefile.am
  	earmelf_linux_fdpiceabi.c \
  	earmelf_nacl.c \
  	earmelf_nbsd.c \
-+	earmelf_osdev.c \
++	earmelf_argentum.c \
  	earmelf_phoenix.c \
  	earmelf_vxworks.c \
  	earmelfb.c \
@@ -50,7 +50,7 @@ diff -ruN orig/ld/Makefile.am new/ld/Makefile.am
  @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/earmelf_linux_fdpiceabi.Pc@am__quote@
  @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/earmelf_nacl.Pc@am__quote@
  @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/earmelf_nbsd.Pc@am__quote@
-+@AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/earmelf_osdev.Pc@am__quote@
++@AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/earmelf_argentum.Pc@am__quote@
  @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/earmelf_phoenix.Pc@am__quote@
  @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/earmelf_vxworks.Pc@am__quote@
  @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/earmelfb.Pc@am__quote@
@@ -61,7 +61,7 @@ diff -ruN orig/ld/Makefile.in new/ld/Makefile.in
  	earmelf_linux_fdpiceabi.c \
  	earmelf_nacl.c \
  	earmelf_nbsd.c \
-+	earmelf_osdev.c \
++	earmelf_argentum.c \
  	earmelf_phoenix.c \
  	earmelf_vxworks.c \
  	earmelfb.c \
@@ -69,7 +69,7 @@ diff -ruN orig/ld/Makefile.in new/ld/Makefile.in
  @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/earmelf_linux_fdpiceabi.Po@am__quote@
  @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/earmelf_nacl.Po@am__quote@
  @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/earmelf_nbsd.Po@am__quote@
-+@AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/earmelf_osdev.Po@am__quote@
++@AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/earmelf_argentum.Po@am__quote@
  @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/earmelf_phoenix.Po@am__quote@
  @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/earmelf_vxworks.Po@am__quote@
  @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/earmelfb.Po@am__quote@
@@ -77,7 +77,7 @@ diff -ruN orig/ld/Makefile.in new/ld/Makefile.in
  @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/earmelf_linux_fdpiceabi.Pc@am__quote@
  @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/earmelf_nacl.Pc@am__quote@
  @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/earmelf_nbsd.Pc@am__quote@
-+@AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/earmelf_osdev.Pc@am__quote@
++@AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/earmelf_argentum.Pc@am__quote@
  @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/earmelf_phoenix.Pc@am__quote@
  @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/earmelf_vxworks.Pc@am__quote@
  @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/earmelfb.Pc@am__quote@
@@ -88,14 +88,14 @@ diff -ruN orig/ld/configure.tgt new/ld/configure.tgt
  			;;
  arm-*-phoenix*)		targ_emul=armelf
  			;;
-+arm-*-osdev*)		targ_emul=armelf_osdev
++arm-*-argentum*)		targ_emul=armelf_argentum
 +			;;
  armeb-*-elf | armeb-*-eabi*)
  			targ_emul=armelfb
  			;;
-diff -ruN orig/ld/emulparams/armelf_osdev.sh new/ld/emulparams/armelf_osdev.sh
---- orig/ld/emulparams/armelf_osdev.sh	1970-01-01 03:00:00.000000000 +0300
-+++ new/ld/emulparams/armelf_osdev.sh	2024-01-01 12:11:07.972498196 +0300
+diff -ruN orig/ld/emulparams/armelf_argentum.sh new/ld/emulparams/armelf_argentum.sh
+--- orig/ld/emulparams/armelf_argentum.sh	1970-01-01 03:00:00.000000000 +0300
++++ new/ld/emulparams/armelf_argentum.sh	2024-01-01 12:11:07.972498196 +0300
 @@ -0,0 +1,2 @@
 +source_sh ${srcdir}/emulparams/armelf.sh
 +DATA_ADDR="ALIGN(${MAXPAGESIZE})"

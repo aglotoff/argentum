@@ -30,7 +30,7 @@ int bsp_started;
 
 // For uname()
 struct utsname utsname = {
-  .sysname = "OSDev",
+  .sysname = "Argentum",
   .nodename = "localhost",
   .release = "0.1.0",
   .version = __DATE__ " " __TIME__,

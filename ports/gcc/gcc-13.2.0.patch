@@ -6,7 +6,7 @@ diff -ruN old/config.sub new/config.sub
  	     | midnightbsd* | amdhsa* | unleashed* | emscripten* | wasi* \
  	     | nsk* | powerunix* | genode* | zvmoe* | qnx* | emx* | zephyr* \
 -	     | fiwix* )
-+	     | fiwix* | osdev* )
++	     | fiwix* | argentum* )
  		;;
  	# This one is extra strict with allowed versions
  	sco3.2v2 | sco3.2v[4-9]* | sco5v6*)
@@ -17,8 +17,8 @@ diff -ruN old/fixincludes/mkfixinc.sh new/fixincludes/mkfixinc.sh
  
  # Check for special fix rules for particular targets
  case $machine in
-+    *-osdev* | \
-+    *-*-osdev* | \
++    *-argentum* | \
++    *-*-argentum* | \
      i?86-*-cygwin* | \
      i?86-*-mingw32* | \
      x86_64-*-mingw32* | \
@@ -29,7 +29,7 @@ diff -ruN old/gcc/config.gcc new/gcc/config.gcc
    d_target_objs="${d_target_objs} openbsd-d.o"
    target_has_targetdm=yes
    ;;
-+*-*-osdev*)
++*-*-argentum*)
 +  gas=yes
 +  gnu_ld=yes
 +  default_use_cxa_atexit=yes
@@ -41,7 +41,7 @@ diff -ruN old/gcc/config.gcc new/gcc/config.gcc
  	# The EABI requires the use of __cxa_atexit.
  	default_use_cxa_atexit=yes
  	;;
-+arm*-*-osdev*)
++arm*-*-argentum*)
 +	tm_file="elfos.h arm/unknown-elf.h arm/elf.h arm/bpabi.h"
 +	tm_file="${tm_file} newlib-stdint.h"
 +	tm_file="${tm_file} arm/aout.h arm/arm.h"
@@ -60,7 +60,7 @@ diff -ruN old/gcc/config.host new/gcc/config.host
      ;;
 -  arm*-*-freebsd* | arm*-*-netbsd* | arm*-*-linux* | arm*-*-fuchsia*)
 +  arm*-*-freebsd* | arm*-*-netbsd* | arm*-*-linux* | arm*-*-fuchsia* |\
-+  arm*-*-osdev*)
++  arm*-*-argentum*)
      case ${target} in
        arm*-*-*)
  	host_extra_gcc_objs="driver-arm.o"
@@ -71,7 +71,7 @@ diff -ruN old/libgcc/config.host new/libgcc/config.host
  	unwind_header=config/arm/unwind-arm.h
  	extra_parts="$extra_parts crti.o crtn.o"
  	;;
-+arm*-*-osdev*)
++arm*-*-argentum*)
 +	tmake_file="t-hardfp t-softfp arm/t-arm arm/t-elf arm/t-softfp"
 +	tmake_file="${tmake_file} arm/t-bpabi"
 +	tm_file="$tm_file arm/bpabi-lib.h"

@@ -1,8 +1,9 @@
 PACKAGE_NAME := dash-0.5.12
 SRC_DIR      := $(PACKAGE_NAME)
 TARBALL_NAME := $(PACKAGE_NAME).tar.gz
+TARBALL_FILE := ../../tarballs/$(TARBALL_NAME)
 
-SYSROOT := $(HOME)/osdev/sysroot
+SYSROOT := $(HOME)/argentum/sysroot
 
 all: config
 	make -C $(SRC_DIR) 
@@ -13,14 +14,14 @@ install: all
 	make -C $(SRC_DIR) DESTDIR=$(SYSROOT) install
 	ln -f $(SYSROOT)/usr/bin/dash $(SYSROOT)/bin/sh
 
-$(TARBALL_NAME):
-	wget "http://gondor.apana.org.au/~herbert/dash/files/${TARBALL_NAME}"
+$(TARBALL_FILE):
+	wget "http://gondor.apana.org.au/~herbert/dash/files/${TARBALL_NAME}" -O $@
 
-$(SRC_DIR): $(TARBALL_NAME)
+$(SRC_DIR): $(TARBALL_FILE)
 	tar xf $<
 
 $(SRC_DIR)/Makefile: | $(SRC_DIR)
-	cd $(@D) && ./configure --host=arm-none-osdev \
+	cd $(@D) && ./configure --host=arm-none-argentum \
 	                        --prefix=/usr
 
 clean:
