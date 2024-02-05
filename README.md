@@ -5,20 +5,41 @@ for Cortex-A9.
 
 ![screenshot](./screenshot.png)
 
-## Prerequisites
+## Building and running the OS
 
-In order to build and run the OS, you'll need the following packages:
-
-* `arm-none-eabi-binutils`
-* `arm-none-eabi-gcc`
-* `qemu-system-arm`
-* `arm-none-eabi-gdb` (optional, required to run the OS in debug mode)
-
-## Building and Running the Kernel
-
-To build the OS code, execute `make`.
-
-To run the kernel, execute `make qemu`.
+1. Install the necessary headers
+   ```
+   make install-headers
+   ```
+2. Build and install the OS-specific toolchain
+   ```
+   make tools-binutils
+   make tools-gcc
+   ```
+3. Build the standard C library
+   ```
+   make all-lib
+   ```
+4. Build and install the libstdc++ library
+   ```
+   make tools-libstdc++-v3
+   ```
+5. Build the kernel and command-line utils
+   ```
+   make all
+   ```
+6. Build the ported packages (optional)
+   ```
+   make ports-binutils
+   make ports-dash
+   make ports-gcc
+   make ports-gzip
+   make ports-sed
+   ```
+7. Run the kernel in the emulator (you'll need `qemu-system-arm`):
+   ```
+   make qemu
+   ```
 
 ## Resources
 
