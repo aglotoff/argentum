@@ -9,7 +9,7 @@
 #include <kernel/cpu.h>
 #include <kernel/cprintf.h>
 #include <kernel/elf.h>
-#include <kernel/fs/file.h>
+#include <kernel/fd.h>
 #include <kernel/fs/fs.h>
 #include <kernel/hash.h>
 #include <kernel/object_pool.h>
@@ -113,8 +113,7 @@ process_alloc(void)
 
   spin_unlock(&pid_hash.lock);
 
-  for (i = 0; i < OPEN_MAX; i++)
-    process->files[i] = NULL;
+  fd_init(process);
 
   return process;
 }
@@ -256,7 +255,7 @@ process_destroy(int status)
 {
   struct ListLink *l;
   struct Process *child, *current = process_current();
-  int fd, has_zombies;
+  int has_zombies;
 
   if(status)
     cprintf("[k] process #%d destroyed with code 0x%x\n", current->pid, status);
@@ -269,10 +268,7 @@ process_destroy(int status)
 
   vm_space_destroy(current->vm);
 
-  for (fd = 0; fd < OPEN_MAX; fd++)
-    if (current->files[fd])
-      file_close(current->files[fd]);
-
+  fd_close_all(current);
   fs_inode_put(current->cwd);
 
   assert(init_process != NULL);
@@ -328,8 +324,7 @@ process_copy(int share_vm)
   *child->thread->tf    = *current->thread->tf;
   child->thread->tf->r0 = 0;
 
-  for (i = 0; i < OPEN_MAX; i++)
-    child->files[i] = current->files[i] ? file_dup(current->files[i]) : NULL;
+  fd_clone(current, child);
 
   for (i = 0; i < NSIG; i++)
     child->signal_handlers[i] = current->signal_handlers[i];

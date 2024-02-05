@@ -49,6 +49,8 @@ file_alloc(struct File **fstore)
   return 0;
 }
 
+#define STATUS_MASK (O_APPEND | O_NONBLOCK | O_SYNC)
+
 int
 file_open(const char *path, int oflag, mode_t mode, struct File **fstore)
 {
@@ -60,7 +62,7 @@ file_open(const char *path, int oflag, mode_t mode, struct File **fstore)
   if ((r = file_alloc(&f)) != 0)
     return r;
 
-  f->flags = oflag;
+  f->flags = oflag & (STATUS_MASK | O_ACCMODE);
   f->type  = FD_INODE;
 
   // TODO: the check and the file creation should be atomic
@@ -171,7 +173,7 @@ file_close(struct File *f)
       break;
     case FD_PIPE:
       assert(f->pipe != NULL);
-      pipe_close(f->pipe, (f->flags & O_WRONLY) || (f->flags & O_RDWR));
+      pipe_close(f->pipe, (f->flags & O_ACCMODE) != O_RDONLY);
       break;
     case FD_SOCKET:
       net_close(f->socket);
@@ -231,7 +233,7 @@ file_read(struct File *f, void *buf, size_t nbytes)
 {
   int r;
 
-  if (f->flags & O_WRONLY)
+  if ((f->flags & O_ACCMODE) == O_WRONLY)
     return -EBADF;
   
   switch (f->type) {
@@ -271,7 +273,7 @@ file_getdents(struct File *f, void *buf, size_t nbytes)
 {
   int r;
 
-  if (f->flags & O_WRONLY)
+  if ((f->flags & O_ACCMODE) == O_WRONLY)
     return -EBADF;
 
   if ((f->type != FD_INODE) || !S_ISDIR(f->inode->mode))
@@ -298,7 +300,7 @@ file_write(struct File *f, const void *buf, size_t nbytes)
 {
   int r;
 
-  if (!((f->flags & O_WRONLY) || (f->flags & O_RDWR)))
+  if ((f->flags & O_ACCMODE) == O_RDONLY)
     return -EBADF;
 
   switch (f->type) {
@@ -313,7 +315,10 @@ file_write(struct File *f, const void *buf, size_t nbytes)
       fs_inode_unlock(f->inode);
       return -EPERM;
     }
-  
+
+    if (f->flags & O_APPEND)
+      f->offset = f->inode->size;
+
     r = fs_inode_write(f->inode, buf, nbytes, &f->offset);
 
     fs_inode_unlock(f->inode);
@@ -368,7 +373,14 @@ file_chdir(struct File *file)
 int
 file_get_flags(struct File *file)
 {
-  return file->flags & (O_ACCMODE | O_APPEND);
+  return file->flags & STATUS_MASK;
+}
+
+int
+file_set_flags(struct File *file, int flags)
+{
+  file->flags = (file->flags & ~STATUS_MASK) | (flags & STATUS_MASK);
+  return 0;
 }
 
 int

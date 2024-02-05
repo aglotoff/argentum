@@ -3,6 +3,10 @@
 #include <sys/resource.h>
 #include <stdio.h>
 
+// TODO: keep in sync with memlayout!
+#define RLIMIT_STACK_MAX  (4096 * 4)
+#define RLIMIT_AS_MAX     (0x80000000 - 4096)
+
 int
 getrlimit(int resource, struct rlimit *rlim)
 {
@@ -11,14 +15,20 @@ getrlimit(int resource, struct rlimit *rlim)
     rlim->rlim_cur = OPEN_MAX;
     rlim->rlim_max = OPEN_MAX;
     break;
+  case RLIMIT_STACK:
+    rlim->rlim_cur = RLIMIT_STACK_MAX;
+    rlim->rlim_max = RLIMIT_STACK_MAX;
+    break;
+  case RLIMIT_AS:
+    rlim->rlim_cur = RLIMIT_AS_MAX;
+    rlim->rlim_max = RLIMIT_AS_MAX;
+    break;
   case RLIMIT_CORE:
   case RLIMIT_CPU:
   case RLIMIT_DATA:
   case RLIMIT_FSIZE:
-  case RLIMIT_STACK:
-  case RLIMIT_AS:
     // TODO: implement
-    fprintf(stderr, "TODO: getrlmit(%d)\n", resource);
+    fprintf(stderr, "TODO: getrlimit(%d)\n", resource);
     errno = ENOSYS;
     return -1;
   default:

@@ -56,6 +56,7 @@ KERNEL_SRCFILES :=	\
 	kernel/mm/vm.c \
 	kernel/net/net.c \
 	kernel/process/exec.c \
+	kernel/process/fd.c \
 	kernel/process/process.c \
 	kernel/process/vm_space.c \
 	kernel/cprintf.c \

@@ -5,6 +5,7 @@
 #include <kernel/cprintf.h>
 #include <kernel/elf.h>
 #include <kernel/fs/fs.h>
+#include <kernel/fd.h>
 #include <kernel/mm/memlayout.h>
 #include <kernel/mm/mmu.h>
 #include <kernel/mm/page.h>
@@ -155,6 +156,8 @@ process_exec(const char *path, char *const argv[], char *const envp[])
   vm_space_destroy(proc->vm);
 
   proc->vm = vm;
+
+  fd_close_on_exec(proc);
 
   // Stack must be aligned to an 8-byte boundary in order for variadic args
   // to properly work!

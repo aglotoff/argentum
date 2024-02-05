@@ -20,6 +20,7 @@
 #define KSTACK_SIZE       PAGE_SIZE
 
 /** Size of a user-mode process stack in bytes */
+// TODO: keep in sync with rlimit
 #define USTACK_SIZE       (PAGE_SIZE * 4)
 
 /** Size of a per-CPU exception stack in bytes */

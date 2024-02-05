@@ -22,6 +22,11 @@ struct SpinLock;
 struct Inode;
 struct Process;
 
+struct FileDesc {
+  struct File *file;
+  int          flags;
+};
+
 /**
  * Process descriptor.
  */
@@ -30,7 +35,7 @@ struct Process {
   struct VMSpace       *vm;
 
   /** Main process thread */
-  struct Thread          *thread;
+  struct Thread        *thread;
 
   /** Unique thread identifier */
   pid_t                 pid;
@@ -68,7 +73,7 @@ struct Process {
   /** File mode creation mask */
   mode_t                cmask;
   /** Open file descriptors */
-  struct File          *files[OPEN_MAX];
+  struct FileDesc       fd[OPEN_MAX];
   /** Current working directory */
   struct Inode         *cwd;
 };

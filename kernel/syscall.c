@@ -11,6 +11,7 @@
 #include <kernel/cprintf.h>
 #include <kernel/cpu.h>
 #include <kernel/drivers/rtc.h>
+#include <kernel/fd.h>
 #include <kernel/fs/file.h>
 #include <kernel/fs/fs.h>
 #include <kernel/vmspace.h>
@@ -239,35 +240,6 @@ sys_arg_str(int n, const char **strp, int perm)
   return 0;
 }
 
-/**
- * Fetch the nth system call argument as a file descriptor. Check that the
- * file desriptor is valid.
- * 
- * @param n       The argument number.
- * @param fdstore Pointer to the memory address to store the file descriptor.
- * @param fstore  Pointer to the memory address to store the file.
- * 
- * @retval 0 on success.
- * @retval -EFAULT if the arguments doesn't point to a valid string.
- * @retval -EBADF if the file descriptor is invalid.
- */
-static int
-sys_arg_fd(int n, int *fdstore, struct File **fstore)
-{
-  struct Process *current = process_current();
-  int fd = sys_get_arg(n);
-
-  if ((fd < 0) || (fd >= OPEN_MAX) || (current->files[fd] == NULL))
-    return -EBADF;
-  
-  if (fdstore)
-    *fdstore = fd;
-  if (fstore)
-    *fstore = current->files[fd];
-
-  return 0;
-}
-
 static int
 sys_arg_args(int n, char ***store)
 {
@@ -426,19 +398,21 @@ sys_getdents(void)
 {
   void *buf;
   size_t n;
-  struct File *f;
+  int fd;
+  struct File *file;
   int r;
 
-  if ((r = sys_arg_fd(0, NULL, &f)) < 0)
+  if ((r = sys_arg_int(0, (int *) &fd)) < 0)
     return r;
-
   if ((r = sys_arg_int(2, (int *) &n)) < 0)
     return r;
-
   if ((r = sys_arg_buf(1, &buf, n, VM_READ, 0)) < 0)
     return r;
 
-  return file_getdents(f, buf, n);
+  if ((file = fd_lookup(process_current(), fd)) == NULL)
+    return -EBADF;
+
+  return file_getdents(file, buf, n);
 }
 
 int32_t
@@ -479,36 +453,22 @@ sys_chmod(void)
 int32_t
 sys_fchdir(void)
 {
-  struct File *f;
-  int r;
+  struct File *file;
+  int r, fd;
 
-  if ((r = sys_arg_fd(0, NULL, &f)) < 0)
+  if ((r = sys_arg_int(0, &fd)) < 0)
     return r;
 
-  return file_chdir(f);
-}
+  if ((file = fd_lookup(process_current(), fd)) == NULL)
+    return -EBADF;
 
-static int
-fd_alloc(struct File *f, int start)
-{
-  struct Process *current = process_current();
-  int i;
-
-  if (start < 0 || start >= OPEN_MAX)
-    return -EINVAL;
-
-  for (i = start; i < OPEN_MAX; i++)
-    if (current->files[i] == NULL) {
-      current->files[i] = f;
-      return i;
-    }
-  return -EMFILE;
+  return file_chdir(file);
 }
 
 int32_t
 sys_open(void)
 {
-  struct File *f;
+  struct File *file;
   const char *path;
   int oflag, r;
   mode_t mode;
@@ -520,11 +480,11 @@ sys_open(void)
   if ((r = sys_arg_short(2, (short *) &mode)) < 0)
     return r;
 
-  if ((r = file_open(path, oflag, mode, &f)) < 0)
+  if ((r = file_open(path, oflag, mode, &file)) < 0)
     return r;
 
-  if ((r = fd_alloc(f, 0)) < 0)
-    file_close(f);
+  if ((r = fd_alloc(process_current(), file, 0)) < 0)
+    file_close(file);
 
   return r;
 }
@@ -604,32 +564,30 @@ sys_rmdir(void)
 int32_t
 sys_stat(void)
 {
-  struct File *f;
+  struct File *file;
   struct stat *buf;
-  int r;
+  int r, fd;
 
-  if ((r = sys_arg_fd(0, NULL, &f)) < 0)
+  if ((r = sys_arg_int(0, &fd)) < 0)
     return r;
-
   if ((r = sys_arg_buf(1, (void **) &buf, sizeof(*buf), VM_WRITE, 0)) < 0)
     return r;
 
-  return file_stat(f, buf);
+  if ((file = fd_lookup(process_current(), fd)) == NULL)
+    return -EBADF;
+
+  return file_stat(file, buf);
 }
 
 int32_t
 sys_close(void)
 {
-  struct File *f;
   int r, fd;
 
-  if ((r = sys_arg_fd(0, &fd, &f)) < 0)
+  if ((r = sys_arg_int(0, &fd)) < 0)
     return r;
 
-  file_close(f);
-  process_current()->files[fd] = NULL;
-
-  return 0;
+  return fd_close(process_current(), fd);
 }
 
 int32_t
@@ -637,68 +595,81 @@ sys_read(void)
 {
   void *buf;
   size_t n;
-  struct File *f;
-  int r;
+  struct File *file;
+  int r, fd;
 
-  if ((r = sys_arg_fd(0, NULL, &f)) < 0)
+  if ((r = sys_arg_int(0, &fd)) < 0)
     return r;
   if ((r = sys_arg_int(2, (int *) &n)) < 0)
     return r;
   if ((r = sys_arg_buf(1, &buf, n, VM_READ, 0)) < 0)
     return r;
 
-  return file_read(f, buf, n);
+  if ((file = fd_lookup(process_current(), fd)) == NULL)
+    return -EBADF;
+
+  return file_read(file, buf, n);
 }
 
 int32_t
 sys_seek(void)
 {
-  struct File *f;
+  struct File *file;
   off_t offset;
-  int whence, r;
+  int whence, r, fd;
 
-  if ((r = sys_arg_fd(0, NULL, &f)) < 0)
+  if ((r = sys_arg_int(0, &fd)) < 0)
     return r;
   if ((r = sys_arg_long(1, (long *) &offset)) < 0)
     return r;
   if ((r = sys_arg_int(2, (int *) &whence)) < 0)
     return r;
 
-  return file_seek(f, offset, whence);
+  if ((file = fd_lookup(process_current(), fd)) == NULL)
+    return -EBADF;
+
+  return file_seek(file, offset, whence);
 }
 
 int32_t
 sys_fcntl(void)
 {
-  struct File *f;
-  int cmd, r, arg;
+  struct File *file;
+  int cmd, r, arg, fd;
 
-  if ((r = sys_arg_fd(0, NULL, &f)) < 0)
+  if ((r = sys_arg_int(0, &fd)) < 0)
     return r;
   if ((r = sys_arg_int(1, &cmd)) < 0)
     return r;
   if ((r = sys_arg_int(1, &arg)) < 0)
     return r;
 
+  if ((file = fd_lookup(process_current(), fd)) == NULL)
+    return -EBADF;
+
   switch (cmd) {
   case F_DUPFD:
-    if ((r = fd_alloc(f, arg)) < 0)
+    if ((r = fd_alloc(process_current(), file, arg)) < 0)
       return r;
-    file_dup(f);
+    file_dup(file);
     return 0;
   case F_GETFL:
-    return file_get_flags(f);
-  case F_GETFD:
-  case F_SETFD:
+    return file_get_flags(file);
   case F_SETFL:
+    return file_set_flags(file, arg);
+  case F_GETFD:
+    return fd_get_flags(process_current(), fd);
+  case F_SETFD:
+    return fd_set_flags(process_current(), fd, arg);
+
   case F_GETOWN:
   case F_SETOWN:
   case F_GETLK:
   case F_SETLK:
   case F_SETLKW:
-    // TODO: implement
     cprintf("TODO: fcntl(%d)\n", cmd);
     return -ENOSYS;
+
   default:
     return -EINVAL;
   }
@@ -709,19 +680,20 @@ sys_write(void)
 {
   void *buf;
   size_t n;
-  struct File *f;
-  int r;
+  struct File *file;
+  int r, fd;
 
-  if ((r = sys_arg_fd(0, NULL, &f)) < 0)
+  if ((r = sys_arg_int(0, &fd)) < 0)
     return r;
-
   if ((r = sys_arg_int(2, (int *) &n)) < 0)
     return r;
-
   if ((r = sys_arg_buf(1, &buf, n, VM_WRITE, 0)) < 0)
     return r;
 
-  return file_write(f, buf, n);
+  if ((file = fd_lookup(process_current(), fd)) == NULL)
+    return -EBADF;
+
+  return file_write(file, buf, n);
 }
 
 int32_t
@@ -759,7 +731,7 @@ sys_socket(void)
   int domain;
   int type;
   int protocol;
-  struct File *f;
+  struct File *file;
 
   if ((r = sys_arg_int(0, &domain)) < 0)
     return r;
@@ -768,11 +740,11 @@ sys_socket(void)
   if ((r = sys_arg_int(2, &protocol)) < 0)
     return r;
 
-  if ((r = net_socket(domain, type, protocol, &f)) != 0)
+  if ((r = net_socket(domain, type, protocol, &file)) != 0)
     return r;
 
-  if ((r = fd_alloc(f, 0)) < 0)
-    file_close(f);
+  if ((r = fd_alloc(process_current(), file, 0)) < 0)
+    file_close(file);
 
   return r;
 }
@@ -780,60 +752,69 @@ sys_socket(void)
 int32_t
 sys_bind(void)
 {
-  struct File *f;
+  struct File *file;
   struct sockaddr *address;
   socklen_t address_len;
-  int r;
+  int r, fd;
 
-  if ((r = sys_arg_fd(0, NULL, &f)) < 0)
+  if ((r = sys_arg_int(0, &fd)) < 0)
     return r;
   if ((r = sys_arg_buf(1, (void **) &address, sizeof(*address), VM_READ, 0)) < 0)
     return r;
   if ((r = sys_arg_long(2, (long *) &address_len)) < 0)
     return r;
-
-  if (f->type != FD_SOCKET)
+  
+  if ((file = fd_lookup(process_current(), fd)) == NULL)
     return -EBADF;
 
-  return net_bind(f->socket, address, address_len);
+  if (file->type != FD_SOCKET)
+    return -EBADF;
+
+  return net_bind(file->socket, address, address_len);
 }
 
 int32_t
 sys_connect(void)
 {
-  struct File *f;
+  struct File *file;
   struct sockaddr *address;
   socklen_t address_len;
-  int r;
+  int r, fd;
 
-  if ((r = sys_arg_fd(0, NULL, &f)) < 0)
+  if ((r = sys_arg_int(0, &fd)) < 0)
     return r;
   if ((r = sys_arg_buf(1, (void **) &address, sizeof(*address), VM_READ, 0)) < 0)
     return r;
   if ((r = sys_arg_long(2, (long *) &address_len)) < 0)
     return r;
 
-  if (f->type != FD_SOCKET)
+  if ((file = fd_lookup(process_current(), fd)) == NULL)
     return -EBADF;
 
-  return net_connect(f->socket, address, address_len);
+  if (file->type != FD_SOCKET)
+    return -EBADF;
+
+  return net_connect(file->socket, address, address_len);
 }
 
 int32_t
 sys_listen(void)
 {
-  struct File *f;
-  int backlog, r;
+  struct File *file;
+  int backlog, r, fd;
 
-  if ((r = sys_arg_fd(0, NULL, &f)) < 0)
+  if ((r = sys_arg_int(0, &fd)) < 0)
     return r;
   if ((r = sys_arg_int(1, &backlog)) < 0)
     return r;
 
-  if (f->type != FD_SOCKET)
+  if ((file = fd_lookup(process_current(), fd)) == NULL)
     return -EBADF;
 
-  return net_listen(f->socket, backlog);
+  if (file->type != FD_SOCKET)
+    return -EBADF;
+
+  return net_listen(file->socket, backlog);
 }
 
 int32_t
@@ -842,14 +823,17 @@ sys_accept(void)
   struct File *sockf, *connf;
   struct sockaddr *address;
   socklen_t *address_len;
-  int r;
+  int r, fd;
 
-  if ((r = sys_arg_fd(0, NULL, &sockf)) < 0)
+  if ((r = sys_arg_int(0, &fd)) < 0)
     return r;
   if ((r = sys_arg_buf(1, (void **) &address, sizeof(*address), VM_WRITE, 1)) < 0)
     return r;
   if ((r = sys_arg_buf(2, (void **) &address_len, sizeof(socklen_t), VM_WRITE, 1)) < 0)
     return r;
+
+  if ((sockf = fd_lookup(process_current(), fd)) == NULL)
+    return -EBADF;
 
   if (sockf->type != FD_SOCKET)
     return -EBADF;
@@ -857,7 +841,7 @@ sys_accept(void)
   if ((r = net_accept(sockf->socket, address, address_len, &connf)) < 0)
     return r;
 
-  if ((r = fd_alloc(connf, 0)) < 0)
+  if ((r = fd_alloc(process_current(), connf, 0)) < 0)
     file_close(connf);
 
   return r;
@@ -883,12 +867,15 @@ sys_fchmod(void)
 {
   struct File *file;
   mode_t mode;
-  int r;
+  int r, fd;
 
-  if ((r = sys_arg_fd(0, NULL, &file)) < 0)
+  if ((r = sys_arg_int(0, &fd)) < 0)
     return r;
   if ((r = sys_arg_short(1, (short *) &mode)) < 0)
     return r;
+
+  if ((file = fd_lookup(process_current(), fd)) == NULL)
+    return -EBADF;
 
   return file_chmod(file, mode);
 }
@@ -936,15 +923,15 @@ sys_nanosleep(void)
 int32_t
 sys_recvfrom(void)
 {
-  struct File *f;
+  struct File *file;
   void *buffer;
   size_t length;
   int flags;
   struct sockaddr *address;
   socklen_t *address_len;
-  int r;
+  int r, fd;
 
-  if ((r = sys_arg_fd(0, NULL, &f)) < 0)
+  if ((r = sys_arg_int(0, &fd)) < 0)
     return r;
   if ((r = sys_arg_int(2, (int *) &length)) < 0)
     return r;
@@ -957,24 +944,27 @@ sys_recvfrom(void)
   if ((r = sys_arg_buf(5, (void **) &address_len, sizeof(*address_len), VM_WRITE, 1)) < 0)
     return r;
 
-  if (f->type != FD_SOCKET)
+  if ((file = fd_lookup(process_current(), fd)) == NULL)
     return -EBADF;
 
-  return net_recvfrom(f->socket, buffer, length, flags, address, address_len);
+  if (file->type != FD_SOCKET)
+    return -EBADF;
+
+  return net_recvfrom(file->socket, buffer, length, flags, address, address_len);
 }
 
 int32_t
 sys_sendto(void)
 {
-  struct File *f;
+  struct File *file;
   void *message;
   size_t length;
   int flags;
   struct sockaddr *dest_addr;
   socklen_t dest_len;
-  int r;
+  int r, fd;
 
-  if ((r = sys_arg_fd(0, NULL, &f)) < 0)
+  if ((r = sys_arg_int(0, &fd)) < 0)
     return r;
   if ((r = sys_arg_int(2, (int *) &length)) < 0)
     return r;
@@ -987,23 +977,26 @@ sys_sendto(void)
   if ((r = sys_arg_int(5, (int *) &dest_len)) < 0)
     return r;
 
-  if (f->type != FD_SOCKET)
+  if ((file = fd_lookup(process_current(), fd)) == NULL)
     return -EBADF;
 
-  return net_sendto(f->socket, message, length, flags, dest_addr, dest_len);
+  if (file->type != FD_SOCKET)
+    return -EBADF;
+
+  return net_sendto(file->socket, message, length, flags, dest_addr, dest_len);
 }
 
 int32_t
 sys_setsockopt(void)
 {
-  struct File *f;
+  struct File *file;
   int level;
   int option_name;
   void *option_value;
   socklen_t option_len;
-  int r;
+  int r, fd;
 
-  if ((r = sys_arg_fd(0, NULL, &f)) < 0)
+  if ((r = sys_arg_int(0, &fd)) < 0)
     return r;
   if ((r = sys_arg_int(1, (int *) &level)) < 0)
     return r;
@@ -1014,10 +1007,13 @@ sys_setsockopt(void)
   if ((r = sys_arg_buf(3, &option_value, option_len, VM_READ, 0)) < 0)
     return r;
 
-  if (f->type != FD_SOCKET)
+  if ((file = fd_lookup(process_current(), fd)) == NULL)
     return -EBADF;
 
-  return net_setsockopt(f->socket, level, option_name, option_value, option_len);
+  if (file->type != FD_SOCKET)
+    return -EBADF;
+
+  return net_setsockopt(file->socket, level, option_name, option_value, option_len);
 }
 
 int32_t
@@ -1073,13 +1069,13 @@ sys_pipe(void)
   if ((r = pipe_alloc(&read, &write)) < 0)
     return r;
 
-  if ((fildes[0] = r = fd_alloc(read, 0)) < 0) {
+  if ((fildes[0] = r = fd_alloc(process_current(), read, 0)) < 0) {
     file_close(read);
     file_close(write);
     return r;
   }
 
-  if ((fildes[1] = r = fd_alloc(write, 0)) < 0) {
+  if ((fildes[1] = r = fd_alloc(process_current(), write, 0)) < 0) {
     file_close(read);
     file_close(write);
     return r;
