@@ -56,6 +56,7 @@
 #define __SYS_SETPGID     50
 #define __SYS_ACCESS      51
 #define __SYS_PIPE        52
+#define __SYS_IOCTL       53
 
 #ifndef __ASSEMBLER__
 

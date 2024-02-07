@@ -14,7 +14,7 @@ config: $(BUILD_DIR)/Makefile
 
 install: all
 	make -C $(BUILD_DIR) DESTDIR=$(SYSROOT) install
-	rm -v $(SYSROOT)/usr/lib/lib{bfd,ctf,ctf-nobfd,opcodes,sframe}.la
+	rm -fv $(SYSROOT)/usr/lib/lib{bfd,ctf,ctf-nobfd,opcodes,sframe}.la
 
 $(TARBALL_FILE):
 	wget "https://ftp.gnu.org/gnu/binutils/${TARBALL_NAME}" -O $@

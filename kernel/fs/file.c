@@ -399,3 +399,24 @@ file_chmod(struct File *file, mode_t mode)
 
   return r;
 }
+
+int
+file_ioctl(struct File *f, int request, int arg)
+{
+  int r;
+
+  switch (f->type) {
+  case FD_INODE:
+    assert(f->inode != NULL);
+
+    fs_inode_lock(f->inode);
+    r = fs_inode_ioctl(f->inode, request, arg);
+    fs_inode_unlock(f->inode);
+
+    return r;
+
+  default:
+    panic("ertrtrtr %d\n", f->type);
+    return -EINVAL;
+  }
+}

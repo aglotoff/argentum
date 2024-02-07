@@ -1,4 +1,6 @@
+#include <errno.h>
 #include <stdint.h>
+#include <sys/ttycom.h>
 
 #include <kernel/thread.h>
 #include <kernel/spinlock.h>
@@ -158,4 +160,23 @@ console_write(const void *buf, size_t nbytes)
   display_flush();
   
   return i;
+}
+
+static int pgrp;
+
+int
+console_ioctl(int request, int arg)
+{
+  switch (request) {
+  case TCGETPGRP:
+    return pgrp;
+  case TCSETPGRP:
+    // TODO: validate
+    pgrp = arg;
+    return 0;
+
+  default:
+    for (;;);
+    return -EINVAL;
+  }
 }

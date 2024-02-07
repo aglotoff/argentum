@@ -17,6 +17,7 @@ libc_a_SOURCES += \
   %D%/signal/sigstub.S \
   %D%/signal/sigsuspend.c \
   %D%/stdlib/realpath.c \
+  %D%/sys/ioctl/ioctl.c \
   %D%/sys/resource/getrlimit.c \
   %D%/sys/resource/setrlimit.c \
   %D%/sys/socket/accept.c \

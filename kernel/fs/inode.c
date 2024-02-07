@@ -726,3 +726,26 @@ fs_access(const char *path, int amode)
 
   return r;
 }
+
+int
+fs_inode_ioctl(struct Inode *inode, int request, int arg)
+{
+  int ret;
+
+  if (!fs_inode_holding(inode))
+    panic("not locked");
+
+  // TODO: check perm
+
+  if (S_ISCHR(inode->mode) || S_ISBLK(inode->mode)) {
+    fs_inode_unlock(inode);
+
+    // TODO: support other devices
+    ret = console_ioctl(request, arg);
+
+    fs_inode_lock(inode);
+    return ret;
+  }
+
+  return -ENOTTY;
+}

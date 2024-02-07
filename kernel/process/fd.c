@@ -2,6 +2,7 @@
 #include <fcntl.h>
 
 #include <kernel/assert.h>
+#include <kernel/cprintf.h>
 #include <kernel/process.h>
 #include <kernel/fd.h>
 #include <kernel/fs/file.h>
@@ -26,8 +27,9 @@ fd_close_all(struct Process *process)
   int i;
 
   for (i = 0; i < OPEN_MAX; i++)
-    if (process->fd[i].file != NULL)
+    if (process->fd[i].file != NULL) {
       _fd_close(&process->fd[i]);
+    }
 }
 
 void
@@ -36,8 +38,9 @@ fd_close_on_exec(struct Process *process)
   int i;
 
   for (i = 0; i < OPEN_MAX; i++)
-    if (process->fd[i].flags & FD_CLOEXEC)
+    if (process->fd[i].flags & FD_CLOEXEC)  {
       _fd_close(&process->fd[i]);
+    }
 }
 
 void
@@ -65,6 +68,8 @@ fd_alloc(struct Process *process, struct File *f, int start)
     if (process->fd[i].file == NULL) {
       process->fd[i].file  = f;
       process->fd[i].flags = 0;
+
+      // cprintf("fd_alloc(%d): %d\n", process->pid, i);
 
       return i;
     }
@@ -106,6 +111,8 @@ fd_close(struct Process *process, int n)
 
   if (fd->file == NULL)
     return -EBADF;
+
+  // cprintf("fd_close(%d): %d\n", process->pid, n);
 
   _fd_close(fd);
 

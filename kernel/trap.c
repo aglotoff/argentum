@@ -90,7 +90,7 @@ trap_handle_abort(struct TrapFrame *tf)
 
   // If unsuccessfull, kill the process
   print_trapframe(tf);
-  cprintf("user fault va %p status %#x\n", address, status);
+  cprintf("[%d]: user fault va %p status %#x\n", process->pid, address, status);
 
   cpu_irq_disable();
   monitor(tf);

@@ -75,6 +75,7 @@ int           fs_create(const char *, mode_t, dev_t, struct Inode **);
 void          fs_inode_cache_init(void);
 int           fs_inode_truncate(struct Inode *);
 int           fs_inode_chmod(struct Inode *, mode_t);
+int           fs_inode_ioctl(struct Inode *, int, int);
 int           fs_set_pwd(struct Inode *);
 
 int           fs_unlink(const char *);

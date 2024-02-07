@@ -15,11 +15,13 @@ LIB_SRCFILES := \
 	lib/argentum/include/arpa/inet.h \
 	lib/argentum/include/netinet/in.h \
 	lib/argentum/include/sys/dirent.h \
+	lib/argentum/include/sys/ioccom.h \
 	lib/argentum/include/sys/ioctl.h \
 	lib/argentum/include/sys/resource.h \
 	lib/argentum/include/sys/socket.h \
 	lib/argentum/include/sys/syscall.h \
 	lib/argentum/include/sys/termios.h \
+	lib/argentum/include/sys/ttycom.h \
 	lib/argentum/include/sys/utime.h \
 	lib/argentum/include/sys/utmp.h \
 	lib/argentum/include/sys/utsname.h \
@@ -37,6 +39,7 @@ LIB_SRCFILES := \
 	lib/argentum/signal/sigstub.S \
 	lib/argentum/signal/sigsuspend.c \
 	lib/argentum/stdlib/realpath.c \
+	lib/argentum/sys/ioctl/ioctl.c \
 	lib/argentum/sys/resource/getrlimit.c \
 	lib/argentum/sys/resource/setrlimit.c \
 	lib/argentum/sys/socket/accept.c \

@@ -20,5 +20,6 @@ void    console_interrupt(int (*)(void));
 int     console_getc(void);
 ssize_t console_read(void *, size_t);
 ssize_t console_write(const void *, size_t);
+int     console_ioctl(int, int);
 
 #endif  // !__KERNEL_INCLUDE_KERNEL_DRIVERS_CONSOLE_H__

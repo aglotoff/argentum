@@ -73,6 +73,7 @@ static int32_t (*syscalls[])(void) = {
   [__SYS_SETPGID]    = sys_setpgid,
   [__SYS_ACCESS]     = sys_access,
   [__SYS_PIPE]       = sys_pipe,
+  [__SYS_IOCTL]      = sys_ioctl,
 };
 
 int32_t
@@ -85,10 +86,12 @@ sys_dispatch(void)
 
   if ((num < (int) ARRAY_SIZE(syscalls)) && syscalls[num]) {
     int r = syscalls[num]();
+    // if (r < 0 || num == __SYS_FCNTL) 
+    //   cprintf("syscall(%d) -> %d\n", num, r);
     return r;
   }
 
- // cprintf("Unknown system call %d\n", num);
+  // cprintf("Unknown system call %d\n", num);
   return -ENOSYS;
 }
 
@@ -283,7 +286,7 @@ sys_fork(void)
   if ((r = sys_arg_int(0, &shared)) < 0)
     return r;
 
-  return process_copy(shared);
+  return process_copy(0);
 }
 
 int32_t
@@ -641,7 +644,7 @@ sys_fcntl(void)
     return r;
   if ((r = sys_arg_int(1, &cmd)) < 0)
     return r;
-  if ((r = sys_arg_int(1, &arg)) < 0)
+  if ((r = sys_arg_int(2, &arg)) < 0)
     return r;
 
   if ((file = fd_lookup(process_current(), fd)) == NULL)
@@ -649,10 +652,9 @@ sys_fcntl(void)
 
   switch (cmd) {
   case F_DUPFD:
-    if ((r = fd_alloc(process_current(), file, arg)) < 0)
-      return r;
-    file_dup(file);
-    return 0;
+    if ((r = fd_alloc(process_current(), file, arg)) >= 0)
+      file_dup(file);
+    return r;
   case F_GETFL:
     return file_get_flags(file);
   case F_SETFL:
@@ -1082,4 +1084,26 @@ sys_pipe(void)
   }
 
   return 0;
+}
+
+
+int32_t
+sys_ioctl(void)
+{
+  struct File *file;
+  int r, request, fd, arg;
+
+  if ((r = sys_arg_int(0, &fd)) < 0)
+    return r;
+  if ((r = sys_arg_int(1, &request)) < 0)
+    return r;
+  if ((r = sys_arg_int(2, &arg)) < 0)
+    return r;
+
+  if ((file = fd_lookup(process_current(), fd)) == NULL)
+    return -EBADF;
+
+  r = file_ioctl(file, request, arg);
+  //cprintf("ioctl(%x, %d) -> %d\n", request, arg, r);
+  return r;
 }

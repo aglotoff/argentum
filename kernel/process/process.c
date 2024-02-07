@@ -806,6 +806,8 @@ process_set_gid(pid_t pid, pid_t pgid)
   struct Process *process, *current = process_current();
   int r;
 
+  if (pid == 0)
+    pid = current->pid;
   if (pgid == 0)
     pgid = current->pgid;
 
