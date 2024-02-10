@@ -36,5 +36,10 @@ void         vm_init(void);
 struct Page *vm_page_lookup(void *, uintptr_t, int *);
 int          vm_page_insert(void *, struct Page *, uintptr_t, int);
 int          vm_page_remove(void *, uintptr_t);
+int          vm_range_alloc(void *, uintptr_t, size_t, int);
+void         vm_range_free(void *, uintptr_t, size_t);
+int          vm_range_clone(void *, void *, uintptr_t, size_t, int);
+int          vm_copy_out(void *, void *, const void *, size_t);
+int          vm_copy_in(void *, void *, const void *, size_t);
 
 #endif  // !__KERNEL_INCLUDE_KERNEL_MM_VM_H__

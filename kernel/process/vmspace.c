@@ -15,175 +15,6 @@
 static struct ObjectPool *vmcache;
 static struct ObjectPool *vm_areacache;
 
-int
-vm_range_alloc(struct VMSpace *vm, uintptr_t va, size_t n, int prot)
-{
-  struct Page *page;
-  uint8_t *a, *start, *end;
-  int r;
-
-  start = ROUND_DOWN((uint8_t *) va, PAGE_SIZE);
-  end   = ROUND_UP((uint8_t *) va + n, PAGE_SIZE);
-
-  if ((start > end) || (end > (uint8_t *) VIRT_KERNEL_BASE))
-    return -EINVAL;
-
-  for (a = start; a < end; a += PAGE_SIZE) {
-    if ((page = page_alloc_one(PAGE_ALLOC_ZERO)) == NULL) {
-      vm_range_free(vm, (uintptr_t) start, a - start);
-      return -ENOMEM;
-    }
-
-    if ((r = (vm_page_insert(vm->pgdir, page, (uintptr_t) a, prot)) != 0)) {
-      page_free_one(page);
-      vm_range_free(vm, (uintptr_t) start, a - start);
-      return r;
-    }
-  }
-
-  return 0;
-}
-
-void
-vm_range_free(struct VMSpace *vm, uintptr_t va, size_t n)
-{
-  uint8_t *a, *end;
-
-  a   = ROUND_DOWN((uint8_t *) va, PAGE_SIZE);
-  end = ROUND_UP((uint8_t *) va + n, PAGE_SIZE);
-
-  if ((a > end) || (end > (uint8_t *) VIRT_KERNEL_BASE))
-    panic("invalid range [%p,%p)", a, end);
-
-  for ( ; a < end; a += PAGE_SIZE)
-    vm_page_remove(vm->pgdir, (uintptr_t) a);
-}
-
-int
-vm_range_clone(struct VMSpace *src, struct VMSpace *dst, uintptr_t va, size_t n, int share)
-{
-  struct Page *src_page, *dst_page;
-  uint8_t *a, *end;
-  int r;
-
-  a   = ROUND_DOWN((uint8_t *) va, PAGE_SIZE);
-  end = ROUND_UP((uint8_t *) va + n, PAGE_SIZE);
-
-  for ( ; a < end; a += PAGE_SIZE) {
-    int perm;
-
-    src_page = vm_page_lookup(src->pgdir, (uintptr_t) a, &perm);
-
-    if (src_page != NULL) {
-      if (share) {
-        if (perm & VM_COW) {
-          if ((dst_page = page_alloc_one(0)) == NULL)
-            return -ENOMEM;
-
-          perm |= VM_WRITE;
-          perm &= ~VM_COW;
-
-          memmove(page2kva(dst_page), page2kva(src_page), PAGE_SIZE);
-
-          if ((r = vm_page_insert(src->pgdir, dst_page, (uintptr_t) va, perm)) < 0) {
-            page_free_one(dst_page);
-            return r;
-          }
-
-          if ((r = vm_page_insert(dst->pgdir, dst_page, (uintptr_t) va, perm)) < 0) {
-            return r;
-          }
-        } else {
-          if ((r = vm_page_insert(dst->pgdir, src_page, (uintptr_t) a, perm)) < 0)
-            return r;
-        }
-      } else if ((perm & VM_WRITE) || (perm & VM_COW)) {
-        perm &= ~VM_WRITE;
-        perm |= VM_COW;
-
-        if ((r = vm_page_insert(src->pgdir, src_page, (uintptr_t) a, perm)) < 0)
-          return r;
-        if ((r = vm_page_insert(dst->pgdir, src_page, (uintptr_t) a, perm)) < 0)
-          return r;
-      } else {
-        if ((dst_page = page_alloc_one(0)) == NULL)
-          return -ENOMEM;
-
-        if ((r = vm_page_insert(dst->pgdir, dst_page, (uintptr_t) va, perm)) < 0) {
-          page_free_one(dst_page);
-          return r;
-        }
-
-        memcpy(page2kva(dst_page), page2kva(src_page), PAGE_SIZE);
-      }
-    }
-  }
-
-  return 0;
-}
-
-/*
- * ----------------------------------------------------------------------------
- * Copying Data Between Address Spaces
- * ----------------------------------------------------------------------------
- */
-
-int
-vm_space_copy_out(struct VMSpace *vm, void *dst_va, const void *src_va, size_t n)
-{
-  uint8_t *src = (uint8_t *) src_va;
-  uint8_t *dst = (uint8_t *) dst_va;
-
-  while (n != 0) {
-    struct Page *page;
-    uint8_t *kva;
-    size_t offset, ncopy;
-
-    if ((page = vm_page_lookup(vm->pgdir, (uintptr_t) dst, NULL)) == NULL)
-      return -EFAULT;
-    
-    kva    = (uint8_t *) page2kva(page);
-    offset = (uintptr_t) dst % PAGE_SIZE;
-    ncopy  = MIN(PAGE_SIZE - offset, n);
-
-    memmove(kva + offset, src, ncopy);
-
-    src += ncopy;
-    dst += ncopy;
-    n   -= ncopy;
-  }
-
-  return 0;
-}
-
-int
-vm_space_copy_in(struct VMSpace *vm, void *dst_va, const void *src_va, size_t n)
-{
-  uint8_t *dst = (uint8_t *) dst_va;
-  uint8_t *src = (uint8_t *) src_va;
-
-  while (n != 0) {
-    struct Page *page;
-    uint8_t *kva;
-    size_t offset, ncopy;
-
-    if ((page = vm_page_lookup(vm->pgdir, (uintptr_t) src, NULL)) == NULL)
-      return -EFAULT;
-
-    kva    = (uint8_t *) page2kva(page);
-    offset = (uintptr_t) dst % PAGE_SIZE;
-    ncopy  = MIN(PAGE_SIZE - offset, n);
-
-    memmove(dst, kva + offset, ncopy);
-
-    src += ncopy;
-    dst += ncopy;
-    n   -= ncopy;
-  }
-
-  return 0;
-}
-
 /*
  * ----------------------------------------------------------------------------
  * Check User Memory Permissions
@@ -321,12 +152,12 @@ vm_space_destroy(struct VMSpace *vm)
 {
   // struct VMSpaceMapEntry *area;
 
-  vm_range_free(vm, 0, ROUND_UP(vm->heap, PAGE_SIZE));
-  vm_range_free(vm, vm->stack, USTACK_SIZE);
+  vm_range_free(vm->pgdir, 0, ROUND_UP(vm->heap, PAGE_SIZE));
+  vm_range_free(vm->pgdir, vm->stack, USTACK_SIZE);
   
   // while (!list_empty(&vm->areas)) {
   //   area = LIST_CONTAINER(vm->areas.next, struct VMSpaceMapEntry, link);
-  //   vm_range_free(vm, area->start, area->length);
+  //   vm_range_free(vm->pgdir, area->start, area->length);
   //   list_remove(&area->link);
   // }
 
@@ -345,13 +176,13 @@ vm_space_clone(struct VMSpace *vm, int share)
   if ((new_vm = vm_space_create()) == NULL)
     return NULL;
 
-  if (vm_range_clone(vm, new_vm, 0, ROUND_UP(vm->heap, PAGE_SIZE), share) < 0) {
+  if (vm_range_clone(vm->pgdir, new_vm->pgdir, 0, ROUND_UP(vm->heap, PAGE_SIZE), share) < 0) {
     vm_space_destroy(new_vm);
     return NULL;
   }
   new_vm->heap = vm->heap;
 
-  if (vm_range_clone(vm, new_vm, vm->stack, USTACK_SIZE, 0) < 0) {
+  if (vm_range_clone(vm->pgdir, new_vm->pgdir, vm->stack, USTACK_SIZE, 0) < 0) {
     vm_space_destroy(new_vm);
     return NULL;
   }
@@ -371,7 +202,7 @@ vm_space_clone(struct VMSpace *vm, int share)
   //   new_area->flags  = area->flags;
   //   list_add_front(&new_vm->areas, &new_area->link);
 
-  //   if (vm_range_clone(vm, new_vm, area->start, area->length) < 0) {
+  //   if (vm_range_clone(vm->pgdir, new_vm->pgdir, area->start, area->length) < 0) {
   //     vm_space_destroy(new_vm);
   //     return NULL;
   //   }
@@ -440,8 +271,8 @@ vm_handle_fault(struct VMSpace *vm, uintptr_t va)
 //   if ((va + n) > VIRT_KERNEL_BASE)
 //     return -ENOMEM;
 
-//   if ((r = vm_range_alloc(vm, va, n, flags)) < 0) {
-//     vm_range_free(vm, va, n);
+//   if ((r = vm_range_alloc(vm->pgdir, va, n, flags)) < 0) {
+//     vm_range_free(vm->pgdir, va, n);
 //     return r;
 //   }
 
@@ -473,7 +304,7 @@ vm_handle_fault(struct VMSpace *vm, uintptr_t va)
 //   } else {
 //     area = (struct VMSpaceMapEntry *) object_pool_get(vm_areacache);
 //     if (area == NULL) {
-//       vm_range_free(vm, va, n);
+//       vm_range_free(vm->pgdir, va, n);
 //       return -ENOMEM;
 //     }
 

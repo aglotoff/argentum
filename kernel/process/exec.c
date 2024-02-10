@@ -31,7 +31,7 @@ copy_args(struct VMSpace *vm, char *const args[], uintptr_t limit, char **sp)
     if (p < (char *) limit)
       return -E2BIG;
 
-    if ((r = vm_space_copy_out(vm, p, args[i], n)) < 0)
+    if ((r = vm_copy_out(vm->pgdir, p, args[i], n)) < 0)
       return r;
 
     oargs[i] = p;
@@ -44,7 +44,7 @@ copy_args(struct VMSpace *vm, char *const args[], uintptr_t limit, char **sp)
   if (p < (char *) (VIRT_USTACK_TOP - USTACK_SIZE))
     return -E2BIG;
 
-  if ((r = vm_space_copy_out(vm, p, oargs, n)) < 0)
+  if ((r = vm_copy_out(vm->pgdir, p, oargs, n)) < 0)
     return r;
 
   *sp = p;
@@ -115,7 +115,7 @@ process_exec(const char *path, char *const argv[], char *const envp[])
       goto out2;
     }
 
-    a = vm_range_alloc(vm, ph.vaddr, ph.memsz, VM_READ | VM_WRITE | VM_EXEC | VM_USER);
+    a = vm_range_alloc(vm->pgdir, ph.vaddr, ph.memsz, VM_READ | VM_WRITE | VM_EXEC | VM_USER);
     if (a < 0) {
       r = (int) a;
       goto out2;
@@ -129,7 +129,7 @@ process_exec(const char *path, char *const argv[], char *const envp[])
   }
 
   // Allocate user stack.
-  if ((r = (int) vm_range_alloc(vm, ustack, USTACK_SIZE, VM_READ | VM_WRITE | VM_USER)) < 0)
+  if ((r = (int) vm_range_alloc(vm->pgdir, ustack, USTACK_SIZE, VM_READ | VM_WRITE | VM_USER)) < 0)
     return r;
 
   // Copy args and environment.

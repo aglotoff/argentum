@@ -3,6 +3,8 @@
 #include <kernel/mm/mmu.h>
 #include <kernel/mm/page.h>
 #include <kernel/mm/vm.h>
+#include <kernel/types.h>
+#include <string.h>
 
 // TODO: move these into a seperate header
 static void         arch_vm_create_kernel(void);
@@ -547,4 +549,173 @@ arch_vm_load(void *pgtab)
 {
   cp15_ttbr0_set(KVA2PA(pgtab));
   cp15_tlbiall();
+}
+
+int
+vm_range_alloc(void *vm, uintptr_t va, size_t n, int prot)
+{
+  struct Page *page;
+  uint8_t *a, *start, *end;
+  int r;
+
+  start = ROUND_DOWN((uint8_t *) va, PAGE_SIZE);
+  end   = ROUND_UP((uint8_t *) va + n, PAGE_SIZE);
+
+  if ((start > end) || (end > (uint8_t *) VIRT_KERNEL_BASE))
+    return -EINVAL;
+
+  for (a = start; a < end; a += PAGE_SIZE) {
+    if ((page = page_alloc_one(PAGE_ALLOC_ZERO)) == NULL) {
+      vm_range_free(vm, (uintptr_t) start, a - start);
+      return -ENOMEM;
+    }
+
+    if ((r = (vm_page_insert(vm, page, (uintptr_t) a, prot)) != 0)) {
+      page_free_one(page);
+      vm_range_free(vm, (uintptr_t) start, a - start);
+      return r;
+    }
+  }
+
+  return 0;
+}
+
+void
+vm_range_free(void *vm, uintptr_t va, size_t n)
+{
+  uint8_t *a, *end;
+
+  a   = ROUND_DOWN((uint8_t *) va, PAGE_SIZE);
+  end = ROUND_UP((uint8_t *) va + n, PAGE_SIZE);
+
+  if ((a > end) || (end > (uint8_t *) VIRT_KERNEL_BASE))
+    panic("invalid range [%p,%p)", a, end);
+
+  for ( ; a < end; a += PAGE_SIZE)
+    vm_page_remove(vm, (uintptr_t) a);
+}
+
+int
+vm_range_clone(void *src, void *dst, uintptr_t va, size_t n, int share)
+{
+  struct Page *src_page, *dst_page;
+  uint8_t *a, *end;
+  int r;
+
+  a   = ROUND_DOWN((uint8_t *) va, PAGE_SIZE);
+  end = ROUND_UP((uint8_t *) va + n, PAGE_SIZE);
+
+  for ( ; a < end; a += PAGE_SIZE) {
+    int perm;
+
+    src_page = vm_page_lookup(src, (uintptr_t) a, &perm);
+
+    if (src_page != NULL) {
+      if (share) {
+        if (perm & VM_COW) {
+          if ((dst_page = page_alloc_one(0)) == NULL)
+            return -ENOMEM;
+
+          perm |= VM_WRITE;
+          perm &= ~VM_COW;
+
+          memmove(page2kva(dst_page), page2kva(src_page), PAGE_SIZE);
+
+          if ((r = vm_page_insert(src, dst_page, (uintptr_t) va, perm)) < 0) {
+            page_free_one(dst_page);
+            return r;
+          }
+
+          if ((r = vm_page_insert(dst, dst_page, (uintptr_t) va, perm)) < 0) {
+            return r;
+          }
+        } else {
+          if ((r = vm_page_insert(dst, src_page, (uintptr_t) a, perm)) < 0)
+            return r;
+        }
+      } else if ((perm & VM_WRITE) || (perm & VM_COW)) {
+        perm &= ~VM_WRITE;
+        perm |= VM_COW;
+
+        if ((r = vm_page_insert(src, src_page, (uintptr_t) a, perm)) < 0)
+          return r;
+        if ((r = vm_page_insert(dst, src_page, (uintptr_t) a, perm)) < 0)
+          return r;
+      } else {
+        if ((dst_page = page_alloc_one(0)) == NULL)
+          return -ENOMEM;
+
+        if ((r = vm_page_insert(dst, dst_page, (uintptr_t) va, perm)) < 0) {
+          page_free_one(dst_page);
+          return r;
+        }
+
+        memcpy(page2kva(dst_page), page2kva(src_page), PAGE_SIZE);
+      }
+    }
+  }
+
+  return 0;
+}
+
+/*
+ * ----------------------------------------------------------------------------
+ * Copying Data Between Address Spaces
+ * ----------------------------------------------------------------------------
+ */
+
+int
+vm_copy_out(void *vm, void *dst_va, const void *src_va, size_t n)
+{
+  uint8_t *src = (uint8_t *) src_va;
+  uint8_t *dst = (uint8_t *) dst_va;
+
+  while (n != 0) {
+    struct Page *page;
+    uint8_t *kva;
+    size_t offset, ncopy;
+
+    if ((page = vm_page_lookup(vm, (uintptr_t) dst, NULL)) == NULL)
+      return -EFAULT;
+    
+    kva    = (uint8_t *) page2kva(page);
+    offset = (uintptr_t) dst % PAGE_SIZE;
+    ncopy  = MIN(PAGE_SIZE - offset, n);
+
+    memmove(kva + offset, src, ncopy);
+
+    src += ncopy;
+    dst += ncopy;
+    n   -= ncopy;
+  }
+
+  return 0;
+}
+
+int
+vm_copy_in(void *vm, void *dst_va, const void *src_va, size_t n)
+{
+  uint8_t *dst = (uint8_t *) dst_va;
+  uint8_t *src = (uint8_t *) src_va;
+
+  while (n != 0) {
+    struct Page *page;
+    uint8_t *kva;
+    size_t offset, ncopy;
+
+    if ((page = vm_page_lookup(vm, (uintptr_t) src, NULL)) == NULL)
+      return -EFAULT;
+
+    kva    = (uint8_t *) page2kva(page);
+    offset = (uintptr_t) dst % PAGE_SIZE;
+    ncopy  = MIN(PAGE_SIZE - offset, n);
+
+    memmove(dst, kva + offset, ncopy);
+
+    src += ncopy;
+    dst += ncopy;
+    n   -= ncopy;
+  }
+
+  return 0;
 }

@@ -34,17 +34,11 @@ void              vm_space_init(void);
 struct VMSpace   *vm_space_create(void);
 void              vm_space_destroy(struct VMSpace *);
 struct VMSpace   *vm_space_clone(struct VMSpace *, int);
-int               vm_space_copy_out(struct VMSpace *, void *, const void *, 
-                                    size_t);
-int               vm_space_copy_in(struct VMSpace *, void *, const void *,
-                                   size_t);
 int               vm_space_check_buf(struct VMSpace *, const void *, size_t,
                                      unsigned);
 int               vm_space_check_str(struct VMSpace *, const char *, unsigned);
 int               vm_space_load_inode(struct VMSpace *, void *, struct Inode *,
                                       size_t, off_t);
-int               vm_range_alloc(struct VMSpace *, uintptr_t, size_t, int);
-void              vm_range_free(struct VMSpace *, uintptr_t, size_t);
 int               vm_handle_fault(struct VMSpace *, uintptr_t);
 // intptr_t          vm_space_alloc(struct VMSpace *, uintptr_t, size_t, int);
 // void         vm_print_areas(struct VMSpace *);

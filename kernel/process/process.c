@@ -160,18 +160,18 @@ process_load_binary(struct Process *proc, const void *binary)
     if (ph->filesz > ph->memsz)
       return -EINVAL;
 
-    if ((r = vm_range_alloc(proc->vm, ph->vaddr, ph->memsz,
+    if ((r = vm_range_alloc(proc->vm->pgdir, ph->vaddr, ph->memsz,
                             VM_READ | VM_WRITE | VM_EXEC | VM_USER)) < 0)
       return r;
 
-    if ((r = vm_space_copy_out(proc->vm, (void *) ph->vaddr,
+    if ((r = vm_copy_out(proc->vm->pgdir, (void *) ph->vaddr,
                          (uint8_t *) elf + ph->offset, ph->filesz)) < 0)
       return r;
 
     proc->vm->heap = ROUND_UP(ph->vaddr + ph->memsz, PAGE_SIZE);
   }
 
-  if ((r = vm_range_alloc(proc->vm, (VIRT_USTACK_TOP - USTACK_SIZE),
+  if ((r = vm_range_alloc(proc->vm->pgdir, (VIRT_USTACK_TOP - USTACK_SIZE),
                           USTACK_SIZE, VM_READ | VM_WRITE | VM_USER)) < 0)
     return r;
   proc->vm->stack = VIRT_USTACK_TOP - USTACK_SIZE;
@@ -474,7 +474,7 @@ process_grow(ptrdiff_t increment)
       uintptr_t next_limit = ROUND_UP(next_heap, PAGE_SIZE);
 
       if (next_limit != prev_limit) {
-        if ((r = vm_range_alloc(current->vm, prev_limit, next_limit - prev_limit, VM_WRITE | VM_READ | VM_USER)) == 0) {
+        if ((r = vm_range_alloc(current->vm->pgdir, prev_limit, next_limit - prev_limit, VM_WRITE | VM_READ | VM_USER)) == 0) {
           current->vm->heap = next_heap;
           r = prev_heap;
         }
@@ -492,7 +492,7 @@ process_grow(ptrdiff_t increment)
       uintptr_t next_limit = ROUND_UP(next_heap, PAGE_SIZE);
 
       if (next_limit != prev_limit) {
-        vm_range_free(current->vm, next_limit, prev_limit - next_limit);
+        vm_range_free(current->vm->pgdir, next_limit, prev_limit - next_limit);
         current->vm->heap = next_heap;
         r = prev_heap;
       } else {

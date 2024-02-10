@@ -168,9 +168,9 @@ int
 console_ioctl(int request, int arg)
 {
   switch (request) {
-  case TCGETPGRP:
+  case TIOCGPGRP:
     return pgrp;
-  case TCSETPGRP:
+  case TIOCSPGRP:
     // TODO: validate
     pgrp = arg;
     return 0;
