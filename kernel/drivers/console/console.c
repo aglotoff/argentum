@@ -1,6 +1,6 @@
 #include <errno.h>
 #include <stdint.h>
-#include <sys/ttycom.h>
+#include <sys/ioctl.h>
 
 #include <kernel/thread.h>
 #include <kernel/spinlock.h>

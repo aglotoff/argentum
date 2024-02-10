@@ -1,4 +1,7 @@
 libc_a_SOURCES += \
+  %D%/arpa/inet/inet_addr.c \
+  %D%/arpa/inet/inet_aton.c \
+  %D%/arpa/inet/inet_ntoa.c \
   %D%/arpa/inet/inet_pton.c \
   %D%/fcntl/fcntl.c \
   %D%/fcntl/open.c \
@@ -8,14 +11,19 @@ libc_a_SOURCES += \
   %D%/grp/getgrnam.c \
   %D%/grp/setgrent.c \
   %D%/mntent/getmntent.c \
+  %D%/netdb/gethostbyaddr.c \
   %D%/netdb/gethostbyname.c \
+  %D%/netdb/getprotobyname.c \
   %D%/netdb/getservbyname.c \
+  %D%/poll/poll.c \
   %D%/signal/kill.c \
   %D%/signal/killpg.c \
   %D%/signal/sigaction.c \
   %D%/signal/sigprocmask.c \
   %D%/signal/sigstub.S \
   %D%/signal/sigsuspend.c \
+  %D%/stdio/flockfile.c \
+  %D%/stdio/funlockfile.c \
   %D%/stdlib/realpath.c \
   %D%/sys/ioctl/ioctl.c \
   %D%/sys/resource/getrlimit.c \
@@ -23,12 +31,14 @@ libc_a_SOURCES += \
   %D%/sys/socket/accept.c \
   %D%/sys/socket/bind.c \
   %D%/sys/socket/connect.c \
+  %D%/sys/socket/getsockname.c \
   %D%/sys/socket/listen.c \
   %D%/sys/socket/recv.c \
   %D%/sys/socket/recvfrom.c \
   %D%/sys/socket/send.c \
   %D%/sys/socket/sendto.c \
   %D%/sys/socket/setsockopt.c \
+  %D%/sys/socket/shutdown.c \
   %D%/sys/socket/socket.c \
   %D%/sys/stat/chmod.c \
   %D%/sys/stat/fchmod.c \
@@ -68,6 +78,7 @@ libc_a_SOURCES += \
   %D%/unistd/fpathconf.c \
   %D%/unistd/ftruncate.c \
   %D%/unistd/getdents.c \
+  %D%/unistd/getdomainname.c \
   %D%/unistd/getegid.c \
   %D%/unistd/geteuid.c \
   %D%/unistd/getgid.c \
@@ -77,6 +88,7 @@ libc_a_SOURCES += \
   %D%/unistd/getpid.c \
   %D%/unistd/getppid.c \
   %D%/unistd/getuid.c \
+  %D%/unistd/issetugid.c \
   %D%/unistd/lchown.c \
   %D%/unistd/link.c \
   %D%/unistd/lseek.c \
@@ -89,6 +101,7 @@ libc_a_SOURCES += \
   %D%/unistd/setpgid.c \
   %D%/unistd/setregid.c \
   %D%/unistd/setreuid.c \
+  %D%/unistd/setuid.c \
   %D%/unistd/sysconf.c \
   %D%/unistd/tcgetpgrp.c \
   %D%/unistd/tcsetpgrp.c \

@@ -27,7 +27,8 @@ struct termios {
 #define IXON		    0x0200	/* enable start/stop output control */
 #define PARMRK		  0x0400
 
-#define OPOST		0x0001	/* perform output processing */
+#define OPOST		  0x0001
+#define ONLCR		  0x0002
 
 #define TCSANOW     0x0001
 #define TCSADRAIN   0x0002

@@ -4,6 +4,9 @@ NEWLIB := lib/newlib-4.4.0.20231231
 NEWLIB_TARBALL := tarballs/newlib-4.4.0.20231231.tar.gz
 
 LIB_SRCFILES := \
+	lib/argentum/arpa/inet/inet_addr.c \
+	lib/argentum/arpa/inet/inet_aton.c \
+	lib/argentum/arpa/inet/inet_ntoa.c \
 	lib/argentum/arpa/inet/inet_pton.c \
 	lib/argentum/fcntl/fcntl.c \
 	lib/argentum/fcntl/open.c \
@@ -12,9 +15,17 @@ LIB_SRCFILES := \
 	lib/argentum/grp/getgrgid.c \
 	lib/argentum/grp/getgrnam.c \
 	lib/argentum/grp/setgrent.c \
+	lib/argentum/include/arpa/ftp.h \
 	lib/argentum/include/arpa/inet.h \
+	lib/argentum/include/arpa/telnet.h \
+	lib/argentum/include/arpa/tftp.h \
+	lib/argentum/include/net/if.h \
+	lib/argentum/include/netinet/icmp6.h \
+	lib/argentum/include/netinet/in_systm.h \
 	lib/argentum/include/netinet/in.h \
+	lib/argentum/include/netinet/ip.h \
 	lib/argentum/include/sys/dirent.h \
+	lib/argentum/include/sys/filio.h \
 	lib/argentum/include/sys/ioccom.h \
 	lib/argentum/include/sys/ioctl.h \
 	lib/argentum/include/sys/resource.h \
@@ -29,15 +40,21 @@ LIB_SRCFILES := \
 	lib/argentum/include/limits.h \
 	lib/argentum/include/mntent.h \
 	lib/argentum/include/netdb.h \
+	lib/argentum/include/poll.h \
 	lib/argentum/mntent/getmntent.c \
+	lib/argentum/netdb/gethostbyaddr.c \
 	lib/argentum/netdb/gethostbyname.c \
+	lib/argentum/netdb/getprotobyname.c \
 	lib/argentum/netdb/getservbyname.c \
+	lib/argentum/poll/poll.c \
 	lib/argentum/signal/kill.c \
 	lib/argentum/signal/killpg.c \
 	lib/argentum/signal/sigaction.c \
 	lib/argentum/signal/sigprocmask.c \
 	lib/argentum/signal/sigstub.S \
 	lib/argentum/signal/sigsuspend.c \
+	lib/argentum/stdio/flockfile.c \
+	lib/argentum/stdio/funlockfile.c \
 	lib/argentum/stdlib/realpath.c \
 	lib/argentum/sys/ioctl/ioctl.c \
 	lib/argentum/sys/resource/getrlimit.c \
@@ -45,12 +62,14 @@ LIB_SRCFILES := \
 	lib/argentum/sys/socket/accept.c \
 	lib/argentum/sys/socket/bind.c \
 	lib/argentum/sys/socket/connect.c \
+	lib/argentum/sys/socket/getsockname.c \
 	lib/argentum/sys/socket/listen.c \
 	lib/argentum/sys/socket/recv.c \
 	lib/argentum/sys/socket/recvfrom.c \
 	lib/argentum/sys/socket/send.c \
 	lib/argentum/sys/socket/sendto.c \
 	lib/argentum/sys/socket/setsockopt.c \
+	lib/argentum/sys/socket/shutdown.c \
 	lib/argentum/sys/socket/socket.c \
 	lib/argentum/sys/stat/chmod.c \
 	lib/argentum/sys/stat/fchmod.c \
@@ -89,6 +108,7 @@ LIB_SRCFILES := \
 	lib/argentum/unistd/fsync.c \
 	lib/argentum/unistd/ftruncate.c \
 	lib/argentum/unistd/getdents.c \
+	lib/argentum/unistd/getdomainname.c \
 	lib/argentum/unistd/getegid.c \
 	lib/argentum/unistd/geteuid.c \
 	lib/argentum/unistd/getgid.c \
@@ -98,6 +118,7 @@ LIB_SRCFILES := \
 	lib/argentum/unistd/getpid.c \
 	lib/argentum/unistd/getppid.c \
 	lib/argentum/unistd/getuid.c \
+	lib/argentum/unistd/issetugid.c \
 	lib/argentum/unistd/lchown.c \
 	lib/argentum/unistd/link.c \
 	lib/argentum/unistd/lseek.c \
@@ -110,6 +131,7 @@ LIB_SRCFILES := \
 	lib/argentum/unistd/setpgid.c \
 	lib/argentum/unistd/setregid.c \
 	lib/argentum/unistd/setreuid.c \
+	lib/argentum/unistd/setuid.c \
 	lib/argentum/unistd/sysconf.c \
 	lib/argentum/unistd/tcgetpgrp.c \
 	lib/argentum/unistd/tcsetpgrp.c \

@@ -2,7 +2,7 @@
 #include <sys/syscall.h>
 
 ssize_t
-recvf(int socket, const void *buffer, size_t length, int flags)
+recv(int socket, void *buffer, size_t length, int flags)
 {
   return __syscall(__SYS_RECVFROM, socket, (uint32_t) buffer, length, flags, 0, 0);
 }
