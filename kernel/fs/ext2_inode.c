@@ -1,6 +1,7 @@
 #include <kernel/assert.h>
 #include <errno.h>
 #include <string.h>
+#include <sys/stat.h>
 
 #include <kernel/cprintf.h>
 #include <kernel/drivers/rtc.h>
@@ -83,6 +84,10 @@ ext2_read_inode(struct Inode *inode)
   // Read ext2-specific fields
   inode->ext2.blocks = raw->blocks;
   memmove(inode->ext2.block, raw->block, sizeof(inode->ext2.block));
+
+  if (S_ISCHR(inode->mode) || S_ISBLK(inode->mode)) {
+    ext2_read(inode, &inode->rdev, sizeof(inode->rdev), 0);
+  }
 
   buf_release(buf);
 

@@ -4,7 +4,9 @@
 #include <kernel/mm/page.h>
 #include <kernel/mm/vm.h>
 #include <kernel/types.h>
+#include <kernel/spinlock.h>
 #include <string.h>
+#include <sys/mman.h>
 
 // TODO: move these into a seperate header
 static void         arch_vm_create_kernel(void);
@@ -22,6 +24,8 @@ static void         arch_vm_invalidate(uintptr_t);
 
 // Master kernel page table.
 static void *kernel_pgtab;
+
+static struct SpinLock vm_lock = SPIN_INITIALIZER("vm");
 
 /**
  * Initialize MMU, create and load the master page table. This function must be
@@ -122,7 +126,7 @@ vm_page_lookup(void *pgtab, uintptr_t va, int *flags_store)
   if ((pte = arch_vm_lookup(pgtab, va, 0)) == NULL)
     return NULL;
 
-  if (!arch_vm_pte_valid(pte) || !(arch_vm_pte_flags(pte) & __VM_PAGE))
+  if (!arch_vm_pte_valid(pte) || !(arch_vm_pte_flags(pte) & _PROT_PAGE))
     return NULL;
 
   if (flags_store)
@@ -161,7 +165,7 @@ vm_page_insert(void *pgtab, struct Page *page, uintptr_t va, int flags)
   // If present, remove the previous mapping
   vm_page_remove(pgtab, (uintptr_t) va);
 
-  arch_vm_pte_set(pte, page2pa(page), flags | __VM_PAGE);
+  arch_vm_pte_set(pte, page2pa(page), flags | _PROT_PAGE);
 
   return 0;
 }
@@ -186,7 +190,7 @@ vm_page_remove(void *pgtab, uintptr_t va)
   if ((pte = arch_vm_lookup(pgtab, va, 0)) == NULL)
     return 0;
 
-  if (!arch_vm_pte_valid(pte) || !(arch_vm_pte_flags(pte) & __VM_PAGE))
+  if (!arch_vm_pte_valid(pte) || !(arch_vm_pte_flags(pte) & _PROT_PAGE))
     return 0;
 
   page = pa2page(arch_vm_pte_addr(pte));
@@ -268,13 +272,13 @@ arch_vm_pte_flags(void *pte)
 }
 
 // Map VM flags to ARMv7 MMU AP bits
-static int flags_to_ap[] = {
-  [VM_READ]                      = AP_PRIV_RO, 
-  [VM_WRITE]                     = AP_PRIV_RW, 
-  [VM_READ | VM_WRITE]           = AP_PRIV_RW, 
-  [VM_USER | VM_READ]            = AP_USER_RO, 
-  [VM_USER | VM_WRITE]           = AP_BOTH_RW, 
-  [VM_USER | VM_READ | VM_WRITE] = AP_BOTH_RW, 
+static int prot_to_ap[] = {
+  [PROT_READ]                           = AP_PRIV_RO, 
+  [PROT_WRITE]                          = AP_PRIV_RW, 
+  [PROT_READ  | PROT_WRITE]             = AP_PRIV_RW, 
+  [_PROT_USER | PROT_READ ]             = AP_USER_RO, 
+  [_PROT_USER | PROT_WRITE]             = AP_BOTH_RW, 
+  [_PROT_USER | PROT_READ | PROT_WRITE] = AP_BOTH_RW, 
 };
 
 /**
@@ -289,10 +293,10 @@ arch_vm_pte_set(void *pte, physaddr_t pa, int flags)
 {
   int bits;
 
-  bits = L2_DESC_AP(flags_to_ap[flags & 7]);
-  if ((flags & VM_USER) && !(flags & VM_EXEC))
+  bits = L2_DESC_AP(prot_to_ap[flags & (PROT_WRITE | PROT_READ | _PROT_USER)]);
+  if ((flags & _PROT_USER) && !(flags & PROT_EXEC))
     bits |= L2_DESC_SM_XN;
-  if (!(flags & VM_NOCACHE))
+  if (!(flags & PROT_NOCACHE))
     bits |= (L2_DESC_B | L2_DESC_C);
 
   *(l2_desc_t *) pte = pa | bits | L2_DESC_TYPE_SM;
@@ -376,10 +380,10 @@ arch_vm_section_set(l1_desc_t *tte, physaddr_t pa, int flags)
 {
   int bits;
 
-  bits = L1_DESC_SECT_AP(flags_to_ap[flags & 7]);
-  if ((flags & VM_USER) && !(flags & VM_EXEC))
+  bits = L1_DESC_SECT_AP(prot_to_ap[flags & (PROT_WRITE | PROT_READ | _PROT_USER)]);
+  if ((flags & _PROT_USER) && !(flags & PROT_EXEC))
     bits |= L1_DESC_SECT_XN;
-  if (!(flags & VM_NOCACHE))
+  if (!(flags & PROT_NOCACHE))
     bits |= (L1_DESC_SECT_B | L1_DESC_SECT_C);
 
   *tte = pa | bits | L1_DESC_TYPE_SECT;
@@ -452,17 +456,17 @@ arch_vm_create_kernel(void)
 
   // Map all physical memory at VIRT_KERNEL_BASE
   // Permissions: kernel RW, user NONE
-  arch_vm_fixed_map(VIRT_KERNEL_BASE, 0, PHYS_LIMIT, VM_READ | VM_WRITE);
+  arch_vm_fixed_map(VIRT_KERNEL_BASE, 0, PHYS_LIMIT, PROT_READ | PROT_WRITE);
 
   // Map I/O devices
   // Permissions: kernel RW, user NONE, disable cache 
   arch_vm_fixed_map(VIRT_KERNEL_BASE + PHYS_LIMIT, PHYS_LIMIT,
                     VIRT_VECTOR_BASE - (VIRT_KERNEL_BASE + PHYS_LIMIT),
-                    VM_READ | VM_WRITE | VM_NOCACHE);
+                    PROT_READ | PROT_WRITE | PROT_NOCACHE);
 
   // Map exception vectors at VIRT_VECTOR_BASE
   // Permissions: kernel R, user NONE
-  arch_vm_fixed_map(VIRT_VECTOR_BASE, (physaddr_t) _start, PAGE_SIZE, VM_READ);
+  arch_vm_fixed_map(VIRT_VECTOR_BASE, (physaddr_t) _start, PAGE_SIZE, PROT_READ);
 }
 
 /**
@@ -565,16 +569,23 @@ vm_range_alloc(void *vm, uintptr_t va, size_t n, int prot)
     return -EINVAL;
 
   for (a = start; a < end; a += PAGE_SIZE) {
+    spin_lock(&vm_lock);
+
     if ((page = page_alloc_one(PAGE_ALLOC_ZERO)) == NULL) {
       vm_range_free(vm, (uintptr_t) start, a - start);
+      spin_unlock(&vm_lock);
       return -ENOMEM;
     }
 
     if ((r = (vm_page_insert(vm, page, (uintptr_t) a, prot)) != 0)) {
       page_free_one(page);
+      spin_unlock(&vm_lock);
+
       vm_range_free(vm, (uintptr_t) start, a - start);
       return r;
     }
+
+    spin_unlock(&vm_lock);
   }
 
   return 0;
@@ -591,8 +602,11 @@ vm_range_free(void *vm, uintptr_t va, size_t n)
   if ((a > end) || (end > (uint8_t *) VIRT_KERNEL_BASE))
     panic("invalid range [%p,%p)", a, end);
 
-  for ( ; a < end; a += PAGE_SIZE)
+  for ( ; a < end; a += PAGE_SIZE) {
+    spin_lock(&vm_lock);
     vm_page_remove(vm, (uintptr_t) a);
+    spin_unlock(&vm_lock);
+  }
 }
 
 int
@@ -608,51 +622,70 @@ vm_range_clone(void *src, void *dst, uintptr_t va, size_t n, int share)
   for ( ; a < end; a += PAGE_SIZE) {
     int perm;
 
-    src_page = vm_page_lookup(src, (uintptr_t) a, &perm);
+    spin_lock(&vm_lock);
 
-    if (src_page != NULL) {
-      if (share) {
-        if (perm & VM_COW) {
-          if ((dst_page = page_alloc_one(0)) == NULL)
-            return -ENOMEM;
-
-          perm |= VM_WRITE;
-          perm &= ~VM_COW;
-
-          memmove(page2kva(dst_page), page2kva(src_page), PAGE_SIZE);
-
-          if ((r = vm_page_insert(src, dst_page, (uintptr_t) va, perm)) < 0) {
-            page_free_one(dst_page);
-            return r;
-          }
-
-          if ((r = vm_page_insert(dst, dst_page, (uintptr_t) va, perm)) < 0) {
-            return r;
-          }
-        } else {
-          if ((r = vm_page_insert(dst, src_page, (uintptr_t) a, perm)) < 0)
-            return r;
-        }
-      } else if ((perm & VM_WRITE) || (perm & VM_COW)) {
-        perm &= ~VM_WRITE;
-        perm |= VM_COW;
-
-        if ((r = vm_page_insert(src, src_page, (uintptr_t) a, perm)) < 0)
-          return r;
-        if ((r = vm_page_insert(dst, src_page, (uintptr_t) a, perm)) < 0)
-          return r;
-      } else {
-        if ((dst_page = page_alloc_one(0)) == NULL)
+    if ((src_page = vm_page_lookup(src, (uintptr_t) a, &perm)) == NULL) {
+      spin_unlock(&vm_lock);
+      continue;
+    }
+    
+    if (share) {
+      if (perm & _PROT_COW) {
+        if ((dst_page = page_alloc_one(0)) == NULL) {
+          spin_unlock(&vm_lock);
           return -ENOMEM;
+        }
+
+        perm |= PROT_WRITE;
+        perm &= ~_PROT_COW;
+
+        memmove(page2kva(dst_page), page2kva(src_page), PAGE_SIZE);
+
+        if ((r = vm_page_insert(src, dst_page, (uintptr_t) va, perm)) < 0) {
+          page_free_one(dst_page);
+          spin_unlock(&vm_lock);
+          return r;
+        }
 
         if ((r = vm_page_insert(dst, dst_page, (uintptr_t) va, perm)) < 0) {
-          page_free_one(dst_page);
+          spin_unlock(&vm_lock);
           return r;
         }
-
-        memcpy(page2kva(dst_page), page2kva(src_page), PAGE_SIZE);
+      } else {
+        if ((r = vm_page_insert(dst, src_page, (uintptr_t) a, perm)) < 0) {
+          spin_unlock(&vm_lock);
+          return r;
+        }
       }
+    } else if ((perm & PROT_WRITE) || (perm & _PROT_COW)) {
+      perm &= ~PROT_WRITE;
+      perm |= _PROT_COW;
+
+      if ((r = vm_page_insert(src, src_page, (uintptr_t) a, perm)) < 0) {
+        spin_unlock(&vm_lock);
+        return r;
+      }
+
+      if ((r = vm_page_insert(dst, src_page, (uintptr_t) a, perm)) < 0) {
+        spin_unlock(&vm_lock);
+        return r;
+      }
+    } else {
+      if ((dst_page = page_alloc_one(0)) == NULL) {
+        spin_unlock(&vm_lock);
+        return -ENOMEM;
+      }
+
+      if ((r = vm_page_insert(dst, dst_page, (uintptr_t) va, perm)) < 0) {
+        page_free_one(dst_page);
+        spin_unlock(&vm_lock);
+        return r;
+      }
+
+      memcpy(page2kva(dst_page), page2kva(src_page), PAGE_SIZE);
     }
+
+    spin_unlock(&vm_lock);
   }
 
   return 0;
@@ -665,56 +698,99 @@ vm_range_clone(void *src, void *dst, uintptr_t va, size_t n, int share)
  */
 
 int
-vm_copy_out(void *vm, void *dst_va, const void *src_va, size_t n)
+vm_copy_out(void *pgtab, const void *src, uintptr_t dst_va, size_t n)
 {
-  uint8_t *src = (uint8_t *) src_va;
-  uint8_t *dst = (uint8_t *) dst_va;
+  uint8_t *p = (uint8_t *) src;
 
   while (n != 0) {
     struct Page *page;
     uint8_t *kva;
     size_t offset, ncopy;
+    int prot;
 
-    if ((page = vm_page_lookup(vm, (uintptr_t) dst, NULL)) == NULL)
-      return -EFAULT;
-    
-    kva    = (uint8_t *) page2kva(page);
-    offset = (uintptr_t) dst % PAGE_SIZE;
+    offset = dst_va % PAGE_SIZE;
     ncopy  = MIN(PAGE_SIZE - offset, n);
 
-    memmove(kva + offset, src, ncopy);
+    spin_lock(&vm_lock);
 
-    src += ncopy;
-    dst += ncopy;
-    n   -= ncopy;
+    if ((page = vm_page_lookup(pgtab, dst_va, &prot)) == NULL) {
+      spin_unlock(&vm_lock);
+      return -EFAULT;
+    }
+
+    // Do copy-on-write
+    if (prot & _PROT_COW) {
+      int r;
+
+      prot &= ~_PROT_COW;
+      prot |= PROT_WRITE;
+
+      if (page->ref_count == 1) {
+        // The page has only one reference, just update permission bits
+        if ((r = vm_page_insert(pgtab, page, dst_va, prot)) < 0) {
+          spin_unlock(&vm_lock);
+          return r;
+        }
+      } else {
+        // Copy the page contents and insert with new permissions
+        struct Page *page_copy;
+
+        if ((page_copy = page_alloc_one(0)) == NULL) {
+          spin_unlock(&vm_lock);
+          return -ENOMEM;
+        }
+        
+        memmove(page2kva(page_copy), page2kva(page), PAGE_SIZE);
+
+        if ((r = vm_page_insert(pgtab, page_copy, dst_va, prot)) < 0) {
+          page_free_one(page_copy);
+          spin_unlock(&vm_lock);
+          return r;
+        }
+      }
+    }
+    
+    kva = (uint8_t *) page2kva(page);
+    memmove(kva + offset, p, ncopy);
+
+    spin_unlock(&vm_lock);
+
+    p      += ncopy;
+    dst_va += ncopy;
+    n      -= ncopy;
   }
 
   return 0;
 }
 
 int
-vm_copy_in(void *vm, void *dst_va, const void *src_va, size_t n)
+vm_copy_in(void *vm, void *dst, uintptr_t src_va, size_t n)
 {
-  uint8_t *dst = (uint8_t *) dst_va;
-  uint8_t *src = (uint8_t *) src_va;
+  uint8_t *p = (uint8_t *) dst;
 
   while (n != 0) {
     struct Page *page;
     uint8_t *kva;
     size_t offset, ncopy;
 
-    if ((page = vm_page_lookup(vm, (uintptr_t) src, NULL)) == NULL)
-      return -EFAULT;
-
-    kva    = (uint8_t *) page2kva(page);
-    offset = (uintptr_t) dst % PAGE_SIZE;
+    offset = src_va % PAGE_SIZE;
     ncopy  = MIN(PAGE_SIZE - offset, n);
 
-    memmove(dst, kva + offset, ncopy);
+    spin_lock(&vm_lock);
 
-    src += ncopy;
-    dst += ncopy;
-    n   -= ncopy;
+    if ((page = vm_page_lookup(vm, src_va, NULL)) == NULL) {
+      spin_unlock(&vm_lock);
+      return -EFAULT;
+    }
+
+    kva = (uint8_t *) page2kva(page);
+    memmove(p, kva + offset, ncopy);
+
+    spin_unlock(&vm_lock);
+
+    src_va += ncopy;
+    p      += ncopy;
+    n      -= ncopy;
   }
 
   return 0;

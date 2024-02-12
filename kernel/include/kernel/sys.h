@@ -56,5 +56,6 @@ int32_t sys_setpgid(void);
 int32_t sys_access(void);
 int32_t sys_pipe(void);
 int32_t sys_ioctl(void);
+int32_t sys_mmap(void);
 
 #endif  // !__KERNEL_INCLUDE_KERNEL_SYSCALL_H__

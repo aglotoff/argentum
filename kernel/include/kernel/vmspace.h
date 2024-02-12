@@ -12,6 +12,7 @@
 #include <kernel/list.h>
 #include <kernel/mm/vm.h>
 #include <kernel/armv7/mmu.h>
+#include <kernel/spinlock.h>
 
 struct Inode;
 struct Page;
@@ -24,10 +25,9 @@ struct VMSpaceMapEntry {
 };
 
 struct VMSpace {
-  l1_desc_t      *pgdir;
-  uintptr_t       heap;
-  uintptr_t       stack;
-  // struct ListLink areas;
+  l1_desc_t      *pgtab;
+  struct SpinLock lock;
+  struct ListLink areas;
 };
 
 void              vm_space_init(void);
@@ -40,7 +40,7 @@ int               vm_space_check_str(struct VMSpace *, const char *, unsigned);
 int               vm_space_load_inode(struct VMSpace *, void *, struct Inode *,
                                       size_t, off_t);
 int               vm_handle_fault(struct VMSpace *, uintptr_t);
-// intptr_t          vm_space_alloc(struct VMSpace *, uintptr_t, size_t, int);
-// void         vm_print_areas(struct VMSpace *);
+intptr_t          vmspace_map(struct VMSpace *, uintptr_t, size_t, int);
+void              vm_print_areas(struct VMSpace *);
 
 #endif  // !__KERNEL_INCLUDE_KERNEL_VMSPACE_H__

@@ -90,7 +90,7 @@ sched_start(void)
       assert(next->state == THREAD_STATE_READY);
 
       if (next->process != NULL)
-        vm_load(next->process->vm->pgdir);
+        vm_load(next->process->vm->pgtab);
 
       next->state = THREAD_STATE_RUNNING;
 

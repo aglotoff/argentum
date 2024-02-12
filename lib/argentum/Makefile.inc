@@ -24,8 +24,15 @@ libc_a_SOURCES += \
   %D%/signal/sigsuspend.c \
   %D%/stdio/flockfile.c \
   %D%/stdio/funlockfile.c \
+  %D%/stdlib/callocr.c \
+  %D%/stdlib/malloc.c \
+  %D%/stdlib/mallocr.c \
+  %D%/stdlib/reallocr.c \
   %D%/stdlib/realpath.c \
   %D%/sys/ioctl/ioctl.c \
+  %D%/sys/mman/mmap.c \
+  %D%/sys/mman/mprotect.c \
+  %D%/sys/mman/munmap.c \
   %D%/sys/resource/getrlimit.c \
   %D%/sys/resource/setrlimit.c \
   %D%/sys/socket/accept.c \

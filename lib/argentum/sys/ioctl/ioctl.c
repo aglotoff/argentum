@@ -1,5 +1,4 @@
 #include <stdarg.h>
-#include <sys/ioccom.h>
 #include <sys/ioctl.h>
 #include <sys/syscall.h>
 
@@ -8,7 +7,7 @@ ioctl(int fildes, int request, ...)
 {
   int arg = 0;
 
-  if ((request >> _IOC_LEN_SHIFT) & _IOC_LEN_MASK) {
+  if (IOCPARM_LEN(request) != 0) {
     va_list ap;
 
     va_start(ap, request);

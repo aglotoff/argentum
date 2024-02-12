@@ -196,13 +196,19 @@ fs_inode_read(struct Inode *ip, void *buf, size_t nbyte, off_t *off)
 
   // Read from the corresponding device
   if (S_ISCHR(ip->mode) || S_ISBLK(ip->mode)) {
-    fs_inode_unlock(ip);
+    // cprintf("Read %x\n", ip->rdev);
 
-    // TODO: support other devices
-    ret = console_read(buf, nbyte);
+    if (ip->rdev == 0x0101) {
+      fs_inode_unlock(ip);
 
-    fs_inode_lock(ip);
-    return ret;
+      // TODO: support other devices
+      ret = console_read((uintptr_t) buf, nbyte);
+
+      fs_inode_lock(ip);
+      return ret;
+    } else {
+       return nbyte;
+    }
   }
 
   if ((off_t) (*off + nbyte) < *off)
@@ -237,13 +243,19 @@ fs_inode_write(struct Inode *ip, const void *buf, size_t nbyte, off_t *off)
 
   // Write to the corresponding device
   if (S_ISCHR(ip->mode) || S_ISBLK(ip->mode)) {
-    fs_inode_unlock(ip);
+    // cprintf("Write %x\n", ip->rdev);
 
-    // TODO: support other devices
-    total = console_write(buf, nbyte);
+    if (ip->rdev == 0x0101) {
+      fs_inode_unlock(ip);
 
-    fs_inode_lock(ip);
-    return total;
+      // TODO: support other devices
+      total = console_write(buf, nbyte);
+
+      fs_inode_lock(ip);
+      return total;
+    } else {
+      return nbyte;
+    }
   }
 
   if ((off_t) (*off + nbyte) < *off)

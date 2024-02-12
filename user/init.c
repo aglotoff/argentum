@@ -39,6 +39,8 @@ main(void)
     if ((stat("/dev/tty", NULL) < 0) && (errno == ENOENT))
       mknod("/dev/tty", S_IFCHR | 0666, 0x0101);
 
+  mknod("/dev/zero", S_IFCHR | 0666, 0x0202);
+
   // Open the standard I/O streams so all other programs inherit them.
   open("/dev/tty", O_RDONLY);     // Standard input
   open("/dev/tty", O_WRONLY);     // Standard output
@@ -52,11 +54,14 @@ main(void)
     }
 
     setenv("HOME", "/home/root", 1);
+
     setenv("PATH", "/bin:/usr/bin", 1);
     
     open("/etc/profile", O_WRONLY | O_CREAT, 0777);
     write(3, "export PS1=\"\033[1;32m[\033[0m$PWD\033[1;32m]$ \033[0m\"", 44);
     close(3);
+
+    
 
     for (;;) {
       if (fork() == 0) {

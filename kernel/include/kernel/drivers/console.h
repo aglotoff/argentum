@@ -18,7 +18,7 @@ void    console_init(void);
 void    console_putc(char);
 void    console_interrupt(int (*)(void));
 int     console_getc(void);
-ssize_t console_read(void *, size_t);
+ssize_t console_read(uintptr_t, size_t);
 ssize_t console_write(const void *, size_t);
 int     console_ioctl(int, int);
 

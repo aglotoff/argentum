@@ -9,6 +9,7 @@
 #include <kernel/drivers/console.h>
 #include <kernel/trap.h>
 #include <kernel/wchan.h>
+#include <kernel/process.h>
 
 #include "kbd.h"
 #include "display.h"
@@ -17,10 +18,11 @@
 #define CONSOLE_BUF_SIZE  256
 
 static struct {
-  char             buf[CONSOLE_BUF_SIZE];
-  uint32_t         rpos;
-  uint32_t         wpos;
-  struct SpinLock  lock;
+  char               buf[CONSOLE_BUF_SIZE];
+  size_t             size;
+  size_t             read_pos;
+  size_t             write_pos;
+  struct SpinLock    lock;
   struct WaitChannel queue;
 } input;
 
@@ -59,22 +61,36 @@ console_interrupt(int (*getc)(void))
     case '\0':
       break;
     case '\b':
-      if (input.rpos != input.wpos) {
+      if (input.size > 0) {
         console_putc(c);
-        input.wpos--;
+
+        input.size--;
+        // if CONSOLE_BUF_SIZE is guaranteed to be a divisor of UINT_MAX:
+        // input.write_pos = (input.write_pos - 1) % CONSOLE_BUF_SIZE;
+        if (input.write_pos == 0) {
+          input.write_pos = CONSOLE_BUF_SIZE - 1;
+        } else {
+          input.write_pos--;
+        }
       }
       break;
     default:
-      if (input.wpos == input.rpos + CONSOLE_BUF_SIZE)
-        input.rpos++;
-
       if (c != C('D'))
         console_putc(c);
 
-      input.buf[input.wpos++ % CONSOLE_BUF_SIZE] = c;
+      input.buf[input.write_pos] = c;
+      input.write_pos = (input.write_pos + 1) % CONSOLE_BUF_SIZE;
 
-      if ((c == '\r') || (c == '\n') || (c == C('D')) ||
-          (input.wpos == input.rpos + CONSOLE_BUF_SIZE))
+      if (input.size == CONSOLE_BUF_SIZE) {
+        input.read_pos = (input.read_pos + 1) % CONSOLE_BUF_SIZE;
+      } else {
+        input.size++;
+      }
+
+      if ((c == '\r') ||
+          (c == '\n') ||
+          (c == C('D')) ||
+          (input.size == CONSOLE_BUF_SIZE))
         wchan_wakeup_all(&input.queue);
       break;
     }
@@ -102,7 +118,7 @@ console_getc(void)
 }
 
 ssize_t
-console_read(void *buf, size_t nbytes)
+console_read(uintptr_t buf, size_t nbytes)
 {
   char c, *s;
   size_t i;
@@ -113,17 +129,18 @@ console_read(void *buf, size_t nbytes)
   spin_lock(&input.lock);
 
   while (i < nbytes) {
-    while (input.rpos == input.wpos)
+    while (input.size == 0)
       wchan_sleep(&input.queue, &input.lock);
 
-    c = input.buf[input.rpos++ % CONSOLE_BUF_SIZE];
+    c = input.buf[input.read_pos];
+    input.read_pos = (input.read_pos + 1) % CONSOLE_BUF_SIZE;
+    input.size--;
 
-    if (c == C('D')) {
-      if (i > 0)
-        input.rpos--;
+    // End of input
+    if (c == C('D'))
       break;
-    }
 
+    // Stop if a newline is encountered
     if ((s[i++] = c) == '\n')
       break;
   }

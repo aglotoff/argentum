@@ -2,6 +2,7 @@
 #include <errno.h>
 #include <limits.h>
 #include <string.h>
+#include <sys/mman.h>
 #include <sys/stat.h>
 #include <sys/wait.h>
 
@@ -145,6 +146,7 @@ process_load_binary(struct Process *proc, const void *binary)
   Elf32_Ehdr *elf;
   Elf32_Phdr *ph, *eph;
   int r;
+  uintptr_t addr;
 
   elf = (Elf32_Ehdr *) binary;
   if (memcmp(elf->ident, "\x7f""ELF", 4) != 0)
@@ -160,21 +162,21 @@ process_load_binary(struct Process *proc, const void *binary)
     if (ph->filesz > ph->memsz)
       return -EINVAL;
 
-    if ((r = vm_range_alloc(proc->vm->pgdir, ph->vaddr, ph->memsz,
-                            VM_READ | VM_WRITE | VM_EXEC | VM_USER)) < 0)
+    addr = vmspace_map(proc->vm, ph->vaddr, ph->memsz, PROT_READ | PROT_WRITE | PROT_EXEC | _PROT_USER);
+    if (addr != ph->vaddr)
+      return (int) addr;
+
+    if ((r = vm_copy_out(proc->vm->pgtab, (uint8_t *) elf + ph->offset,
+                         ph->vaddr, ph->filesz)) < 0)
       return r;
 
-    if ((r = vm_copy_out(proc->vm->pgdir, (void *) ph->vaddr,
-                         (uint8_t *) elf + ph->offset, ph->filesz)) < 0)
-      return r;
-
-    proc->vm->heap = ROUND_UP(ph->vaddr + ph->memsz, PAGE_SIZE);
+    // proc->vm->heap = ROUND_UP(ph->vaddr + ph->memsz, PAGE_SIZE);
   }
 
-  if ((r = vm_range_alloc(proc->vm->pgdir, (VIRT_USTACK_TOP - USTACK_SIZE),
-                          USTACK_SIZE, VM_READ | VM_WRITE | VM_USER)) < 0)
-    return r;
-  proc->vm->stack = VIRT_USTACK_TOP - USTACK_SIZE;
+  addr = vmspace_map(proc->vm, (VIRT_USTACK_TOP - USTACK_SIZE), USTACK_SIZE,
+                        PROT_READ | PROT_WRITE | _PROT_USER);
+  if (addr != (VIRT_USTACK_TOP - USTACK_SIZE))
+    return (int) addr;
 
   arch_trap_frame_init(proc, elf->entry, 0, 0, 0, VIRT_USTACK_TOP);
 
@@ -365,13 +367,10 @@ process_wait_check(struct Process *current, struct Process *process, pid_t pid)
 }
 
 pid_t
-process_wait(pid_t pid, int *stat_loc, int options)
+process_wait(pid_t pid, uintptr_t stat_loc, int options)
 {
   struct Process *current = process_current();
-  struct ListLink *l;
-  int r, has_match;
-
-  // cprintf("[k] process #%d waits for #%d\n", current->pid, pid);
+  int r;
 
   if (options & ~(WNOHANG | WUNTRACED))
     return -EINVAL;
@@ -379,13 +378,14 @@ process_wait(pid_t pid, int *stat_loc, int options)
   spin_lock(&process_lock);
 
   for (;;) {
-    has_match = 0;
+    struct ListLink *l;
+    pid_t match = 0;
 
     LIST_FOREACH(&current->children, l) {
       struct Process *process = LIST_CONTAINER(l, struct Process, sibling_link);
 
       if (process_wait_check(current, process, pid))
-        has_match = process->pid;
+        match = process->pid;
 
       // Return immediately
       if (process->zombie) {
@@ -393,16 +393,20 @@ process_wait(pid_t pid, int *stat_loc, int options)
 
         spin_unlock(&process_lock);
 
-        if (stat_loc)
-          *stat_loc = process->exit_code;
+        if (stat_loc) {
+          r = vm_copy_out(current->vm->pgtab, &process->exit_code, stat_loc,
+                          sizeof process->exit_code);
+        } else {
+          r = 0;
+        }
 
         process_free(process);
 
-        return has_match;
+        return r == 0 ? match : r;
       }
     }
 
-    if (!has_match) {
+    if (!match) {
       r = -ECHILD;
       break;
     }
@@ -458,52 +462,8 @@ arch_trap_frame_pop(struct TrapFrame *tf)
 void *
 process_grow(ptrdiff_t increment)
 {
-  struct Process *current = process_current();
-  uintptr_t prev_heap = current->vm->heap;
-  uintptr_t prev_limit = ROUND_UP(prev_heap, PAGE_SIZE);
-  intptr_t r;
-
-  if (increment == 0) {
-    r = prev_heap;
-  } else if (increment > 0) {
-    uintptr_t next_heap = prev_heap + increment;
-
-    if ((next_heap < prev_heap) || (next_heap > current->vm->stack)) {
-      r = -ENOMEM;
-    } else {
-      uintptr_t next_limit = ROUND_UP(next_heap, PAGE_SIZE);
-
-      if (next_limit != prev_limit) {
-        if ((r = vm_range_alloc(current->vm->pgdir, prev_limit, next_limit - prev_limit, VM_WRITE | VM_READ | VM_USER)) == 0) {
-          current->vm->heap = next_heap;
-          r = prev_heap;
-        }
-      } else {
-        current->vm->heap = next_heap;
-        r = prev_heap;
-      }
-    }
-  } else if (increment < 0) {
-    uintptr_t next_heap = prev_heap + increment;
-
-    if ((next_heap > prev_heap) || (next_heap < PAGE_SIZE)) {
-      r = -ENOMEM;
-    } else {
-      uintptr_t next_limit = ROUND_UP(next_heap, PAGE_SIZE);
-
-      if (next_limit != prev_limit) {
-        vm_range_free(current->vm->pgdir, next_limit, prev_limit - next_limit);
-        current->vm->heap = next_heap;
-        r = prev_heap;
-      } else {
-        current->vm->heap = next_heap;
-        r = prev_heap;
-      }
-    }
-  }
-
-  // cprintf("sbrk(%ld) -> %p, new = %p, %u pages left\n", increment, (void *) r, current->vm->heap, pages_free);
-  return (void *) r;
+  panic("deprecated %d\n", increment);
+  return NULL;
 }
 
 struct Signal *
@@ -668,7 +628,7 @@ process_signal_handle(struct Process *current, struct sigaction *handler, struct
   struct SignalContext *ctx;
 
   ctx = ((struct SignalContext *) current->thread->tf->sp) - 1;
-  if ((r = vm_space_check_buf(current->vm, ctx, sizeof(*ctx), VM_WRITE)) < 0) {
+  if ((r = vm_space_check_buf(current->vm, ctx, sizeof(*ctx), PROT_WRITE)) < 0) {
     spin_unlock(&process_lock);
     object_pool_put(signal_cache, signal);
     process_destroy(SIGSEGV);
@@ -731,7 +691,7 @@ process_signal_return(void)
   spin_lock(&process_lock);
 
   ctx = (struct SignalContext *) current->thread->tf->sp;
-  if ((r = vm_space_check_buf(current->vm, ctx, sizeof(*ctx), VM_WRITE)) < 0) {
+  if ((r = vm_space_check_buf(current->vm, ctx, sizeof(*ctx), PROT_WRITE)) < 0) {
     spin_unlock(&process_lock);
     process_destroy(SIGSEGV);
   }

@@ -3,6 +3,7 @@
 #include <limits.h>
 #include <stddef.h>
 #include <string.h>
+#include <sys/mman.h>
 #include <sys/syscall.h>
 #include <sys/stat.h>
 #include <sys/utsname.h>
@@ -74,6 +75,7 @@ static int32_t (*syscalls[])(void) = {
   [__SYS_ACCESS]     = sys_access,
   [__SYS_PIPE]       = sys_pipe,
   [__SYS_IOCTL]      = sys_ioctl,
+  [__SYS_MMAP]       = sys_mmap,
 };
 
 int32_t
@@ -91,7 +93,7 @@ sys_dispatch(void)
     return r;
   }
 
-  // cprintf("Unknown system call %d\n", num);
+  cprintf("Unknown system call %d\n", num);
   return -ENOSYS;
 }
 
@@ -110,7 +112,7 @@ sys_get_num(void)
   int *pc = (int *) (current->thread->tf->pc - 4);
   int r;
 
-  if ((r = vm_space_check_buf(current->vm, pc, sizeof(int), VM_READ)) < 0)
+  if ((r = vm_space_check_buf(current->vm, pc, sizeof(int), PROT_READ)) < 0)
     return r;
 
   return *pc & 0xFFFFFF;
@@ -256,13 +258,13 @@ sys_arg_args(int n, char ***store)
     int r;
 
     if ((r = vm_space_check_buf(current->vm, args + i, sizeof(args[i]),
-                               VM_READ)) < 0)
+                               PROT_READ)) < 0)
       return r;
 
     if (args[i] == NULL)
       break;
     
-    if ((r = vm_space_check_str(current->vm, args[i], VM_READ)) < 0)
+    if ((r = vm_space_check_str(current->vm, args[i], PROT_READ)) < 0)
       return r;
   }
 
@@ -296,7 +298,7 @@ sys_exec(void)
   char **argv, **envp;
   int r;
 
-  if ((r = sys_arg_str(0, &path, VM_READ)) < 0)
+  if ((r = sys_arg_str(0, &path, PROT_READ)) < 0)
     return r;
   if ((r = sys_arg_args(1, &argv)) < 0)
     return r;
@@ -316,10 +318,10 @@ sys_wait(void)
   if ((r = sys_arg_int(0, &pid)) < 0)
     return r;
 
-  if ((r = sys_arg_buf(1, (void **) &stat_loc, sizeof(int), VM_WRITE, 1)) < 0)
+  if ((r = sys_arg_buf(1, (void **) &stat_loc, sizeof(int), PROT_WRITE, 1)) < 0)
     return r;
 
-  return process_wait(pid, stat_loc, 0);
+  return process_wait(pid, (uintptr_t) stat_loc, 0);
 }
 
 int32_t
@@ -384,14 +386,21 @@ sys_clock_time(void)
   if ((r = sys_arg_long(0, (long *) &clock_id)) < 0)
     return r;
   
-  if ((r = sys_arg_buf(1, (void **) &prev, sizeof(*prev), VM_WRITE, 0)) < 0)
+  if ((r = sys_arg_buf(1, (void **) &prev, sizeof(*prev), PROT_WRITE, 1)) < 0)
     return r;
 
   if (clock_id != CLOCK_REALTIME)
     return -EINVAL;
 
-  prev->tv_sec = rtc_get_time();
-  prev->tv_nsec = 0;
+  if (prev) {
+    struct timespec prev_value;
+    prev_value.tv_sec  = rtc_get_time();
+    prev_value.tv_nsec = 0;
+
+    if ((r = vm_copy_out(process_current()->vm->pgtab, &prev_value,
+                         (uintptr_t) prev, sizeof prev_value)) < 0)
+      return r;
+  }
 
   return 0;
 }
@@ -409,7 +418,7 @@ sys_getdents(void)
     return r;
   if ((r = sys_arg_int(2, (int *) &n)) < 0)
     return r;
-  if ((r = sys_arg_buf(1, &buf, n, VM_READ, 0)) < 0)
+  if ((r = sys_arg_buf(1, &buf, n, PROT_READ, 0)) < 0)
     return r;
 
   if ((file = fd_lookup(process_current(), fd)) == NULL)
@@ -424,7 +433,7 @@ sys_chdir(void)
   const char *path;
   int r;
 
-  if ((r = sys_arg_str(0, &path, VM_READ)) < 0)
+  if ((r = sys_arg_str(0, &path, PROT_READ)) < 0)
     return r;
   
   return fs_chdir(path);
@@ -438,7 +447,7 @@ sys_chmod(void)
   mode_t mode;
   int r;
 
-  if ((r = sys_arg_str(0, &path, VM_READ)) < 0)
+  if ((r = sys_arg_str(0, &path, PROT_READ)) < 0)
     return r;
   if ((r = sys_arg_short(1, (short *) &mode)) < 0)
     return r;
@@ -476,7 +485,7 @@ sys_open(void)
   int oflag, r;
   mode_t mode;
 
-  if ((r = sys_arg_str(0, &path, VM_READ)) < 0)
+  if ((r = sys_arg_str(0, &path, PROT_READ)) < 0)
     return r;
   if ((r = sys_arg_int(1, &oflag)) < 0)
     return r;
@@ -514,9 +523,9 @@ sys_link(void)
   const char *path1, *path2;
   int r;
 
-  if ((r = sys_arg_str(0, &path1, VM_READ)) < 0)
+  if ((r = sys_arg_str(0, &path1, PROT_READ)) < 0)
     return r;
-  if ((r = sys_arg_str(1, &path2, VM_READ)) < 0)
+  if ((r = sys_arg_str(1, &path2, PROT_READ)) < 0)
     return r;
 
   return fs_link((char *) path1, (char *) path2);
@@ -530,7 +539,7 @@ sys_mknod(void)
   dev_t dev;
   int r;
 
-  if ((r = sys_arg_str(0, &path, VM_READ)) < 0)
+  if ((r = sys_arg_str(0, &path, PROT_READ)) < 0)
     return r;
   if ((r = sys_arg_short(1, (short *) &mode)) < 0)
     return r;
@@ -546,7 +555,7 @@ sys_unlink(void)
   const char *path;
   int r;
 
-  if ((r = sys_arg_str(0, &path, VM_READ)) < 0)
+  if ((r = sys_arg_str(0, &path, PROT_READ)) < 0)
     return r;
 
   return fs_unlink(path);
@@ -558,7 +567,7 @@ sys_rmdir(void)
   const char *path;
   int r;
 
-  if ((r = sys_arg_str(0, &path, VM_READ)) < 0)
+  if ((r = sys_arg_str(0, &path, PROT_READ)) < 0)
     return r;
 
   return fs_rmdir(path);
@@ -573,7 +582,7 @@ sys_stat(void)
 
   if ((r = sys_arg_int(0, &fd)) < 0)
     return r;
-  if ((r = sys_arg_buf(1, (void **) &buf, sizeof(*buf), VM_WRITE, 0)) < 0)
+  if ((r = sys_arg_buf(1, (void **) &buf, sizeof(*buf), PROT_WRITE, 0)) < 0)
     return r;
 
   if ((file = fd_lookup(process_current(), fd)) == NULL)
@@ -605,7 +614,7 @@ sys_read(void)
     return r;
   if ((r = sys_arg_int(2, (int *) &n)) < 0)
     return r;
-  if ((r = sys_arg_buf(1, &buf, n, VM_READ, 0)) < 0)
+  if ((r = sys_arg_buf(1, &buf, n, PROT_READ, 0)) < 0)
     return r;
 
   if ((file = fd_lookup(process_current(), fd)) == NULL)
@@ -689,7 +698,7 @@ sys_write(void)
     return r;
   if ((r = sys_arg_int(2, (int *) &n)) < 0)
     return r;
-  if ((r = sys_arg_buf(1, &buf, n, VM_WRITE, 0)) < 0)
+  if ((r = sys_arg_buf(1, &buf, n, PROT_WRITE, 0)) < 0)
     return r;
 
   if ((file = fd_lookup(process_current(), fd)) == NULL)
@@ -706,6 +715,8 @@ sys_sbrk(void)
 
   if ((r = sys_arg_int(0, &n)) < 0)
     return r;
+
+  panic("deprecated!\n");
   
   return (int32_t) process_grow(n);
 }
@@ -718,7 +729,7 @@ sys_uname(void)
   struct utsname *name;
   int r;
 
-  if ((r = sys_arg_buf(0, (void **) &name, sizeof(*name), VM_WRITE, 0)) < 0)
+  if ((r = sys_arg_buf(0, (void **) &name, sizeof(*name), PROT_WRITE, 0)) < 0)
     return r;
   
   memcpy(name, &utsname, sizeof (*name));
@@ -761,7 +772,7 @@ sys_bind(void)
 
   if ((r = sys_arg_int(0, &fd)) < 0)
     return r;
-  if ((r = sys_arg_buf(1, (void **) &address, sizeof(*address), VM_READ, 0)) < 0)
+  if ((r = sys_arg_buf(1, (void **) &address, sizeof(*address), PROT_READ, 0)) < 0)
     return r;
   if ((r = sys_arg_long(2, (long *) &address_len)) < 0)
     return r;
@@ -785,7 +796,7 @@ sys_connect(void)
 
   if ((r = sys_arg_int(0, &fd)) < 0)
     return r;
-  if ((r = sys_arg_buf(1, (void **) &address, sizeof(*address), VM_READ, 0)) < 0)
+  if ((r = sys_arg_buf(1, (void **) &address, sizeof(*address), PROT_READ, 0)) < 0)
     return r;
   if ((r = sys_arg_long(2, (long *) &address_len)) < 0)
     return r;
@@ -829,9 +840,9 @@ sys_accept(void)
 
   if ((r = sys_arg_int(0, &fd)) < 0)
     return r;
-  if ((r = sys_arg_buf(1, (void **) &address, sizeof(*address), VM_WRITE, 1)) < 0)
+  if ((r = sys_arg_buf(1, (void **) &address, sizeof(*address), PROT_WRITE, 1)) < 0)
     return r;
-  if ((r = sys_arg_buf(2, (void **) &address_len, sizeof(socklen_t), VM_WRITE, 1)) < 0)
+  if ((r = sys_arg_buf(2, (void **) &address_len, sizeof(socklen_t), PROT_WRITE, 1)) < 0)
     return r;
 
   if ((sockf = fd_lookup(process_current(), fd)) == NULL)
@@ -894,9 +905,9 @@ sys_sigaction(void)
     return r;
   if ((r = sys_arg_long(1, (long *) &stub)) < 0)
     return r;
-  if ((r = sys_arg_buf(2, (void **) &act, sizeof(*act), VM_READ, 1)) < 0)
+  if ((r = sys_arg_buf(2, (void **) &act, sizeof(*act), PROT_READ, 1)) < 0)
     return r;
-  if ((r = sys_arg_buf(3, (void **) &oact, sizeof(*oact), VM_WRITE, 1)) < 0)
+  if ((r = sys_arg_buf(3, (void **) &oact, sizeof(*oact), PROT_WRITE, 1)) < 0)
     return r;
 
   return process_signal_action(sig, stub, act, oact);
@@ -914,9 +925,9 @@ sys_nanosleep(void)
   struct timespec *rqtp, *rmtp;
   int r;
 
-  if ((r = sys_arg_buf(0, (void **) &rqtp, sizeof(*rqtp), VM_READ, 0)) < 0)
+  if ((r = sys_arg_buf(0, (void **) &rqtp, sizeof(*rqtp), PROT_READ, 0)) < 0)
     return r;
-  if ((r = sys_arg_buf(1, (void **) &rmtp, sizeof(*rmtp), VM_WRITE, 1)) < 0)
+  if ((r = sys_arg_buf(1, (void **) &rmtp, sizeof(*rmtp), PROT_WRITE, 1)) < 0)
     return r;
 
   return process_nanosleep(rqtp, rmtp);
@@ -937,13 +948,13 @@ sys_recvfrom(void)
     return r;
   if ((r = sys_arg_int(2, (int *) &length)) < 0)
     return r;
-  if ((r = sys_arg_buf(1, &buffer, length, VM_WRITE, 0)) < 0)
+  if ((r = sys_arg_buf(1, &buffer, length, PROT_WRITE, 0)) < 0)
     return r;
   if ((r = sys_arg_int(3, (int *) &flags)) < 0)
     return r;
-  if ((r = sys_arg_buf(4, (void **) &address, sizeof(*address), VM_WRITE, 1)) < 0)
+  if ((r = sys_arg_buf(4, (void **) &address, sizeof(*address), PROT_WRITE, 1)) < 0)
     return r;
-  if ((r = sys_arg_buf(5, (void **) &address_len, sizeof(*address_len), VM_WRITE, 1)) < 0)
+  if ((r = sys_arg_buf(5, (void **) &address_len, sizeof(*address_len), PROT_WRITE, 1)) < 0)
     return r;
 
   if ((file = fd_lookup(process_current(), fd)) == NULL)
@@ -970,11 +981,11 @@ sys_sendto(void)
     return r;
   if ((r = sys_arg_int(2, (int *) &length)) < 0)
     return r;
-  if ((r = sys_arg_buf(1, &message, length, VM_READ, 0)) < 0)
+  if ((r = sys_arg_buf(1, &message, length, PROT_READ, 0)) < 0)
     return r;
   if ((r = sys_arg_int(3, (int *) &flags)) < 0)
     return r;
-  if ((r = sys_arg_buf(4, (void **) &dest_addr, sizeof(*dest_addr), VM_READ, 1)) < 0)
+  if ((r = sys_arg_buf(4, (void **) &dest_addr, sizeof(*dest_addr), PROT_READ, 1)) < 0)
     return r;
   if ((r = sys_arg_int(5, (int *) &dest_len)) < 0)
     return r;
@@ -1006,7 +1017,7 @@ sys_setsockopt(void)
     return r;
   if ((r = sys_arg_int(4, (int *) &option_len)) < 0)
     return r;
-  if ((r = sys_arg_buf(3, &option_value, option_len, VM_READ, 0)) < 0)
+  if ((r = sys_arg_buf(3, &option_value, option_len, PROT_READ, 0)) < 0)
     return r;
 
   if ((file = fd_lookup(process_current(), fd)) == NULL)
@@ -1050,7 +1061,7 @@ sys_access(void)
   const char *path;
   int r, amode;
 
-  if ((r = sys_arg_str(0, &path, VM_READ)) < 0)
+  if ((r = sys_arg_str(0, &path, PROT_READ)) < 0)
     return r;
   if ((r = sys_arg_int(1, &amode)) < 0)
     return r;
@@ -1065,7 +1076,7 @@ sys_pipe(void)
   int *fildes;
   struct File *read, *write;
 
-  if ((r = sys_arg_buf(0, (void **) &fildes, sizeof(int)*2, VM_WRITE, 0)) < 0)
+  if ((r = sys_arg_buf(0, (void **) &fildes, sizeof(int)*2, PROT_WRITE, 0)) < 0)
     return r;
 
   if ((r = pipe_alloc(&read, &write)) < 0)
@@ -1106,4 +1117,29 @@ sys_ioctl(void)
   r = file_ioctl(file, request, arg);
   //cprintf("ioctl(%x, %d) -> %d\n", request, arg, r);
   return r;
+}
+
+int32_t
+sys_mmap(void)
+{
+  uintptr_t addr;
+  size_t n;
+  int prot;
+  int r;
+
+  if ((r = sys_arg_long(0, (long *) &addr)) < 0)
+    return r;
+  if ((r = sys_arg_long(1, (long *) &n)) < 0)
+    return r;
+  if ((r = sys_arg_int(2, &prot)) < 0)
+    return r;
+
+  // vm_print_areas(process_current()->vm);
+
+  uintptr_t aa = vmspace_map(process_current()->vm, addr, n, prot | _PROT_USER);
+  // cprintf("mmap(%p, %p, %d) -> %p\n", addr, n, prot, aa);
+
+  // vm_print_areas(process_current()->vm);
+
+  return (int32_t) aa;
 }

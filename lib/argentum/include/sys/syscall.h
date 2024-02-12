@@ -57,6 +57,9 @@
 #define __SYS_ACCESS      51
 #define __SYS_PIPE        52
 #define __SYS_IOCTL       53
+#define __SYS_MMAP        54
+#define __SYS_MPROTECT    55
+#define __SYS_MUNMAP      56
 
 #ifndef __ASSEMBLER__
 

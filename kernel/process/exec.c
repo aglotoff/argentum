@@ -1,6 +1,7 @@
 #include <errno.h>
 #include <string.h>
 #include <sys/stat.h>
+#include <sys/mman.h>
 
 #include <kernel/cprintf.h>
 #include <kernel/elf.h>
@@ -31,7 +32,7 @@ copy_args(struct VMSpace *vm, char *const args[], uintptr_t limit, char **sp)
     if (p < (char *) limit)
       return -E2BIG;
 
-    if ((r = vm_copy_out(vm->pgdir, p, args[i], n)) < 0)
+    if ((r = vm_copy_out(vm->pgtab, args[i], (uintptr_t) p, n)) < 0)
       return r;
 
     oargs[i] = p;
@@ -44,7 +45,7 @@ copy_args(struct VMSpace *vm, char *const args[], uintptr_t limit, char **sp)
   if (p < (char *) (VIRT_USTACK_TOP - USTACK_SIZE))
     return -E2BIG;
 
-  if ((r = vm_copy_out(vm->pgdir, p, oargs, n)) < 0)
+  if ((r = vm_copy_out(vm->pgtab, oargs, (uintptr_t) p, n)) < 0)
     return r;
 
   *sp = p;
@@ -61,10 +62,11 @@ process_exec(const char *path, char *const argv[], char *const envp[])
   Elf32_Phdr ph;
   off_t off;
   struct VMSpace *vm;
-  uintptr_t heap, ustack;
+  // uintptr_t heap, ustack;
+  uintptr_t ustack;
   char *usp, *uargv, *uenvp;
   int r, argc;
-  intptr_t a;
+  uintptr_t a;
 
   if ((r = fs_name_lookup(path, 0, &ip)) < 0)
     return r;
@@ -94,7 +96,7 @@ process_exec(const char *path, char *const argv[], char *const envp[])
     goto out2;
   }
 
-  heap   = 0;
+  // heap   = 0;
   ustack = VIRT_USTACK_TOP - USTACK_SIZE;
 
   off = elf.phoff;
@@ -115,22 +117,21 @@ process_exec(const char *path, char *const argv[], char *const envp[])
       goto out2;
     }
 
-    a = vm_range_alloc(vm->pgdir, ph.vaddr, ph.memsz, VM_READ | VM_WRITE | VM_EXEC | VM_USER);
-    if (a < 0) {
+    a = vmspace_map(vm, ph.vaddr, ph.memsz, PROT_READ | PROT_WRITE | PROT_EXEC | _PROT_USER);
+    if (a != ph.vaddr) {
       r = (int) a;
       goto out2;
     }
-
-    heap = MAX(heap, ph.vaddr + ph.memsz);
-    vm->heap = heap;
 
     if ((r = vm_space_load_inode(vm, (void *) ph.vaddr, ip, ph.filesz, ph.offset)) < 0)
       goto out2;
   }
 
-  // Allocate user stack.
-  if ((r = (int) vm_range_alloc(vm->pgdir, ustack, USTACK_SIZE, VM_READ | VM_WRITE | VM_USER)) < 0)
-    return r;
+  a = vmspace_map(vm, ustack, USTACK_SIZE, PROT_READ | PROT_WRITE | _PROT_USER);
+  if (a != ustack) {
+    r = (int) a;
+    goto out2;
+  }
 
   // Copy args and environment.
   usp = (char *) VIRT_USTACK_TOP;
@@ -149,10 +150,10 @@ process_exec(const char *path, char *const argv[], char *const envp[])
 
   proc = process_current();
 
-  vm->heap  = heap;
-  vm->stack = ustack;
+  // vm->heap  = heap;
+  // vm->stack = ustack;
 
-  vm_load(vm->pgdir);
+  vm_load(vm->pgtab);
   vm_space_destroy(proc->vm);
 
   proc->vm = vm;

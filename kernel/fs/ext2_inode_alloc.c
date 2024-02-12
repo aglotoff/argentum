@@ -2,6 +2,7 @@
 #include <errno.h>
 #include <string.h>
 
+#include <kernel/cprintf.h>
 #include <kernel/drivers/rtc.h>
 #include <kernel/fs/buf.h>
 
@@ -53,12 +54,13 @@ ext2_inode_init(dev_t dev, uint32_t table, uint32_t inum, uint16_t mode,
     struct Buf *block_buf;
 
     block_buf = buf_read(raw->block[0], ext2_block_size, dev);
-    *(uint16_t *) block_buf->data = rdev;
+    memmove(block_buf->data, &rdev, sizeof rdev);
     block_buf->flags |= BUF_DIRTY;
     buf_release(block_buf);
 
-    raw->size = sizeof(uint16_t);
-    raw->blocks++;
+    raw->size = sizeof rdev;
+  
+    raw->blocks += ext2_block_size / 512;
   }
 
   buf->flags |= BUF_DIRTY;

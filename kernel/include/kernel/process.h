@@ -95,7 +95,7 @@ int            process_create(const void *, struct Process **);
 void           process_destroy(int);
 void           process_free(struct Process *);
 pid_t          process_copy(int);
-pid_t          process_wait(pid_t, int *, int);
+pid_t          process_wait(pid_t, uintptr_t, int);
 int            process_exec(const char *, char *const[], char *const[]);
 void          *process_grow(ptrdiff_t);
 void           arch_trap_frame_init(struct Process *, uintptr_t, uintptr_t, uintptr_t, uintptr_t, uintptr_t);
