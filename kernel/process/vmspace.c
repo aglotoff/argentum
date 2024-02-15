@@ -9,7 +9,7 @@
 #include <kernel/types.h>
 #include <kernel/object_pool.h>
 #include <kernel/mm/mmu.h>
-#include <kernel/mm/page.h>
+#include <kernel/page.h>
 #include <kernel/vmspace.h>
 #include <kernel/process.h>
 
@@ -204,8 +204,8 @@ vm_space_clone(struct VMSpace *vm, int share)
 void
 vm_space_init(void)
 {
-  vmcache = object_pool_create("vmcache", sizeof(struct VMSpace), 0, 0, NULL, NULL);
-  vm_areacache = object_pool_create("vm_areacache", sizeof(struct VMSpaceMapEntry), 0, 0, NULL, NULL);
+  vmcache = object_pool_create("vmcache", sizeof(struct VMSpace), 0, NULL, NULL);
+  vm_areacache = object_pool_create("vm_areacache", sizeof(struct VMSpaceMapEntry), 0, NULL, NULL);
 }
 
 int
@@ -305,7 +305,7 @@ vmspace_map(struct VMSpace *vm, uintptr_t addr, size_t n, int flags)
     list_add_back(l, &area->link);
   }
 
-  // cprintf("[pages_free %d]\n", pages_free);
+  // cprintf("[page_free_count %d]\n", page_free_count);
 
   return va;
 }

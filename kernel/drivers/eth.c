@@ -5,7 +5,7 @@
 #include <kernel/cprintf.h>
 #include <kernel/drivers/eth.h>
 #include <kernel/mm/memlayout.h>
-#include <kernel/mm/page.h>
+#include <kernel/page.h>
 #include <kernel/irq.h>
 #include <kernel/net.h>
 #include <kernel/types.h>

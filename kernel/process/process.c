@@ -15,7 +15,7 @@
 #include <kernel/hash.h>
 #include <kernel/object_pool.h>
 #include <kernel/mm/mmu.h>
-#include <kernel/mm/page.h>
+#include <kernel/page.h>
 #include <kernel/monitor.h>
 #include <kernel/process.h>
 #include <kernel/spinlock.h>
@@ -62,11 +62,11 @@ process_init(void)
 {
   extern uint8_t _binary_obj_user_init_start[];
 
-  process_cache = object_pool_create("process_cache", sizeof(struct Process), 0, 0, process_ctor, NULL);
+  process_cache = object_pool_create("process_cache", sizeof(struct Process), 0, process_ctor, NULL);
   if (process_cache == NULL)
     panic("cannot allocate process_cache");
   
-  signal_cache = object_pool_create("signal_cache", sizeof(struct Signal), 0, 0, NULL, NULL);
+  signal_cache = object_pool_create("signal_cache", sizeof(struct Signal), 0, NULL, NULL);
   if (signal_cache == NULL)
     panic("cannot allocate signal_cache");
 

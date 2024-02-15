@@ -16,7 +16,7 @@
 #include <kernel/ktimer.h>
 #include <kernel/object_pool.h>
 #include <kernel/mm/mmu.h>
-#include <kernel/mm/page.h>
+#include <kernel/page.h>
 #include <kernel/vmspace.h>
 #include <kernel/pipe.h>
 #include <kernel/process.h>

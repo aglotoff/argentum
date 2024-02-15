@@ -9,7 +9,7 @@
 #include <kernel/fd.h>
 #include <kernel/mm/memlayout.h>
 #include <kernel/mm/mmu.h>
-#include <kernel/mm/page.h>
+#include <kernel/page.h>
 #include <kernel/process.h>
 #include <kernel/vmspace.h>
 #include <kernel/types.h>

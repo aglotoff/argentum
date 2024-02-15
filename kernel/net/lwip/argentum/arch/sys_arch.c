@@ -1,6 +1,6 @@
 #include <kernel/cpu.h>
 #include <kernel/object_pool.h>
-#include <kernel/mm/page.h>
+#include <kernel/page.h>
 #include <kernel/kmutex.h>
 #include <kernel/kqueue.h>
 #include <kernel/ksemaphore.h>
@@ -223,9 +223,9 @@ __errno(void)
 void
 sys_init(void)
 {
-  mutex_cache = object_pool_create("mutex", sizeof(struct KMutex), 0, 0, NULL, NULL);
-  queue_cache = object_pool_create("queue", sizeof(struct KQueue), 0, 0, NULL, NULL);
-  sem_cache   = object_pool_create("sem", sizeof(struct KSemaphore), 0, 0, NULL, NULL);
+  mutex_cache = object_pool_create("mutex", sizeof(struct KMutex), 0, NULL, NULL);
+  queue_cache = object_pool_create("queue", sizeof(struct KQueue), 0, NULL, NULL);
+  sem_cache   = object_pool_create("sem", sizeof(struct KSemaphore), 0, NULL, NULL);
 }
 
 int errno;

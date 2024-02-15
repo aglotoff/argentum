@@ -4,7 +4,7 @@
 
 #include <kernel/drivers/console.h>
 #include <kernel/mm/memlayout.h>
-#include <kernel/mm/page.h>
+#include <kernel/page.h>
 #include <kernel/mm/vm.h>
 #include <kernel/types.h>
 

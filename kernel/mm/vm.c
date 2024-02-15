@@ -1,7 +1,7 @@
 #include <errno.h>
 #include <kernel/cprintf.h>
 #include <kernel/mm/mmu.h>
-#include <kernel/mm/page.h>
+#include <kernel/page.h>
 #include <kernel/mm/vm.h>
 #include <kernel/types.h>
 #include <kernel/spinlock.h>
@@ -572,8 +572,10 @@ vm_range_alloc(void *vm, uintptr_t va, size_t n, int prot)
     spin_lock(&vm_lock);
 
     if ((page = page_alloc_one(PAGE_ALLOC_ZERO)) == NULL) {
-      vm_range_free(vm, (uintptr_t) start, a - start);
       spin_unlock(&vm_lock);
+
+      vm_range_free(vm, (uintptr_t) start, a - start);
+      
       return -ENOMEM;
     }
 
@@ -582,6 +584,7 @@ vm_range_alloc(void *vm, uintptr_t va, size_t n, int prot)
       spin_unlock(&vm_lock);
 
       vm_range_free(vm, (uintptr_t) start, a - start);
+
       return r;
     }
 
@@ -628,34 +631,38 @@ vm_range_clone(void *src, void *dst, uintptr_t va, size_t n, int share)
       spin_unlock(&vm_lock);
       continue;
     }
-    
+
     if (share) {
       if (perm & _PROT_COW) {
-        if ((dst_page = page_alloc_one(0)) == NULL) {
-          spin_unlock(&vm_lock);
-          return -ENOMEM;
-        }
-
         perm |= PROT_WRITE;
         perm &= ~_PROT_COW;
 
-        memmove(page2kva(dst_page), page2kva(src_page), PAGE_SIZE);
+        if (src_page->ref_count == 1) {
+          if ((r = vm_page_insert(src, src_page, va, perm)) < 0) {
+            page_free_one(dst_page);
+            spin_unlock(&vm_lock);
+            return r;
+          }
+        } else {
+          if ((dst_page = page_alloc_one(0)) == NULL) {
+            spin_unlock(&vm_lock);
+            return -ENOMEM;
+          }
 
-        if ((r = vm_page_insert(src, dst_page, (uintptr_t) va, perm)) < 0) {
-          page_free_one(dst_page);
-          spin_unlock(&vm_lock);
-          return r;
-        }
+          if ((r = vm_page_insert(src, dst_page, va, perm)) < 0) {
+            page_free_one(dst_page);
+            spin_unlock(&vm_lock);
+            return r;
+          }
 
-        if ((r = vm_page_insert(dst, dst_page, (uintptr_t) va, perm)) < 0) {
-          spin_unlock(&vm_lock);
-          return r;
+          memmove(page2kva(dst_page), page2kva(src_page), PAGE_SIZE);
+          src_page = dst_page;
         }
-      } else {
-        if ((r = vm_page_insert(dst, src_page, (uintptr_t) a, perm)) < 0) {
-          spin_unlock(&vm_lock);
-          return r;
-        }
+      }
+
+      if ((r = vm_page_insert(dst, src_page, va, perm)) < 0) {
+        spin_unlock(&vm_lock);
+        return r;
       }
     } else if ((perm & PROT_WRITE) || (perm & _PROT_COW)) {
       perm &= ~PROT_WRITE;

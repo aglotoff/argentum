@@ -12,7 +12,7 @@
 #include <kernel/mm/vm.h>
 #include <kernel/mm/mmu.h>
 #include <kernel/object_pool.h>
-#include <kernel/mm/page.h>
+#include <kernel/page.h>
 
 void arch_context_switch(struct Context **, struct Context *);
 
@@ -29,7 +29,7 @@ sched_init(void)
 {
   int i;
 
-  thread_cache = object_pool_create("thread_cache", sizeof(struct Thread), 0, 0,
+  thread_cache = object_pool_create("thread_cache", sizeof(struct Thread), 0,
                                    NULL, NULL);
   if (thread_cache == NULL)
     panic("cannot allocate thread cache");

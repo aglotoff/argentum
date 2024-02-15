@@ -21,7 +21,7 @@ static struct ObjectPool *file_cache;
 void
 file_init(void)
 {
-  if (!(file_cache = object_pool_create("file_cache", sizeof(struct File), 0, 0, NULL, NULL)))
+  if (!(file_cache = object_pool_create("file_cache", sizeof(struct File), 0, NULL, NULL)))
     panic("Cannot allocate file cache");
 
   spin_init(&file_lock, "file_lock");

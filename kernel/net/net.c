@@ -1,7 +1,7 @@
 #include <kernel/drivers/eth.h>
 #include <kernel/cprintf.h>
 #include <kernel/fs/file.h>
-#include <kernel/mm/page.h>
+#include <kernel/page.h>
 #include <kernel/net.h>
 #include <kernel/thread.h>
 

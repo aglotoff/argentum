@@ -1,56 +1,70 @@
 #include <string.h>
 
 #include <kernel/cprintf.h>
-#include <kernel/mm/page.h>
+#include <kernel/page.h>
 #include <kernel/spinlock.h>
 #include <kernel/types.h>
 
-/** The kernel uses this array to keep track of physical pages. */
+/**
+ * @defgroup page Physical Page Allocator
+ * 
+ * Overview
+ * --------
+ * 
+ * Page allocator implements the binary buddy algorithm.
+ * 
+ * All physical memory is represented as a collection of blocks where each block
+ * is a power of 2 number of pages. The allocator maintains a list of the free
+ * blocks for each size.
+ * 
+ * Allocations always have a specified order (i.e. log2 of the desired block
+ * size). If no block of the requested order is available, a higher order block
+ * is split into two so called buddies. One is allocated and the other is placed
+ * to the appropriate free list.
+ *
+ * When the block is later freed, the allocator checks whether the buddy of the
+ * deallocated block is free, in which case two blocks are merged to form a
+ * higher order block and placed on the higher free list.
+ * 
+ * Initialization
+ * --------------
+ * 
+ * Initialization happens in two phases:
+ * 
+ * 1. main() calls page_init_low() while still using the initial translation
+ *    table to place just the pages mapped by entry_pgdir on the free list.
+ * 2. main() calls page_init_high() after installing the full kernel
+ *    translation table to place the rest of the pages on the free list.
+ */
+
+/** The kernel uses this array to keep track of physical pages */
 struct Page *pages;
+/** The maximum number of available physical pages */
+unsigned page_count;
+/** The number of free physical pages */
+unsigned page_free_count = 0;
 
-/** The maximum number of available physical pages. */
-unsigned pages_length;
-unsigned pages_free = 0;
-
-//
-// Page allocator implements the binary buddy algorithm.
-//
-// All physical memory is represented as a collection of blocks where each block
-// is a power of 2 number of pages. The allocator maintains a list of the free
-// blocks of each size.
-//
-// Allocation are always for a specified order (i.e. log2 of the desired block
-// size). If no block of the requested order is available, a higher order block
-// is split into two buddies. One is allocated and the other is placed to the
-// appropriate free list.
-//
-// When the block is later freed, the allocator checks whether the buddy of the
-// deallocated block is free, in which case two blocks are merged to form a
-// higher order block and placed on the higher free list.
-//
+/** The list of free pages, grouped by block order */
 static struct {
   struct ListLink link;
-  uint32_t       *bitmap;
-} free_list[PAGE_ORDER_MAX + 1];
-
-static int pages_inited = 0;
-// static int high_inited = 0;
+  unsigned long  *bitmap;
+} page_free_list[PAGE_ORDER_MAX + 1];
+/** The spinlock protecting the allocator structures */
 static struct SpinLock page_lock;
+/** Whether the allocator is ready to be used */
+static int page_initialized = 0;
+
+#define BITS_PER_BYTE     8
+#define BITS_PER_WORD     (sizeof(unsigned long) * BITS_PER_BYTE)
+#define BITMAP_OFFSET(n)  ((n) / BITS_PER_WORD)
+#define BITMAP_SHIFT(n)   ((n) % BITS_PER_WORD)
+#define BITMAP_MASK(n)    (1U << BITMAP_SHIFT(n))
 
 static void        *boot_alloc(size_t);
 static struct Page *page_buddy(struct Page *, unsigned);
 static void         page_list_add(struct Page *, unsigned);
 static void         page_list_remove(struct Page *, unsigned);
 static int          page_list_contains(struct Page *, unsigned);
-
-//
-// Initialization happens in two phases:
-// 
-// 1. main() calls page_init_low() while still using the initial translation
-//    table to place just the pages mapped by entry_pgdir on the free list.
-// 2. main() calls page_init_high() after installing the full kernel
-//    translation table to place the rest of the pages on the free list.
-//
 
 /**
  * Begin the page allocator initialization.
@@ -64,25 +78,24 @@ page_init_low(void)
   spin_init(&page_lock, "page_lock");
 
   // TODO: detect the actual amount of physical memory!
-  // pages_length = PHYS_EXTRA_LIMIT / PAGE_SIZE;
-  pages_length = PHYS_LIMIT / PAGE_SIZE;
+  page_count = PHYS_LIMIT / PAGE_SIZE;
 
   // Allocate the 'pages' array.
-  pages = (struct Page *) boot_alloc(pages_length * sizeof(struct Page));
+  pages = (struct Page *) boot_alloc(page_count * sizeof(struct Page));
 
-  // Initialize the free page lists.
+  // Initialize the free page list
   for (i = 0; i <= PAGE_ORDER_MAX; i++) {
-    list_init(&free_list[i].link);
+    list_init(&page_free_list[i].link);
 
-    bitmap_len = ROUND_UP(pages_length / (1U << i), 8);
-    free_list[i].bitmap = (uint32_t *) boot_alloc(bitmap_len);
+    bitmap_len = ROUND_UP(page_count / (1U << i), BITS_PER_BYTE);
+    page_free_list[i].bitmap = (unsigned long *) boot_alloc(bitmap_len);
   }
 
   // Place pages mapped by 'entry_pgdir' to the free list.
   page_free_region(0, PHYS_KERNEL_LOAD);
   page_free_region(KVA2PA(boot_alloc(0)), PHYS_ENTRY_LIMIT);
 
-  pages_inited = 1;
+  page_initialized = 1;
 }
 
 /**
@@ -91,16 +104,14 @@ page_init_low(void)
 void
 page_init_high(void)
 {
+  // TODO: detect the actual amount of physical memory!
   page_free_region(PHYS_ENTRY_LIMIT, PHYS_LIMIT);
-  // page_free_region(PHYS_EXTRA_BASE, PHYS_EXTRA_LIMIT);
-  // high_inited = 1;
 }
 
 /**
- * Boot-time memory allocator.
- * 
- * Simple memory allocator used only during the initialization of free page
- * block management structures.
+ * Simple boot-time memory allocator to solve the "chicken and egg" problem
+ * during the page allocator initialization. The memory obtained via this
+ * function is never freed.
  * 
  * @param n The number of bytes to allocate.
  * 
@@ -109,17 +120,17 @@ page_init_high(void)
 static void *
 boot_alloc(size_t n)
 {
-  // First address after the kernel loaded from ELF file.
+  // First address after the kernel image
   extern uint8_t _end[];
-  // Virtual address of the next byte of free memory.
+  // Virtual address of the next byte of free memory
   static uint8_t *next_free = NULL;
 
   void *ret;
 
-  if (pages_inited)
-    panic("called after the page allocator is already initialized");
+  if (page_initialized)
+    panic("called after page_init_low");
 
-  // If this is the first time the allocator is invoked, initialize next_free.
+  // If this is the first time the allocator is invoked, initialize next_free
   if (next_free == NULL)
     next_free = ROUND_UP((uint8_t *) _end, sizeof(uintptr_t));
 
@@ -152,30 +163,30 @@ struct Page *
 page_alloc_block(unsigned order, int flags)
 {
   struct Page *page;
-  unsigned curr_order;
+  unsigned o;
 
   spin_lock(&page_lock);
 
-  for (curr_order = order; curr_order <= PAGE_ORDER_MAX; curr_order++)
-    if (!list_empty(&free_list[curr_order].link))
+  for (o = order; o <= PAGE_ORDER_MAX; o++)
+    if (!list_empty(&page_free_list[o].link))
       break;
 
-  if (curr_order > PAGE_ORDER_MAX) {
+  if (o > PAGE_ORDER_MAX) {
+    // TODO: try to reclaim pages from the slab allocator
     spin_unlock(&page_lock);
     return NULL;
   }
 
-  page = LIST_CONTAINER(free_list[curr_order].link.next, struct Page, link);
+  page = LIST_CONTAINER(page_free_list[o].link.next, struct Page, link);
 
-  page_list_remove(page, curr_order);
-  pages_free -= 1U << order;
-  // if (high_inited) cprintf("[pages_free %d]\n", pages_free);
+  page_list_remove(page, o);
+  page_free_count -= 1U << order;
 
   // Split
-  while (curr_order > order) {
-    curr_order--;
-    page_list_add(page, curr_order);
-    page += (1U << curr_order);
+  while (o > order) {
+    o--;
+    page_list_add(page, o);
+    page += (1U << o);
   }
 
   assert(page->ref_count == 0);
@@ -218,8 +229,7 @@ page_free_block(struct Page *page, unsigned order)
   }
 
   page_list_add(page, order);
-  pages_free += 1U << order;
-  // if (high_inited) cprintf("[pages_free %d]\n", pages_free);
+  page_free_count += 1U << order;
 
   spin_unlock(&page_lock);
 }
@@ -243,7 +253,7 @@ page_free_region(physaddr_t start, physaddr_t end)
     blk_order  = PAGE_ORDER_MAX;
     blk_length = (1U << blk_order);
 
-    // Determine the maximum order for this page index.
+    // Determine the maximum order for this page index
     while (blk_order > 0) {
       if (!(page_idx & (blk_length - 1)) &&
           (page_idx + blk_length <= last_page_idx))
@@ -260,7 +270,7 @@ page_free_region(physaddr_t start, physaddr_t end)
 }
 
 /**
- * Get buddy of a page block.
+ * Get the buddy of a page block.
  * 
  * @param page  Pointer to the page structure corresponding to the block.
  * @param order The page block order.
@@ -272,11 +282,6 @@ page_buddy(struct Page *page, unsigned order)
 {
   return &pages[(page - pages) ^ (1U << order)];
 }
-
-#define BITS_PER_WORD     (sizeof(uint32_t) * 8)
-#define BITMAP_OFFSET(n)  ((n) / BITS_PER_WORD)
-#define BITMAP_SHIFT(n)   ((n) % BITS_PER_WORD)
-#define BITMAP_MASK(n)    (1U << BITMAP_SHIFT(n))
 
 /**
  * Check whether a page block is available.
@@ -292,7 +297,7 @@ page_list_contains(struct Page *page, unsigned order)
   unsigned idx;
 
   idx = (page - pages) / (1U << order);
-  return free_list[order].bitmap[BITMAP_OFFSET(idx)] & BITMAP_MASK(idx);
+  return page_free_list[order].bitmap[BITMAP_OFFSET(idx)] & BITMAP_MASK(idx);
 }
 
 /**
@@ -311,10 +316,10 @@ page_list_add(struct Page *page, unsigned order)
   assert((block_idx % (1U << order)) == 0);
   assert(!page_list_contains(page, order));
 
-  list_add_front(&free_list[order].link, &page->link);
+  list_add_front(&page_free_list[order].link, &page->link);
 
   map_idx = block_idx / (1 << order);
-  free_list[order].bitmap[BITMAP_OFFSET(map_idx)] |= BITMAP_MASK(map_idx);
+  page_free_list[order].bitmap[BITMAP_OFFSET(map_idx)] |= BITMAP_MASK(map_idx);
 }
 
 /**
@@ -336,5 +341,5 @@ page_list_remove(struct Page *page, unsigned order)
   list_remove(&page->link);
 
   map_idx = block_idx / (1U << order);
-  free_list[order].bitmap[BITMAP_OFFSET(map_idx)] &= ~BITMAP_MASK(map_idx);
+  page_free_list[order].bitmap[BITMAP_OFFSET(map_idx)] &= ~BITMAP_MASK(map_idx);
 }

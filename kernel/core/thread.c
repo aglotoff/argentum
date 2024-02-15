@@ -12,7 +12,7 @@
 #include <kernel/mm/vm.h>
 #include <kernel/mm/mmu.h>
 #include <kernel/object_pool.h>
-#include <kernel/mm/page.h>
+#include <kernel/page.h>
 
 static void thread_run(void);
 

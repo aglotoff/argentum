@@ -6,7 +6,7 @@
 #include <kernel/list.h>
 #include <kernel/object_pool.h>
 #include <kernel/spinlock.h>
-#include <kernel/mm/page.h>
+#include <kernel/page.h>
 
 struct ObjectPool *buf_desc_cache;
 
@@ -37,7 +37,7 @@ void
 buf_init(void)
 {
   buf_desc_cache = object_pool_create("buf_desc_cache", sizeof(struct Buf), 0,
-                                      0, buf_ctor, NULL);
+                                      buf_ctor, NULL);
   if (buf_desc_cache == NULL)
     panic("cannot allocate buf_desc_cache");
 

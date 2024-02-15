@@ -23,7 +23,6 @@ KERNEL_SRCFILES :=	\
 	kernel/core/kqueue.c \
 	kernel/core/ktime.c \
 	kernel/core/ktimer.c \
-	kernel/core/object_pool.c \
 	kernel/core/thread.c \
 	kernel/core/sched.c \
 	kernel/core/spinlock.c \
@@ -52,6 +51,7 @@ KERNEL_SRCFILES :=	\
 	kernel/fs/inode.c \
 	kernel/fs/path.c \
 	kernel/mm/entry_pgdir.c \
+	kernel/mm/object_pool.c \
 	kernel/mm/page.c \
 	kernel/mm/vm.c \
 	kernel/net/net.c \

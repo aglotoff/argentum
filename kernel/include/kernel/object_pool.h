@@ -1,5 +1,5 @@
-#ifndef __KERNEL_INCLUDE_KERNEL_MM_KMEM_H__
-#define __KERNEL_INCLUDE_KERNEL_MM_KMEM_H__
+#ifndef __KERNEL_OBJECT_POOL_H__
+#define __KERNEL_OBJECT_POOL_H__
 
 /**
  * @file include/object_pool.h
@@ -87,7 +87,7 @@ struct ObjectSlab {
   struct ObjectTag   tags[0];
 };
 
-struct ObjectPool *object_pool_create(const char *, size_t, size_t, int,
+struct ObjectPool *object_pool_create(const char *, size_t, size_t,
                                       void (*)(void *, size_t),
                                       void (*)(void *, size_t));
 int                object_pool_destroy(struct ObjectPool *);
@@ -99,4 +99,4 @@ void               system_object_pool_init(void);
 void              *kmalloc(size_t);
 void               kfree(void *);
 
-#endif  // !__KERNEL_INCLUDE_KERNEL_MM_KMEM_H__
+#endif  // !__KERNEL_OBJECT_POOL_H__

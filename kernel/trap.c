@@ -2,7 +2,7 @@
 
 #include <kernel/armv7/regs.h>
 #include <kernel/cprintf.h>
-#include <kernel/mm/page.h>
+#include <kernel/page.h>
 #include <kernel/vmspace.h>
 #include <kernel/process.h>
 #include <kernel/sys.h>

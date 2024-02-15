@@ -4,7 +4,7 @@
 #include <kernel/cprintf.h>
 #include <kernel/fs/file.h>
 #include <kernel/object_pool.h>
-#include <kernel/mm/page.h>
+#include <kernel/page.h>
 #include <kernel/pipe.h>
 #include <kernel/wchan.h>
 
@@ -13,7 +13,7 @@ static struct ObjectPool *pipe_cache;
 void
 pipe_init(void)
 {
-  pipe_cache = object_pool_create("pipe", sizeof(struct Pipe), 0, 0, NULL, NULL);
+  pipe_cache = object_pool_create("pipe", sizeof(struct Pipe), 0, NULL, NULL);
   if (pipe_cache == NULL)
     panic("cannot allocate pipe cache");
 }

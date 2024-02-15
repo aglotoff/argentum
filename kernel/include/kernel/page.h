@@ -1,8 +1,8 @@
-#ifndef __KERNEL_INCLUDE_KERNEL_MM_PAGE_H__
-#define __KERNEL_INCLUDE_KERNEL_MM_PAGE_H__
+#ifndef __KERNEL_PAGE_H__
+#define __KERNEL_PAGE_H__
 
 /**
- * @file include/mm/page.h
+ * @file include/page.h
  * 
  * Physical page allocator.
  */
@@ -20,19 +20,22 @@
 struct ObjectSlab;
 
 /**
- * Physical page block info.
+ * Physical page block descriptor.
  */
 struct Page {
   union {
-    struct ListLink        link;  ///< Link into the free list
-    struct ObjectSlab *slab;  ///< The slab this page block belongs to
+    /** Link into the free list */
+    struct ListLink    link;
+    /** The slab this page block belongs to */
+    struct ObjectSlab *slab;
   };
-  int              ref_count;    ///< Reference counter
+  /** Reference counter */
+  int ref_count;
 };
 
 extern struct Page *pages;
-extern unsigned pages_length;
-extern unsigned pages_free;
+extern unsigned page_count;
+extern unsigned page_free_count;
 
 /**
  * Given a page info structure, return the starting physical address.
@@ -43,8 +46,8 @@ extern unsigned pages_free;
 static inline physaddr_t
 page2pa(struct Page *p)
 {
-  if ((p < pages) || (p >= &pages[pages_length]))
-    panic("invalid page index %u", (p - pages));
+  if ((p < pages) || (p >= &pages[page_count]))
+    panic("bad page index %u", (p - pages));
 
   return (p - pages) << PAGE_SHIFT;
 }
@@ -70,8 +73,8 @@ page2kva(struct Page *p)
 static inline struct Page *
 pa2page(physaddr_t pa)
 {
-  if ((pa >> PAGE_SHIFT) >= pages_length)
-    panic("invalid page index %u", pa >> PAGE_SHIFT);
+  if ((pa >> PAGE_SHIFT) >= page_count)
+    panic("bad page index %u", pa >> PAGE_SHIFT);
 
   return &pages[pa >> PAGE_SHIFT];
 }
@@ -124,4 +127,4 @@ page_free_one(struct Page *page)
   page_free_block(page, 0);
 }
 
-#endif  // !__KERNEL_INCLUDE_KERNEL_MM_PAGE_H__
+#endif  // !__KERNEL_PAGE_H__
