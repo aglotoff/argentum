@@ -5,6 +5,7 @@
 #include <sys/types.h>
 
 #include <kernel/kmutex.h>
+#include <kernel/fs/fs.h>
 
 /**
  * Filesystem Superblock
@@ -46,6 +47,22 @@ struct Ext2Superblock {
   uint16_t inode_size;
   uint16_t block_group_nr;
 } __attribute__((packed));
+
+struct Ext2SuperblockData {
+  struct KMutex mutex;
+
+  uint32_t inodes_count;
+  uint32_t block_count;
+  uint32_t r_blocks_count;
+  uint32_t free_blocks_count;
+  uint32_t log_block_size;
+  uint32_t blocks_per_group;
+  uint32_t inodes_per_group;
+  uint32_t wtime;
+  uint16_t inode_size;
+
+  uint32_t block_size;
+};
 
 /**
  * Block Group Descriptor 
@@ -89,6 +106,11 @@ struct Ext2Inode {
   uint32_t faddr;
   uint8_t  osd2[12];
 } __attribute__((packed));
+
+struct Ext2InodeExtra {
+  uint32_t        blocks;
+  uint32_t        block[15];
+};
 
 // File format
 #define EXT2_S_IFMASK   (0xF << 12)
@@ -135,37 +157,33 @@ struct Ext2DirEntry {
 
 struct Inode;
 
-extern struct Ext2Superblock ext2_sb;
-extern struct KMutex ext2_sb_mutex;
-extern uint32_t ext2_block_size;
+extern struct FS ext2fs;
 
-typedef int (*FillDirFunc)(void *, ino_t, const char *, size_t);
+int           ext2_bitmap_alloc(struct Ext2SuperblockData *, uint32_t, size_t, dev_t, uint32_t *);
+int           ext2_bitmap_free(struct Ext2SuperblockData *, uint32_t, dev_t, uint32_t);
 
-int           ext2_bitmap_alloc(uint32_t, size_t, dev_t, uint32_t *);
-int           ext2_bitmap_free(uint32_t, dev_t, uint32_t);
-int           ext2_block_alloc(dev_t, uint32_t *);
-void          ext2_block_free(dev_t, uint32_t);
-int           ext2_block_zero(uint32_t, uint32_t);
-int           ext2_inode_alloc(mode_t, dev_t, dev_t, uint32_t *, uint32_t);
-void          ext2_inode_free(dev_t, uint32_t);
+int           ext2_block_alloc(struct Ext2SuperblockData *, dev_t, uint32_t *);
+void          ext2_block_free(struct Ext2SuperblockData *, dev_t, uint32_t);
+int           ext2_block_zero(struct Ext2SuperblockData *, uint32_t, uint32_t);
 
-void          ext2_sb_sync(dev_t);
+int           ext2_inode_alloc(struct Ext2SuperblockData *, mode_t, dev_t, dev_t, uint32_t *, uint32_t);
+void          ext2_inode_free(struct Ext2SuperblockData *, dev_t, uint32_t);
+
+void          ext2_sb_sync(struct Ext2SuperblockData *, dev_t);
 struct Inode *ext2_mount(dev_t);
-int           ext2_read_inode(struct Inode *);
-int           ext2_write_inode(struct Inode *);
-void          ext2_delete_inode(struct Inode *);
+int           ext2_inode_read(struct Inode *);
+int           ext2_inode_writee(struct Inode *);
+void          ext2_inode_delete(struct Inode *);
 
-int           ext2_inode_create(struct Inode *, char *, mode_t,
+int           ext2_create(struct Inode *, char *, mode_t,
                                 struct Inode **);
-struct Inode *ext2_inode_lookup(struct Inode *, const char *);
-int           ext2_inode_link(struct Inode *, char *, struct Inode *);
-int           ext2_inode_unlink(struct Inode *, struct Inode *);
-int           ext2_inode_mkdir(struct Inode *, char *, mode_t,
-                               struct Inode **);
-int           ext2_inode_rmdir(struct Inode *, struct Inode *);
-int           ext2_inode_mknod(struct Inode *, char *, mode_t, dev_t,
-                               struct Inode **);
-void          ext2_inode_trunc(struct Inode *, off_t);
+struct Inode *ext2_lookup(struct Inode *, const char *);
+int           ext2_link(struct Inode *, char *, struct Inode *);
+int           ext2_unlink(struct Inode *, struct Inode *);
+int           ext2_mkdir(struct Inode *, char *, mode_t, struct Inode **);
+int           ext2_rmdir(struct Inode *, struct Inode *);
+int           ext2_mknod(struct Inode *, char *, mode_t, dev_t, struct Inode **);
+void          ext2_trunc(struct Inode *, off_t);
 ssize_t       ext2_read(struct Inode *, void *, size_t, off_t);
 ssize_t       ext2_write(struct Inode *, const void *, size_t, off_t);
 

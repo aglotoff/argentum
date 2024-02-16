@@ -40,16 +40,16 @@ bit_clear(uint32_t *bmap, size_t n)
  * @retval -ENOMEM if there are no unused bits
  */
 int
-ext2_bitmap_alloc(uint32_t bstart, size_t blen, dev_t dev, uint32_t *bstore)
+ext2_bitmap_alloc(struct Ext2SuperblockData *sb, uint32_t bstart, size_t blen, dev_t dev, uint32_t *bstore)
 {
-  uint32_t bits_per_block = ext2_block_size * BITS_PER_BYTE;
+  uint32_t bits_per_block = sb->block_size * BITS_PER_BYTE;
   uint32_t b, bi;
 
   for (b = 0; b < blen; b += bits_per_block) {
     struct Buf *buf;
     uint32_t *bmap;
 
-    if ((buf = buf_read(bstart + b / bits_per_block, ext2_block_size, dev)) == NULL)
+    if ((buf = buf_read(bstart + b / bits_per_block, sb->block_size, dev)) == NULL)
       // TODO: recover from I/O errors
       panic("cannot read the bitmap block %d", bstart + b / bits_per_block);
 
@@ -86,9 +86,9 @@ ext2_bitmap_alloc(uint32_t bstart, size_t blen, dev_t dev, uint32_t *bstore)
  * @retval 0       on success
  */
 int
-ext2_bitmap_free(uint32_t bstart, dev_t dev, uint32_t bit_no)
+ext2_bitmap_free(struct Ext2SuperblockData *sb, uint32_t bstart, dev_t dev, uint32_t bit_no)
 {
-  uint32_t bits_per_block = ext2_block_size * BITS_PER_BYTE;
+  uint32_t bits_per_block = sb->block_size * BITS_PER_BYTE;
   uint32_t b, bi;
   struct Buf *buf;
   uint32_t *bmap;
@@ -96,7 +96,7 @@ ext2_bitmap_free(uint32_t bstart, dev_t dev, uint32_t bit_no)
   b  = bit_no / bits_per_block;
   bi = bit_no % bits_per_block;
 
-  if ((buf = buf_read(bstart + b, ext2_block_size, dev)) == NULL)
+  if ((buf = buf_read(bstart + b, sb->block_size, dev)) == NULL)
     // TODO: recover from I/O errors
     panic("cannot read the bitmap block %d", bstart + b);
 

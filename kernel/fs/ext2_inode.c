@@ -24,33 +24,34 @@
 static uint32_t
 ext2_locate_inode(struct Inode *inode, uint32_t *offset)
 {
-  unsigned gds_per_block    = ext2_block_size / sizeof(struct Ext2BlockGroup);
-  unsigned inodes_per_block = ext2_block_size / ext2_sb.inode_size;
+  struct Ext2SuperblockData *sb = (struct Ext2SuperblockData *) (inode->fs->extra);
+  unsigned gds_per_block    = sb->block_size / sizeof(struct Ext2BlockGroup);
+  unsigned inodes_per_block = sb->block_size / sb->inode_size;
 
   struct Buf *buf;
   struct Ext2BlockGroup *gd;
   unsigned block_group, gd_table_block, gd_table_idx;
   unsigned local_inode_idx, block;
-  uint32_t gd_start      = ext2_block_size > 1024U ? 1 : 2;
+  uint32_t gd_start      = sb->block_size > 1024U ? 1 : 2;
 
   // 1. Determine which block group the inode belongs to and read the
   //    corresponding block group descriptor
 
-  block_group    = (inode->ino - 1) / ext2_sb.inodes_per_group;
+  block_group    = (inode->ino - 1) / sb->inodes_per_group;
   gd_table_block = gd_start + (block_group / gds_per_block);
   gd_table_idx   = (block_group % gds_per_block);
 
-  if ((buf = buf_read(gd_table_block, ext2_block_size, inode->dev)) == NULL)
+  if ((buf = buf_read(gd_table_block, sb->block_size, inode->dev)) == NULL)
     return 0;
 
   gd = (struct Ext2BlockGroup *) buf->data + gd_table_idx;
 
   // 2. Determine the index in the local inode table of this group descriptor
 
-  local_inode_idx  = (inode->ino - 1) % ext2_sb.inodes_per_group;
+  local_inode_idx  = (inode->ino - 1) % sb->inodes_per_group;
 
   block   = gd->inode_table + local_inode_idx / inodes_per_block;
-  *offset = (local_inode_idx % inodes_per_block) * ext2_sb.inode_size;
+  *offset = (local_inode_idx % inodes_per_block) * sb->inode_size;
 
   buf_release(buf);
 
@@ -58,15 +59,17 @@ ext2_locate_inode(struct Inode *inode, uint32_t *offset)
 }
 
 int
-ext2_read_inode(struct Inode *inode)
+ext2_inode_read(struct Inode *inode)
 {
   struct Buf *buf;
   struct Ext2Inode *raw;
+  struct Ext2InodeExtra *extra;
   unsigned long inode_block, inode_offset;
+  struct Ext2SuperblockData *sb = (struct Ext2SuperblockData *) (inode->fs->extra);
 
   inode_block = ext2_locate_inode(inode, &inode_offset);
 
-  if ((buf = buf_read(inode_block, ext2_block_size, inode->dev)) == NULL)
+  if ((buf = buf_read(inode_block, sb->block_size, inode->dev)) == NULL)
     return -EIO;
 
   raw = (struct Ext2Inode *) (buf->data + inode_offset);
@@ -81,9 +84,11 @@ ext2_read_inode(struct Inode *inode)
   inode->mtime = raw->mtime;
   inode->ctime = raw->ctime;
 
+  extra = (struct Ext2InodeExtra *) inode->extra;
+
   // Read ext2-specific fields
-  inode->ext2.blocks = raw->blocks;
-  memmove(inode->ext2.block, raw->block, sizeof(inode->ext2.block));
+  extra->blocks = raw->blocks;
+  memmove(extra->block, raw->block, sizeof(extra->block));
 
   if (S_ISCHR(inode->mode) || S_ISBLK(inode->mode)) {
     ext2_read(inode, &inode->rdev, sizeof(inode->rdev), 0);
@@ -95,15 +100,17 @@ ext2_read_inode(struct Inode *inode)
 }
 
 int
-ext2_write_inode(struct Inode *inode)
+ext2_inode_writee(struct Inode *inode)
 {
   struct Buf *buf;
   struct Ext2Inode *raw;
   unsigned long block, offset;
+  struct Ext2InodeExtra *extra;
+  struct Ext2SuperblockData *sb = (struct Ext2SuperblockData *) (inode->fs->extra);
 
   block = ext2_locate_inode(inode, &offset);
 
-  if ((buf = buf_read(block, ext2_block_size, inode->dev)) == NULL)
+  if ((buf = buf_read(block, sb->block_size, inode->dev)) == NULL)
     return -EIO;
 
   raw = (struct Ext2Inode *) (buf->data + offset);
@@ -118,9 +125,11 @@ ext2_write_inode(struct Inode *inode)
   raw->mtime       = inode->mtime;
   raw->ctime       = inode->ctime;
 
+  extra = (struct Ext2InodeExtra *) inode->extra;
+
   // Update ext2-specific fields
-  raw->blocks = inode->ext2.blocks;
-  memmove(raw->block, inode->ext2.block, sizeof(inode->ext2.block));
+  raw->blocks = extra->blocks;
+  memmove(raw->block, extra->block, sizeof(extra->block));
 
   buf->flags |= BUF_DIRTY;
 
@@ -134,23 +143,25 @@ ext2_write_inode(struct Inode *inode)
 uint32_t
 ext2_inode_get_block(struct Inode *inode, uint32_t n, int alloc)
 {
-  size_t blocks_inc = (1024U / 512U) << ext2_sb.log_block_size;
-  uint32_t shift_per_lvl = (10 - 2 + ext2_sb.log_block_size);
+  struct Ext2SuperblockData *sb = (struct Ext2SuperblockData *) (inode->fs->extra);
+  size_t blocks_inc = (1024U / 512U) << sb->log_block_size;
+  uint32_t shift_per_lvl = (10 - 2 + sb->log_block_size);
   uint32_t lvl_limit, lvl_idx_mask, lvl_idx_shift;
   uint32_t id, *id_store;
+  struct Ext2InodeExtra *extra = (struct Ext2InodeExtra *) inode->extra;
   int lvl;
 
   if (n < EXT2_MAX_DIRECT_BLOCKS) {
     // Direct block
-    id_store = &inode->ext2.block[n];
+    id_store = &extra->block[n];
 
     if ((id = *id_store) == 0) {
-      if (!alloc || (ext2_block_alloc(inode->dev, &id) != 0))
+      if (!alloc || (ext2_block_alloc(sb, inode->dev, &id) != 0))
         return 0;
 
       *id_store = id;
 
-      inode->ext2.blocks += blocks_inc;
+      extra->blocks += blocks_inc;
       inode->flags |= FS_INODE_DIRTY;
     }
 
@@ -179,13 +190,13 @@ ext2_inode_get_block(struct Inode *inode, uint32_t n, int alloc)
     return 0;
 
   // Get the ID of the first indirect block in the chain
-  id_store = &inode->ext2.block[EXT2_MAX_DIRECT_BLOCKS + lvl];
+  id_store = &extra->block[EXT2_MAX_DIRECT_BLOCKS + lvl];
   if ((id = *id_store) == 0) {
-    if (!alloc || (ext2_block_alloc(inode->dev, &id) != 0))
+    if (!alloc || (ext2_block_alloc(sb, inode->dev, &id) != 0))
       return 0;
 
     *id_store = id;
-    inode->ext2.blocks += blocks_inc;
+    extra->blocks += blocks_inc;
     inode->flags |= FS_INODE_DIRTY;
   }
 
@@ -193,7 +204,7 @@ ext2_inode_get_block(struct Inode *inode, uint32_t n, int alloc)
   for ( ; lvl >= 0; lvl--) {
     struct Buf *buf;
 
-    if ((buf = buf_read(id, ext2_block_size, inode->dev)) == NULL)
+    if ((buf = buf_read(id, sb->block_size, inode->dev)) == NULL)
       // TODO: I/O error?
       return 0;
     
@@ -201,13 +212,13 @@ ext2_inode_get_block(struct Inode *inode, uint32_t n, int alloc)
     id_store += (n >> lvl_idx_shift) & lvl_idx_mask;
 
     if ((id = *id_store) == 0) {
-      if (!alloc || (ext2_block_alloc(inode->dev, &id) != 0)) {
+      if (!alloc || (ext2_block_alloc(sb, inode->dev, &id) != 0)) {
         buf_release(buf);
         return 0;
       }
 
       *id_store = id;
-      inode->ext2.blocks += blocks_inc;
+      extra->blocks += blocks_inc;
       inode->flags |= FS_INODE_DIRTY;
 
       buf->flags |= BUF_DIRTY;
@@ -223,9 +234,11 @@ ext2_inode_get_block(struct Inode *inode, uint32_t n, int alloc)
 static void
 ext2_trunc_indirect(struct Inode *inode, uint32_t *id_store, int lvl, size_t to)
 {
-  size_t blocks_inc    = (1024U / 512U) << ext2_sb.log_block_size;
-  size_t shift_per_lvl = (10 - 2 + ext2_sb.log_block_size);
+  struct Ext2SuperblockData *sb = (struct Ext2SuperblockData *) (inode->fs->extra);
+  size_t blocks_inc    = (1024U / 512U) << sb->log_block_size;
+  size_t shift_per_lvl = (10 - 2 + sb->log_block_size);
   size_t inc           = 1U << (shift_per_lvl * lvl);
+  struct Ext2InodeExtra *extra = (struct Ext2InodeExtra *) inode->extra;
 
   uint32_t id = *id_store;
 
@@ -233,7 +246,7 @@ ext2_trunc_indirect(struct Inode *inode, uint32_t *id_store, int lvl, size_t to)
     return;
 
   if (lvl >= 0) {
-    struct Buf *buf = buf_read(id, ext2_block_size, inode->dev);
+    struct Buf *buf = buf_read(id, sb->block_size, inode->dev);
     uint32_t *ids = (uint32_t *) buf->data;
     size_t i;
 
@@ -245,30 +258,32 @@ ext2_trunc_indirect(struct Inode *inode, uint32_t *id_store, int lvl, size_t to)
   }
 
   if (to == 0) {
-    ext2_block_free(inode->dev, id);
-    inode->ext2.blocks -= blocks_inc;
+    ext2_block_free(sb, inode->dev, id);
+    extra->blocks -= blocks_inc;
     *id_store = 0;
   }
 }
 
 void
-ext2_inode_trunc(struct Inode *inode, off_t length)
+ext2_trunc(struct Inode *inode, off_t length)
 {
-  size_t blocks_inc = (1024U / 512U) << ext2_sb.log_block_size;
-  size_t n          = (length + ext2_block_size - 1) / ext2_block_size;
-  size_t end        = (inode->size + ext2_block_size - 1) / ext2_block_size;
+  struct Ext2SuperblockData *sb = (struct Ext2SuperblockData *) (inode->fs->extra);
+  size_t blocks_inc = (1024U / 512U) << sb->log_block_size;
+  size_t n          = (length + sb->block_size - 1) / sb->block_size;
+  size_t end        = (inode->size + sb->block_size - 1) / sb->block_size;
+  struct Ext2InodeExtra *extra = (struct Ext2InodeExtra *) inode->extra;
   
-  uint32_t shift_per_lvl = (10 - 2 + ext2_sb.log_block_size);
+  uint32_t shift_per_lvl = (10 - 2 + sb->log_block_size);
   uint32_t lvl_start, lvl_limit;
 
   int lvl;
 
   // Free direct blocks
   for ( ; (n < end) && (n < EXT2_MAX_DIRECT_BLOCKS); n++) {
-    if (inode->ext2.block[n] != 0) {
-      ext2_block_free(inode->dev, inode->ext2.block[n]);
-      inode->ext2.block[n] = 0;
-      inode->ext2.blocks -= blocks_inc;
+    if (extra->block[n] != 0) {
+      ext2_block_free(sb, inode->dev, extra->block[n]);
+      extra->block[n] = 0;
+      extra->blocks -= blocks_inc;
     }
   }
 
@@ -280,7 +295,7 @@ ext2_inode_trunc(struct Inode *inode, off_t length)
 
     if (n < lvl_end) {
       ext2_trunc_indirect(inode,
-                          &inode->ext2.block[EXT2_MAX_DIRECT_BLOCKS + lvl], lvl,
+                          &extra->block[EXT2_MAX_DIRECT_BLOCKS + lvl], lvl,
                           n - lvl_start);
       n = lvl_end;
     }
@@ -295,12 +310,13 @@ ext2_read(struct Inode *inode, void *buf, size_t nbyte, off_t off)
 {
   size_t total, n;
   uint8_t *dst;
+  struct Ext2SuperblockData *sb = (struct Ext2SuperblockData *) (inode->fs->extra);
 
   dst = (uint8_t *) buf;
   for (total = 0; total < nbyte; total += n, off += n, dst += n) {
-    uint32_t block_id = ext2_inode_get_block(inode, off / ext2_block_size, 0);
+    uint32_t block_id = ext2_inode_get_block(inode, off / sb->block_size, 0);
   
-    n = MIN(nbyte - total, ext2_block_size - off % ext2_block_size);
+    n = MIN(nbyte - total, sb->block_size - off % sb->block_size);
   
     if (block_id == 0) {
       // Zero block in a sparse file - fill with zeros
@@ -310,12 +326,12 @@ ext2_read(struct Inode *inode, void *buf, size_t nbyte, off_t off)
       // Read the block contents
       struct Buf *buf;
 
-      if ((buf = buf_read(block_id, ext2_block_size, inode->dev)) == NULL) {
+      if ((buf = buf_read(block_id, sb->block_size, inode->dev)) == NULL) {
         buf_release(buf);
         return -EIO;
       }
 
-      memmove(dst, &buf->data[off % ext2_block_size], n);
+      memmove(dst, &buf->data[off % sb->block_size], n);
 
       buf_release(buf);
     }
@@ -329,23 +345,24 @@ ext2_write(struct Inode *inode, const void *buf, size_t nbyte, off_t off)
 {
   size_t total, n;
   const uint8_t *src;
+  struct Ext2SuperblockData *sb = (struct Ext2SuperblockData *) (inode->fs->extra);
 
   src = (const uint8_t *) buf;
   for (total = 0; total < nbyte; total += n, off += n, src += n) {
-    uint32_t block_id = ext2_inode_get_block(inode, off / ext2_block_size, 1);
+    uint32_t block_id = ext2_inode_get_block(inode, off / sb->block_size, 1);
     struct Buf *buf;
 
-    n = MIN(nbyte - total, ext2_block_size - off % ext2_block_size);
+    n = MIN(nbyte - total, sb->block_size - off % sb->block_size);
   
     if (block_id == 0)
       return -ENOMEM;
 
-    if ((buf = buf_read(block_id, ext2_block_size, inode->dev)) == NULL) {
+    if ((buf = buf_read(block_id, sb->block_size, inode->dev)) == NULL) {
       buf_release(buf);
       return -EIO;
     }
 
-    memmove(&buf->data[off % ext2_block_size], src, n);
+    memmove(&buf->data[off % sb->block_size], src, n);
     buf->flags |= BUF_DIRTY;
 
     buf_release(buf);

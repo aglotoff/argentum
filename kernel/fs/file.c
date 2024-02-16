@@ -13,8 +13,6 @@
 #include <kernel/net.h>
 #include <kernel/pipe.h>
 
-#include "ext2.h"
-
 static struct SpinLock file_lock;
 static struct ObjectPool *file_cache;
 

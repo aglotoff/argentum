@@ -16,6 +16,8 @@
 
 struct stat;
 
+struct FS;
+
 struct Inode {
   // These two fields never change
   ino_t           ino;
@@ -39,11 +41,33 @@ struct Inode {
   time_t          ctime;
   dev_t           rdev;
 
-  // Ext2-specific fields
-  struct {
-    uint32_t        blocks;
-    uint32_t        block[15];
-  } ext2;
+  struct FS        *fs;
+  void             *extra;
+};
+
+typedef int (*FillDirFunc)(void *, ino_t, const char *, size_t);
+
+struct FSOps {
+  int             (*inode_read)(struct Inode *);
+  int             (*inode_write)(struct Inode *);
+  void            (*inode_delete)(struct Inode *);
+  ssize_t         (*read)(struct Inode *, void *, size_t, off_t);
+  ssize_t         (*write)(struct Inode *, const void *, size_t, off_t);
+  int             (*rmdir)(struct Inode *, struct Inode *);
+  ssize_t         (*readdir)(struct Inode *, void *, FillDirFunc, off_t);
+  int             (*create)(struct Inode *, char *, mode_t, struct Inode **);
+  int             (*mkdir)(struct Inode *, char *, mode_t, struct Inode **);
+  int             (*mknod)(struct Inode *, char *, mode_t, dev_t, struct Inode **);
+  int             (*link)(struct Inode *, char *, struct Inode *);
+  int             (*unlink)(struct Inode *, struct Inode *);
+  struct Inode *  (*lookup)(struct Inode *, const char *);
+  void            (*trunc)(struct Inode *, off_t);
+};
+
+struct FS {
+  dev_t         dev;
+  void         *extra;
+  struct FSOps *ops;
 };
 
 #define FS_INODE_VALID  (1 << 0)

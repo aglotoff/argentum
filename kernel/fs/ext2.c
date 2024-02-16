@@ -7,25 +7,11 @@
 #include <kernel/drivers/rtc.h>
 #include <kernel/fs/buf.h>
 #include <kernel/fs/fs.h>
+#include <kernel/object_pool.h>
 #include <kernel/process.h>
 #include <kernel/types.h>
 
 #include "ext2.h"
-
-int ext2_sb_dirty;
-struct Ext2Superblock ext2_sb;
-struct KMutex ext2_sb_mutex;
-
-uint32_t ext2_block_size;
-
-/*
- * ----------------------------------------------------------------------------
- * Inode allocator
- * ----------------------------------------------------------------------------
- */
-
-// Block descriptors begin at block 2
-#define GD_BLOCKS_BASE  2
 
 /*
  * ----------------------------------------------------------------------------
@@ -34,24 +20,31 @@ uint32_t ext2_block_size;
  */
 
 static struct Inode *
-fs_inode_alloc(mode_t mode, dev_t rdev, dev_t dev, ino_t parent)
+ext2_inode_get(struct FS *fs, ino_t inum)
 {
-  uint32_t inum;
+  struct Inode *inode = fs_inode_get(inum, fs->dev);
 
-  if (ext2_inode_alloc(mode, rdev, dev, &inum, parent) < 0)
-    return NULL;
+  if (inode != NULL && inode->fs == NULL) {
+    inode->fs = fs;
+    if ((inode->extra = kmalloc(sizeof(struct Ext2InodeExtra))) == NULL)
+      panic("TODO");
+  }
 
-  return fs_inode_get(inum, dev);
+  return inode;
 }
 
 int
-ext2_create(struct Inode *dirp, char *name, mode_t mode, dev_t rdev,
+ext2_inode_create(struct Inode *dirp, char *name, mode_t mode, dev_t rdev,
             struct Inode **istore)
 {
   struct Inode *ip;
+  uint32_t inum;
   int r;
+  
+  if ((r = ext2_inode_alloc((struct Ext2SuperblockData *) (dirp->fs->extra), mode, rdev, dirp->dev, &inum, dirp->ino)) < 0)
+    return r;
 
-  if ((ip = fs_inode_alloc(mode, rdev, dirp->dev, dirp->ino)) == NULL)
+  if ((ip = ext2_inode_get(dirp->fs, inum)) == NULL)
     return -ENOMEM;
 
   fs_inode_lock(ip);
@@ -59,7 +52,7 @@ ext2_create(struct Inode *dirp, char *name, mode_t mode, dev_t rdev,
   ip->uid = process_current()->euid;
   ip->gid = dirp->gid;
 
-  if ((r = ext2_inode_link(dirp, name, ip)))
+  if ((r = ext2_link(dirp, name, ip)))
     panic("Cannot create link");
 
   ip->ctime = ip->mtime = rtc_get_time();
@@ -71,13 +64,13 @@ ext2_create(struct Inode *dirp, char *name, mode_t mode, dev_t rdev,
 }
 
 int
-ext2_inode_create(struct Inode *dirp, char *name, mode_t mode,
+ext2_create(struct Inode *dirp, char *name, mode_t mode,
                   struct Inode **istore)
 {
   struct Inode *ip;
   int r;
 
-  if ((r = ext2_create(dirp, name, mode, 0, &ip)) != 0)
+  if ((r = ext2_inode_create(dirp, name, mode, 0, &ip)) != 0)
     return r;
 
   ip->nlink = 1;
@@ -93,7 +86,7 @@ ext2_inode_create(struct Inode *dirp, char *name, mode_t mode,
 }
 
 int
-ext2_inode_mkdir(struct Inode *dirp, char *name, mode_t mode,
+ext2_mkdir(struct Inode *dirp, char *name, mode_t mode,
                  struct Inode **istore)
 {
   struct Inode *ip;
@@ -102,18 +95,18 @@ ext2_inode_mkdir(struct Inode *dirp, char *name, mode_t mode,
   if (dirp->nlink >= LINK_MAX)
     return -EMLINK;
 
-  if ((r = ext2_create(dirp, name, mode, 0, &ip)) != 0)
+  if ((r = ext2_inode_create(dirp, name, mode, 0, &ip)) != 0)
     return r;
 
   // Create the "." entry
-  if (ext2_inode_link(ip, ".", ip) < 0)
+  if (ext2_link(ip, ".", ip) < 0)
     panic("Cannot create .");
 
   ip->nlink = 1;
   ip->flags |= FS_INODE_DIRTY;
 
   // Create the ".." entry
-  if (ext2_inode_link(ip, "..", dirp) < 0)
+  if (ext2_link(ip, "..", dirp) < 0)
     panic("Cannot create ..");
 
   dirp->nlink++;
@@ -127,13 +120,13 @@ ext2_inode_mkdir(struct Inode *dirp, char *name, mode_t mode,
 }
 
 int
-ext2_inode_mknod(struct Inode *dirp, char *name, mode_t mode, dev_t dev,
+ext2_mknod(struct Inode *dirp, char *name, mode_t mode, dev_t dev,
                  struct Inode **istore)
 {
   struct Inode *ip;
   int r;
 
-  if ((r = ext2_create(dirp, name, mode, dev, &ip)) != 0)
+  if ((r = ext2_inode_create(dirp, name, mode, dev, &ip)) != 0)
     return r;
 
   ip->nlink = 1;
@@ -183,7 +176,7 @@ ext2_dirent_write(struct Inode *dir, struct Ext2DirEntry *de, off_t off)
 }
 
 struct Inode *
-ext2_inode_lookup(struct Inode *dirp, const char *name)
+ext2_lookup(struct Inode *dirp, const char *name)
 {
   struct Ext2DirEntry de;
   off_t off;
@@ -204,22 +197,23 @@ ext2_inode_lookup(struct Inode *dirp, const char *name)
       continue;
 
     if (strncmp(de.name, name, de.name_len) == 0)
-      return fs_inode_get(de.inode, 0);
+      return ext2_inode_get(dirp->fs, de.inode);
   }
 
   return NULL;
 }
 
 int
-ext2_inode_link(struct Inode *dir, char *name, struct Inode *ip)
+ext2_link(struct Inode *dir, char *name, struct Inode *ip)
 {
   struct Inode *ip2;
   struct Ext2DirEntry de, new_de;
   off_t off;
   ssize_t name_len, de_len, new_len;
   uint8_t file_type;
+  struct Ext2SuperblockData *sb = (struct Ext2SuperblockData *) (dir->fs->extra);
 
-  if ((ip2 = ext2_inode_lookup(dir, name)) != NULL) {
+  if ((ip2 = ext2_lookup(dir, name)) != NULL) {
     fs_inode_put(ip2);
     return -EEXIST;
   }
@@ -289,10 +283,10 @@ ext2_inode_link(struct Inode *dir, char *name, struct Inode *ip)
     }
   }
 
-  assert(off % ext2_block_size == 0);
+  assert(off % sb->block_size == 0);
 
-  new_de.rec_len = ext2_block_size;
-  dir->size = off + ext2_block_size;
+  new_de.rec_len = sb->block_size;
+  dir->size = off + sb->block_size;
 
   ip->ctime = rtc_get_time();
   ip->nlink++;
@@ -327,7 +321,7 @@ ext2_dir_empty(struct Inode *dir)
 }
 
 int
-ext2_inode_unlink(struct Inode *dir, struct Inode *ip)
+ext2_unlink(struct Inode *dir, struct Inode *ip)
 {
   struct Ext2DirEntry de;
   off_t off, prev_off;
@@ -370,14 +364,14 @@ ext2_inode_unlink(struct Inode *dir, struct Inode *ip)
 }
 
 int
-ext2_inode_rmdir(struct Inode *dir, struct Inode *ip)
+ext2_rmdir(struct Inode *dir, struct Inode *ip)
 {
   int r;
 
   if (!ext2_dir_empty(ip))
     return -ENOTEMPTY;
 
-  if ((r = ext2_inode_unlink(dir, ip)) < 0)
+  if ((r = ext2_unlink(dir, ip)) < 0)
     return r;
 
   dir->nlink--;
@@ -388,15 +382,15 @@ ext2_inode_rmdir(struct Inode *dir, struct Inode *ip)
 }
 
 void
-ext2_delete_inode(struct Inode *ip)
+ext2_inode_delete(struct Inode *ip)
 {
-  ext2_inode_trunc(ip, 0);
+  ext2_trunc(ip, 0);
 
   ip->mode = 0;
   ip->size = 0;
-  ext2_write_inode(ip);
+  ext2_inode_writee(ip);
 
-  ext2_inode_free(ip->dev, ip->ino);
+  ext2_inode_free((struct Ext2SuperblockData *) (ip->fs->extra), ip->dev, ip->ino);
 }
 
 /*
@@ -409,48 +403,92 @@ ext2_delete_inode(struct Inode *ip)
 #define EXT2_SB_OFFSET        0
 
 void
-ext2_sb_sync(dev_t dev)
+ext2_sb_sync(struct Ext2SuperblockData *sb, dev_t dev)
 {
+  struct Ext2Superblock *raw;
   struct Buf *buf;
 
-  kmutex_lock(&ext2_sb_mutex);
+  kmutex_lock(&sb->mutex);
+
+  sb->wtime = rtc_get_time();
 
   if ((buf = buf_read(1, 1024, dev)) == NULL)
     panic("cannot read the superblock");
 
-  ext2_sb.wtime = rtc_get_time();
+  raw = (struct Ext2Superblock *) &buf->data[EXT2_SB_OFFSET];
 
-  memcpy(&buf->data[EXT2_SB_OFFSET], &ext2_sb, sizeof(ext2_sb));
+  raw->wtime             = sb->wtime;
+  raw->free_blocks_count = sb->free_blocks_count;
+
   buf->flags = BUF_DIRTY;
 
   buf_release(buf);
 
-  kmutex_unlock(&ext2_sb_mutex);
+  kmutex_unlock(&sb->mutex);
 }
+
+struct FSOps ext2fs_ops = {
+  .inode_read   = ext2_inode_read,
+  .inode_write  = ext2_inode_writee,
+  .inode_delete = ext2_inode_delete,
+  .read         = ext2_read,
+  .write        = ext2_write,
+  .trunc        = ext2_trunc,
+  .rmdir        = ext2_rmdir,
+  .readdir      = ext2_readdir,
+  .create       = ext2_create,
+  .mkdir        = ext2_mkdir,
+  .mknod        = ext2_mknod,
+  .link         = ext2_link,
+  .unlink       = ext2_unlink,
+  .lookup       = ext2_lookup,
+};
 
 struct Inode *
 ext2_mount(dev_t dev)
 {
   struct Buf *buf;
+  struct Ext2Superblock *raw;
+  struct Ext2SuperblockData *sb;
+  struct FS *ext2fs;
 
-  kmutex_init(&ext2_sb_mutex, "ext2_sb_mutex");
+  if ((ext2fs = (struct FS *) kmalloc(sizeof(struct FS))) == NULL)
+    panic("cannot allocate FS");
+  if ((sb = (struct Ext2SuperblockData *) kmalloc(sizeof(struct Ext2SuperblockData))) == NULL)
+    panic("cannt allocate superblock");
+
+  kmutex_init(&sb->mutex, "ext2_sb_mutex");
   
   if ((buf = buf_read(1, 1024, dev)) == NULL)
     panic("cannot read the superblock");
 
-  memcpy(&ext2_sb, &buf->data[EXT2_SB_OFFSET], sizeof(ext2_sb));
+  raw = (struct Ext2Superblock *) &buf->data[EXT2_SB_OFFSET];
+
+  sb->block_count       = raw->block_count;
+  sb->inodes_count      = raw->inodes_count;
+  sb->r_blocks_count    = raw->r_blocks_count;
+  sb->free_blocks_count = raw->free_blocks_count;
+  sb->log_block_size    = raw->log_block_size;
+  sb->blocks_per_group  = raw->blocks_per_group;
+  sb->inodes_per_group  = raw->inodes_per_group;
+  sb->wtime             = raw->wtime;
+  sb->inode_size        = raw->inode_size;
 
   buf_release(buf);
 
-  ext2_block_size = 1024 << ext2_sb.log_block_size;
+  sb->block_size = 1024 << sb->log_block_size;
 
   cprintf("Filesystem size = %dM, inodes_count = %d, block_count = %d\n",
-          ext2_sb.block_count * ext2_block_size / (1024 * 1024),
-          ext2_sb.inodes_count, ext2_sb.block_count);
+          sb->block_count * sb->block_size / (1024 * 1024),
+          sb->inodes_count, sb->block_count);
 
   // TODO: update mtime, mnt_count, state, last_mounted
 
-  return fs_inode_get(2, dev);
+  ext2fs->dev   = dev;
+  ext2fs->extra = sb;
+  ext2fs->ops   = &ext2fs_ops;
+
+  return ext2_inode_get(ext2fs, 2);
 }
 
 ssize_t

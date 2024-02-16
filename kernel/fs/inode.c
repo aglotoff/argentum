@@ -114,7 +114,7 @@ fs_inode_put(struct Inode *inode)
 
     // If this is the last reference to this inode
     if (ref_count == 1) {
-      ext2_delete_inode(inode);
+      inode->fs->ops->inode_delete(inode);
       inode->flags &= ~FS_INODE_VALID;
     }
   }
@@ -152,7 +152,7 @@ fs_inode_lock(struct Inode *ip)
   if (ip->flags & FS_INODE_DIRTY)
     panic("inode dirty");
 
-  ext2_read_inode(ip);
+  ip->fs->ops->inode_read(ip);
 
   ip->flags |= FS_INODE_VALID;
 }
@@ -164,7 +164,7 @@ fs_inode_unlock(struct Inode *ip)
     panic("inode not valid");
 
   if (ip->flags & FS_INODE_DIRTY) {
-    ext2_write_inode(ip);
+    ip->fs->ops->inode_write(ip);
     ip->flags &= ~FS_INODE_DIRTY;
   }
 
@@ -219,7 +219,7 @@ fs_inode_read(struct Inode *ip, void *buf, size_t nbyte, off_t *off)
   if (nbyte == 0)
     return 0;
 
-  if ((ret = ext2_read(ip, buf, nbyte, *off)) < 0)
+  if ((ret = ip->fs->ops->read(ip, buf, nbyte, *off)) < 0)
     return ret;
 
   ip->atime  = rtc_get_time();
@@ -264,7 +264,7 @@ fs_inode_write(struct Inode *ip, const void *buf, size_t nbyte, off_t *off)
   if (nbyte == 0)
     return 0;
 
-  total = ext2_write(ip, buf, nbyte, *off);
+  total = ip->fs->ops->write(ip, buf, nbyte, *off);
 
   if (total > 0) {
     *off += total;
@@ -312,7 +312,7 @@ fs_inode_read_dir(struct Inode *ip, void *buf, size_t nbyte, off_t *off)
   while (nbyte > 0) {
     ssize_t nread;
 
-    if ((nread = ext2_readdir(ip, &de, fs_filldir, *off)) < 0)
+    if ((nread = ip->fs->ops->readdir(ip, &de, fs_filldir, *off)) < 0)
       return nread;
 
     if (nread == 0)
@@ -368,7 +368,7 @@ fs_inode_truncate(struct Inode *inode)
   if (!fs_permission(inode, FS_PERM_WRITE, 0))
     return -EPERM;
 
-  ext2_inode_trunc(inode, 0);
+  inode->fs->ops->trunc(inode, 0);
   
   inode->size = 0;
   inode->ctime = inode->mtime = rtc_get_time();
@@ -389,16 +389,16 @@ fs_inode_create(struct Inode *dir, char *name, mode_t mode, dev_t dev,
   if (!fs_permission(dir, FS_PERM_WRITE, 0))
     return -EPERM;
 
-  if (ext2_inode_lookup(dir, name) != NULL)
+  if (dir->fs->ops->lookup(dir, name) != NULL)
     return -EEXIST;
 
   switch (mode & S_IFMT) {
   case S_IFDIR:
-    return ext2_inode_mkdir(dir, name, mode, istore);
+    return dir->fs->ops->mkdir(dir, name, mode, istore);
   case S_IFREG:
-    return ext2_inode_create(dir, name, mode, istore);
+    return dir->fs->ops->create(dir, name, mode, istore);
   default:
-    return ext2_inode_mknod(dir, name, mode, dev, istore);
+    return dir->fs->ops->mknod(dir, name, mode, dev, istore);
   }
 }
 
@@ -424,7 +424,7 @@ fs_inode_link(struct Inode *inode, struct Inode *dir, char *name)
   if (dir->dev != inode->dev)
     return -EXDEV;
 
-  return ext2_inode_link(dir, name, inode);
+  return dir->fs->ops->link(dir, name, inode);
 }
 
 int
@@ -441,7 +441,7 @@ fs_inode_lookup(struct Inode *dir, const char *name, int real,
   if (!fs_permission(dir, FS_PERM_READ, real))
     return -EPERM;
 
-  inode = ext2_inode_lookup(dir, name);
+  inode = dir->fs->ops->lookup(dir, name);
 
   if (istore != NULL)
     *istore = inode;
@@ -468,7 +468,7 @@ fs_inode_unlink(struct Inode *dir, struct Inode *inode)
   if (S_ISDIR(inode->mode))
     return -EPERM;
 
-  return ext2_inode_unlink(dir, inode);
+  return dir->fs->ops->unlink(dir, inode);
 }
 
 int
@@ -489,7 +489,7 @@ fs_inode_rmdir(struct Inode *dir, struct Inode *inode)
   if (!S_ISDIR(inode->mode))
     return -EPERM;
 
-  return ext2_inode_rmdir(dir, inode);
+  return dir->fs->ops->rmdir(dir, inode);
 }
 
 int
@@ -705,7 +705,6 @@ fs_permission(struct Inode *inode, mode_t mode, int real)
 
   return (inode->mode & mode) == mode;
 }
-
 
 int
 fs_access(const char *path, int amode)

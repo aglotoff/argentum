@@ -8,9 +8,6 @@
 
 #include "ext2.h"
 
-// Block descriptors begin at block 2
-#define GD_BLOCKS_BASE  2
-
 /**
  * Fill the block with zeros.
  * 
@@ -20,14 +17,14 @@
  * @retval 0 on success.
  */
 int
-ext2_block_zero(uint32_t block_id, uint32_t dev)
+ext2_block_zero(struct Ext2SuperblockData *sb, uint32_t block_id, uint32_t dev)
 {
   struct Buf *buf;
   
-  if ((buf = buf_read(block_id, ext2_block_size, dev)) == NULL)
+  if ((buf = buf_read(block_id, sb->block_size, dev)) == NULL)
     panic("cannot read block %d", block_id);
 
-  memset(buf->data, 0, ext2_block_size);
+  memset(buf->data, 0, sb->block_size);
   buf->flags |= BUF_DIRTY;
 
   buf_release(buf);
@@ -41,12 +38,12 @@ ext2_block_zero(uint32_t block_id, uint32_t dev)
 // the group) into the memory location pointed to by `bstore`. Otherwise,
 // return `-ENOMEM`.
 static int
-ext2_block_group_alloc(struct Ext2BlockGroup *gd, dev_t dev, uint32_t *bstore)
+ext2_block_group_alloc(struct Ext2SuperblockData *sb, struct Ext2BlockGroup *gd, dev_t dev, uint32_t *bstore)
 {
   if (gd->free_blocks_count == 0)
     return -ENOMEM;
 
-  if (ext2_bitmap_alloc(gd->block_bitmap, ext2_sb.blocks_per_group, dev,
+  if (ext2_bitmap_alloc(sb, gd->block_bitmap, sb->blocks_per_group, dev,
                         bstore) < 0)
     // If free_blocks_count isn't zero, but we couldn't find a free block, the
     // filesystem is corrupted.
@@ -70,32 +67,32 @@ ext2_block_group_alloc(struct Ext2BlockGroup *gd, dev_t dev, uint32_t *bstore)
  * @retval -ENOMEM Couldn't find a free block.
  */
 int
-ext2_block_alloc(dev_t dev, uint32_t *bstore)
+ext2_block_alloc(struct Ext2SuperblockData *sb, dev_t dev, uint32_t *bstore)
 {
   struct Process *my_process = process_current();
   
-  uint32_t gd_start      = ext2_block_size > 1024U ? 1 : 2;
-  uint32_t gds_total     = ext2_sb.block_count / ext2_sb.blocks_per_group;
-  uint32_t gds_per_block = ext2_block_size / sizeof(struct Ext2BlockGroup);
+  uint32_t gd_start      = sb->block_size > 1024U ? 1 : 2;
+  uint32_t gds_total     = sb->block_count / sb->blocks_per_group;
+  uint32_t gds_per_block = sb->block_size / sizeof(struct Ext2BlockGroup);
 
   uint32_t g, gi;
 
-  kmutex_lock(&ext2_sb_mutex);
+  kmutex_lock(&sb->mutex);
   
-  if (ext2_sb.free_blocks_count == 0) {
-    kmutex_unlock(&ext2_sb_mutex);
+  if (sb->free_blocks_count == 0) {
+    kmutex_unlock(&sb->mutex);
     return -ENOSPC;
   }
 
-  if ((ext2_sb.free_blocks_count < ext2_sb.r_blocks_count) &&
+  if ((sb->free_blocks_count < sb->r_blocks_count) &&
       (my_process->euid != 0)) {
-    kmutex_unlock(&ext2_sb_mutex);
+    kmutex_unlock(&sb->mutex);
     return -ENOSPC;
   }
 
-  ext2_sb.free_blocks_count--;
+  sb->free_blocks_count--;
 
-  kmutex_unlock(&ext2_sb_mutex);
+  kmutex_unlock(&sb->mutex);
 
   // TODO: do not exceed r_blocks_count for ordinary users!
   // TODO: update free_blocks_count
@@ -107,7 +104,7 @@ ext2_block_alloc(dev_t dev, uint32_t *bstore)
   for (g = 0; g < gds_total; g += gds_per_block) {
     struct Buf *buf;
 
-    if ((buf = buf_read(gd_start + (g / gds_per_block), ext2_block_size, dev)) == NULL)
+    if ((buf = buf_read(gd_start + (g / gds_per_block), sb->block_size, dev)) == NULL)
       // TODO: recover from I/O errors
       panic("cannot read the group descriptor table");
 
@@ -115,15 +112,15 @@ ext2_block_alloc(dev_t dev, uint32_t *bstore)
       struct Ext2BlockGroup *gd = (struct Ext2BlockGroup *) buf->data + gi;
       uint32_t block_id;
 
-      if (ext2_block_group_alloc(gd, dev, &block_id) == 0) {
+      if (ext2_block_group_alloc(sb, gd, dev, &block_id) == 0) {
         buf->flags |= BUF_DIRTY;
 
         buf_release(buf);
         // TODO: recover from I/O errors
 
-        block_id += (g + gi) * ext2_sb.blocks_per_group;
+        block_id += (g + gi) * sb->blocks_per_group;
 
-        ext2_block_zero(block_id, dev);
+        ext2_block_zero(sb, block_id, dev);
 
         *bstore = block_id;
 
@@ -134,9 +131,9 @@ ext2_block_alloc(dev_t dev, uint32_t *bstore)
     buf_release(buf);
   }
 
-  kmutex_lock(&ext2_sb_mutex);
-  ext2_sb.free_blocks_count++;
-  kmutex_unlock(&ext2_sb_mutex);
+  kmutex_lock(&sb->mutex);
+  sb->free_blocks_count++;
+  kmutex_unlock(&sb->mutex);
 
   return -ENOMEM;
 }
@@ -148,30 +145,30 @@ ext2_block_alloc(dev_t dev, uint32_t *bstore)
  * @param bno The block number.
  */
 void
-ext2_block_free(dev_t dev, uint32_t bno)
+ext2_block_free(struct Ext2SuperblockData *sb, dev_t dev, uint32_t bno)
 {
   struct Buf *buf;
   struct Ext2BlockGroup *gd;
   uint32_t gds_per_block, gd_idx, g, gi;
 
-  uint32_t gd_start = ext2_block_size > 1024U ? 1 : 2;
-  gds_per_block = ext2_block_size / sizeof(struct Ext2BlockGroup);
-  gd_idx = bno / ext2_sb.blocks_per_group;
+  uint32_t gd_start = sb->block_size > 1024U ? 1 : 2;
+  gds_per_block = sb->block_size / sizeof(struct Ext2BlockGroup);
+  gd_idx = bno / sb->blocks_per_group;
   g  = gd_idx / gds_per_block;
   gi = gd_idx % gds_per_block;
 
-  buf = buf_read(gd_start + g, ext2_block_size, dev);
+  buf = buf_read(gd_start + g, sb->block_size, dev);
 
   gd = (struct Ext2BlockGroup *) buf->data + gi;
 
-  ext2_bitmap_free(gd->block_bitmap, dev, bno % ext2_sb.blocks_per_group);
+  ext2_bitmap_free(sb, gd->block_bitmap, dev, bno % sb->blocks_per_group);
 
   gd->free_blocks_count++;
   buf->flags |= BUF_DIRTY;
 
   buf_release(buf);
 
-  kmutex_lock(&ext2_sb_mutex);
-  ext2_sb.free_blocks_count++;
-  kmutex_unlock(&ext2_sb_mutex);
+  kmutex_lock(&sb->mutex);
+  sb->free_blocks_count++;
+  kmutex_unlock(&sb->mutex);
 }

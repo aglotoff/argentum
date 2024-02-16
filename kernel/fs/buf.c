@@ -11,7 +11,7 @@
 struct ObjectPool *buf_desc_cache;
 
 // Maximum size of the buffer cache
-#define BUF_CACHE_MAX_SIZE   32
+#define BUF_CACHE_MAX_SIZE   512
 
 static struct {
   size_t          size;
