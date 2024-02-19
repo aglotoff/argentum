@@ -15,7 +15,7 @@
 #include <kernel/ksemaphore.h>
 #include <kernel/ktimer.h>
 #include <kernel/object_pool.h>
-#include <kernel/mm/mmu.h>
+#include <kernel/vm.h>
 #include <kernel/page.h>
 #include <kernel/vmspace.h>
 #include <kernel/pipe.h>
@@ -46,7 +46,7 @@ void main(void)
 {
   // Begin the memory manager initialization
   page_init_low(); // Physical page allocator (lower memory)
-  vm_init();       // Memory management unit and kernel mappings
+  vm_arch_init();       // Memory management unit and kernel mappings
 
   // Now we can initialize the console to print messages during initialization
   irq_init();     // Interrupt controller
@@ -84,7 +84,7 @@ void main(void)
 void mp_enter(void)
 {
   // Per-CPU initialization
-  vm_init_percpu(); // Load the kernel page table
+  vm_arch_init_percpu(); // Load the kernel page table
   irq_init_percpu();
 
   mp_main();

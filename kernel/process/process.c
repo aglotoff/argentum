@@ -14,7 +14,7 @@
 #include <kernel/fs/fs.h>
 #include <kernel/hash.h>
 #include <kernel/object_pool.h>
-#include <kernel/mm/mmu.h>
+#include <kernel/vm.h>
 #include <kernel/page.h>
 #include <kernel/monitor.h>
 #include <kernel/process.h>

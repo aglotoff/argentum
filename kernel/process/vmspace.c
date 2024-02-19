@@ -8,7 +8,7 @@
 #include <kernel/fs/fs.h>
 #include <kernel/types.h>
 #include <kernel/object_pool.h>
-#include <kernel/mm/mmu.h>
+#include <kernel/vm.h>
 #include <kernel/page.h>
 #include <kernel/vmspace.h>
 #include <kernel/process.h>
@@ -136,7 +136,7 @@ vm_space_create(void)
   if ((vm = (struct VMSpace *) object_pool_get(vmcache)) == NULL)
     return NULL;
 
-  if ((vm->pgtab = vm_create()) == NULL) {
+  if ((vm->pgtab = vm_arch_create()) == NULL) {
     object_pool_put(vmcache, vm);
     return NULL;
   }
@@ -163,7 +163,7 @@ vm_space_destroy(struct VMSpace *vm)
     object_pool_put(vm_areacache, area);
   }
 
-  vm_destroy(vm->pgtab);
+  vm_arch_destroy(vm->pgtab);
 
   object_pool_put(vmcache, vm);
 }

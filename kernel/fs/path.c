@@ -65,6 +65,10 @@ fs_path_lookup(const char *path, char *name_buf, int real,
   parent  = NULL;
 
   while ((r = fs_path_next(path, name_buf, (char **) &path)) > 0) {
+    // Stay in the current directory
+    if (strcmp(name_buf, ".") == 0)
+      continue;
+
     if (parent != NULL)
       fs_inode_put(parent);
     parent = current;

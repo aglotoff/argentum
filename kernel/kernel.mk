@@ -50,10 +50,10 @@ KERNEL_SRCFILES :=	\
 	kernel/fs/file.c \
 	kernel/fs/inode.c \
 	kernel/fs/path.c \
-	kernel/mm/entry_pgdir.c \
 	kernel/mm/object_pool.c \
 	kernel/mm/page.c \
 	kernel/mm/vm.c \
+	kernel/mm/vm_arch.c \
 	kernel/net/net.c \
 	kernel/process/exec.c \
 	kernel/process/fd.c \

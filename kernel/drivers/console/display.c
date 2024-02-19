@@ -5,7 +5,7 @@
 #include <kernel/drivers/console.h>
 #include <kernel/mm/memlayout.h>
 #include <kernel/page.h>
-#include <kernel/mm/vm.h>
+#include <kernel/vm.h>
 #include <kernel/types.h>
 
 #include "display.h"

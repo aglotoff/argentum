@@ -2,7 +2,7 @@
 
 #include <kernel/drivers/console.h>
 #include <kernel/mm/memlayout.h>
-#include <kernel/mm/vm.h>
+#include <kernel/vm.h>
 #include <kernel/irq.h>
 
 #include "kbd.h"

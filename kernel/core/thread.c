@@ -9,8 +9,8 @@
 #include <kernel/spinlock.h>
 #include <kernel/process.h>
 #include <kernel/vmspace.h>
-#include <kernel/mm/vm.h>
-#include <kernel/mm/mmu.h>
+#include <kernel/vm.h>
+#include <kernel/vm.h>
 #include <kernel/object_pool.h>
 #include <kernel/page.h>
 

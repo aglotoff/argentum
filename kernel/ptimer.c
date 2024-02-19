@@ -1,7 +1,7 @@
 #include <stdint.h>
 
 #include <kernel/mm/memlayout.h>
-#include <kernel/mm/vm.h>
+#include <kernel/vm.h>
 #include <kernel/irq.h>
 
 #include "ptimer.h"

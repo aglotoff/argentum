@@ -8,7 +8,7 @@
 #include <kernel/cprintf.h>
 #include <kernel/ktimer.h>
 #include <kernel/mm/memlayout.h>
-#include <kernel/mm/vm.h>
+#include <kernel/vm.h>
 
 #include "gic.h"
 #include "ptimer.h"

@@ -9,8 +9,8 @@
 #include <kernel/spinlock.h>
 #include <kernel/process.h>
 #include <kernel/vmspace.h>
-#include <kernel/mm/vm.h>
-#include <kernel/mm/mmu.h>
+#include <kernel/vm.h>
+#include <kernel/vm.h>
 #include <kernel/object_pool.h>
 #include <kernel/page.h>
 
@@ -90,7 +90,7 @@ sched_start(void)
       assert(next->state == THREAD_STATE_READY);
 
       if (next->process != NULL)
-        vm_load(next->process->vm->pgtab);
+        vm_arch_load(next->process->vm->pgtab);
 
       next->state = THREAD_STATE_RUNNING;
 
@@ -103,7 +103,7 @@ sched_start(void)
       next->cpu = NULL;
 
       if (next->process != NULL)
-        vm_load_kernel();
+        vm_arch_load_kernel();
 
       // Perform cleanup for the exited thread
       if (next->state == THREAD_STATE_DESTROYED) {

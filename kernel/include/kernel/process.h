@@ -11,7 +11,7 @@
 
 #include <kernel/cpu.h>
 #include <kernel/list.h>
-#include <kernel/mm/vm.h>
+#include <kernel/vm.h>
 #include <kernel/thread.h>
 #include <kernel/trap.h>
 #include <kernel/wchan.h>

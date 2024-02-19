@@ -5,7 +5,7 @@
 #include <kernel/thread.h>
 #include <kernel/spinlock.h>
 #include <kernel/mm/memlayout.h>
-#include <kernel/mm/vm.h>
+#include <kernel/vm.h>
 #include <kernel/drivers/console.h>
 #include <kernel/trap.h>
 #include <kernel/wchan.h>

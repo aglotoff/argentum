@@ -8,7 +8,7 @@
 #include <kernel/fs/fs.h>
 #include <kernel/fd.h>
 #include <kernel/mm/memlayout.h>
-#include <kernel/mm/mmu.h>
+#include <kernel/vm.h>
 #include <kernel/page.h>
 #include <kernel/process.h>
 #include <kernel/vmspace.h>
@@ -153,7 +153,7 @@ process_exec(const char *path, char *const argv[], char *const envp[])
   // vm->heap  = heap;
   // vm->stack = ustack;
 
-  vm_load(vm->pgtab);
+  vm_arch_load(vm->pgtab);
   vm_space_destroy(proc->vm);
 
   proc->vm = vm;
