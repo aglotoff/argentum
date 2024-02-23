@@ -455,9 +455,7 @@ sys_chmod(void)
   if ((r = fs_name_lookup(path, 0, &node)) < 0)
     return r;
 
-  fs_inode_lock(node->inode);
   r = fs_inode_chmod(node->inode, mode);
-  fs_inode_unlock(node->inode);
 
   fs_path_put(node);
 

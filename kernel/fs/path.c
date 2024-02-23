@@ -1,6 +1,7 @@
 #include <kernel/assert.h>
 #include <dirent.h>
 #include <errno.h>
+#include <unistd.h>
 #include <limits.h>
 #include <string.h>
 #include <sys/stat.h>
@@ -28,6 +29,7 @@ fs_path_create(const char *name)
 
   if (name != NULL)
     strncpy(path->name, name, NAME_MAX);
+  path->inode = NULL;
   path->ref_count = 1;
   path->parent = NULL;
   list_init(&path->children);
@@ -61,7 +63,7 @@ fs_path_put(struct PathNode *path)
   if (count < 0)
     panic("negative count for path %s\n", path->name);
 
-  // cprintf("[%s: %d]\n", path->name, count);
+  // TODO: go up the tree and remove all unused nodes
 
   if (count == 0) {
     if (path->inode != NULL)
@@ -195,9 +197,7 @@ fs_path_lookup(const char *path, char *name_buf, int real,
       break;
     }
 
-    fs_inode_lock(parent->inode);
     r = fs_inode_lookup(parent->inode, name_buf, real, &current->inode);
-    fs_inode_unlock(parent->inode);
 
     if (r == 0 && current->inode != NULL) {
       current->parent = fs_path_duplicate(parent);
@@ -265,4 +265,23 @@ fs_init(void)
 
   fs_root->inode  = ext2_mount(FS_ROOT_DEV);
   fs_root->parent = fs_path_duplicate(fs_root);
+}
+
+int
+fs_access(const char *path, int amode)
+{
+  struct PathNode *pp;
+  int r;
+
+  if ((r = fs_name_lookup(path, 0, &pp)) < 0)
+    return r;
+
+  if (pp == NULL)
+    return -ENOENT;
+
+  r = amode != F_OK ? fs_inode_access(pp->inode, amode) : 0;
+
+  fs_path_put(pp);
+
+  return r;
 }

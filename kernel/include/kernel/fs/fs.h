@@ -101,7 +101,7 @@ struct Inode *fs_inode_get(ino_t ino, dev_t dev);
 void          fs_inode_put(struct Inode *);
 struct Inode *fs_inode_duplicate(struct Inode *);
 void          fs_inode_lock(struct Inode *);
-void          fs_inode_unlock_put(struct Inode *);
+int           fs_inode_access(struct Inode *, int);
 void          fs_inode_unlock(struct Inode *);
 int           fs_inode_lookup(struct Inode *, const char *, int, struct Inode **);
 
@@ -110,7 +110,7 @@ ssize_t       fs_inode_read_dir(struct Inode *, void *, size_t, off_t *);
 ssize_t       fs_inode_write(struct Inode *, const void *, size_t, off_t *);
 ssize_t       fs_inode_getdents(struct Inode *, void *, size_t, off_t *);
 int           fs_inode_stat(struct Inode *, struct stat *);
-int           fs_create(const char *, mode_t, dev_t, struct Inode **);
+int           fs_create(const char *, mode_t, dev_t, struct PathNode **);
 void          fs_inode_cache_init(void);
 int           fs_inode_truncate(struct Inode *);
 int           fs_inode_chmod(struct Inode *, mode_t);

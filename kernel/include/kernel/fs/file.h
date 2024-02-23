@@ -16,13 +16,13 @@ struct Pipe;
 #define FD_SOCKET   2
 
 struct File {
-  int           type;         ///< File type (inode, console, or pipe)
-  int           ref_count;    ///< The number of references to this file
-  int           flags;
-  off_t         offset;       ///< Current offset within the file
-  struct Inode *inode;        ///< Pointer to the corresponding inode
-  int           socket;       ///< Socket ID
-  struct Pipe  *pipe;         ///< Pointer to the correspondig pipe
+  int              type;         ///< File type (inode, console, or pipe)
+  int              ref_count;    ///< The number of references to this file
+  int              flags;
+  off_t            offset;       ///< Current offset within the file
+  struct PathNode *node;        ///< Pointer to the corresponding inode
+  int              socket;       ///< Socket ID
+  struct Pipe     *pipe;         ///< Pointer to the correspondig pipe
 };
 
 int          file_alloc(struct File **);

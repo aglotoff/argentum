@@ -176,12 +176,12 @@ fs_inode_unlock(struct Inode *ip)
  *
  * @param ip Pointer to the inode.
  */
-void
-fs_inode_unlock_put(struct Inode *ip)
-{  
-  fs_inode_unlock(ip);
-  fs_inode_put(ip);
-}
+// void
+// fs_inode_unlock_put(struct Inode *ip)
+// {  
+//   fs_inode_unlock(ip);
+//   fs_inode_put(ip);
+// }
 
 ssize_t
 fs_inode_read(struct Inode *ip, void *buf, size_t nbyte, off_t *off)
@@ -433,13 +433,17 @@ fs_inode_lookup(struct Inode *dir, const char *name, int real,
 {
   struct Inode *inode;
 
-  if (!fs_inode_holding(dir))
-    panic("not locked");
+  fs_inode_lock(dir);
   
-  if (!S_ISDIR(dir->mode))
+  if (!S_ISDIR(dir->mode)) {
+    fs_inode_unlock(dir);
     return -ENOTDIR;
-  if (!fs_permission(dir, FS_PERM_READ, real))
+  }
+
+  if (!fs_permission(dir, FS_PERM_READ, real)) {
+    fs_inode_unlock(dir);
     return -EPERM;
+  }
 
   inode = dir->fs->ops->lookup(dir, name);
 
@@ -447,6 +451,8 @@ fs_inode_lookup(struct Inode *dir, const char *name, int real,
     *istore = inode;
   else if (inode == NULL)
     fs_inode_put(inode);
+
+  fs_inode_unlock(dir);
 
   return 0;
 }
@@ -493,10 +499,9 @@ fs_inode_rmdir(struct Inode *dir, struct Inode *inode)
 }
 
 int
-fs_create(const char *path, mode_t mode, dev_t dev, struct Inode **istore)
+fs_create(const char *path, mode_t mode, dev_t dev, struct PathNode **istore)
 {
-  struct PathNode *dir;
-  struct Inode *ip;
+  struct PathNode *dir, *ip;
   char name[NAME_MAX + 1];
   int r;
 
@@ -505,16 +510,27 @@ fs_create(const char *path, mode_t mode, dev_t dev, struct Inode **istore)
 
   mode &= ~process_current()->cmask;
 
+  if ((ip = fs_path_create(name)) == NULL) {
+    fs_path_put(dir);
+    return -ENOMEM;
+  }
+
   fs_path_lock(dir);
 
   fs_inode_lock(dir->inode);
 
-  if ((r = fs_inode_create(dir->inode, name, mode, dev, &ip)) == 0) {
+  if ((r = fs_inode_create(dir->inode, name, mode, dev, &ip->inode)) == 0) {
     if (istore == NULL) {
-      fs_inode_unlock_put(ip);
+      fs_inode_unlock(ip->inode);
+      fs_path_put(ip);
     } else {
-      *istore = ip;
+      ip->parent = fs_path_duplicate(dir);
+      list_add_front(&dir->children, &ip->siblings);
+
+      *istore = fs_path_duplicate(ip);
     }
+  } else {
+    fs_path_put(ip);
   }
 
   fs_inode_unlock(dir->inode);
@@ -696,21 +712,24 @@ fs_chdir(const char *path)
 #define CHMOD_MASK  (S_IRWXU | S_IRWXG | S_IRWXO | S_ISUID | S_ISGID)
 
 int
-fs_inode_chmod(struct Inode *ip, mode_t mode)
+fs_inode_chmod(struct Inode *inode, mode_t mode)
 {
   struct Process *current = process_current();
 
-  if (!fs_inode_holding(ip))
-    panic("not holding");
+  fs_inode_lock(inode);
 
-  if ((current->euid != 0) && (ip->uid != current->euid))
+  if ((current->euid != 0) && (inode->uid != current->euid)) {
+    fs_inode_unlock(inode);
     return -EPERM;
+  }
 
   // TODO: additional permission checks
 
-  ip->mode  = (ip->mode & ~CHMOD_MASK) | (mode & CHMOD_MASK);
-  ip->ctime = rtc_get_time();
-  ip->flags |= FS_INODE_DIRTY;
+  inode->mode  = (inode->mode & ~CHMOD_MASK) | (mode & CHMOD_MASK);
+  inode->ctime = rtc_get_time();
+  inode->flags |= FS_INODE_DIRTY;
+
+  fs_inode_unlock(inode);
 
   return 0;
 }
@@ -737,33 +756,20 @@ fs_permission(struct Inode *inode, mode_t mode, int real)
 }
 
 int
-fs_access(const char *path, int amode)
+fs_inode_access(struct Inode *inode, int amode)
 {
-  struct PathNode *pp;
-  int r;
+  int r = 0;
 
-  if ((r = fs_name_lookup(path, 0, &pp)) < 0)
-    return r;
+  fs_inode_lock(inode);
 
-  if (pp == NULL)
-    return -ENOENT;
+  if ((amode & R_OK) && !fs_permission(inode, FS_PERM_READ, 1))
+    r = -EPERM;
+  if ((amode & W_OK) && !fs_permission(inode, FS_PERM_WRITE, 1))
+    r = -EPERM;
+  if ((amode & X_OK) && !fs_permission(inode, FS_PERM_EXEC, 1))
+    r = -EPERM;
 
-  r = 0;
-
-  if (amode != F_OK) {
-    fs_inode_lock(pp->inode);
-
-    if ((amode & R_OK) && !fs_permission(pp->inode, FS_PERM_READ, 1))
-      r = -EPERM;
-    if ((amode & W_OK) && !fs_permission(pp->inode, FS_PERM_WRITE, 1))
-      r = -EPERM;
-    if ((amode & X_OK) && !fs_permission(pp->inode, FS_PERM_EXEC, 1))
-      r = -EPERM;
-
-    fs_inode_unlock(pp->inode);
-  }
-
-  fs_path_put(pp);
+  fs_inode_unlock(inode);
 
   return r;
 }
