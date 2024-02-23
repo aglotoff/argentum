@@ -13,7 +13,100 @@
 
 #include "ext2.h"
 
-struct Inode *fs_root;
+struct PathNode *fs_root;
+
+static struct ObjectPool *path_pool;
+static struct SpinLock path_lock = SPIN_INITIALIZER("path");
+
+struct PathNode *
+fs_path_create(const char *name)
+{
+  struct PathNode *path;
+
+  if ((path = (struct PathNode *) object_pool_get(path_pool)) == NULL)
+    return NULL;
+
+  if (name != NULL)
+    strncpy(path->name, name, NAME_MAX);
+  path->ref_count = 1;
+  path->parent = NULL;
+  list_init(&path->children);
+  list_init(&path->siblings);
+  kmutex_init(&path->mutex, "path");
+
+  return path;
+}
+
+struct PathNode *
+fs_path_duplicate(struct PathNode *path)
+{
+  spin_lock(&path_lock);
+  path->ref_count++;
+  spin_unlock(&path_lock);
+
+  // cprintf("[%s: %d]\n", path->name, path->ref_count);
+
+  return path;
+}
+
+void
+fs_path_put(struct PathNode *path)
+{
+  int count;
+
+  spin_lock(&path_lock);
+  count = --path->ref_count;
+  spin_unlock(&path_lock);
+
+  if (count < 0)
+    panic("negative count for path %s\n", path->name);
+
+  // cprintf("[%s: %d]\n", path->name, count);
+
+  if (count == 0) {
+    if (path->inode != NULL)
+      fs_inode_put(path->inode);
+
+    object_pool_put(path_pool, path);
+  }
+}
+
+void
+fs_path_lock(struct PathNode *node)
+{
+  kmutex_lock(&node->mutex);
+}
+
+void
+fs_path_unlock(struct PathNode *node)
+{
+  kmutex_unlock(&node->mutex);
+}
+
+void
+fs_path_lock_two(struct PathNode *node1, struct PathNode *node2)
+{
+  if (node1 < node2) {
+    fs_path_lock(node1);
+    fs_path_lock(node2);
+  } else {
+    fs_path_lock(node2);
+    fs_path_lock(node1);
+  }
+}
+
+void
+fs_path_unlock_two(struct PathNode *node1, struct PathNode *node2)
+{
+  if (node1 < node2) {
+    fs_path_unlock(node2);
+    fs_path_unlock(node1);
+  } else {
+    fs_path_unlock(node1);
+    fs_path_unlock(node2);
+  }
+}
+
 
 int
 fs_path_next(const char *path, char *name_buf, char **result)
@@ -49,19 +142,18 @@ fs_path_next(const char *path, char *name_buf, char **result)
 
 int
 fs_path_lookup(const char *path, char *name_buf, int real, 
-               struct Inode **istore, struct Inode **pstore)
+               struct PathNode **istore, struct PathNode **pstore)
 {
-  struct Inode *parent, *current;
+  struct PathNode *parent, *current;
   int r;
+  struct ListLink *l;
 
   if (*path == '\0')
     return -ENOENT;
 
   // For absolute paths, begin search from the root directory.
   // For relative paths, begin search from the current working directory.
-  current = *path == '/'
-          ? fs_inode_duplicate(fs_root)
-          : fs_inode_duplicate(process_current()->cwd);
+  current = fs_path_duplicate(*path == '/' ? fs_root : process_current()->cwd);
   parent  = NULL;
 
   while ((r = fs_path_next(path, name_buf, (char **) &path)) > 0) {
@@ -70,12 +162,53 @@ fs_path_lookup(const char *path, char *name_buf, int real,
       continue;
 
     if (parent != NULL)
-      fs_inode_put(parent);
-    parent = current;
+      fs_path_put(parent);
 
-    fs_inode_lock(parent);
-    r = fs_inode_lookup(parent, name_buf, real, &current);
-    fs_inode_unlock(parent);
+    parent  = current;
+    current = NULL;
+
+    fs_path_lock(parent);
+
+    // Move to the parent directory
+    if (strcmp(name_buf, "..") == 0) {
+      current = fs_path_duplicate(parent->parent);
+      fs_path_unlock(parent);
+      continue;
+    }
+
+    LIST_FOREACH(&parent->children, l) {
+      struct PathNode *p = LIST_CONTAINER(l, struct PathNode, siblings);
+      
+      if (strcmp(p->name, name_buf) == 0) {
+        current = fs_path_duplicate(p);
+        break;
+      }
+    }
+
+    if (current != NULL) {
+      fs_path_unlock(parent);
+      continue;
+    }
+
+    if ((current = fs_path_create(name_buf)) == NULL) {
+      r = -ENOMEM;
+      break;
+    }
+
+    fs_inode_lock(parent->inode);
+    r = fs_inode_lookup(parent->inode, name_buf, real, &current->inode);
+    fs_inode_unlock(parent->inode);
+
+    if (r == 0 && current->inode != NULL) {
+      current->parent = fs_path_duplicate(parent);
+      list_add_front(&parent->children, &current->siblings);
+      fs_path_duplicate(current);
+    } else {
+      fs_path_put(current);
+      current = NULL;
+    }
+
+    fs_path_unlock(parent);
 
     if (r < 0)
       break;
@@ -92,34 +225,44 @@ fs_path_lookup(const char *path, char *name_buf, int real,
   if ((r == 0) && (pstore != NULL))
     *pstore = parent;
   else if (parent != NULL)
-    fs_inode_put(parent);
+    fs_path_put(parent);
   
   if ((r == 0) && (istore != NULL))
     *istore = current;
   else if (current != NULL)
-    fs_inode_put(current);
+    fs_path_put(current);
 
   return r;
 }
 
 int
-fs_name_lookup(const char *path, int real, struct Inode **ip)
+fs_name_lookup(const char *path, int real, struct PathNode **pp)
 {
   char name_buf[NAME_MAX + 1];
 
   if (strcmp(path, "/") == 0) {
-    *ip = fs_inode_duplicate(fs_root);
+    *pp = fs_path_duplicate(fs_root);
     return 0;
   }
 
-  return fs_path_lookup(path, name_buf, real, ip, NULL);
+  return fs_path_lookup(path, name_buf, real, pp, NULL);
 }
 
 #define FS_ROOT_DEV 0
 
 void
 fs_init(void)
-{
+{ 
   fs_inode_cache_init();
-  fs_root = ext2_mount(FS_ROOT_DEV);
+
+  path_pool = object_pool_create("path_pool", sizeof(struct PathNode), 0,
+                                 NULL, NULL);
+  if (path_pool == NULL)
+    panic("cannot allocate path_pool");
+
+  if ((fs_root = fs_path_create("/")) == NULL)
+    panic("cannot allocate fs root");
+
+  fs_root->inode  = ext2_mount(FS_ROOT_DEV);
+  fs_root->parent = fs_path_duplicate(fs_root);
 }

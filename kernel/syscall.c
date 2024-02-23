@@ -443,7 +443,7 @@ int32_t
 sys_chmod(void)
 {
   const char *path;
-  struct Inode *inode;
+  struct PathNode *node;
   mode_t mode;
   int r;
 
@@ -452,12 +452,14 @@ sys_chmod(void)
   if ((r = sys_arg_short(1, (short *) &mode)) < 0)
     return r;
 
-  if ((r = fs_name_lookup(path, 0, &inode)) < 0)
+  if ((r = fs_name_lookup(path, 0, &node)) < 0)
     return r;
 
-  fs_inode_lock(inode);
-  r = fs_inode_chmod(inode, mode);
-  fs_inode_unlock_put(inode);
+  fs_inode_lock(node->inode);
+  r = fs_inode_chmod(node->inode, mode);
+  fs_inode_unlock(node->inode);
+
+  fs_path_put(node);
 
   return r;
 }

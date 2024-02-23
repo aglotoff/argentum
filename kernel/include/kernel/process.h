@@ -21,6 +21,7 @@ struct File;
 struct SpinLock;
 struct Inode;
 struct Process;
+struct PathNode;
 
 struct FileDesc {
   struct File *file;
@@ -75,7 +76,7 @@ struct Process {
   /** Open file descriptors */
   struct FileDesc       fd[OPEN_MAX];
   /** Current working directory */
-  struct Inode         *cwd;
+  struct PathNode      *cwd;
 };
 
 struct Signal {

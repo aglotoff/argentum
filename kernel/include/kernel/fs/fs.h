@@ -5,6 +5,7 @@
 #error "This is a kernel header; user programs should not #include it"
 #endif
 
+#include <limits.h>
 #include <stdint.h>
 #include <sys/types.h>
 
@@ -45,6 +46,19 @@ struct Inode {
   void             *extra;
 };
 
+struct PathNode {
+  char            name[NAME_MAX];
+  int             ref_count;
+
+  struct KMutex   mutex;
+
+  struct PathNode    *parent;
+  struct ListLink children;
+  struct ListLink siblings;
+
+  struct Inode   *inode;
+};
+
 typedef int (*FillDirFunc)(void *, ino_t, const char *, size_t);
 
 struct FSOps {
@@ -77,10 +91,11 @@ struct FS {
 #define FS_PERM_WRITE   (1 << 1)
 #define FS_PERM_READ    (1 << 2)
 
-extern struct Inode *fs_root;
+extern struct PathNode *fs_root;
 
 void          fs_init(void);
-int           fs_name_lookup(const char *, int, struct Inode **);
+int           fs_name_lookup(const char *, int, struct PathNode **);
+int           fs_path_lookup(const char *, char *, int, struct PathNode **, struct PathNode **);
 
 struct Inode *fs_inode_get(ino_t ino, dev_t dev);
 void          fs_inode_put(struct Inode *);
@@ -89,7 +104,7 @@ void          fs_inode_lock(struct Inode *);
 void          fs_inode_unlock_put(struct Inode *);
 void          fs_inode_unlock(struct Inode *);
 int           fs_inode_lookup(struct Inode *, const char *, int, struct Inode **);
-int           fs_path_lookup(const char *, char *, int, struct Inode **, struct Inode **);
+
 ssize_t       fs_inode_read(struct Inode *, void *, size_t, off_t *);
 ssize_t       fs_inode_read_dir(struct Inode *, void *, size_t, off_t *);
 ssize_t       fs_inode_write(struct Inode *, const void *, size_t, off_t *);
@@ -100,7 +115,7 @@ void          fs_inode_cache_init(void);
 int           fs_inode_truncate(struct Inode *);
 int           fs_inode_chmod(struct Inode *, mode_t);
 int           fs_inode_ioctl(struct Inode *, int, int);
-int           fs_set_pwd(struct Inode *);
+int           fs_set_pwd(struct PathNode *);
 
 int           fs_unlink(const char *);
 int           fs_rmdir(const char *);
@@ -108,5 +123,13 @@ int           fs_permission(struct Inode *, mode_t, int);
 int           fs_link(char *, char *);
 int           fs_chdir(const char *);
 int           fs_access(const char *, int);
+
+struct PathNode *fs_path_create(const char *);
+struct PathNode *fs_path_duplicate(struct PathNode *);
+void             fs_path_put(struct PathNode *);
+void             fs_path_lock(struct PathNode *);
+void             fs_path_unlock(struct PathNode *);
+void             fs_path_lock_two(struct PathNode *, struct PathNode *);
+void             fs_path_unlock_two(struct PathNode *, struct PathNode *);
 
 #endif  // !__KERNEL_INCLUDE_KERNEL_FS_FS_H__

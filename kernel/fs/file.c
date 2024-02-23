@@ -54,6 +54,7 @@ file_open(const char *path, int oflag, mode_t mode, struct File **fstore)
 {
   struct File *f;
   struct Inode *ip;
+  struct PathNode *pp;
   int r;
 
   // TODO: ENFILE
@@ -64,10 +65,10 @@ file_open(const char *path, int oflag, mode_t mode, struct File **fstore)
   f->type  = FD_INODE;
 
   // TODO: the check and the file creation should be atomic
-  if ((r = fs_name_lookup(path, 0, &ip)) < 0)
+  if ((r = fs_name_lookup(path, 0, &pp)) < 0)
     goto out1;
 
-  if (ip == NULL) {
+  if (pp == NULL) {
     if (!(oflag & O_CREAT)) {
       r = -ENOENT;
       goto out1;
@@ -78,6 +79,9 @@ file_open(const char *path, int oflag, mode_t mode, struct File **fstore)
     if ((r = fs_create(path, S_IFREG | mode, 0, &ip)) < 0)
       goto out1;
   } else {
+    ip = fs_inode_duplicate(pp->inode);
+    fs_path_put(pp);
+
     fs_inode_lock(ip);
 
     if ((oflag & O_CREAT) && (oflag & O_EXCL)) {
@@ -358,12 +362,16 @@ file_chdir(struct File *file)
 {
   int r;
 
-  if (file->type != FD_INODE)
-    return -ENOTDIR;
+  (void) file;
 
-  fs_inode_lock(file->inode);
-  r = fs_set_pwd(file->inode);
-  fs_inode_unlock(file->inode);
+  // if (file->type != FD_INODE)
+  //   return -ENOTDIR;
+
+  // fs_inode_lock(file->inode);
+  // r = fs_set_pwd(file->inode);
+  // fs_inode_unlock(file->inode);
+
+  r = -ENOSYS;
 
   return r;
 }
@@ -414,7 +422,7 @@ file_ioctl(struct File *f, int request, int arg)
     return r;
 
   default:
-    panic("ertrtrtr %d\n", f->type);
+    panic("ioctl %d\n", f->type);
     return -EINVAL;
   }
 }

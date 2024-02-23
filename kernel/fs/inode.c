@@ -495,7 +495,8 @@ fs_inode_rmdir(struct Inode *dir, struct Inode *inode)
 int
 fs_create(const char *path, mode_t mode, dev_t dev, struct Inode **istore)
 {
-  struct Inode *dir, *ip;
+  struct PathNode *dir;
+  struct Inode *ip;
   char name[NAME_MAX + 1];
   int r;
 
@@ -504,9 +505,11 @@ fs_create(const char *path, mode_t mode, dev_t dev, struct Inode **istore)
 
   mode &= ~process_current()->cmask;
 
-  fs_inode_lock(dir);
+  fs_path_lock(dir);
 
-  if ((r = fs_inode_create(dir, name, mode, dev, &ip)) == 0) {
+  fs_inode_lock(dir->inode);
+
+  if ((r = fs_inode_create(dir->inode, name, mode, dev, &ip)) == 0) {
     if (istore == NULL) {
       fs_inode_unlock_put(ip);
     } else {
@@ -514,7 +517,11 @@ fs_create(const char *path, mode_t mode, dev_t dev, struct Inode **istore)
     }
   }
 
-  fs_inode_unlock_put(dir);
+  fs_inode_unlock(dir->inode);
+
+  fs_path_unlock(dir);
+  fs_path_put(dir);
+
   return r;
 }
 
@@ -545,13 +552,13 @@ fs_inode_unlock_two(struct Inode *inode1, struct Inode *inode2)
 int
 fs_link(char *path1, char *path2)
 {
-  struct Inode *ip, *dirp;
+  struct PathNode *dirp, *pp;
   char name[NAME_MAX + 1];
   int r;
 
-  if ((r = fs_name_lookup(path1, 0, &ip)) < 0)
+  if ((r = fs_name_lookup(path1, 0, &pp)) < 0)
     return r;
-  if (ip == NULL)
+  if (pp == NULL)
     return -ENOENT;
 
   if ((r = fs_path_lookup(path2, name, 0, NULL, &dirp)) < 0)
@@ -560,38 +567,51 @@ fs_link(char *path1, char *path2)
   // TODO: check for the same node?
 
   // Always lock inodes in a specific order to avoid deadlocks
-  fs_inode_lock_two(dirp, ip);
+  fs_path_lock_two(dirp, pp);
+  fs_inode_lock_two(dirp->inode, pp->inode);
 
-  r = fs_inode_link(ip, dirp, name);
+  r = fs_inode_link(pp->inode, dirp->inode, name);
 
-  fs_inode_unlock_two(dirp, ip);
-  fs_inode_put(dirp);
+  fs_inode_unlock_two(dirp->inode, pp->inode);
+  fs_path_unlock_two(dirp, pp);
+
+  fs_path_put(dirp);
 out1:
-  fs_inode_put(ip);
+  fs_path_put(pp);
   return r;
 }
 
 int
 fs_unlink(const char *path)
 {
-  struct Inode *dir, *ip;
+  struct PathNode *dir, *pp;
   char name[NAME_MAX + 1];
   int r;
 
-  if ((r = fs_path_lookup(path, name, 0, &ip, &dir)) < 0)
+  if ((r = fs_path_lookup(path, name, 0, &pp, &dir)) < 0)
     return r;
 
-  if (ip == NULL) {
-    fs_inode_put(dir);
+  if (pp == NULL) {
+    fs_path_put(dir);
     return -ENOENT;
   }
 
-  fs_inode_lock_two(dir, ip);
-  r = fs_inode_unlink(dir, ip);
-  fs_inode_unlock_two(dir, ip);
+  fs_path_lock_two(dir, pp);
 
-  fs_inode_put(dir);
-  fs_inode_put(ip);
+  fs_inode_lock_two(dir->inode, pp->inode);
+  r = fs_inode_unlink(dir->inode, pp->inode);
+  fs_inode_unlock_two(dir->inode, pp->inode);
+
+  if (r == 0)
+    list_remove(&pp->siblings);
+
+  fs_path_unlock_two(dir, pp);
+
+  fs_path_put(dir);
+  fs_path_put(dir);
+
+  fs_path_put(pp);
+  fs_path_put(pp);
 
   return r;
 }
@@ -599,48 +619,58 @@ fs_unlink(const char *path)
 int
 fs_rmdir(const char *path)
 {
-  struct Inode *dir, *ip;
+  struct PathNode *dir, *pp;
   char name[NAME_MAX + 1];
   int r;
 
-  if ((r = fs_path_lookup(path, name, 0, &ip, &dir)) < 0)
+  if ((r = fs_path_lookup(path, name, 0, &pp, &dir)) < 0)
     return r;
 
-  if (ip == NULL) {
-    fs_inode_put(dir);
+  if (pp == NULL) {
+    fs_path_put(dir);
     return -ENOENT;
   }
 
-  fs_inode_lock_two(dir, ip);
-  r = fs_inode_rmdir(dir, ip);
-  fs_inode_unlock_two(dir, ip);
+  fs_path_lock_two(dir, pp);
 
-  fs_inode_put(dir);
-  fs_inode_put(ip);
+  fs_inode_lock_two(dir->inode, pp->inode);
+  r = fs_inode_rmdir(dir->inode, pp->inode);
+  fs_inode_unlock_two(dir->inode, pp->inode);
+
+  if (r == 0)
+    list_remove(&pp->siblings);
+
+  fs_path_unlock_two(dir, pp);
+
+  fs_path_put(dir);
+  fs_path_put(dir);
+
+  fs_path_put(pp);
+  fs_path_put(pp);
 
   return r;
 }
 
 int
-fs_set_pwd(struct Inode *inode)
+fs_set_pwd(struct PathNode *node)
 {
   struct Process *current = process_current();
 
-  fs_inode_lock(inode);
+  fs_inode_lock(node->inode);
 
-  if (!S_ISDIR(inode->mode)) {
-    fs_inode_unlock(inode);
+  if (!S_ISDIR(node->inode->mode)) {
+    fs_inode_unlock(node->inode);
     return -ENOTDIR;
   }
-  if (!fs_permission(inode, FS_PERM_EXEC, 0)) {
-    fs_inode_unlock(inode);
+  if (!fs_permission(node->inode, FS_PERM_EXEC, 0)) {
+    fs_inode_unlock(node->inode);
     return -EPERM;
   }
 
-  fs_inode_unlock(inode);
+  fs_inode_unlock(node->inode);
 
-  fs_inode_put(current->cwd);
-  current->cwd = inode;
+  fs_path_put(current->cwd);
+  current->cwd = node;
 
   return 0;
 }
@@ -648,17 +678,17 @@ fs_set_pwd(struct Inode *inode)
 int
 fs_chdir(const char *path)
 {
-  struct Inode *ip;
+  struct PathNode *pp;
   int r;
 
-  if ((r = fs_name_lookup(path, 0, &ip)) < 0)
+  if ((r = fs_name_lookup(path, 0, &pp)) < 0)
     return r;
 
-  if (ip == NULL)
+  if (pp == NULL)
     return -ENOENT;
 
-  if ((r = fs_set_pwd(ip)) != 0)
-    fs_inode_put(ip);
+  if ((r = fs_set_pwd(pp)) != 0)
+    fs_path_put(pp);
 
   return r;
 }
@@ -709,31 +739,31 @@ fs_permission(struct Inode *inode, mode_t mode, int real)
 int
 fs_access(const char *path, int amode)
 {
-  struct Inode *ip;
+  struct PathNode *pp;
   int r;
 
-  if ((r = fs_name_lookup(path, 0, &ip)) < 0)
+  if ((r = fs_name_lookup(path, 0, &pp)) < 0)
     return r;
 
-  if (ip == NULL)
+  if (pp == NULL)
     return -ENOENT;
 
   r = 0;
 
   if (amode != F_OK) {
-    fs_inode_lock(ip);
+    fs_inode_lock(pp->inode);
 
-    if ((amode & R_OK) && !fs_permission(ip, FS_PERM_READ, 1))
+    if ((amode & R_OK) && !fs_permission(pp->inode, FS_PERM_READ, 1))
       r = -EPERM;
-    if ((amode & W_OK) && !fs_permission(ip, FS_PERM_WRITE, 1))
+    if ((amode & W_OK) && !fs_permission(pp->inode, FS_PERM_WRITE, 1))
       r = -EPERM;
-    if ((amode & X_OK) && !fs_permission(ip, FS_PERM_EXEC, 1))
+    if ((amode & X_OK) && !fs_permission(pp->inode, FS_PERM_EXEC, 1))
       r = -EPERM;
 
-    fs_inode_unlock(ip);
+    fs_inode_unlock(pp->inode);
   }
 
-  fs_inode_put(ip);
+  fs_path_put(pp);
 
   return r;
 }

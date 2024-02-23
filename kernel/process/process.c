@@ -271,7 +271,7 @@ process_destroy(int status)
   vm_space_destroy(current->vm);
 
   fd_close_all(current);
-  fs_inode_put(current->cwd);
+  fs_path_put(current->cwd);
 
   assert(init_process != NULL);
 
@@ -337,7 +337,7 @@ process_copy(int share_vm)
   child->rgid  = current->rgid;
   child->egid  = current->egid;
   child->cmask = current->cmask;
-  child->cwd   = fs_inode_duplicate(current->cwd);
+  child->cwd   = fs_path_duplicate(current->cwd);
 
   spin_lock(&process_lock);
   list_add_back(&current->children, &child->sibling_link);
