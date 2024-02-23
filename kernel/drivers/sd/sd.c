@@ -9,7 +9,7 @@
 #include <kernel/mm/memlayout.h>
 #include <kernel/thread.h>
 #include <kernel/sd.h>
-#include <kernel/spinlock.h>
+#include <kernel/spin.h>
 
 #include "pl180.h"
 

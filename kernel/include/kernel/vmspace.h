@@ -12,7 +12,7 @@
 #include <kernel/list.h>
 #include <kernel/vm.h>
 #include <kernel/armv7/mmu.h>
-#include <kernel/spinlock.h>
+#include <kernel/spin.h>
 
 struct Inode;
 struct Page;

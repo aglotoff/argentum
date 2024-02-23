@@ -10,7 +10,7 @@
 
 #include <kernel/ktimer.h>
 #include <kernel/list.h>
-#include <kernel/spinlock.h>
+#include <kernel/spin.h>
 
 #define THREAD_MAX_PRIORITIES  (2 * NZERO)
 

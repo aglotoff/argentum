@@ -4,7 +4,7 @@
 #include <kernel/drivers/rtc.h>
 #include <kernel/mm/memlayout.h>
 #include <kernel/vm.h>
-#include <kernel/spinlock.h>
+#include <kernel/spin.h>
 
 #include "ds1338.h"
 #include "sbcon.h"

@@ -9,7 +9,7 @@
 #include <kernel/fs/file.h>
 #include <kernel/fs/fs.h>
 #include <kernel/object_pool.h>
-#include <kernel/spinlock.h>
+#include <kernel/spin.h>
 #include <kernel/net.h>
 #include <kernel/pipe.h>
 

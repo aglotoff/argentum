@@ -6,7 +6,7 @@
 #include <kernel/cpu.h>
 #include <kernel/irq.h>
 #include <kernel/thread.h>
-#include <kernel/spinlock.h>
+#include <kernel/spin.h>
 #include <kernel/process.h>
 #include <kernel/vmspace.h>
 #include <kernel/vm.h>

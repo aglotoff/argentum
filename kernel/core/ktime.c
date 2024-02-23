@@ -1,7 +1,7 @@
 #include <kernel/cpu.h>
 #include <kernel/ktime.h>
 #include <kernel/ktimer.h>
-#include <kernel/spinlock.h>
+#include <kernel/spin.h>
 #include <kernel/thread.h>
 
 static struct SpinLock ktime_lock = SPIN_INITIALIZER("ktime");

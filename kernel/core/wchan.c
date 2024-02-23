@@ -1,5 +1,5 @@
 #include <kernel/thread.h>
-#include <kernel/spinlock.h>
+#include <kernel/spin.h>
 #include <kernel/wchan.h>
 
 /**

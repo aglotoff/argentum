@@ -49,4 +49,9 @@ void spin_lock(struct SpinLock *);
 void spin_unlock(struct SpinLock *);
 int  spin_holding(struct SpinLock *);
 
+void spin_arch_lock(volatile int *);
+void spin_arch_unlock(volatile int *);
+void spin_arch_pcs_save(struct SpinLock *);
+void spin_arch_pcs_print(struct SpinLock *);
+
 #endif  // !__KERNEL_INCLUDE_KERNEL_SPINLOCK_H__

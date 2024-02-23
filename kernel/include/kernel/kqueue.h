@@ -8,7 +8,7 @@
 #include <stdint.h>
 
 #include <kernel/list.h>
-#include <kernel/spinlock.h>
+#include <kernel/spin.h>
 
 struct KQueue {
   uint8_t          *buf_start;

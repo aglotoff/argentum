@@ -3,7 +3,7 @@
 
 #include <kernel/cprintf.h>
 #include <kernel/ktimer.h>
-#include <kernel/spinlock.h>
+#include <kernel/spin.h>
 
 static LIST_DECLARE(ktimer_queue);
 static struct SpinLock ktimer_lock = SPIN_INITIALIZER("ktimer");

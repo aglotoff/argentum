@@ -2,7 +2,7 @@
 #define __KERNEL_INCLUDE_KERNEL_PIPE_H__
 
 #include <kernel/wchan.h>
-#include <kernel/spinlock.h>
+#include <kernel/spin.h>
 
 struct Pipe {
   struct SpinLock lock;

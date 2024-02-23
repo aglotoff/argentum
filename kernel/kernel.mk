@@ -25,7 +25,8 @@ KERNEL_SRCFILES :=	\
 	kernel/core/ktimer.c \
 	kernel/core/thread.c \
 	kernel/core/sched.c \
-	kernel/core/spinlock.c \
+	kernel/core/spin.c \
+	kernel/core/spin_arch.c \
 	kernel/core/wchan.c \
 	kernel/drivers/console/kbd.c \
 	kernel/drivers/console/display.c \
