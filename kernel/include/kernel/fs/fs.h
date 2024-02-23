@@ -42,12 +42,12 @@ struct Inode {
   time_t          ctime;
   dev_t           rdev;
 
-  struct FS        *fs;
-  void             *extra;
+  struct FS      *fs;
+  void           *extra;
 };
 
 struct PathNode {
-  char            name[NAME_MAX];
+  char            name[NAME_MAX + 1];
   int             ref_count;
 
   struct KMutex   mutex;
@@ -57,6 +57,7 @@ struct PathNode {
   struct ListLink siblings;
 
   struct Inode   *inode;
+  struct Inode   *mounted;
 };
 
 typedef int (*FillDirFunc)(void *, ino_t, const char *, size_t);
@@ -94,7 +95,7 @@ struct FS {
 extern struct PathNode *fs_root;
 
 void          fs_init(void);
-int           fs_name_lookup(const char *, int, struct PathNode **);
+int           fs_lookup(const char *, int, struct PathNode **);
 int           fs_path_lookup(const char *, char *, int, struct PathNode **, struct PathNode **);
 
 struct Inode *fs_inode_get(ino_t ino, dev_t dev);
@@ -124,8 +125,9 @@ int           fs_link(char *, char *);
 int           fs_chdir(const char *);
 int           fs_access(const char *, int);
 
-struct PathNode *fs_path_create(const char *);
+struct PathNode *fs_path_create(const char *, struct Inode *, struct PathNode *);
 struct PathNode *fs_path_duplicate(struct PathNode *);
+void             fs_path_remove(struct PathNode *);
 void             fs_path_put(struct PathNode *);
 void             fs_path_lock(struct PathNode *);
 void             fs_path_unlock(struct PathNode *);

@@ -437,7 +437,7 @@ process_run(void *arg)
 
     fs_init();
 
-    if ((process->cwd == NULL) && (fs_name_lookup("/", 0, &process->cwd) < 0))
+    if ((process->cwd == NULL) && (fs_lookup("/", 0, &process->cwd) < 0))
       panic("root not found");
   }
 

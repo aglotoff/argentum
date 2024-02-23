@@ -452,7 +452,7 @@ sys_chmod(void)
   if ((r = sys_arg_short(1, (short *) &mode)) < 0)
     return r;
 
-  if ((r = fs_name_lookup(path, 0, &node)) < 0)
+  if ((r = fs_lookup(path, 0, &node)) < 0)
     return r;
 
   r = fs_inode_chmod(node->inode, mode);

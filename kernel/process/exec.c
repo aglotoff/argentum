@@ -68,7 +68,7 @@ process_exec(const char *path, char *const argv[], char *const envp[])
   int r, argc;
   uintptr_t a;
 
-  if ((r = fs_name_lookup(path, 0, &pp)) < 0)
+  if ((r = fs_lookup(path, 0, &pp)) < 0)
     return r;
   if (pp == NULL)
     return -ENOENT;

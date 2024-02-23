@@ -501,7 +501,8 @@ fs_inode_rmdir(struct Inode *dir, struct Inode *inode)
 int
 fs_create(const char *path, mode_t mode, dev_t dev, struct PathNode **istore)
 {
-  struct PathNode *dir, *ip;
+  struct PathNode *dir;
+  struct Inode *inode;
   char name[NAME_MAX + 1];
   int r;
 
@@ -510,32 +511,27 @@ fs_create(const char *path, mode_t mode, dev_t dev, struct PathNode **istore)
 
   mode &= ~process_current()->cmask;
 
-  if ((ip = fs_path_create(name)) == NULL) {
-    fs_path_put(dir);
-    return -ENOMEM;
-  }
-
-  fs_path_lock(dir);
-
   fs_inode_lock(dir->inode);
 
-  if ((r = fs_inode_create(dir->inode, name, mode, dev, &ip->inode)) == 0) {
-    if (istore == NULL) {
-      fs_inode_unlock(ip->inode);
-      fs_path_put(ip);
+  if ((r = fs_inode_create(dir->inode, name, mode, dev, &inode)) == 0) {
+    if (istore != NULL) {
+      struct PathNode *pp;
+      
+      if ((pp = fs_path_create(name, inode, dir)) == NULL) {
+        fs_inode_unlock(inode);
+        fs_inode_put(inode);
+        r = -ENOMEM;
+      } else {
+        *istore = pp;
+      }
     } else {
-      ip->parent = fs_path_duplicate(dir);
-      list_add_front(&dir->children, &ip->siblings);
-
-      *istore = fs_path_duplicate(ip);
+      fs_inode_unlock(inode);
+      fs_inode_put(inode);
     }
-  } else {
-    fs_path_put(ip);
   }
 
   fs_inode_unlock(dir->inode);
 
-  fs_path_unlock(dir);
   fs_path_put(dir);
 
   return r;
@@ -572,7 +568,7 @@ fs_link(char *path1, char *path2)
   char name[NAME_MAX + 1];
   int r;
 
-  if ((r = fs_name_lookup(path1, 0, &pp)) < 0)
+  if ((r = fs_lookup(path1, 0, &pp)) < 0)
     return r;
   if (pp == NULL)
     return -ENOENT;
@@ -581,15 +577,14 @@ fs_link(char *path1, char *path2)
     goto out1;
 
   // TODO: check for the same node?
+  // TODO: lock the namespace manager?
 
   // Always lock inodes in a specific order to avoid deadlocks
-  fs_path_lock_two(dirp, pp);
   fs_inode_lock_two(dirp->inode, pp->inode);
 
   r = fs_inode_link(pp->inode, dirp->inode, name);
 
   fs_inode_unlock_two(dirp->inode, pp->inode);
-  fs_path_unlock_two(dirp, pp);
 
   fs_path_put(dirp);
 out1:
@@ -612,21 +607,17 @@ fs_unlink(const char *path)
     return -ENOENT;
   }
 
-  fs_path_lock_two(dir, pp);
+  // TODO: lock the namespace manager?
 
   fs_inode_lock_two(dir->inode, pp->inode);
-  r = fs_inode_unlink(dir->inode, pp->inode);
+  
+  if ((r = fs_inode_unlink(dir->inode, pp->inode)) == 0) {
+    fs_path_remove(pp);
+  }
+
   fs_inode_unlock_two(dir->inode, pp->inode);
 
-  if (r == 0)
-    list_remove(&pp->siblings);
-
-  fs_path_unlock_two(dir, pp);
-
   fs_path_put(dir);
-  fs_path_put(dir);
-
-  fs_path_put(pp);
   fs_path_put(pp);
 
   return r;
@@ -647,21 +638,17 @@ fs_rmdir(const char *path)
     return -ENOENT;
   }
 
-  fs_path_lock_two(dir, pp);
+  // TODO: lock the namespace manager?
 
   fs_inode_lock_two(dir->inode, pp->inode);
-  r = fs_inode_rmdir(dir->inode, pp->inode);
+
+  if ((r = fs_inode_rmdir(dir->inode, pp->inode)) == 0) {
+    fs_path_remove(pp);
+  }
+
   fs_inode_unlock_two(dir->inode, pp->inode);
 
-  if (r == 0)
-    list_remove(&pp->siblings);
-
-  fs_path_unlock_two(dir, pp);
-
   fs_path_put(dir);
-  fs_path_put(dir);
-
-  fs_path_put(pp);
   fs_path_put(pp);
 
   return r;
@@ -697,7 +684,7 @@ fs_chdir(const char *path)
   struct PathNode *pp;
   int r;
 
-  if ((r = fs_name_lookup(path, 0, &pp)) < 0)
+  if ((r = fs_lookup(path, 0, &pp)) < 0)
     return r;
 
   if (pp == NULL)
