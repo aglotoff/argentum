@@ -217,10 +217,12 @@ vm_handle_fault(struct VMSpace *vm, uintptr_t va)
   if (va < PAGE_SIZE || va >= VIRT_KERNEL_BASE)
     return -EFAULT;
 
-  // if (va >= vm->heap && va < vm->stack)
-  //   return -EFAULT;
+  // cprintf("%p\n", va);
 
   fault_page = vm_page_lookup(vm->pgtab, va, &flags);
+
+  if (fault_page == NULL)
+    return -EFAULT;
 
   if ((flags & _PROT_COW) && ((page = page_alloc_one(0)) != NULL)) {
     memcpy(page2kva(page), page2kva(fault_page), PAGE_SIZE);

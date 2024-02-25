@@ -8,6 +8,7 @@
 #include <kernel/trap.h>
 #include <kernel/process.h>
 #include <kernel/thread.h>
+#include <kernel/vmspace.h>
 
 #include "kbd.h"
 #include "display.h"
@@ -23,6 +24,8 @@ console_init(void)
 {  
   spin_init(&console_current.in.lock, "input");
   wchan_init(&console_current.in.queue);
+
+  console_current.termios.c_lflag = ICANON | ECHO;
 
   serial_init();
   kbd_init();
@@ -62,7 +65,7 @@ console_interrupt(char *buf)
       }
       break;
     default:
-      if (c != C('D'))
+      if (c != C('D') && (console_current.termios.c_lflag & ECHO))
         console_putc(c);
 
       console_current.in.buf[console_current.in.write_pos] = c;
@@ -77,6 +80,7 @@ console_interrupt(char *buf)
       if ((c == '\r') ||
           (c == '\n') ||
           (c == C('D')) ||
+          !(console_current.termios.c_lflag & ICANON) ||
           (console_current.in.size == CONSOLE_INPUT_MAX))
         wchan_wakeup_all(&console_current.in.queue);
       break;
@@ -171,16 +175,32 @@ static int pgrp;
 int
 console_ioctl(int request, int arg)
 {
+  struct winsize ws;
+
   switch (request) {
+  case TIOCGETA:
+    return vm_copy_out(process_current()->vm->pgtab, &console_current.termios, arg, sizeof(struct termios));
+
+  case TIOCSETAW:
+    // TODO: drain
+  case TIOCSETA:
+    return vm_copy_in(process_current()->vm->pgtab, &console_current.termios, arg, sizeof(struct termios));
+
   case TIOCGPGRP:
     return pgrp;
   case TIOCSPGRP:
     // TODO: validate
     pgrp = arg;
     return 0;
+  case TIOCGWINSZ:
+    ws.ws_col = CONSOLE_COLS;
+    ws.ws_row = CONSOLE_ROWS;
+    ws.ws_xpixel = DEFAULT_FB_WIDTH;
+    ws.ws_ypixel = DEFAULT_FB_HEIGHT;
+    return vm_copy_out(process_current()->vm->pgtab, &ws, arg, sizeof ws);
 
   default:
-    for (;;);
+    panic("TODO: %d\n", request & 0xFF);
     return -EINVAL;
   }
 }

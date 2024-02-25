@@ -24,11 +24,6 @@ main(void)
   int status;
 
   char *const argv[] = { "/bin/sh", "-l", NULL };
-  char *const envp[] = {
-    "HOME=/home/root",
-    "PATH=/usr/local/bin:/usr/bin:/bin",
-    NULL,
-  };
 
   // Create the directory for special device files.
   mkdir("/dev", 0755);
@@ -54,19 +49,17 @@ main(void)
     }
 
     setenv("HOME", "/home/root", 1);
-
     setenv("PATH", "/bin:/usr/bin", 1);
+    setenv("TERM", "ansi", 1);
     
     open("/etc/profile", O_WRONLY | O_CREAT, 0777);
     write(3, "export PS1=\"\033[1;32m[\033[0m$PWD\033[1;32m]$ \033[0m\"", 44);
     close(3);
 
-    
-
     for (;;) {
       if (fork() == 0) {
-        execve("/usr/bin/dash", argv, envp);
-        execve("/bin/sh", argv, envp);
+        execv("/usr/bin/dash", argv);
+        execv("/bin/sh", argv);
       } else {
         wait(NULL);
       }

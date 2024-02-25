@@ -13,6 +13,7 @@
 
 #include <stdarg.h>
 #include <sys/types.h>
+#include <sys/termios.h>
 
 #include <kernel/spin.h>
 #include <kernel/wchan.h>
@@ -43,8 +44,9 @@ struct Console {
     int                 fg_color;                     // Current foreground color
     int                 bg_color;                     // Current background color
     enum ParserState    state;          
-    int                 esc_params[CONSOLE_ESC_MAX];  // The esc sequence parameters
+    unsigned            esc_params[CONSOLE_ESC_MAX];  // The esc sequence parameters
     int                 esc_cur_param;                // Index of the current esc parameter
+    int                 esc_question;
     struct {
       unsigned ch : 8;
       unsigned fg : 4;
@@ -54,6 +56,7 @@ struct Console {
     unsigned            rows;
     unsigned            pos;
   } out;
+  struct termios        termios;
 };
 
 extern struct Console console_current;

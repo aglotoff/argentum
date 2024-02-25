@@ -95,4 +95,8 @@ int     cfsetospeed(struct termios *, speed_t);
 #define B19200	0xE000	/* 19200 baud */
 #define B38400	0xF000	/* 38400 baud */
 
+#ifndef _POSIX_VDISABLE
+#define	_POSIX_VDISABLE		((unsigned char)'\377')
+#endif /* POSIX_VDISABLE */
+
 #endif

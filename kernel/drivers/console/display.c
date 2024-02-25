@@ -45,9 +45,6 @@ struct PsfHeader {
 
 #define PSF_MAGIC  0x0436
 
-#define DEFAULT_FB_WIDTH    640
-#define DEFAULT_FB_HEIGHT   480
-
 static struct {
   uint8_t *bitmap;
   uint8_t  glyph_width;
@@ -66,6 +63,7 @@ static int  display_load_font(const void *);
 static void display_scroll_down(unsigned);
 static void display_buf_flush(void);
 static void display_echo(char);
+static void display_erase(unsigned, unsigned);
 
 /**
  * Initialize the display driver.
@@ -107,6 +105,27 @@ display_init(void)
   return 0;
 }
 
+void
+dump(unsigned c)
+{
+  const char sym[] = "0123456789ABCDEF";
+
+  display_echo('~');
+  display_echo('~');
+  display_echo('~');
+
+  display_echo(sym[(c >> 28) & 0xF]);
+  display_echo(sym[(c >> 24) & 0xF]);
+  display_echo(sym[(c >> 20) & 0xF]);
+  display_echo(sym[(c >> 16) & 0xF]);
+  display_echo(sym[(c >> 12) & 0xF]);
+  display_echo(sym[(c >> 8) & 0xF]);
+  display_echo(sym[(c >> 4) & 0xF]);
+  display_echo(sym[(c >> 0) & 0xF]);
+
+  display_echo('\n');
+}
+
 /**
  * Output character to the display.
  * 
@@ -129,6 +148,7 @@ display_putc(char c)
 		if (c == '[') {
 			console_current.out.state = PARSER_CSI;
       console_current.out.esc_cur_param = -1;
+      console_current.out.esc_question = 0;
       for (i = 0; i < CONSOLE_ESC_MAX; i++)
         console_current.out.esc_params[i] = 0;
 		} else {
@@ -137,26 +157,32 @@ display_putc(char c)
 		break;
 
 	case PARSER_CSI:
-    
+    if (c == '?') {
+      if (console_current.out.esc_cur_param == -1) {
+        console_current.out.esc_question = 1;
+      } else {
+        console_current.out.state = PARSER_NORMAL;
+      }
+    } else {
+      if (c >= '0' && c <= '9') {
+        if (console_current.out.esc_cur_param == -1)
+          console_current.out.esc_cur_param = 0;
 
-		if (c >= '0' && c <= '9') {
-      if (console_current.out.esc_cur_param == -1)
-        console_current.out.esc_cur_param = 0;
+        // Parse the current parameter
+        if (console_current.out.esc_cur_param < CONSOLE_ESC_MAX)
+          console_current.out.esc_params[console_current.out.esc_cur_param] = console_current.out.esc_params[console_current.out.esc_cur_param] * 10 + (c - '0');
+      } else if (c == ';') {
+        // Next parameter
+        if (console_current.out.esc_cur_param < CONSOLE_ESC_MAX)
+          console_current.out.esc_cur_param++;
+      } else {
+        if (console_current.out.esc_cur_param < CONSOLE_ESC_MAX)
+          console_current.out.esc_cur_param++;
 
-			// Parse the current parameter
-			if (console_current.out.esc_cur_param < CONSOLE_ESC_MAX)
-        console_current.out.esc_params[console_current.out.esc_cur_param] = console_current.out.esc_params[console_current.out.esc_cur_param] * 10 + (c - '0');
-		} else if (c == ';') {
-			// Next parameter
-			if (console_current.out.esc_cur_param < CONSOLE_ESC_MAX)
-				console_current.out.esc_cur_param++;
-		} else {
-      if (console_current.out.esc_cur_param < CONSOLE_ESC_MAX)
-				console_current.out.esc_cur_param++;
-
-			display_handle_esc(c);
-      console_current.out.state = PARSER_NORMAL;
-		}
+        display_handle_esc(c);
+        console_current.out.state = PARSER_NORMAL;
+      }
+    }
 		break;
 
 	default:
@@ -189,13 +215,14 @@ display_flush(void)
  *
  */
 
+
+
 // Handle the escape sequence terminated by the final character c.
 static void
 display_handle_esc(char c)
 {
   int i, tmp;
-  unsigned n;
-  (void) n;
+  unsigned n, m;
 
   display_flush();
 
@@ -219,6 +246,7 @@ display_handle_esc(char c)
 
   // Cursor Forward
   case 'C':
+    for (;;);
     n = (console_current.out.esc_cur_param == 0) ? 1 : console_current.out.esc_params[0];
     n = MIN(n, console_current.out.cols - console_current.out.pos % console_current.out.cols - 1);
     console_current.out.pos += n;
@@ -232,6 +260,73 @@ display_handle_esc(char c)
     console_current.out.pos -= n;
     display_flush();
     break;
+
+  // Cursor Horizontal Absolute
+  case 'G':
+    n = (console_current.out.esc_cur_param < 1) ? 0 : console_current.out.esc_params[0];
+    n = MIN(n, console_current.out.cols - 1);
+    console_current.out.pos -= console_current.out.pos % console_current.out.cols;
+    console_current.out.pos += n;
+    display_flush();
+    break;
+
+  // Cursor Position
+  case 'H':
+    n = (console_current.out.esc_cur_param < 1) ? 0 : console_current.out.esc_params[0];
+    m = (console_current.out.esc_cur_param < 2) ? 0 : console_current.out.esc_params[1];
+    n = MIN(n, console_current.out.rows - 1);
+    m = MIN(m, console_current.out.cols - 1);
+    console_current.out.pos = n * console_current.out.cols + m;
+    display_flush();
+    break;
+
+  // Erase in Display
+  case 'J':
+    n = (console_current.out.esc_cur_param < 1) ? 0 : console_current.out.esc_params[0];
+    if (n == 0) {
+      display_erase(console_current.out.pos, CONSOLE_COLS * CONSOLE_ROWS - 1);
+    } else if (n == 1) {
+      display_erase(0, console_current.out.pos);
+    } else if (n == 2) {
+      display_erase(0, CONSOLE_COLS * CONSOLE_ROWS - 1);
+    }
+    display_flush();
+    break;
+
+  // Erase in Line
+  case 'K':
+    n = (console_current.out.esc_cur_param < 1) ? 0 : console_current.out.esc_params[0];
+    if (n == 0) {
+      display_erase(console_current.out.pos, console_current.out.pos - console_current.out.pos % CONSOLE_COLS + CONSOLE_COLS - 1);
+    } else if (n == 1) {
+      display_erase(console_current.out.pos - console_current.out.pos % CONSOLE_COLS, console_current.out.pos);
+    } else if (n == 2) {
+      display_erase(console_current.out.pos - console_current.out.pos % CONSOLE_COLS, console_current.out.pos - console_current.out.pos % CONSOLE_COLS + CONSOLE_COLS - 1);
+    }
+    display_flush();
+    break;
+
+  // Cursor Vertical Position
+  case 'd':
+    n = (console_current.out.esc_cur_param < 1) ? 0 : console_current.out.esc_params[0];
+    n = MIN(n, console_current.out.rows - 1);
+    console_current.out.pos = n * console_current.out.cols + m;
+    display_flush();
+    break;
+
+  // case 't':
+  //   break;
+
+  // case 'h':
+  //   if (console_current.out.esc_params[0] != 1049)
+  //     dump('a');
+  //   break;
+
+  // case 'l':
+  //   if (console_current.out.esc_params[0] != 1049)
+  //     dump('a');
+  //   break;
+    
 
   // Set Graphic Rendition
   case 'm':
@@ -277,11 +372,22 @@ display_handle_esc(char c)
         }
       }
     }
+    display_flush();
+    break;
+
+  case 'b':
+    for (n = 0; n < console_current.out.esc_params[0]; n++)
+      display_echo(console_current.out.buf[console_current.out.pos - 1].ch);
+    display_flush();
     break;
 
   // TODO: handle other control sequences here
 
   default:
+    dump(c);
+    dump(console_current.out.esc_params[0]);
+    for (;;);
+
     break;
   }
 }
@@ -306,6 +412,22 @@ display_load_font(const void *addr)
     display_draw_cursor();
 
   return 0;
+}
+
+static void
+display_erase(unsigned from, unsigned to)
+{
+  while (from <= to) {
+    display_buf_putc(from, ' ');
+    display_draw_char(from,
+                      console_current.out.buf[from].ch,
+                      console_current.out.buf[from].fg,
+                      console_current.out.buf[from].bg);
+    from++;
+  }
+
+  if (console_current.out.cursor_visible)
+    display_draw_cursor();
 }
 
 static void

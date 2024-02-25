@@ -6,6 +6,7 @@
 #include <sys/mman.h>
 #include <sys/syscall.h>
 #include <sys/stat.h>
+#include <sys/select.h>
 #include <sys/utsname.h>
 #include <time.h>
 
@@ -76,6 +77,7 @@ static int32_t (*syscalls[])(void) = {
   [__SYS_PIPE]       = sys_pipe,
   [__SYS_IOCTL]      = sys_ioctl,
   [__SYS_MMAP]       = sys_mmap,
+  [__SYS_SELECT]     = sys_select,
 };
 
 int32_t
@@ -89,11 +91,11 @@ sys_dispatch(void)
   if ((num < (int) ARRAY_SIZE(syscalls)) && syscalls[num]) {
     int r = syscalls[num]();
     // if (r < 0 || num == __SYS_FCNTL) 
-    //   cprintf("syscall(%d) -> %d\n", num, r);
+    //  cprintf("syscall(%d) -> %d\n", num, r);
     return r;
   }
 
-  // cprintf("Unknown system call %d\n", num);
+  //cprintf("Unknown system call %d\n", num);
   return -ENOSYS;
 }
 
@@ -1142,4 +1144,17 @@ sys_mmap(void)
   // vm_print_areas(process_current()->vm);
 
   return (int32_t) aa;
+}
+
+int32_t
+sys_select(void)
+{
+  int r, fd;
+
+  if ((r = sys_arg_int(0, &fd)) < 0)
+    return r;
+
+  // TODO: implement
+
+  return 1;
 }

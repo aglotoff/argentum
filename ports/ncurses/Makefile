@@ -1,29 +1,31 @@
-PACKAGE_NAME := dash-0.5.12
+PACKAGE_NAME := ncurses-6.4
 SRC_DIR      := $(PACKAGE_NAME)
 TARBALL_NAME := $(PACKAGE_NAME).tar.gz
 TARBALL_FILE := ../../tarballs/$(TARBALL_NAME)
+PATCH_FILE   := $(PACKAGE_NAME).patch
 
 SYSROOT := $(HOME)/argentum/sysroot
 
 all: config
-	make -C $(SRC_DIR) 
+	make -C $(SRC_DIR)
 
 config: $(SRC_DIR)/Makefile
 
 install: all
 	make -C $(SRC_DIR) DESTDIR=$(SYSROOT) install
-	mkdir -p $(SYSROOT)/bin
-	ln -f $(SYSROOT)/usr/bin/dash $(SYSROOT)/bin/sh
 
 $(TARBALL_FILE):
-	wget "http://gondor.apana.org.au/~herbert/dash/files/${TARBALL_NAME}" -O $@
+	wget "https://ftp.gnu.org/gnu/ncurses/${TARBALL_NAME}" -O $@
 
 $(SRC_DIR): $(TARBALL_FILE)
 	tar xf $<
+	cd $@ && patch -p1 -i ../$(PATCH_FILE)
 
 $(SRC_DIR)/Makefile: | $(SRC_DIR)
 	cd $(@D) && ./configure --host=arm-none-argentum \
-	                        --prefix=/usr
+	                        --build=$(shell $(SRC_DIR)/config.guess) \
+	                        --prefix=/usr \
+													--disable-stripping
 
 clean:
 	rm -rf $(SRC_DIR)

@@ -60,6 +60,7 @@
 #define __SYS_MMAP        54
 #define __SYS_MPROTECT    55
 #define __SYS_MUNMAP      56
+#define __SYS_SELECT      57
 
 #ifndef __ASSEMBLER__
 
