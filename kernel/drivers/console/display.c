@@ -45,41 +45,8 @@ struct PsfHeader {
 
 #define PSF_MAGIC  0x0436
 
-static unsigned cursor_pos;              // Current cursor position
-static int cursor_visible;
-static int fg_color = COLOR_WHITE;      // Current foreground color
-static int bg_color = COLOR_BLACK;      // Current background color
-
-#define ESC_MAX_PARAM   16            // The maximum number of esc parameters
-
-enum ParserState {
-  PARSER_NORMAL,
-  PARSER_ESC,
-  PARSER_CSI,
-};
-
-// State of the esc sequence parser
-static enum ParserState parser_state = PARSER_NORMAL;          
-
-static int esc_params[ESC_MAX_PARAM]; // The esc sequence parameters
-static int esc_cur_param;             // Index of the current esc parameter
-
-#define DEFAULT_BUF_WIDTH   80
-#define DEFAULT_BUF_HEIGHT  30
-
 #define DEFAULT_FB_WIDTH    640
 #define DEFAULT_FB_HEIGHT   480
-
-static struct {
-  struct {
-    unsigned ch : 8;
-    unsigned fg : 4;
-    unsigned bg : 4;
-  } data[DEFAULT_BUF_WIDTH * DEFAULT_BUF_HEIGHT];
-  unsigned width;
-  unsigned height;
-  unsigned pos;
-} buf;
 
 static struct {
   uint8_t *bitmap;
@@ -111,12 +78,17 @@ display_init(void)
   struct Page *page;
   unsigned i;
 
-  buf.width  = DEFAULT_BUF_WIDTH;
-  buf.height = DEFAULT_BUF_HEIGHT;
-  for (i = 0; i < buf.width * buf.height; i++) {
-    buf.data[i].ch = ' ';
-    buf.data[i].fg = COLOR_WHITE;
-    buf.data[i].bg = COLOR_BLACK;
+  console_current.out.fg_color      = COLOR_WHITE;
+  console_current.out.bg_color      = COLOR_BLACK;
+  console_current.out.state         = PARSER_NORMAL;
+  console_current.out.esc_cur_param = -1;
+
+  console_current.out.cols  = CONSOLE_COLS;
+  console_current.out.rows = CONSOLE_ROWS;
+  for (i = 0; i < console_current.out.cols * console_current.out.rows; i++) {
+    console_current.out.buf[i].ch = ' ';
+    console_current.out.buf[i].fg = COLOR_WHITE;
+    console_current.out.buf[i].bg = COLOR_BLACK;
   }
 
   // Allocate the frame buffer.
@@ -145,42 +117,50 @@ display_putc(char c)
 { 
   int i;
 
-  switch (parser_state) {
+  switch (console_current.out.state) {
   case PARSER_NORMAL:
     if (c == '\x1b')
-      parser_state = PARSER_ESC;
+      console_current.out.state = PARSER_ESC;
     else
       display_echo(c);
     break;
 
 	case PARSER_ESC:
 		if (c == '[') {
-			parser_state = PARSER_CSI;
-      esc_cur_param = 0;
-      for (i = 0; i < ESC_MAX_PARAM; i++)
-        esc_params[i] = 0;
+			console_current.out.state = PARSER_CSI;
+      console_current.out.esc_cur_param = -1;
+      for (i = 0; i < CONSOLE_ESC_MAX; i++)
+        console_current.out.esc_params[i] = 0;
 		} else {
-			parser_state = PARSER_NORMAL;
+			console_current.out.state = PARSER_NORMAL;
 		}
 		break;
 
 	case PARSER_CSI:
+    
+
 		if (c >= '0' && c <= '9') {
+      if (console_current.out.esc_cur_param == -1)
+        console_current.out.esc_cur_param = 0;
+
 			// Parse the current parameter
-			if (esc_cur_param < ESC_MAX_PARAM)
-        esc_params[esc_cur_param] = esc_params[esc_cur_param] * 10 + (c - '0');
+			if (console_current.out.esc_cur_param < CONSOLE_ESC_MAX)
+        console_current.out.esc_params[console_current.out.esc_cur_param] = console_current.out.esc_params[console_current.out.esc_cur_param] * 10 + (c - '0');
 		} else if (c == ';') {
 			// Next parameter
-			if (esc_cur_param < ESC_MAX_PARAM)
-				esc_cur_param++;
+			if (console_current.out.esc_cur_param < CONSOLE_ESC_MAX)
+				console_current.out.esc_cur_param++;
 		} else {
+      if (console_current.out.esc_cur_param < CONSOLE_ESC_MAX)
+				console_current.out.esc_cur_param++;
+
 			display_handle_esc(c);
-      parser_state = PARSER_NORMAL;
+      console_current.out.state = PARSER_NORMAL;
 		}
 		break;
 
 	default:
-		parser_state = PARSER_NORMAL;
+		console_current.out.state = PARSER_NORMAL;
     break;
 	}
 }
@@ -193,8 +173,8 @@ display_flush(void)
 {
   display_buf_flush();
 
-  if (!cursor_visible) {
-    cursor_visible = 1;
+  if (!console_current.out.cursor_visible) {
+    console_current.out.cursor_visible = 1;
     display_draw_cursor();
   }
 }
@@ -214,42 +194,86 @@ static void
 display_handle_esc(char c)
 {
   int i, tmp;
+  unsigned n;
+  (void) n;
+
+  display_flush();
 
   switch (c) {
+
+  // Cursor Up
+  case 'A':
+    n = (console_current.out.esc_cur_param == 0) ? 1 : console_current.out.esc_params[0];
+    n = MIN(n, console_current.out.pos / console_current.out.cols);
+    console_current.out.pos -= n * console_current.out.cols;
+    display_flush();
+    break;
+  
+  // Cursor Down
+  case 'B':
+    n = (console_current.out.esc_cur_param == 0) ? 1 : console_current.out.esc_params[0];
+    n = MIN(n, console_current.out.rows - console_current.out.pos / console_current.out.cols - 1);
+    console_current.out.pos += n * console_current.out.cols;
+    display_flush();
+    break;
+
+  // Cursor Forward
+  case 'C':
+    n = (console_current.out.esc_cur_param == 0) ? 1 : console_current.out.esc_params[0];
+    n = MIN(n, console_current.out.cols - console_current.out.pos % console_current.out.cols - 1);
+    console_current.out.pos += n;
+    display_flush();
+    break;
+
+  // Cursor Back
+  case 'D':
+    n = (console_current.out.esc_cur_param == 0) ? 1 : console_current.out.esc_params[0];
+    n = MIN(n, console_current.out.pos % console_current.out.cols);
+    console_current.out.pos -= n;
+    display_flush();
+    break;
+
   // Set Graphic Rendition
-  case 'm':       
-    for (i = 0; (i <= esc_cur_param) && (i < ESC_MAX_PARAM); i++) {
-      switch (esc_params[i]) {
+  case 'm':
+    if (console_current.out.esc_cur_param == 0) {
+      // All attributes off
+      console_current.out.bg_color = COLOR_BLACK;
+      console_current.out.fg_color = COLOR_WHITE;
+      break;
+    }
+
+    for (i = 0; (i < console_current.out.esc_cur_param) && (i < CONSOLE_ESC_MAX); i++) {
+      switch (console_current.out.esc_params[i]) {
       case 0:
         // All attributes off
-        bg_color = COLOR_BLACK;
-        fg_color = COLOR_WHITE;
+        console_current.out.bg_color = COLOR_BLACK;
+        console_current.out.fg_color = COLOR_WHITE;
         break;
       case 1:
         // Bold on
-        fg_color |= COLOR_BRIGHT;
+        console_current.out.fg_color |= COLOR_BRIGHT;
         break;
       case 7:
         // Reverse video
-        tmp = bg_color;
-        bg_color = fg_color;
-        fg_color = tmp;
+        tmp = console_current.out.bg_color;
+        console_current.out.bg_color = console_current.out.fg_color;
+        console_current.out.fg_color = tmp;
         break;
       case 39:
         // Default foreground color (white)
-        fg_color = (fg_color & ~COLOR_MASK) | COLOR_WHITE;
+        console_current.out.fg_color = (console_current.out.fg_color & ~COLOR_MASK) | COLOR_WHITE;
         break;
       case 49:
         // Default background color (black)
-        bg_color = (bg_color & ~COLOR_MASK) | COLOR_BLACK;
+        console_current.out.bg_color = (console_current.out.bg_color & ~COLOR_MASK) | COLOR_BLACK;
         break;
       default:
-        if ((esc_params[i] >= 30) && (esc_params[i] <= 37)) {
+        if ((console_current.out.esc_params[i] >= 30) && (console_current.out.esc_params[i] <= 37)) {
           // Set foreground color
-          fg_color = (fg_color & ~COLOR_MASK) | (esc_params[i] - 30);
-        } else if ((esc_params[i] >= 40) && (esc_params[i] <= 47)) {
+          console_current.out.fg_color = (console_current.out.fg_color & ~COLOR_MASK) | (console_current.out.esc_params[i] - 30);
+        } else if ((console_current.out.esc_params[i] >= 40) && (console_current.out.esc_params[i] <= 47)) {
           // Set background color
-          bg_color = (bg_color & ~COLOR_MASK) | (esc_params[i] - 40);
+          console_current.out.bg_color = (console_current.out.bg_color & ~COLOR_MASK) | (console_current.out.esc_params[i] - 40);
         }
       }
     }
@@ -275,10 +299,10 @@ display_load_font(const void *addr)
   font.glyph_width  = 8;
   font.glyph_height = psf->charsize;
 
-  for (unsigned i = 0; i < buf.width * buf.height; i++)
-    display_draw_char(i, buf.data[i].ch, buf.data[i].fg, buf.data[i].bg);
+  for (unsigned i = 0; i < console_current.out.cols * console_current.out.rows; i++)
+    display_draw_char(i, console_current.out.buf[i].ch, console_current.out.buf[i].fg, console_current.out.buf[i].bg);
   
-  if (cursor_visible)
+  if (console_current.out.cursor_visible)
     display_draw_cursor();
 
   return 0;
@@ -287,25 +311,25 @@ display_load_font(const void *addr)
 static void
 display_buf_flush(void)
 {
-  if (cursor_pos < buf.pos) {
-    cursor_visible = 0;
+  if (console_current.out.cursor_pos < console_current.out.pos) {
+    console_current.out.cursor_visible = 0;
 
-    for ( ; cursor_pos < buf.pos; cursor_pos++)
-      display_draw_char(cursor_pos,
-                        buf.data[cursor_pos].ch,
-                        buf.data[cursor_pos].fg,
-                        buf.data[cursor_pos].bg);
-  } else if (cursor_pos > buf.pos) {
-    if (cursor_visible) {
+    for ( ; console_current.out.cursor_pos < console_current.out.pos; console_current.out.cursor_pos++)
+      display_draw_char(console_current.out.cursor_pos,
+                        console_current.out.buf[console_current.out.cursor_pos].ch,
+                        console_current.out.buf[console_current.out.cursor_pos].fg,
+                        console_current.out.buf[console_current.out.cursor_pos].bg);
+  } else if (console_current.out.cursor_pos > console_current.out.pos) {
+    if (console_current.out.cursor_visible) {
       display_erase_cursor();
-      cursor_visible = 0;
+      console_current.out.cursor_visible = 0;
     }
 
-    for ( ; cursor_pos > buf.pos; cursor_pos--)
-      display_draw_char(cursor_pos,
-                        buf.data[cursor_pos].ch,
-                        buf.data[cursor_pos].fg,
-                        buf.data[cursor_pos].bg);
+    for ( ; console_current.out.cursor_pos > console_current.out.pos; console_current.out.cursor_pos--)
+      display_draw_char(console_current.out.cursor_pos,
+                        console_current.out.buf[console_current.out.cursor_pos].ch,
+                        console_current.out.buf[console_current.out.cursor_pos].fg,
+                        console_current.out.buf[console_current.out.cursor_pos].bg);
   }
 }
 
@@ -318,45 +342,45 @@ display_echo(char c)
   case '\n':
     display_buf_flush();
 
-    if (cursor_visible) {
-      cursor_visible = 0;
+    if (console_current.out.cursor_visible) {
+      console_current.out.cursor_visible = 0;
       display_erase_cursor();
     }
 
-    buf.pos += buf.width;
-    buf.pos -= buf.pos % buf.width;
-    cursor_pos = buf.pos;
+    console_current.out.pos += console_current.out.cols;
+    console_current.out.pos -= console_current.out.pos % console_current.out.cols;
+    console_current.out.cursor_pos = console_current.out.pos;
     break;
 
   case '\r':
     display_buf_flush();
 
-    if (cursor_visible) {
-      cursor_visible = 0;
+    if (console_current.out.cursor_visible) {
+      console_current.out.cursor_visible = 0;
       display_erase_cursor();
     }
 
-    buf.pos -= buf.pos % buf.width;
-    cursor_pos = buf.pos;
+    console_current.out.pos -= console_current.out.pos % console_current.out.cols;
+    console_current.out.cursor_pos = console_current.out.pos;
     break;
 
   case '\b':
-    if (buf.pos > 0)
-      display_buf_putc(--buf.pos, ' ');
+    if (console_current.out.pos > 0)
+      display_buf_putc(--console_current.out.pos, ' ');
     break;
 
   case '\t':
     do {
-      display_buf_putc(buf.pos++, ' ');
-    } while ((buf.pos % DISPLAY_TAB_WIDTH) != 0);
+      display_buf_putc(console_current.out.pos++, ' ');
+    } while ((console_current.out.pos % DISPLAY_TAB_WIDTH) != 0);
     break;
 
   default:
-    display_buf_putc(buf.pos++, c);
+    display_buf_putc(console_current.out.pos++, c);
     break;
   }
 
-  if (buf.pos >= buf.width * buf.height)
+  if (console_current.out.pos >= console_current.out.cols * console_current.out.rows)
     display_scroll_down(1);
 }
 
@@ -367,22 +391,22 @@ display_scroll_down(unsigned n)
 
   display_buf_flush();
 
-  memmove(&buf.data[0], &buf.data[buf.width * n],
-          sizeof(buf.data[0]) * (buf.width * (buf.height - n)));
+  memmove(&console_current.out.buf[0], &console_current.out.buf[console_current.out.cols * n],
+          sizeof(console_current.out.buf[0]) * (console_current.out.cols * (console_current.out.rows - n)));
 
-  for (i = buf.width * (buf.height - n); i < buf.width * buf.height; i++) {
-    buf.data[i].ch = ' ';
-    buf.data[i].fg = COLOR_WHITE;
-    buf.data[i].bg = COLOR_BLACK;
+  for (i = console_current.out.cols * (console_current.out.rows - n); i < console_current.out.cols * console_current.out.rows; i++) {
+    console_current.out.buf[i].ch = ' ';
+    console_current.out.buf[i].fg = COLOR_WHITE;
+    console_current.out.buf[i].bg = COLOR_BLACK;
   }
 
-  buf.pos -= n * buf.width;
+  console_current.out.pos -= n * console_current.out.cols;
 
-  if (cursor_pos < buf.width * n) {
-    cursor_visible = 0;
-    cursor_pos = 0;
+  if (console_current.out.cursor_pos < console_current.out.cols * n) {
+    console_current.out.cursor_visible = 0;
+    console_current.out.cursor_pos = 0;
   } else {
-    cursor_pos -= buf.width * n;
+    console_current.out.cursor_pos -= console_current.out.cols * n;
   }
 
   memmove(&fb_base[0], &fb_base[fb_width * font.glyph_height * n],
@@ -394,23 +418,23 @@ display_scroll_down(unsigned n)
 static void
 display_buf_putc(unsigned i, char c)
 {
-  buf.data[i].ch = c;
-  buf.data[i].fg = fg_color & 0xF;
-  buf.data[i].bg = bg_color & 0xF;
+  console_current.out.buf[i].ch = c;
+  console_current.out.buf[i].fg = console_current.out.fg_color & 0xF;
+  console_current.out.buf[i].bg = console_current.out.bg_color & 0xF;
 }
 
 static void
 display_erase_cursor(void)
 {
-  display_draw_char(cursor_pos, buf.data[cursor_pos].ch,
-                    buf.data[cursor_pos].fg, buf.data[cursor_pos].bg);
+  display_draw_char(console_current.out.cursor_pos, console_current.out.buf[console_current.out.cursor_pos].ch,
+                    console_current.out.buf[console_current.out.cursor_pos].fg, console_current.out.buf[console_current.out.cursor_pos].bg);
 }
 
 static void
 display_draw_cursor(void)
 {
-  display_draw_char(cursor_pos, buf.data[cursor_pos].ch,
-                    buf.data[cursor_pos].bg, buf.data[cursor_pos].fg);
+  display_draw_char(console_current.out.cursor_pos, console_current.out.buf[console_current.out.cursor_pos].ch,
+                    console_current.out.buf[console_current.out.cursor_pos].bg, console_current.out.buf[console_current.out.cursor_pos].fg);
 }
 
 // Create a 16-bit 5:6:5 RGB color reperesentation
@@ -453,8 +477,8 @@ display_draw_char(unsigned pos, char c, uint16_t fg, uint16_t bg)
     c = ' ';
   glyph = &font.bitmap[c * font.glyph_height];
 
-  x0 = (pos % buf.width) * font.glyph_width;
-  y0 = (pos / buf.width) * font.glyph_height;
+  x0 = (pos % console_current.out.cols) * font.glyph_width;
+  y0 = (pos / console_current.out.cols) * font.glyph_height;
 
   for (x = 0; x < font.glyph_width; x++)
     for (y = 0; y < font.glyph_height; y++)

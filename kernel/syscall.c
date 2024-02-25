@@ -93,7 +93,7 @@ sys_dispatch(void)
     return r;
   }
 
-  cprintf("Unknown system call %d\n", num);
+  // cprintf("Unknown system call %d\n", num);
   return -ENOSYS;
 }
 

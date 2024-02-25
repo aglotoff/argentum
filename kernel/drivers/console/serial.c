@@ -52,7 +52,16 @@ serial_getc(void)
 static void
 serial_irq(void)
 {
-  console_interrupt(serial_getc);
+  char buf[2];
+  int c;
+
+  while ((c = serial_getc()) >= 0) {
+    if (c != 0) {
+      buf[0] = c;
+      buf[1] = '\0';
+      console_interrupt(buf);
+    }
+  }
 }
 
 /**

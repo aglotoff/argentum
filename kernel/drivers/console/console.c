@@ -2,29 +2,18 @@
 #include <stdint.h>
 #include <sys/ioctl.h>
 
-#include <kernel/thread.h>
-#include <kernel/spin.h>
 #include <kernel/mm/memlayout.h>
 #include <kernel/vm.h>
 #include <kernel/drivers/console.h>
 #include <kernel/trap.h>
-#include <kernel/wchan.h>
 #include <kernel/process.h>
+#include <kernel/thread.h>
 
 #include "kbd.h"
 #include "display.h"
 #include "serial.h"
 
-#define CONSOLE_BUF_SIZE  256
-
-static struct {
-  char               buf[CONSOLE_BUF_SIZE];
-  size_t             size;
-  size_t             read_pos;
-  size_t             write_pos;
-  struct SpinLock    lock;
-  struct WaitChannel queue;
-} input;
+struct Console console_current;
 
 /**
  * Initialize the console devices.
@@ -32,8 +21,8 @@ static struct {
 void
 console_init(void)
 {  
-  spin_init(&input.lock, "input");
-  wchan_init(&input.queue);
+  spin_init(&console_current.in.lock, "input");
+  wchan_init(&console_current.in.queue);
 
   serial_init();
   kbd_init();
@@ -50,27 +39,25 @@ console_init(void)
  *             if there is no data avalable.
  */
 void
-console_interrupt(int (*getc)(void))
+console_interrupt(char *buf)
 {
   int c;
 
-  spin_lock(&input.lock);
+  spin_lock(&console_current.in.lock);
 
-  while ((c = getc()) >= 0) {
+  while ((c = *buf++) != 0) {
     switch (c) {
     case '\0':
       break;
     case '\b':
-      if (input.size > 0) {
+      if (console_current.in.size > 0) {
         console_putc(c);
 
-        input.size--;
-        // if CONSOLE_BUF_SIZE is guaranteed to be a divisor of UINT_MAX:
-        // input.write_pos = (input.write_pos - 1) % CONSOLE_BUF_SIZE;
-        if (input.write_pos == 0) {
-          input.write_pos = CONSOLE_BUF_SIZE - 1;
+        console_current.in.size--;
+        if (console_current.in.write_pos == 0) {
+          console_current.in.write_pos = CONSOLE_INPUT_MAX - 1;
         } else {
-          input.write_pos--;
+          console_current.in.write_pos--;
         }
       }
       break;
@@ -78,25 +65,25 @@ console_interrupt(int (*getc)(void))
       if (c != C('D'))
         console_putc(c);
 
-      input.buf[input.write_pos] = c;
-      input.write_pos = (input.write_pos + 1) % CONSOLE_BUF_SIZE;
+      console_current.in.buf[console_current.in.write_pos] = c;
+      console_current.in.write_pos = (console_current.in.write_pos + 1) % CONSOLE_INPUT_MAX;
 
-      if (input.size == CONSOLE_BUF_SIZE) {
-        input.read_pos = (input.read_pos + 1) % CONSOLE_BUF_SIZE;
+      if (console_current.in.size == CONSOLE_INPUT_MAX) {
+        console_current.in.read_pos = (console_current.in.read_pos + 1) % CONSOLE_INPUT_MAX;
       } else {
-        input.size++;
+        console_current.in.size++;
       }
 
       if ((c == '\r') ||
           (c == '\n') ||
           (c == C('D')) ||
-          (input.size == CONSOLE_BUF_SIZE))
-        wchan_wakeup_all(&input.queue);
+          (console_current.in.size == CONSOLE_INPUT_MAX))
+        wchan_wakeup_all(&console_current.in.queue);
       break;
     }
   }
 
-  spin_unlock(&input.lock);
+  spin_unlock(&console_current.in.lock);
 }
 
 /**
@@ -126,15 +113,15 @@ console_read(uintptr_t buf, size_t nbytes)
   s = (char *) buf;
   i = 0;
 
-  spin_lock(&input.lock);
+  spin_lock(&console_current.in.lock);
 
   while (i < nbytes) {
-    while (input.size == 0)
-      wchan_sleep(&input.queue, &input.lock);
+    while (console_current.in.size == 0)
+      wchan_sleep(&console_current.in.queue, &console_current.in.lock);
 
-    c = input.buf[input.read_pos];
-    input.read_pos = (input.read_pos + 1) % CONSOLE_BUF_SIZE;
-    input.size--;
+    c = console_current.in.buf[console_current.in.read_pos];
+    console_current.in.read_pos = (console_current.in.read_pos + 1) % CONSOLE_INPUT_MAX;
+    console_current.in.size--;
 
     // End of input
     if (c == C('D'))
@@ -145,7 +132,7 @@ console_read(uintptr_t buf, size_t nbytes)
       break;
   }
 
-  spin_unlock(&input.lock);
+  spin_unlock(&console_current.in.lock);
   
   return i;
 }

@@ -29,23 +29,6 @@ kbd_init(void)
   irq_attach(IRQ_KMI0, kbd_irq, 0);
 }
 
-/**
- * Handle interrupt from the keyboard.
- * 
- * Get data and store it into the console buffer.
- */
-static void
-kbd_irq(void)
-{
-  console_interrupt(kbd_getc);
-}
-
-// Keymap column indicies for different states
-#define KEYMAP_COL_NORMAL   0
-#define KEYMAP_COL_SHIFT    1
-#define KEYMAP_COL_CTRL     2
-#define KEYMAP_COL_MAX      3
-
 // Keymap size in characters
 #define KEYMAP_LENGTH       256
 
@@ -60,103 +43,145 @@ kbd_irq(void)
 #define KEY_PGDN            0xE7
 #define KEY_INSERT          0xE8
 
+static char *key_sequences[KEYMAP_LENGTH] = {
+  [KEY_HOME]    "\033[H",
+  [KEY_END]     "\033[F",
+  [KEY_UP]      "\033[A",
+  [KEY_DOWN]    "\033[B",
+  [KEY_LEFT]    "\033[D",
+  [KEY_RIGHT]   "\033[C",
+};
+
+/**
+ * Handle interrupt from the keyboard.
+ * 
+ * Get data and store it into the console buffer.
+ */
+static void
+kbd_irq(void)
+{
+  char buf[2];
+  int c;
+
+  while ((c = kbd_getc()) >= 0) {
+    if ((c < KEYMAP_LENGTH) && (key_sequences[c] != NULL)) {
+      console_interrupt(key_sequences[c]);
+    } else if (c != 0) {
+      buf[0] = c;
+      buf[1] = '\0';
+      console_interrupt(buf);
+    }
+  }
+}
+
+// Keymap column indicies for different states
+#define KEYMAP_COL_NORMAL   0
+#define KEYMAP_COL_SHIFT    1
+#define KEYMAP_COL_CTRL     2
+#define KEYMAP_COL_MAX      3
+
 // Map scan codes to key codes
 static uint8_t
 key_map[KEYMAP_LENGTH][KEYMAP_COL_MAX] = {
 // code     key               normal      shift   ctrl
 // =====================================================
-  [0x00]                    { 0,          0,      0   },
-  [0x01] /* Esc         */  { 0x1B,       0x1B,   0   },
-  [0x02] /* 1           */  { '1',        '!',    0   },
-  [0x03] /* 2           */  { '2',        '@',    0   },
-  [0x04] /* 3           */  { '3',        '#',    0   },
-  [0x05] /* 4           */  { '4',        '$',    0   },
-  [0x06] /* 5           */  { '5',        '%',    0   },
-  [0x07] /* 6           */  { '6',        '^',    0   },
-  [0x08] /* 7           */  { '7',        '&',    0   },
-  [0x09] /* 8           */  { '8',        '*',    0   },
-  [0x0A] /* 9           */  { '9',        '(',    0   },
-  [0x0B] /* 0           */  { '0',        ')',    0   },
-  [0x0C] /* -           */  { '-',        '_',    0   },
-  [0x0D] /* =           */  { '=',        '+',    0   },
-  [0x0E] /* Backspace   */  { '\b',       '\b',   0   },
-  [0x0F] /* Tab         */  { '\t',       '\t',   0   },
+  [0x00]                   { 0,          0,      0   },
+  [0x01] /* Esc         */ { 0x1B,       0x1B,   0   },
+  [0x02] /* 1            */ { '1',        '!',    0   },
+  [0x03] /* 2            */ { '2',        '@',    0   },
+  [0x04] /* 3            */ { '3',        '#',    0   },
+  [0x05] /* 4            */ { '4',        '$',    0   },
+  [0x06] /* 5            */ { '5',        '%',    0   },
+  [0x07] /* 6            */ { '6',        '^',    0   },
+  [0x08] /* 7            */ { '7',        '&',    0   },
+  [0x09] /* 8            */ { '8',        '*',    0   },
+  [0x0A] /* 9            */ { '9',        '(',    0   },
+  [0x0B] /* 0            */ { '0',        ')',    0   },
+  [0x0C] /* -            */ { '-',        '_',    0   },
+  [0x0D] /* =            */ { '=',        '+',    0   },
+  [0x0E] /* Backspace    */ { '\b',       '\b',   0   },
+  [0x0F] /* Tab          */ { '\t',       '\t',   0   },
 
-  [0x10] /* Q           */  { 'q',        'Q',    C('Q')  },
-  [0x11] /* W           */  { 'w',        'W',    C('W')  },
-  [0x12] /* E           */  { 'e',        'E',    C('E')  },
-  [0x13] /* R           */  { 'r',        'R',    C('R')  },
-  [0x14] /* T           */  { 't',        'T',    C('T')  },
-  [0x15] /* Y           */  { 'y',        'Y',    C('Y')  },
-  [0x16] /* U           */  { 'u',        'U',    C('U')  },
-  [0x17] /* I           */  { 'i',        'I',    C('I')  },
-  [0x18] /* O           */  { 'o',        'O',    C('O')  },
-  [0x19] /* P           */  { 'p',        'P',    C('P')  },
-  [0x1A] /* [           */  { '[',        '{',    0       },
-  [0x1B] /* ]           */  { ']',        '}',    0       },
-  [0x1C] /* Enter       */  { '\n',       '\r',   0       },
-  [0x1D] /* Left Ctrl   */  { 0,          0,      0       },
-  [0x1E] /* A           */  { 'a',        'A',    C('A')  },
-  [0x1F] /* S           */  { 's',        'S',    C('S')  },
+  [0x10] /* Q            */ { 'q',        'Q',    C('Q')  },
+  [0x11] /* W            */ { 'w',        'W',    C('W')  },
+  [0x12] /* E            */ { 'e',        'E',    C('E')  },
+  [0x13] /* R            */ { 'r',        'R',    C('R')  },
+  [0x14] /* T            */ { 't',        'T',    C('T')  },
+  [0x15] /* Y            */ { 'y',        'Y',    C('Y')  },
+  [0x16] /* U            */ { 'u',        'U',    C('U')  },
+  [0x17] /* I            */ { 'i',        'I',    C('I')  },
+  [0x18] /* O            */ { 'o',        'O',    C('O')  },
+  [0x19] /* P            */ { 'p',        'P',    C('P')  },
+  [0x1A] /* [            */ { '[',        '{',    0       },
+  [0x1B] /* ]            */ { ']',        '}',    0       },
+  [0x1C] /* Enter        */ { '\n',       '\r',   0       },
+  [0x1D] /* Left Ctrl    */ { 0,          0,      0       },
+  [0x1E] /* A            */ { 'a',        'A',    C('A')  },
+  [0x1F] /* S            */ { 's',        'S',    C('S')  },
 
-  [0x20] /* D           */  { 'd',        'D',    C('D')  },
-  [0x21] /* F           */  { 'f',        'F',    C('F')  },
-  [0x22] /* G           */  { 'g',        'G',    C('G')  },
-  [0x23] /* H           */  { 'h',        'H',    C('H')  },
-  [0x24] /* J           */  { 'j',        'J',    C('J')  },
-  [0x25] /* K           */  { 'k',        'K',    C('K')  },
-  [0x26] /* L           */  { 'l',        'L',    C('L')  },
-  [0x27] /* ;           */  { ';',        ':',    0       },
-  [0x28] /* '           */  { '\'',       '"',    0       },
-  [0x29] /* `           */  { '`',        '~',    0       },
-  [0x2A] /* Left Shift  */  { 0,          0,      0       },
-  [0x2B] /* \           */  { '\\',       '|',    0       },
-  [0x2C] /* Z           */  { 'z',        'Z',    C('Z')  },
-  [0x2D] /* X           */  { 'x',        'X',    C('X')  },
-  [0x2E] /* C           */  { 'c',        'C',    C('C')  },
-  [0x2F] /* V           */  { 'v',        'V',    C('V')  },
+  [0x20] /* D            */ { 'd',        'D',    C('D')  },
+  [0x21] /* F            */ { 'f',        'F',    C('F')  },
+  [0x22] /* G            */ { 'g',        'G',    C('G')  },
+  [0x23] /* H            */ { 'h',        'H',    C('H')  },
+  [0x24] /* J            */ { 'j',        'J',    C('J')  },
+  [0x25] /* K            */ { 'k',        'K',    C('K')  },
+  [0x26] /* L            */ { 'l',        'L',    C('L')  },
+  [0x27] /* ;            */ { ';',        ':',    0       },
+  [0x28] /* '            */ { '\'',       '"',    0       },
+  [0x29] /* `            */ { '`',        '~',    0       },
+  [0x2A] /* Left Shift   */ { 0,          0,      0       },
+  [0x2B] /* \            */ { '\\',       '|',    0       },
+  [0x2C] /* Z            */ { 'z',        'Z',    C('Z')  },
+  [0x2D] /* X            */ { 'x',        'X',    C('X')  },
+  [0x2E] /* C            */ { 'c',        'C',    C('C')  },
+  [0x2F] /* V            */ { 'v',        'V',    C('V')  },
 
-  [0x30] /* B           */  { 'b',        'B',    C('B')  },
-  [0x31] /* N           */  { 'n',        'N',    C('N')  },
-  [0x32] /* M           */  { 'm',        'M',    C('M')  },
-  [0x33] /* ,           */  { ',',        '<',    0       },
-  [0x34] /* .           */  { '.',        '>',    0       },
-  [0x35] /* /           */  { '/',        '?',    0       },
-  [0x36] /* Right Shift */  { 0,          0,      0       },
-  [0x37] /* *           */  { '*',        '*',    0       },
-  [0x38] /* Left Alt    */  { 0,          0,      0       },
-  [0x39] /* `Space      */  { ' ',        ' ',    0       },
-  [0x3A] /* Caps Lock   */  { 0,          0,      0       },
-  [0x3B] /* F1          */  { 0,          0,      0       },
-  [0x3C] /* F2          */  { 0,          0,      0       },
-  [0x3D] /* F3          */  { 0,          0,      0       },
-  [0x3E] /* F4          */  { 0,          0,      0       },
-  [0x3F] /* F5          */  { 0,          0,      0       },
+  [0x30] /* B            */ { 'b',        'B',    C('B')  },
+  [0x31] /* N            */ { 'n',        'N',    C('N')  },
+  [0x32] /* M            */ { 'm',        'M',    C('M')  },
+  [0x33] /* ,            */ { ',',        '<',    0       },
+  [0x34] /* .            */ { '.',        '>',    0       },
+  [0x35] /* /            */ { '/',        '?',    0       },
+  [0x36] /* Right Shift  */ { 0,          0,      0       },
+  [0x37] /* *            */ { '*',        '*',    0       },
+  [0x38] /* Left Alt     */ { 0,          0,      0       },
+  [0x39] /* `Space       */ { ' ',        ' ',    0       },
+  [0x3A] /* Caps Lock    */ { 0,          0,      0       },
+  [0x3B] /* F1           */ { 0,          0,      0       },
+  [0x3C] /* F2           */ { 0,          0,      0       },
+  [0x3D] /* F3           */ { 0,          0,      0       },
+  [0x3E] /* F4           */ { 0,          0,      0       },
+  [0x3F] /* F5           */ { 0,          0,      0       },
 
-  [0x40] /* F6          */  { 0,          0,      0       },
-  [0x41] /* F7          */  { 0,          0,      0       },
-  [0x42] /* F8          */  { 0,          0,      0       },
-  [0x43] /* F9          */  { 0,          0,      0       },
-  [0x44] /* F10         */  { 0,          0,      0       },
-  [0x45] /* Num Lock    */  { 0,          0,      0       },
-  [0x46] /* Scroll Lock */  { 0,          0,      0       },
-  [0x47] /* (keypad) 7  */  { KEY_HOME,   '7',    0       },
-  [0x48] /* (keypad) 8  */  { KEY_UP,     '8',    0       },
-  [0x49] /* (keypad) 9  */  { KEY_PGUP,   '9',    0       },
-  [0x4A] /* (keypad) -  */  { '-',        '-',    0       },
-  [0x4B] /* (keypad) 4  */  { KEY_LEFT,   '4',    0       },
-  [0x4C] /* (keypad) 5  */  { '5',        '5',    0       },
-  [0x4D] /* (keypad) 6  */  { KEY_RIGHT,  '6',    0       },
-  [0x4E] /* (keypad) +  */  { '+',        '+',    0       },
-  [0x4F] /* (keypad) 1  */  { KEY_END,    '1',    0       },
+  [0x40] /* F6           */ { 0,          0,      0       },
+  [0x41] /* F7           */ { 0,          0,      0       },
+  [0x42] /* F8           */ { 0,          0,      0       },
+  [0x43] /* F9           */ { 0,          0,      0       },
+  [0x44] /* F10          */ { 0,          0,      0       },
+  [0x45] /* Num Lock     */ { 0,          0,      0       },
+  [0x46] /* Scroll Lock  */ { 0,          0,      0       },
+  [0x47] /* (keypad) 7   */ { KEY_HOME,   '7',    0       },
+  [0x48] /* (keypad) 8   */ { KEY_UP,     '8',    0       },
+  [0x49] /* (keypad) 9   */ { KEY_PGUP,   '9',    0       },
+  [0x4A] /* (keypad) -   */ { '-',        '-',    0       },
+  [0x4B] /* (keypad) 4   */ { KEY_LEFT,   '4',    0       },
+  [0x4C] /* (keypad) 5   */ { '5',        '5',    0       },
+  [0x4D] /* (keypad) 6   */ { KEY_RIGHT,  '6',    0       },
+  [0x4E] /* (keypad) +   */ { '+',        '+',    0       },
+  [0x4F] /* (keypad) 1   */ { KEY_END,    '1',    0       },
 
-  [0x50] /* (keypad) 2  */  { KEY_DOWN,   '2',    0       },
-  [0x51] /* (keypad) 3  */  { KEY_PGDN,   '3',    0       },
-  [0x52] /* (keypad) 0  */  { KEY_INSERT, '0',    0       },
-  [0x53] /* (keypad) .  */  { '.',        '.',    0       },
+  [0x50] /* (keypad) 2   */ { KEY_DOWN,   '2',    0       },
+  [0x51] /* (keypad) 3   */ { KEY_PGDN,   '3',    0       },
+  [0x52] /* (keypad) 0   */ { KEY_INSERT, '0',    0       },
+  [0x53] /* (keypad) .   */ { '.',        '.',    0       },
 
-  [0x57] /* F11         */  { 0,          0,      0       },
-  [0x58] /* F12         */  { 0,          0,      0       },
+  [0x57] /* F11          */ { 0,          0,      0       },
+  [0x58] /* F12          */ { 0,          0,      0       },
+
+  [0xC8] /* cursor up    */ { KEY_UP,     'A',    0       },
+  [0xCB] /* cursor left  */ { KEY_LEFT,   'D',    0       },
+  [0xCD] /* cursor right */ { KEY_RIGHT,  'C',    0       },
+  [0xD0] /* cursor down  */ { KEY_DOWN,   'B',    0       },
 };
 
 // Driver states
