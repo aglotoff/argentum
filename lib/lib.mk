@@ -31,6 +31,7 @@ LIB_SRCFILES := \
 	lib/argentum/include/sys/socket.h \
 	lib/argentum/include/sys/syscall.h \
 	lib/argentum/include/sys/termios.h \
+	lib/argentum/include/sys/un.h \
 	lib/argentum/include/sys/utime.h \
 	lib/argentum/include/sys/utmp.h \
 	lib/argentum/include/sys/utsname.h \

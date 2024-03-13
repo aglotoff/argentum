@@ -198,11 +198,11 @@ fs_inode_read(struct Inode *ip, void *buf, size_t nbyte, off_t *off)
   if (S_ISCHR(ip->mode) || S_ISBLK(ip->mode)) {
     // cprintf("Read %x\n", ip->rdev);
 
-    if (ip->rdev == 0x0101) {
+    if ((ip->rdev & 0xFF00) == 0x0100) {
       fs_inode_unlock(ip);
 
       // TODO: support other devices
-      ret = console_read((uintptr_t) buf, nbyte);
+      ret = console_read(ip, (uintptr_t) buf, nbyte);
 
       fs_inode_lock(ip);
       return ret;
@@ -245,11 +245,11 @@ fs_inode_write(struct Inode *ip, const void *buf, size_t nbyte, off_t *off)
   if (S_ISCHR(ip->mode) || S_ISBLK(ip->mode)) {
     // cprintf("Write %x\n", ip->rdev);
 
-    if (ip->rdev == 0x0101) {
+    if ((ip->rdev & 0xFF00) == 0x0100) {
       fs_inode_unlock(ip);
 
       // TODO: support other devices
-      total = console_write(buf, nbyte);
+      total = console_write(ip, buf, nbyte);
 
       fs_inode_lock(ip);
       return total;
@@ -352,6 +352,7 @@ fs_inode_stat(struct Inode *ip, struct stat *buf)
   buf->st_uid   = ip->uid;
   buf->st_gid   = ip->gid;
   buf->st_size  = ip->size;
+  buf->st_rdev  = ip->rdev;
   buf->st_atime = ip->atime;
   buf->st_mtime = ip->mtime;
   buf->st_ctime = ip->ctime;
@@ -772,13 +773,15 @@ fs_inode_ioctl(struct Inode *inode, int request, int arg)
   // TODO: check perm
 
   if (S_ISCHR(inode->mode) || S_ISBLK(inode->mode)) {
-    fs_inode_unlock(inode);
+    if ((inode->rdev & 0xFF00) == 0x0100) {
+      fs_inode_unlock(inode);
 
-    // TODO: support other devices
-    ret = console_ioctl(request, arg);
+      // TODO: support other devices
+      ret = console_ioctl(inode, request, arg);
 
-    fs_inode_lock(inode);
-    return ret;
+      fs_inode_lock(inode);
+      return ret;
+    }
   }
 
   return -ENOTTY;

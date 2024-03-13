@@ -43,6 +43,7 @@ kbd_init(void)
 #define KEY_PGDN            0xE7
 #define KEY_INSERT          0xE8
 
+
 static char *key_sequences[KEYMAP_LENGTH] = {
   [KEY_HOME]    "\033[H",
   [KEY_END]     "\033[F",
@@ -242,6 +243,12 @@ kbd_getc(void)
   // Update state.
   key_state |= shift_map[scan_code];
   key_state ^= toggle_map[scan_code];
+
+  // Alt + F1..F6 pressed
+  if ((key_state & STATE_ALT) && (scan_code >= 0x3B) && (scan_code <= 0x40)) {
+    console_switch(scan_code - 0x3B);
+    return 0;
+  }
 
   // TODO: may need more columns: Alt, Ctrl + Alt, Alt + Shift, etc.
   if (key_state & STATE_CTRL)

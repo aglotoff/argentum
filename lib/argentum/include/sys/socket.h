@@ -10,6 +10,7 @@ typedef uint32_t socklen_t;
 typedef uint8_t  sa_family_t;
 
 #define AF_UNSPEC       0
+#define AF_UNIX         1
 #define AF_INET         2
 #define AF_INET6        10
 #define PF_UNSPEC       AF_UNSPEC
