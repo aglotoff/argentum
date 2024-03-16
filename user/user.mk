@@ -4,8 +4,8 @@ USER_CFLAGS := $(CFLAGS) $(USER_FLAGS)
 
 USER_SRCFILES :=
 
-USER_SRCFILES += \
- 	user/hello.c \
+# USER_SRCFILES += \
+#  	user/hello.c \
 	#user/hello2.cc
 
 USER_SRCFILES += \

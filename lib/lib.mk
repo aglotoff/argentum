@@ -49,6 +49,7 @@ LIB_SRCFILES := \
 	lib/argentum/signal/kill.c \
 	lib/argentum/signal/killpg.c \
 	lib/argentum/signal/sigaction.c \
+	lib/argentum/signal/sigpending.c \
 	lib/argentum/signal/sigprocmask.c \
 	lib/argentum/signal/sigstub.S \
 	lib/argentum/signal/sigsuspend.c \
@@ -69,6 +70,7 @@ LIB_SRCFILES := \
 	lib/argentum/sys/socket/bind.c \
 	lib/argentum/sys/socket/connect.c \
 	lib/argentum/sys/socket/getsockname.c \
+	lib/argentum/sys/socket/getsockopt.c \
 	lib/argentum/sys/socket/listen.c \
 	lib/argentum/sys/socket/recv.c \
 	lib/argentum/sys/socket/recvfrom.c \
@@ -87,6 +89,7 @@ LIB_SRCFILES := \
 	lib/argentum/sys/stat/umask.c \
 	lib/argentum/sys/time/gettimeofday.c \
 	lib/argentum/sys/time/select.c \
+	lib/argentum/sys/time/setitimer.c \
 	lib/argentum/sys/times/times.c \
 	lib/argentum/sys/utsname/uname.c \
 	lib/argentum/sys/vfs/statfs.c \
@@ -108,6 +111,7 @@ LIB_SRCFILES := \
 	lib/argentum/unistd/dup.c \
 	lib/argentum/unistd/dup2.c \
 	lib/argentum/unistd/execve.c \
+	lib/argentum/unistd/fchdir.c \
 	lib/argentum/unistd/fchown.c \
 	lib/argentum/unistd/fork.c \
 	lib/argentum/unistd/fpathconf.c \
@@ -131,6 +135,7 @@ LIB_SRCFILES := \
 	lib/argentum/unistd/pathconf.c \
 	lib/argentum/unistd/pipe.c \
 	lib/argentum/unistd/read.c \
+	lib/argentum/unistd/readlink.c \
 	lib/argentum/unistd/rmdir.c \
 	lib/argentum/unistd/sbrk.c \
 	lib/argentum/unistd/sethostname.c \
@@ -138,6 +143,7 @@ LIB_SRCFILES := \
 	lib/argentum/unistd/setregid.c \
 	lib/argentum/unistd/setreuid.c \
 	lib/argentum/unistd/setuid.c \
+	lib/argentum/unistd/sync.c \
 	lib/argentum/unistd/sysconf.c \
 	lib/argentum/unistd/tcgetpgrp.c \
 	lib/argentum/unistd/tcsetpgrp.c \

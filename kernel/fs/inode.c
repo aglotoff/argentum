@@ -674,6 +674,7 @@ fs_set_pwd(struct PathNode *node)
   fs_inode_unlock(node->inode);
 
   fs_path_put(current->cwd);
+
   current->cwd = node;
 
   return 0;

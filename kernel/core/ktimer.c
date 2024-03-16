@@ -94,6 +94,9 @@ ktimer_start(struct KTimer *timer)
 int
 ktimer_stop(struct KTimer *timer)
 {
+  if (timer == NULL)
+    panic("aaa");
+
   spin_lock(&ktimer_lock);
 
   if (timer->state != KTIMER_STATE_ACTIVE) {

@@ -19,6 +19,7 @@ libc_a_SOURCES += \
   %D%/signal/kill.c \
   %D%/signal/killpg.c \
   %D%/signal/sigaction.c \
+  %D%/signal/sigpending.c \
   %D%/signal/sigprocmask.c \
   %D%/signal/sigstub.S \
   %D%/signal/sigsuspend.c \
@@ -39,6 +40,7 @@ libc_a_SOURCES += \
   %D%/sys/socket/bind.c \
   %D%/sys/socket/connect.c \
   %D%/sys/socket/getsockname.c \
+  %D%/sys/socket/getsockopt.c \
   %D%/sys/socket/listen.c \
   %D%/sys/socket/recv.c \
   %D%/sys/socket/recvfrom.c \
@@ -57,6 +59,7 @@ libc_a_SOURCES += \
   %D%/sys/stat/umask.c \
   %D%/sys/time/gettimeofday.c \
   %D%/sys/time/select.c \
+  %D%/sys/time/setitimer.c \
   %D%/sys/times/times.c \
   %D%/sys/utsname/uname.c \
   %D%/sys/vfs/statfs.c \
@@ -79,6 +82,7 @@ libc_a_SOURCES += \
   %D%/unistd/dup.c \
   %D%/unistd/dup2.c \
   %D%/unistd/execve.c \
+  %D%/unistd/fchdir.c \
   %D%/unistd/fchown.c \
   %D%/unistd/fork.c \
   %D%/unistd/fsync.c \
@@ -102,6 +106,7 @@ libc_a_SOURCES += \
   %D%/unistd/pathconf.c \
   %D%/unistd/pipe.c \
   %D%/unistd/read.c \
+  %D%/unistd/readlink.c \
   %D%/unistd/rmdir.c \
   %D%/unistd/sbrk.c \
   %D%/unistd/sethostname.c \
@@ -109,6 +114,7 @@ libc_a_SOURCES += \
   %D%/unistd/setregid.c \
   %D%/unistd/setreuid.c \
   %D%/unistd/setuid.c \
+  %D%/unistd/sync.c \
   %D%/unistd/sysconf.c \
   %D%/unistd/tcgetpgrp.c \
   %D%/unistd/tcsetpgrp.c \

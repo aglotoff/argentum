@@ -71,7 +71,7 @@ $(OBJ)/fs.img: $(SYSROOT) $(USER_APPS)
 	@echo "+ GEN $@"
 	$(V)mkdir -p $@.d/{,dev,etc,home/{,root,guest},tmp}
 	$(V)cp -aR $(SYSROOT)/* $@.d/
-	$(V)mke2fs -E root_owner=0:0 -F -b 4K -d $@.d -t ext2 $@ 512M
+	$(V)genext2fs -B 4096 -b 131072 -d $@.d -P -U $@
 
 ifndef CPUS
   CPUS := 2

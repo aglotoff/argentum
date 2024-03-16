@@ -364,9 +364,8 @@ file_chdir(struct File *file)
 
   assert(file->node != NULL);
 
-  r = fs_set_pwd(file->node);
-
-  r = -ENOSYS;
+  if ((r = fs_set_pwd(fs_path_duplicate(file->node))) != 0)
+    fs_path_put(file->node);
 
   return r;
 }

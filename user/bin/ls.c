@@ -62,7 +62,7 @@ main(int argc, char **argv)
             st.st_mode & S_IROTH ? 'r' : '-',
             st.st_mode & S_IWOTH ? 'w' : '-',
             st.st_mode & S_IXOTH ? 'x' : '-');
-    printf("%2d root root ", st.st_nlink);
+    printf("%2d %d %d ", st.st_uid, st.st_gid, st.st_nlink);
 
     if (S_ISCHR(st.st_mode) || S_ISBLK(st.st_mode)) {
       printf("%3d,%3d", (st.st_rdev >> 8) & 0xFF, st.st_rdev & 0xFF);

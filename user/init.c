@@ -41,6 +41,10 @@ main(void)
     if ((stat(df->name, NULL) < 0) && (errno == ENOENT))
       mknod(df->name, df->mode, df->dev);
 
+  open("/etc/passwd", O_WRONLY | O_CREAT | O_TRUNC, 0777);
+  write(0, "root:x:0:0:root:/root:/bin/sh\n", 37);
+  close(0);
+
   open("/etc/profile", O_WRONLY | O_CREAT, 0777);
   write(0, "export PS1=\"\033[1;32m[\033[0m$PWD\033[1;32m]$ \033[0m\"", 44);
   close(0);
@@ -59,7 +63,7 @@ main(void)
       }
 
       setenv("HOME", "/home/root", 1);
-      setenv("PATH", "/bin:/usr/bin", 1);
+      setenv("PATH", "/usr/bin:/bin", 1);
       setenv("TERM", "ansi", 1);
 
       for (;;) {

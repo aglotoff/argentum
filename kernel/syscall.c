@@ -91,8 +91,7 @@ sys_dispatch(void)
   if ((num < (int) ARRAY_SIZE(syscalls)) && syscalls[num]) {
     int r = syscalls[num]();
     // if (r < 0 || num == __SYS_FCNTL) 
-    // cprintf("syscall(%d) -> %d ", num, r);
-    // cprintf("%p\n", process_current()->thread->tf->pc);
+    //   cprintf("syscall(%d) -> %d\n", num, r);
     return r;
   }
 
@@ -421,7 +420,7 @@ sys_getdents(void)
     return r;
   if ((r = sys_arg_int(2, (int *) &n)) < 0)
     return r;
-  if ((r = sys_arg_buf(1, &buf, n, PROT_READ, 0)) < 0)
+  if ((r = sys_arg_buf(1, &buf, n, PROT_WRITE, 0)) < 0)
     return r;
 
   if ((file = fd_lookup(process_current(), fd)) == NULL)
@@ -494,6 +493,8 @@ sys_open(void)
     return r;
   if ((r = sys_arg_short(2, (short *) &mode)) < 0)
     return r;
+
+  // cprintf("want top open %s\n", path);
 
   if ((r = file_open(path, oflag, mode, &file)) < 0)
     return r;

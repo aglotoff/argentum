@@ -1,5 +1,6 @@
 #include <sys/fcntl.h>
 #include <unistd.h>
+#include <stdio.h>
 
 int
 _stat(const char *path, struct stat *buf)
