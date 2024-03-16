@@ -37,8 +37,6 @@ serial_getc(void)
   c = pl011_read(&uart0);
 
   switch (c) {
-  case '\r':
-    return '\n';
   case '\x7f':
     return '\b';
   default:

@@ -91,7 +91,8 @@ sys_dispatch(void)
   if ((num < (int) ARRAY_SIZE(syscalls)) && syscalls[num]) {
     int r = syscalls[num]();
     // if (r < 0 || num == __SYS_FCNTL) 
-    //  cprintf("syscall(%d) -> %d\n", num, r);
+    // cprintf("syscall(%d) -> %d ", num, r);
+    // cprintf("%p\n", process_current()->thread->tf->pc);
     return r;
   }
 

@@ -46,7 +46,7 @@ main(void)
   close(0);
 
   // Spawn the shells
-  for (i = 0; i < 6; i++) {
+  for (i = 0; i < 1; i++) {
     if (fork() == 0) {
       // Open the standard I/O streams so all other programs inherit them.
       open(dev_files[i].name, O_RDONLY);     // Standard input

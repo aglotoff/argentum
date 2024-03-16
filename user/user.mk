@@ -32,7 +32,7 @@ USER_APPS := $(patsubst user/%.S, $(SYSROOT)/%, $(USER_APPS))
 $(OBJ)/user/hello: user/hello.c $(OBJ)/.vars.USER_CFLAGS
 	@echo "+ CC [USER] $<"
 	@mkdir -p $(@D)
-	$(V)$(CC) $(USER_CFLAGS) -o $@ $< -Wno-unused 
+	$(V)$(CC) $(USER_CFLAGS) -o $@ $< -Wno-unused -lncurses
 
 $(OBJ)/user/%.o: user/%.c $(OBJ)/.vars.USER_CFLAGS
 	@echo "+ CC [USER] $<"

@@ -53,6 +53,8 @@ struct Console {
     unsigned            cols;
     unsigned            rows;
     unsigned            pos;
+    int                 stopped;
+    struct SpinLock     lock;
   } out;
   struct termios        termios;
 };

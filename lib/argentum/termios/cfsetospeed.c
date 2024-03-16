@@ -5,6 +5,6 @@ int
 cfsetospeed(struct termios *termios_p, speed_t speed)
 {
   (void) speed;
-  fprintf("TODO: cfsetospeed(%p)\n", termios_p);
+  fprintf(stderr, "TODO: cfsetospeed(%p)\n", termios_p);
   return -1;
 }

@@ -11,6 +11,7 @@
 #include <kernel/thread.h>
 #include <kernel/vmspace.h>
 #include <kernel/fs/fs.h>
+#include <kernel/cprintf.h>
 
 #include "kbd.h"
 #include "display.h"
@@ -20,6 +21,9 @@
 
 struct Console consoles[NCONSOLES];
 struct Console *console_current = &consoles[0];
+
+#define IN_EOF  (1 << 0)
+#define IN_EOL  (1 << 1)
 
 /**
  * Initialize the console devices.
@@ -32,10 +36,8 @@ console_init(void)
   for (console = consoles; console < &consoles[NCONSOLES]; console++) {
     unsigned i;
 
-    spin_init(&console->in.lock, "input");
+    spin_init(&console->in.lock, "console.in");
     wchan_init(&console->in.queue);
-
-    console->termios.c_lflag = ICANON | ECHO;
 
     console->out.fg_color      = COLOR_WHITE;
     console->out.bg_color      = COLOR_BLACK;
@@ -43,12 +45,29 @@ console_init(void)
     console->out.esc_cur_param = -1;
     console->out.cols          = CONSOLE_COLS;
     console->out.rows          = CONSOLE_ROWS;
+    spin_init(&console->out.lock, "console.out");
 
     for (i = 0; i < console->out.cols * console->out.rows; i++) {
       console->out.buf[i].ch = ' ';
       console->out.buf[i].fg = COLOR_WHITE;
       console->out.buf[i].bg = COLOR_BLACK;
     }
+
+    console->termios.c_iflag = BRKINT | ICRNL | IXON | IXANY;
+    console->termios.c_oflag = OPOST | ONLCR;
+    console->termios.c_cflag = CREAD | CS8 | HUPCL;
+    console->termios.c_lflag = ISIG | ICANON | ECHO | ECHOE;
+    console->termios.c_cc[VEOF]   = C('D');
+    console->termios.c_cc[VEOL]   = _POSIX_VDISABLE;
+    console->termios.c_cc[VERASE] = C('H');
+    console->termios.c_cc[VINTR]  = C('C');
+    console->termios.c_cc[VKILL]  = C('U');
+    console->termios.c_cc[VMIN]   = 1;
+    console->termios.c_cc[VQUIT]  = C('\\');
+    console->termios.c_cc[VTIME]  = 0;
+    console->termios.c_cc[VSUSP]  = C('Z');
+    console->termios.c_cc[VSTART] = C('Q');
+    console->termios.c_cc[VSTOP]  = C('S');
   }
 
   serial_init();
@@ -56,135 +75,6 @@ console_init(void)
   display_init();
 
   display_update(console_current);
-}
-
-/**
- * Handle console interrupt.
- * 
- * This function should be called by driver interrupt routines to feed input
- * characters into the console buffer.
- * 
- * @param getc The function to fetch the next input character. Should return -1
- *             if there is no data avalable.
- */
-void
-console_interrupt(char *buf)
-{
-  struct Console *console = console_current;
-
-  int c;
-
-  spin_lock(&console->in.lock);
-
-  while ((c = *buf++) != 0) {
-    switch (c) {
-    case '\0':
-      break;
-    case '\b':
-      if (console->in.size > 0) {
-        console_putc(c);
-
-        console->in.size--;
-        if (console->in.write_pos == 0) {
-          console->in.write_pos = CONSOLE_INPUT_MAX - 1;
-        } else {
-          console->in.write_pos--;
-        }
-      }
-      break;
-    default:
-      if (c != C('D') && (console->termios.c_lflag & ECHO))
-        console_putc(c);
-
-      console->in.buf[console->in.write_pos] = c;
-      console->in.write_pos = (console->in.write_pos + 1) % CONSOLE_INPUT_MAX;
-
-      if (console->in.size == CONSOLE_INPUT_MAX) {
-        console->in.read_pos = (console->in.read_pos + 1) % CONSOLE_INPUT_MAX;
-      } else {
-        console->in.size++;
-      }
-
-      if ((c == '\r') || (c == '\n') || (c == C('D')) ||
-          !(console->termios.c_lflag & ICANON) ||
-          (console->in.size == CONSOLE_INPUT_MAX))
-        wchan_wakeup_all(&console->in.queue);
-      break;
-    }
-  }
-
-  spin_unlock(&console->in.lock);
-}
-
-void
-console_switch(int n)
-{
-  if (console_current != &consoles[n]) {
-    console_current = &consoles[n];
-    display_update(console_current);
-  }
-}
-
-/**
- * Return the next input character from the console. Polls for any pending
- * input characters.
- * 
- * @returns The next input character.
- */
-int
-console_getc(void)
-{
-  int c;
-  
-  // Poll for any pending characters from UART and the keyboard.
-  while (((c = kbd_getc()) <= 0) && ((c = serial_getc()) <= 0))
-    ;
-
-  return c;
-}
-
-static struct Console *
-console_get(struct Inode *inode)
-{
-  int minor = inode->rdev & 0xFF;
-  return minor < NCONSOLES ? &consoles[minor] : NULL;
-}
-
-ssize_t
-console_read(struct Inode *inode, uintptr_t buf, size_t nbytes)
-{
-  struct Console *console = console_get(inode);
-  char c, *s;
-  size_t i;
-  
-  if (console == NULL)
-    return -EBADF;
-  
-  s = (char *) buf;
-  i = 0;
-
-  spin_lock(&console->in.lock);
-
-  while (i < nbytes) {
-    while (console->in.size == 0)
-      wchan_sleep(&console->in.queue, &console->in.lock);
-
-    c = console->in.buf[console->in.read_pos];
-    console->in.read_pos = (console->in.read_pos + 1) % CONSOLE_INPUT_MAX;
-    console->in.size--;
-
-    // End of input
-    if (c == C('D'))
-      break;
-
-    // Stop if a newline is encountered
-    if ((s[i++] = c) == '\n')
-      break;
-  }
-
-  spin_unlock(&console->in.lock);
-  
-  return i;
 }
 
 static void
@@ -195,6 +85,14 @@ console_out_flush(struct Console *console)
     display_update_cursor(console);
   }
 }
+
+static struct Console *
+console_get(struct Inode *inode)
+{
+  int minor = inode->rdev & 0xFF;
+  return minor < NCONSOLES ? &consoles[minor] : NULL;
+}
+
 
 /*
  * ----------------------------------------------------------------------------
@@ -209,9 +107,13 @@ console_out_flush(struct Console *console)
 static void
 console_erase(struct Console *console, unsigned from, unsigned to)
 {
-  size_t n = to - from + 1;
+  size_t i;
 
-  memset(&console->out.buf[from], 0, (sizeof console->out.buf[0]) * n);
+  for (i = from; i <= to; i++) {
+    console->out.buf[i].ch = ' ';
+    console->out.buf[i].fg = console->out.fg_color;
+    console->out.buf[i].bg = console->out.bg_color;
+  }
 
   if (console == console_current)
     display_erase(console, from, to);
@@ -250,9 +152,11 @@ console_scroll_down(struct Console *console, unsigned n)
     display_scroll_down(console, n);
 }
 
-static void
+static int
 console_print_char(struct Console *console, char c)
 { 
+  int ret = 0;
+
   switch (c) {
   case '\n':
     if (console == console_current)
@@ -285,16 +189,20 @@ console_print_char(struct Console *console, char c)
   case '\t':
     do {
       console_set_char(console, console->out.pos++, ' ');
+      ret++;
     } while ((console->out.pos % DISPLAY_TAB_WIDTH) != 0);
     break;
 
   default:
     console_set_char(console, console->out.pos++, c);
+    ret++;
     break;
   }
 
   if (console->out.pos >= console->out.cols * console->out.rows)
     console_scroll_down(console, 1);
+
+  return ret;
 }
 
 void
@@ -553,6 +461,16 @@ console_out_char(struct Console *console, char c)
 	}
 }
 
+static void
+console_echo(struct Console *console, char c)
+{
+  spin_lock(&console->out.lock);
+  console_out_char(console, c);
+  console_out_flush(console);
+  spin_unlock(&console->out.lock);
+}
+
+
 /**
  * Output character to the display.
  * 
@@ -561,8 +479,7 @@ console_out_char(struct Console *console, char c)
 void
 console_putc(char c)
 {
-  console_out_char(console_current, c);
-  console_out_flush(console_current);
+  console_echo(console_current, c);
 }
 
 ssize_t
@@ -575,10 +492,16 @@ console_write(struct Inode *inode, const void *buf, size_t nbytes)
   if (console == NULL)
     return -EBADF;
 
-  for (i = 0; i != nbytes; i++)
-    console_out_char(console, s[i]);
+  spin_lock(&console->out.lock);
 
-  console_out_flush(console);
+  if (!console->out.stopped) {
+    // TODO: unlock periodically to not block the entire system?
+    for (i = 0; i != nbytes; i++)
+      console_out_char(console, s[i]);
+    console_out_flush(console);
+  }
+
+  spin_unlock(&console->out.lock);
   
   return i;
 }
@@ -626,4 +549,211 @@ console_ioctl(struct Inode *inode, int request, int arg)
     panic("TODO: %d\n", request & 0xFF);
     return -EINVAL;
   }
+}
+
+static int
+console_back(struct Console *cons)
+{
+  if (cons->in.size == 0)
+    return 0;
+
+  if (cons->termios.c_lflag & ECHOE)
+    console_echo(cons, '\b');
+
+  cons->in.size--;
+  if (cons->in.write_pos == 0) {
+    cons->in.write_pos = CONSOLE_INPUT_MAX - 1;
+  } else {
+    cons->in.write_pos--;
+  }
+  
+  return 1;
+}
+
+/**
+ * Handle console interrupt.
+ * 
+ * This function should be called by driver interrupt routines to feed input
+ * characters into the console buffer.
+ * 
+ * @param getc The function to fetch the next input character. Should return -1
+ *             if there is no data avalable.
+ */
+void
+console_interrupt(char *buf)
+{
+  struct Console *cons = console_current;
+  int c, status = 0;
+
+  spin_lock(&cons->in.lock);
+
+  while ((c = *buf++) != 0) {
+    if (c == '\0')
+      break;
+
+    // Strip character
+    if (cons->termios.c_iflag & ISTRIP)
+      c &= 0x7F;
+    
+    if (c == '\r') {
+      // Ignore CR
+      if (cons->termios.c_iflag & IGNCR)
+        continue;
+      // Map CR to NL
+      if (cons->termios.c_iflag & ICRNL)
+        c = '\n';
+    } else if (c == '\n') {
+      // Map NL to CR
+      if (cons->termios.c_iflag & INLCR)
+        c = '\r';
+    }
+
+    // Canonical input processing
+    if (cons->termios.c_lflag & ICANON) {
+      // ERASE character
+      if (c == cons->termios.c_cc[VERASE]) {
+        console_back(cons);
+        continue;
+      }
+
+      // KILL character
+      if (c == cons->termios.c_cc[VKILL]) {
+        while (console_back(cons))
+          ;
+
+        if (cons->termios.c_lflag & ECHOK)
+          console_echo(cons, c);
+
+        continue;
+      }
+
+      // EOF character
+      if (c == cons->termios.c_cc[VEOF])
+        status |= IN_EOF;
+
+      // EOL character
+      if ((c == cons->termios.c_cc[VEOL]) || (c == '\n'))
+        status |= IN_EOL;
+    }
+
+    // Handle flow control characters
+    if (cons->termios.c_iflag & (IXON | IXOFF)) {
+      if (c == cons->termios.c_cc[VSTOP]) {
+        spin_lock(&cons->out.lock);
+        cons->out.stopped = 1;
+        spin_unlock(&cons->out.lock);
+
+        if (cons->termios.c_iflag & IXOFF)
+          console_echo(cons, c);
+
+        continue;
+      }
+
+      if (c == cons->termios.c_cc[VSTART] || cons->termios.c_iflag & IXANY) {
+        spin_lock(&cons->out.lock);
+        cons->out.stopped = 0;
+        spin_unlock(&cons->out.lock);
+
+        if (c == cons->termios.c_cc[VSTART]) {
+          if (cons->termios.c_iflag & IXOFF)
+            console_echo(cons, c);
+          continue;
+        }
+      }
+    }
+
+    if ((c != cons->termios.c_cc[VEOF]) && (cons->termios.c_lflag & ECHO))
+      console_echo(cons, c);
+    else if ((c == '\n') && (cons->termios.c_lflag & ECHONL))
+      console_echo(cons, c);
+
+    if (cons->in.size == (CONSOLE_INPUT_MAX - 1)) {
+      // Reserve space for one EOL character at the end of the input buffer
+      if (!(cons->termios.c_lflag & ICANON))
+        continue;
+      if ((c != cons->termios.c_cc[VEOL]) &&
+          (c != cons->termios.c_cc[VEOF]) &&
+          (c != '\n'))
+        continue;
+    } else if (cons->in.size == CONSOLE_INPUT_MAX) {
+      // Input buffer full - discard all extra characters
+      continue;
+    }
+
+    cons->in.buf[cons->in.write_pos] = c;
+    cons->in.write_pos = (cons->in.write_pos + 1) % CONSOLE_INPUT_MAX;
+    cons->in.size++;
+  }
+
+  if ((status & (IN_EOF | IN_EOL)) || !(cons->termios.c_lflag & ICANON))
+    wchan_wakeup_all(&cons->in.queue);
+
+  spin_unlock(&cons->in.lock);
+}
+
+void
+console_switch(int n)
+{
+  if (console_current != &consoles[n]) {
+    console_current = &consoles[n];
+    display_update(console_current);
+  }
+}
+
+/**
+ * Return the next input character from the console. Polls for any pending
+ * input characters.
+ * 
+ * @returns The next input character.
+ */
+int
+console_getc(void)
+{
+  int c;
+  
+  // Poll for any pending characters from UART and the keyboard.
+  while (((c = kbd_getc()) <= 0) && ((c = serial_getc()) <= 0))
+    ;
+
+  return c;
+}
+
+ssize_t
+console_read(struct Inode *inode, uintptr_t buf, size_t nbytes)
+{
+  struct Console *cons = console_get(inode);
+  char *s = (char *) buf;
+  size_t i = 0;
+  
+  if (cons == NULL)
+    return -EBADF;
+
+  spin_lock(&cons->in.lock);
+
+  while (i < nbytes) {
+    char c;
+
+    while (cons->in.size == 0)
+      wchan_sleep(&cons->in.queue, &cons->in.lock);
+
+    c = cons->in.buf[cons->in.read_pos];
+    cons->in.read_pos = (cons->in.read_pos + 1) % CONSOLE_INPUT_MAX;
+    cons->in.size--;
+
+    if (cons->termios.c_lflag & ICANON) {
+      if (c == cons->termios.c_cc[VEOF])
+        break;
+
+      s[i++] = c;
+
+      if ((c == cons->termios.c_cc[VEOL]) || (c == '\n'))
+        break;
+    } else {
+      s[i++] = c;
+    }
+  }
+
+  spin_unlock(&cons->in.lock);
+
+  return i;
 }
