@@ -26,10 +26,13 @@ libc_a_SOURCES += \
   %D%/stdio/flockfile.c \
   %D%/stdio/funlockfile.c \
   %D%/stdlib/callocr.c \
+  %D%/stdlib/grantpt.c \
   %D%/stdlib/malloc.c \
   %D%/stdlib/mallocr.c \
+  %D%/stdlib/ptsname.c \
   %D%/stdlib/reallocr.c \
   %D%/stdlib/realpath.c \
+  %D%/stdlib/unlockpt.c \
   %D%/sys/ioctl/ioctl.c \
   %D%/sys/mman/mmap.c \
   %D%/sys/mman/mprotect.c \

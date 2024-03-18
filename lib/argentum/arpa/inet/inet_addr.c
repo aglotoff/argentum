@@ -4,6 +4,8 @@
 in_addr_t
 inet_addr(const char *cp)
 {
-  fprintf(stderr, "TODO: inet_addr(%s)\n", cp);
-  return -1;
+  struct in_addr in;
+  if (inet_aton(cp, &in) != 1)
+    return (in_addr_t) -1;
+  return in.s_addr;
 }

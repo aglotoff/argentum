@@ -56,10 +56,13 @@ LIB_SRCFILES := \
 	lib/argentum/stdio/flockfile.c \
 	lib/argentum/stdio/funlockfile.c \
 	lib/argentum/stdlib/callocr.c \
+	lib/argentum/stdlib/grantpt.c \
 	lib/argentum/stdlib/malloc.c \
 	lib/argentum/stdlib/mallocr.c \
+	lib/argentum/stdlib/ptsname.c \
 	lib/argentum/stdlib/reallocr.c \
 	lib/argentum/stdlib/realpath.c \
+	lib/argentum/stdlib/unlockpt.c \
 	lib/argentum/sys/ioctl/ioctl.c \
 	lib/argentum/sys/mman/mmap.c \
 	lib/argentum/sys/mman/mprotect.c \

@@ -29,6 +29,8 @@ struct termios {
 
 #define OPOST		  0x0001
 #define ONLCR		  0x0002
+#define ONLRET    0x0004
+#define OCRNL     0x0008
 
 #define TCSANOW     0x0001
 #define TCSADRAIN   0x0002
@@ -56,6 +58,8 @@ struct termios {
 #define IEXTEN		0x0020	/* enable extended functions */
 #define ISIG		0x0040
 #define NOFLSH   0x0080
+#define ECHOCTL 0x0100
+#define ECHOKE  0x0200
 
 int     tcgetattr(int, struct termios *);
 int     tcsetattr(int, int, const struct termios *);
