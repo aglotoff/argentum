@@ -1,6 +1,6 @@
 diff -ruN old/build-aux/config.sub new/build-aux/config.sub
 --- old/build-aux/config.sub	2023-08-11 16:01:01.000000000 +0300
-+++ new/build-aux/config.sub	2024-03-16 16:33:07.757161463 +0300
++++ new/build-aux/config.sub	2024-05-01 19:20:02.028283487 +0300
 @@ -1736,7 +1736,7 @@
  	     | onefs* | tirtos* | phoenix* | fuchsia* | redox* | bme* \
  	     | midnightbsd* | amdhsa* | unleashed* | emscripten* | wasi* \
@@ -10,3 +10,20 @@ diff -ruN old/build-aux/config.sub new/build-aux/config.sub
  		;;
  	# This one is extra strict with allowed versions
  	sco3.2v2 | sco3.2v[4-9]* | sco5v6*)
+diff -ruN old/src/ls.c new/src/ls.c
+--- old/src/ls.c	2023-08-29 14:39:27.000000000 +0300
++++ new/src/ls.c	2024-05-01 19:22:04.498290626 +0300
+@@ -4268,7 +4268,12 @@
+       return MAX (0, len);
+     }
+   else
+-    return snprintf (nullptr, 0, "%"PRIuMAX, id);
++    {
++      char *ptr;
++      size_t n;
++      free(asnprintf(NULL, &n, "%"PRIuMAX, id));
++      return n;
++    }
+ }
+ 
+ /* Return the number of columns that format_user will print.  */

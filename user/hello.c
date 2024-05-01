@@ -7,7 +7,7 @@
 #include <stdlib.h>
 
 int
-main() {
+main(void) {
   sigset_t sigset;
   int    p[2], status;
   char   c='z';
