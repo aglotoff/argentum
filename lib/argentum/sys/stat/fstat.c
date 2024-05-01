@@ -4,7 +4,7 @@
 int
 _fstat(int fildes, struct stat *buf)
 {
-  return __syscall(__SYS_STAT, fildes, (uintptr_t) buf, 0, 0, 0, 0);
+  return __syscall2(__SYS_STAT, fildes, buf);
 }
 
 int

@@ -57,6 +57,7 @@ struct Console {
     struct SpinLock     lock;
   } out;
   struct termios        termios;
+  pid_t                 pgrp;
 };
 
 extern struct Console *console_current;

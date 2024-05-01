@@ -59,6 +59,7 @@ KERNEL_SRCFILES :=	\
 	kernel/process/exec.c \
 	kernel/process/fd.c \
 	kernel/process/process.c \
+	kernel/process/signal.c \
 	kernel/process/vmspace.c \
 	kernel/cprintf.c \
 	kernel/entry.S \

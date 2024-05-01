@@ -4,5 +4,5 @@
 int
 setpgid(pid_t pid, pid_t pgid)
 {
-  return __syscall(__SYS_SETPGID, pid, pgid, 0, 0, 0, 0);
+  return __syscall2(__SYS_SETPGID, pid, pgid);
 }

@@ -32,6 +32,7 @@ struct FileDesc {
  * Process descriptor.
  */
 struct Process {
+  struct ListLink       link;
   /** The process' address space */
   struct VMSpace       *vm;
 
@@ -59,9 +60,11 @@ struct Process {
   /** Exit code */
   int                   exit_code;
 
-  struct ListLink       pending_signals;
   uintptr_t             signal_stub;
-  struct sigaction      signal_handlers[NSIG];
+  struct sigaction      signal_actions[NSIG];
+  struct ListLink       signal_queue;
+  sigset_t              signal_mask;
+  sigset_t              signal_pending;
 
   /** Real user ID */
   uid_t                 ruid;
@@ -79,9 +82,42 @@ struct Process {
   struct PathNode      *cwd;
 };
 
+extern struct SpinLock __process_lock;
+extern struct ListLink __process_list;
+
 struct Signal {
   struct ListLink link;
   siginfo_t       info;
+};
+
+struct SignalFrame {
+  // Saved by user:
+  uint32_t s[32];
+  uint32_t fpscr;
+  uint32_t r1;
+  uint32_t r2;
+  uint32_t r3;
+  uint32_t r4;
+  uint32_t r5;
+  uint32_t r6;
+  uint32_t r7;
+  uint32_t r8;
+  uint32_t r9;
+  uint32_t r10;
+  uint32_t r11;
+  uint32_t r12;
+
+  // Saved by kernel:
+  uint32_t signo;
+  uint32_t handler;
+
+  uint32_t r0;
+  uint32_t sp;
+  uint32_t lr;
+  uint32_t pc;
+  uint32_t psr;
+  uint32_t trapno;
+  sigset_t mask;
 };
 
 static inline struct Process *
@@ -91,6 +127,19 @@ process_current(void)
   return task != NULL ? task->process : NULL;
 }
 
+static inline void
+process_lock(void)
+{
+  spin_lock(&__process_lock);
+}
+
+static inline void
+process_unlock(void)
+{
+  spin_unlock(&__process_lock);
+}
+
+void           signal_init_system(void);
 void           process_init(void);
 int            process_create(const void *, struct Process **);
 void           process_destroy(int);
@@ -100,13 +149,20 @@ pid_t          process_wait(pid_t, uintptr_t, int);
 int            process_exec(const char *, char *const[], char *const[]);
 void          *process_grow(ptrdiff_t);
 void           arch_trap_frame_init(struct Process *, uintptr_t, uintptr_t, uintptr_t, uintptr_t, uintptr_t);
-struct Signal *process_signal_create(int sig);
-void           process_signal_send(struct Process *, struct Signal *);
-void           process_signal_check(void);
-int            process_signal_action(int, uintptr_t, struct sigaction *, struct sigaction *);
-int            process_signal_return(void);
+
+void           signal_init(struct Process *);
+int            signal_generate(pid_t, int, int);
+void           signal_clone(struct Process *, struct Process *);
+void           signal_deliver_pending(void);
+int            signal_action(int, uintptr_t, struct sigaction *, struct sigaction *);
+int            signal_return(void);
+int            signal_pending(sigset_t *);
+int            signal_mask(int, const sigset_t *, sigset_t *);
+int            signal_suspend(const sigset_t *);
+
 int            process_nanosleep(const struct timespec *, struct timespec *);
 pid_t          process_get_gid(pid_t);
 int            process_set_gid(pid_t, pid_t);
+int            process_match_pid(struct Process *, pid_t);
 
 #endif  // __KERNEL_INCLUDE_KERNEL_PROCESS_H__

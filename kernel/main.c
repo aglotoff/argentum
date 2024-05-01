@@ -67,8 +67,9 @@ void main(void)
   file_init();    // File table
   sched_init();   // Scheduler
   net_init();     // Network
-  pipe_init();
+  pipe_init();    // Pipes subsystem
   process_init(); // Process table
+  signal_init_system();
 
   // Unblock other CPUs
   bsp_started = 1;

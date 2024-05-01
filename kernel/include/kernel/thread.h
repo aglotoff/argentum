@@ -19,6 +19,7 @@ enum {
   THREAD_STATE_READY,
   THREAD_STATE_RUNNING,
   THREAD_STATE_SLEEPING,
+  THREAD_STATE_SLEEPING_INTERRUPTILE,
   THREAD_STATE_SUSPENDED,
   THREAD_STATE_DESTROYED,
 };
@@ -93,8 +94,9 @@ struct Thread *thread_create(struct Process *, void (*)(void *), void *, int);
 void         thread_exit(void);
 int          thread_resume(struct Thread *);
 void         thread_yield(void);
-int          sched_sleep(struct ListLink *, unsigned long, struct SpinLock *);
+int          sched_sleep(struct ListLink *, int, unsigned long, struct SpinLock *);
 void         thread_cleanup(struct Thread *);
+void         thread_interrupt(struct Thread *);
 
 void         sched_may_yield(struct Thread *);
 void         sched_yield(void);
@@ -106,6 +108,7 @@ void         sched_start(void);
 void         ktime_tick(void);
 void         sched_isr_enter(void);
 void         sched_isr_exit(void);
+void         sched_resume(struct Thread *, int);
 
 extern struct SpinLock __sched_lock;
 

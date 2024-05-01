@@ -23,7 +23,7 @@ wchan_init(struct WaitChannel *chan)
 int
 wchan_sleep(struct WaitChannel *chan, struct SpinLock *lock)
 {
-  return sched_sleep(&chan->head, 0, lock);
+  return sched_sleep(&chan->head, 1, 0, lock);
 }
 
 /**

@@ -4,5 +4,5 @@
 int
 listen(int socket, int backlog)
 {
-  return __syscall(__SYS_LISTEN, socket, backlog, 0, 0, 0, 0);
+  return __syscall2(__SYS_LISTEN, socket, backlog);
 }

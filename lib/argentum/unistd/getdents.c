@@ -4,5 +4,5 @@
 ssize_t
 getdents(int fd, void *buf, size_t n)
 {
-  return __syscall(__SYS_GETDENTS, fd, (uint32_t) buf, n, 0, 0, 0);
+  return __syscall3(__SYS_GETDENTS, fd, buf, n);
 }

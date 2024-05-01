@@ -4,5 +4,5 @@
 pid_t
 getpgid(pid_t pid)
 {
-  return __syscall(__SYS_GETPGID, pid, 0, 0, 0, 0, 0);
+  return __syscall1(__SYS_GETPGID, pid);
 }

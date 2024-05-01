@@ -4,5 +4,5 @@
 int
 pipe(int fildes[2])
 {
-  return __syscall(__SYS_PIPE, (uintptr_t) fildes, 0, 0, 0, 0, 0);
+  return __syscall1(__SYS_PIPE, fildes);
 }

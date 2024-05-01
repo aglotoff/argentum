@@ -40,27 +40,29 @@
 #define __SYS_KILL        34
 #define __SYS_SIGACTION   35
 #define __SYS_SIGRETURN   36
-#define __SYS_NANOSLEEP   37
-#define __SYS_SENDTO      38
-#define __SYS_RECVFROM    39
-#define __SYS_SETSOCKOPT  40
-#define __SYS_GETUID      41
-#define __SYS_GETEUID     42
-#define __SYS_GETGID      43
-#define __SYS_GETEGID     44
-#define __SYS_GETPGID     45
-#define __SYS_SETUID      46
-#define __SYS_SETEUID     47
-#define __SYS_SETGID      48
-#define __SYS_SETEGID     49
-#define __SYS_SETPGID     50
-#define __SYS_ACCESS      51
-#define __SYS_PIPE        52
-#define __SYS_IOCTL       53
-#define __SYS_MMAP        54
-#define __SYS_MPROTECT    55
-#define __SYS_MUNMAP      56
-#define __SYS_SELECT      57
+#define __SYS_SIGPENDING  37
+#define __SYS_NANOSLEEP   38
+#define __SYS_SENDTO      39
+#define __SYS_RECVFROM    40
+#define __SYS_SETSOCKOPT  41
+#define __SYS_GETUID      42
+#define __SYS_GETEUID     43
+#define __SYS_GETGID      44
+#define __SYS_GETEGID     45
+#define __SYS_GETPGID     46
+#define __SYS_SETUID      47
+#define __SYS_SETEUID     48
+#define __SYS_SETGID      49
+#define __SYS_SETEGID     50
+#define __SYS_SETPGID     51
+#define __SYS_ACCESS      52
+#define __SYS_PIPE        53
+#define __SYS_IOCTL       54
+#define __SYS_MMAP        55
+#define __SYS_MPROTECT    56
+#define __SYS_MUNMAP      57
+#define __SYS_SELECT      58
+#define __SYS_SIGSUSPEND  59
 
 #ifndef __ASSEMBLER__
 
@@ -115,6 +117,24 @@ __syscall(uint8_t num, uint32_t a1, uint32_t a2, uint32_t a3, uint32_t a4,
 
   return r;
 }
+
+#define __syscall0(num)     \
+  __syscall(num, 0, 0, 0, 0, 0, 0)
+#define __syscall1(num, a1) \
+  __syscall(num, (uint32_t) (a1), 0, 0, 0, 0, 0)
+#define __syscall2(num, a1, a2) \
+  __syscall(num, (uint32_t) (a1), (uint32_t) (a2), 0, 0, 0, 0)
+#define __syscall3(num, a1, a2, a3) \
+  __syscall(num, (uint32_t) (a1), (uint32_t) (a2), (uint32_t) (a3), 0, 0, 0)
+#define __syscall4(num, a1, a2, a3, a4) \
+  __syscall(num, (uint32_t) (a1), (uint32_t) (a2), (uint32_t) (a3), \
+            (uint32_t) (a4), 0, 0)
+#define __syscall5(num, a1, a2, a3, a4, a5) \
+  __syscall(num, (uint32_t) (a1), (uint32_t) (a2), (uint32_t) (a3), \
+            (uint32_t) (a4), (uint32_t) (a5), 0)
+#define __syscall6(num, a1, a2, a3, a4, a5, a6) \
+  __syscall(num, (uint32_t) (a1), (uint32_t) (a2), (uint32_t) (a3), \
+            (uint32_t) (a4), (uint32_t) (a5), (uint32_t) (a6))
 
 #endif
 

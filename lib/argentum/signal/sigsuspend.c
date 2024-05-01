@@ -1,9 +1,8 @@
 #include <signal.h>
-#include <stdio.h>
+#include <sys/syscall.h>
 
-int sigsuspend
-(const sigset_t *sigmask)
+int
+sigsuspend(const sigset_t *sigmask)
 {
-  fprintf(stderr, "TODO: sigsuspend(%p)\n", sigmask);
-  return -1;
+  return __syscall1(__SYS_SIGSUSPEND, sigmask);
 }

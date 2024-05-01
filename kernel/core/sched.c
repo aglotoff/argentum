@@ -223,6 +223,71 @@ sched_may_yield(struct Thread *candidate)
   }
 }
 
+/**
+ * Put the current thread into sleep.
+ *
+ * @param queue An optional queue to insert the thread into.
+ * @param state The state indicating a kind of sleep.
+ * @param lock  An optional spinlock to release while going to sleep.
+ */
+int
+sched_sleep(struct ListLink *queue, int interruptible, unsigned long timeout,
+            struct SpinLock *lock)
+{
+  struct Thread *my_thread = thread_current();
+
+  if (lock != NULL) {
+    sched_lock();
+    spin_unlock(lock);
+  }
+
+  if (!spin_holding(&__sched_lock))
+    panic("scheduler not locked");
+
+  if (timeout != 0) {
+    my_thread->timer.remain = timeout;
+    ktimer_start(&my_thread->timer);
+  }
+
+  my_thread->state = interruptible
+    ? THREAD_STATE_SLEEPING_INTERRUPTILE
+    : THREAD_STATE_SLEEPING;
+
+  if (queue != NULL)
+    list_add_back(queue, &my_thread->link);
+
+  sched_yield();
+
+  if (timeout != 0)
+    ktimer_stop(&my_thread->timer);
+
+  // someone may call this function while holding __sched_lock?
+  if (lock != NULL) {
+    sched_unlock();
+    spin_lock(lock);
+  }
+
+  return my_thread->sleep_result;
+}
+
+void
+sched_resume(struct Thread *thread, int result)
+{
+  if (!spin_holding(&__sched_lock))
+    panic("sched not locked");
+  
+  if ((thread->state != THREAD_STATE_SLEEPING) &&
+      (thread->state != THREAD_STATE_SLEEPING_INTERRUPTILE))
+    panic("thread is not sleeping");
+
+  thread->sleep_result = result;
+
+  list_remove(&thread->link);
+
+  sched_enqueue(thread);
+  sched_may_yield(thread);
+}
+
 void
 sched_wakeup_all(struct ListLink *thread_list, int result)
 {
@@ -233,12 +298,7 @@ sched_wakeup_all(struct ListLink *thread_list, int result)
     struct ListLink *link = thread_list->next;
     struct Thread *thread = LIST_CONTAINER(link, struct Thread, link);
 
-    list_remove(link);
-
-    thread->sleep_result = result;
-
-    sched_enqueue(thread);
-    sched_may_yield(thread);
+    sched_resume(thread, result);
   }
 }
 
@@ -265,58 +325,6 @@ sched_wakeup_one(struct ListLink *queue, int result)
       highest = t;
   }
 
-  if (highest != NULL) {
-    // cprintf("wakeup %p from %p\n", highest, queue);
-
-    list_remove(&highest->link);
-    highest->sleep_result = result;
-
-    sched_enqueue(highest);
-    sched_may_yield(highest);
-  }
-}
-
-/**
- * Put the current thread into sleep.
- *
- * @param queue An optional queue to insert the thread into.
- * @param state The state indicating a kind of sleep.
- * @param lock  An optional spinlock to release while going to sleep.
- */
-int
-sched_sleep(struct ListLink *queue, unsigned long timeout,
-            struct SpinLock *lock)
-{
-  struct Thread *my_thread = thread_current();
-
-  if (lock != NULL) {
-    sched_lock();
-    spin_unlock(lock);
-  }
-
-  if (!spin_holding(&__sched_lock))
-    panic("scheduler not locked");
-
-  if (timeout != 0) {
-    my_thread->timer.remain = timeout;
-    ktimer_start(&my_thread->timer);
-  }
-
-  my_thread->state = THREAD_STATE_SLEEPING;
-
-  if (queue != NULL)
-    list_add_back(queue, &my_thread->link);
-
-  sched_yield();
-
-  if (timeout != 0)
-    ktimer_stop(&my_thread->timer);
-
-  // someone may call this function while holding __sched_lock?
-  if (lock != NULL) {
-    sched_unlock();
-    spin_lock(lock);
-  }
-
-  return my_thread->sleep_result;
+  if (highest != NULL)
+    sched_resume(highest, result);
 }

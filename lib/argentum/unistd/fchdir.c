@@ -4,5 +4,5 @@
 int
 fchdir(int fildes)
 {
-  return __syscall(__SYS_FCHDIR, fildes, 0, 0, 0, 0, 0);
+  return __syscall1(__SYS_FCHDIR, fildes);
 }

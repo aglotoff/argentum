@@ -56,7 +56,7 @@ kqueue_receive(struct KQueue *queue, void *msg, unsigned long timeout,
       return -EAGAIN;
     }
 
-    if ((r = sched_sleep(&queue->receive_list, timeout, NULL)) != 0) {
+    if ((r = sched_sleep(&queue->receive_list, 0, timeout, NULL)) != 0) {
       sched_unlock();
       return r;
     }
@@ -97,7 +97,7 @@ kqueue_send(struct KQueue *queue, const void *msg, unsigned long timeout,
       return -EAGAIN;
     }
 
-    sched_sleep(&queue->send_list, timeout, NULL);
+    sched_sleep(&queue->send_list, 0, timeout, NULL);
 
     if ((ret = my_task->sleep_result) != 0) {
       sched_unlock();

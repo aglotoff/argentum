@@ -30,5 +30,5 @@ fcntl(int fildes, int cmd, ...)
 
   va_end(ap);
 
-  return __syscall(__SYS_FCNTL, fildes, cmd, arg, 0, 0, 0);
+  return __syscall3(__SYS_FCNTL, fildes, cmd, arg);
 }

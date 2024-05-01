@@ -5,5 +5,5 @@
 int
 mprotect(void *addr, size_t len, int prot)
 {
-  return __syscall(__SYS_MPROTECT, (uintptr_t) addr, len, prot, 0, 0, 0);
+  return __syscall3(__SYS_MPROTECT, addr, len, prot);
 }

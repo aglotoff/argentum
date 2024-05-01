@@ -4,7 +4,7 @@
 ssize_t
 _read(int fildes, void *buf, size_t n)
 {
-  return __syscall(__SYS_READ, fildes, (uint32_t) buf, n, 0, 0, 0);
+  return __syscall3(__SYS_READ, fildes, buf, n);
 }
 
 ssize_t

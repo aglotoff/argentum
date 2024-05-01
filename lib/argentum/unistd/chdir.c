@@ -4,5 +4,5 @@
 int
 chdir(const char *path)
 {
-  return __syscall(__SYS_CHDIR, (uint32_t) path, 0, 0, 0, 0, 0);
+  return __syscall1(__SYS_CHDIR, path);
 }

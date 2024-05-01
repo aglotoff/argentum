@@ -104,14 +104,22 @@ thread_timeout_callback(void *arg)
 
   sched_lock();
 
-  if (thread->state == THREAD_STATE_SLEEPING) {
-    thread->sleep_result = -ETIMEDOUT;
+  if ((thread->state == THREAD_STATE_SLEEPING) ||
+      (thread->state == THREAD_STATE_SLEEPING_INTERRUPTILE))
+    sched_resume(thread, -ETIMEDOUT);
 
-    list_remove(&thread->link);
+  sched_unlock();
+}
 
-    sched_enqueue(thread);
-    sched_may_yield(thread);
-  }
+void
+thread_interrupt(struct Thread *thread)
+{
+  sched_lock();
+
+  // TODO: if thread is running, send an SGI
+
+  if (thread->state == THREAD_STATE_SLEEPING_INTERRUPTILE)
+    sched_resume(thread, -EINTR);
 
   sched_unlock();
 }

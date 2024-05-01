@@ -29,55 +29,59 @@ static int     sys_get_num(void);
 static int32_t sys_get_arg(int);
 
 static int32_t (*syscalls[])(void) = {
-  [__SYS_FORK]       = sys_fork,
-  [__SYS_EXEC]       = sys_exec,
-  [__SYS_WAIT]       = sys_wait,
-  [__SYS_EXIT]       = sys_exit,
-  [__SYS_GETPID]     = sys_getpid,
-  [__SYS_GETPPID]    = sys_getppid,
-  [__SYS_GETDENTS]   = sys_getdents,
-  [__SYS_CHDIR]      = sys_chdir,
-  [__SYS_FCHDIR]     = sys_fchdir,
-  [__SYS_OPEN]       = sys_open,
-  [__SYS_FCNTL]      = sys_fcntl,
-  [__SYS_SEEK]       = sys_seek,
-  [__SYS_UMASK]      = sys_umask,
-  [__SYS_MKNOD]      = sys_mknod,
-  [__SYS_LINK]       = sys_link,
-  [__SYS_UNLINK]     = sys_unlink,
-  [__SYS_RMDIR]      = sys_rmdir,
-  [__SYS_STAT]       = sys_stat,
-  [__SYS_CLOSE]      = sys_close,
-  [__SYS_READ]       = sys_read,
-  [__SYS_WRITE]      = sys_write,
-  [__SYS_SBRK]       = sys_sbrk,
-  [__SYS_UNAME]      = sys_uname,
-  [__SYS_CHMOD]      = sys_chmod,
-  [__SYS_CLOCK_TIME] = sys_clock_time,
-  [__SYS_SOCKET]     = sys_socket,
-  [__SYS_BIND]       = sys_bind,
-  [__SYS_LISTEN]     = sys_listen,
-  [__SYS_ACCEPT]     = sys_accept,
-  [__SYS_CONNECT]    = sys_connect,
-  [__SYS_TEST]       = sys_test,
-  [__SYS_FCHMOD]     = sys_fchmod,
-  [__SYS_SIGACTION]  = sys_sigaction,
-  [__SYS_SIGRETURN]  = sys_sigreturn,
-  [__SYS_NANOSLEEP]  = sys_nanosleep,
-  [__SYS_RECVFROM]   = sys_recvfrom,
-  [__SYS_SENDTO]     = sys_sendto,
-  [__SYS_SETSOCKOPT] = sys_setsockopt,
-  [__SYS_GETUID]     = sys_getuid,
-  [__SYS_GETEUID]    = sys_geteuid,
-  [__SYS_GETGID]     = sys_getgid,
-  [__SYS_GETEGID]    = sys_getegid,
-  [__SYS_GETPGID]    = sys_getpgid,
-  [__SYS_SETPGID]    = sys_setpgid,
-  [__SYS_ACCESS]     = sys_access,
-  [__SYS_PIPE]       = sys_pipe,
-  [__SYS_IOCTL]      = sys_ioctl,
-  [__SYS_MMAP]       = sys_mmap,
-  [__SYS_SELECT]     = sys_select,
+  [__SYS_FORK]        = sys_fork,
+  [__SYS_EXEC]        = sys_exec,
+  [__SYS_WAIT]        = sys_wait,
+  [__SYS_EXIT]        = sys_exit,
+  [__SYS_GETPID]      = sys_getpid,
+  [__SYS_GETPPID]     = sys_getppid,
+  [__SYS_GETDENTS]    = sys_getdents,
+  [__SYS_CHDIR]       = sys_chdir,
+  [__SYS_FCHDIR]      = sys_fchdir,
+  [__SYS_OPEN]        = sys_open,
+  [__SYS_FCNTL]       = sys_fcntl,
+  [__SYS_SEEK]        = sys_seek,
+  [__SYS_UMASK]       = sys_umask,
+  [__SYS_MKNOD]       = sys_mknod,
+  [__SYS_LINK]        = sys_link,
+  [__SYS_UNLINK]      = sys_unlink,
+  [__SYS_RMDIR]       = sys_rmdir,
+  [__SYS_STAT]        = sys_stat,
+  [__SYS_CLOSE]       = sys_close,
+  [__SYS_READ]        = sys_read,
+  [__SYS_WRITE]       = sys_write,
+  [__SYS_SBRK]        = sys_sbrk,
+  [__SYS_UNAME]       = sys_uname,
+  [__SYS_CHMOD]       = sys_chmod,
+  [__SYS_CLOCK_TIME]  = sys_clock_time,
+  [__SYS_SOCKET]      = sys_socket,
+  [__SYS_BIND]        = sys_bind,
+  [__SYS_LISTEN]      = sys_listen,
+  [__SYS_ACCEPT]      = sys_accept,
+  [__SYS_CONNECT]     = sys_connect,
+  [__SYS_TEST]        = sys_test,
+  [__SYS_FCHMOD]      = sys_fchmod,
+  [__SYS_SIGACTION]   = sys_sigaction,
+  [__SYS_SIGRETURN]   = sys_sigreturn,
+  [__SYS_SIGPENDING]  = sys_sigpending,
+  [__SYS_SIGPROCMASK] = sys_sigprocmask,
+  [__SYS_NANOSLEEP]   = sys_nanosleep,
+  [__SYS_RECVFROM]    = sys_recvfrom,
+  [__SYS_SENDTO]      = sys_sendto,
+  [__SYS_SETSOCKOPT]  = sys_setsockopt,
+  [__SYS_GETUID]      = sys_getuid,
+  [__SYS_GETEUID]     = sys_geteuid,
+  [__SYS_GETGID]      = sys_getgid,
+  [__SYS_GETEGID]     = sys_getegid,
+  [__SYS_GETPGID]     = sys_getpgid,
+  [__SYS_SETPGID]     = sys_setpgid,
+  [__SYS_ACCESS]      = sys_access,
+  [__SYS_PIPE]        = sys_pipe,
+  [__SYS_IOCTL]       = sys_ioctl,
+  [__SYS_MMAP]        = sys_mmap,
+  [__SYS_SELECT]      = sys_select,
+  [__SYS_SIGSUSPEND]  = sys_sigsuspend,
+  [__SYS_KILL]        = sys_kill,
 };
 
 int32_t
@@ -184,6 +188,28 @@ static int
 sys_arg_long(int n, long *ip)
 {
   *ip = (long) sys_get_arg(n);
+  return 0;
+}
+
+static int
+sys_arg_ptr(int n, uintptr_t *pp, int perm, int can_be_null)
+{
+  uintptr_t ptr = sys_get_arg(n);
+  int r;
+
+  if (ptr == 0) {
+    if (can_be_null) {
+      *pp = 0;
+      return 0;
+    }
+    return -EFAULT;
+  }
+
+  if ((r = vm_space_check_ptr(process_current()->vm, ptr, perm)) < 0)
+    return r;
+
+  *pp = ptr;
+
   return 0;
 }
 
@@ -907,20 +933,20 @@ sys_sigaction(void)
 
   if ((r = sys_arg_int(0, &sig)) < 0)
     return r;
-  if ((r = sys_arg_long(1, (long *) &stub)) < 0)
+  if ((r = sys_arg_ptr(1, &stub, PROT_READ | PROT_EXEC, 1)) < 0)
     return r;
   if ((r = sys_arg_buf(2, (void **) &act, sizeof(*act), PROT_READ, 1)) < 0)
     return r;
   if ((r = sys_arg_buf(3, (void **) &oact, sizeof(*oact), PROT_WRITE, 1)) < 0)
     return r;
 
-  return process_signal_action(sig, stub, act, oact);
+  return signal_action(sig, stub, act, oact);
 }
 
 int32_t
 sys_sigreturn(void)
 {
-  return process_signal_return();
+  return signal_return();
 }
 
 int32_t
@@ -1101,7 +1127,6 @@ sys_pipe(void)
   return 0;
 }
 
-
 int32_t
 sys_ioctl(void)
 {
@@ -1159,4 +1184,58 @@ sys_select(void)
   // TODO: implement
 
   return 1;
+}
+
+int32_t
+sys_sigpending(void)
+{
+  sigset_t *set;
+  int r;
+
+  if ((r = sys_arg_buf(0, (void **) &set, sizeof(*set), PROT_WRITE, 0)) < 0)
+    return r;
+
+  return signal_pending(set);
+}
+
+int32_t
+sys_sigprocmask(void)
+{
+  sigset_t *set, *oset;
+  int how, r;
+
+  if ((r = sys_arg_int(0, &how)) < 0)
+    return r;
+  if ((r = sys_arg_buf(1, (void **) &set, sizeof(*set), PROT_READ, 1)) < 0)
+    return r;
+  if ((r = sys_arg_buf(2, (void **) &oset, sizeof(*oset), PROT_WRITE, 1)) < 0)
+    return r;
+
+  return signal_mask(how, set, oset);
+}
+
+int32_t
+sys_sigsuspend(void)
+{
+  sigset_t *mask;
+  int r;
+
+  if ((r = sys_arg_buf(0, (void **) &mask, sizeof(*mask), PROT_READ, 1)) < 0)
+    return r;
+
+  return signal_suspend(mask);
+}
+
+int32_t
+sys_kill(void)
+{
+  pid_t pid;
+  int sig, r;
+
+  if ((r = sys_arg_int(0, &pid)) < 0)
+    return r;
+  if ((r = sys_arg_int(1, &sig)) < 0)
+    return r;
+
+  return signal_generate(pid, sig, 0);
 }

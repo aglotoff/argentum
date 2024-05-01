@@ -4,5 +4,5 @@
 void
 _exit(int status)
 {
-  __syscall(__SYS_EXIT, status, 0, 0, 0, 0, 0);
+  __syscall1(__SYS_EXIT, status);
 }

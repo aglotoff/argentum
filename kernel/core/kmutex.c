@@ -42,7 +42,7 @@ kmutex_lock(struct KMutex *mutex)
 
     // TODO: priority inheritance
 
-    if ((r = sched_sleep(&mutex->queue, 0, NULL)) != 0) {
+    if ((r = sched_sleep(&mutex->queue, 0, 0, NULL)) != 0) {
       sched_unlock();
       return r;
     }

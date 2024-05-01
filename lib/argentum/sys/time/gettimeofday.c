@@ -4,7 +4,7 @@
 int
 clock_gettime(clockid_t clock_id, struct timespec *tp)
 {
-  return __syscall(__SYS_CLOCK_TIME, clock_id, (uintptr_t) tp, 0, 0, 0, 0);
+  return __syscall2(__SYS_CLOCK_TIME, clock_id, tp);
 }
 
 int

@@ -15,5 +15,5 @@ ioctl(int fildes, int request, ...)
     va_end(ap);
   }
 
-  return __syscall(__SYS_IOCTL, fildes, request, arg, 0, 0, 0);
+  return __syscall3(__SYS_IOCTL, fildes, request, arg);
 }

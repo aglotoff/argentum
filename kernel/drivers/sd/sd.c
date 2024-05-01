@@ -133,6 +133,7 @@ sd_request(struct Buf *buf)
     sd_start_transfer(buf);
 
   // Wait for the R/W operation to finish.
+  // TODO: deal with errors!
   while ((buf->flags & (BUF_DIRTY | BUF_VALID)) != BUF_VALID)
     wchan_sleep(&buf->wait_queue, &sd_queue.lock);
 

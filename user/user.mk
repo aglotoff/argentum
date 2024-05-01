@@ -4,8 +4,8 @@ USER_CFLAGS := $(CFLAGS) $(USER_FLAGS)
 
 USER_SRCFILES :=
 
-# USER_SRCFILES += \
-#  	user/hello.c \
+USER_SRCFILES += \
+  user/hello.c \
 	#user/hello2.cc
 
 USER_SRCFILES += \
@@ -32,7 +32,7 @@ USER_APPS := $(patsubst user/%.S, $(SYSROOT)/%, $(USER_APPS))
 $(OBJ)/user/hello: user/hello.c $(OBJ)/.vars.USER_CFLAGS
 	@echo "+ CC [USER] $<"
 	@mkdir -p $(@D)
-	$(V)$(CC) $(USER_CFLAGS) -o $@ $< -Wno-unused -lncurses
+	$(V)$(CC) $(USER_CFLAGS) -o $@ $<
 
 $(OBJ)/user/%.o: user/%.c $(OBJ)/.vars.USER_CFLAGS
 	@echo "+ CC [USER] $<"

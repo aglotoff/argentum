@@ -4,7 +4,7 @@
 int
 _close(int fildes)
 {
-  return __syscall(__SYS_CLOSE, fildes, 0, 0, 0, 0, 0);
+  return __syscall1(__SYS_CLOSE, fildes);
 }
 
 int

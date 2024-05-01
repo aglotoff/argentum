@@ -4,7 +4,7 @@
 ssize_t
 _write(int fildes, const void *buf, size_t n)
 {
-  return __syscall(__SYS_WRITE, fildes, (uint32_t) buf, n, 0, 0, 0);
+  return __syscall3(__SYS_WRITE, fildes, buf, n);
 }
 
 ssize_t

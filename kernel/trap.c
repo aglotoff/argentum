@@ -50,7 +50,9 @@ trap(struct TrapFrame *tf)
     break;
   case T_UNDEF:
     if ((tf->psr & PSR_M_MASK) == PSR_M_USR) {
-      process_signal_send(my_process, process_signal_create(SIGILL));
+      // TODO: ILL_ILLOPC
+      if (signal_generate(my_process->pid, SIGILL, 0) != 0)
+        panic("sending SIGILL failed");
       break;
     }
     // fall through
@@ -60,7 +62,7 @@ trap(struct TrapFrame *tf)
   }
 
   if ((tf->psr & PSR_M_MASK) == PSR_M_USR)
-    process_signal_check();
+    signal_deliver_pending();
 }
 
 // Handle data or prefetch abort
@@ -89,13 +91,15 @@ trap_handle_abort(struct TrapFrame *tf)
     return;
 
   // If unsuccessfull, kill the process
-  print_trapframe(tf);
+  // print_trapframe(tf);
   cprintf("[%d]: user fault va %p status %#x\n", process->pid, address, status);
 
   cpu_irq_disable();
-  monitor(tf);
+  // monitor(tf);
 
-  process_signal_send(process, process_signal_create(SIGSEGV));
+  // TODO: SEGV_MAPERR or SEGV_ACCERR
+  if (signal_generate(process->pid, SIGSEGV, 0) != 0)
+    panic("sending SIGSEGV failed");
 }
 
 // Returns a human-readable name for the given trap number

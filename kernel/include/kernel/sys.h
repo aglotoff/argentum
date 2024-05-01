@@ -58,5 +58,9 @@ int32_t sys_pipe(void);
 int32_t sys_ioctl(void);
 int32_t sys_mmap(void);
 int32_t sys_select(void);
+int32_t sys_sigpending(void);
+int32_t sys_sigprocmask(void);
+int32_t sys_sigsuspend(void);
+int32_t sys_kill(void);
 
 #endif  // !__KERNEL_INCLUDE_KERNEL_SYSCALL_H__

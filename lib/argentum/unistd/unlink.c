@@ -4,7 +4,7 @@
 int
 _unlink(const char *path)
 {
-  return __syscall(__SYS_UNLINK, (uint32_t) path, 0, 0, 0, 0, 0);
+  return __syscall1(__SYS_UNLINK, path);
 }
 
 int

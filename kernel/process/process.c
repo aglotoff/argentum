@@ -26,7 +26,6 @@
 
 struct ObjectPool *process_cache;
 struct ObjectPool *thread_cache;
-struct ObjectPool *signal_cache;
 
 // Size of PID hash table
 #define NBUCKET   256
@@ -38,7 +37,8 @@ static struct {
 } pid_hash;
 
 // Lock to protect the parent/child relationships between the processes
-static struct SpinLock process_lock;
+struct ListLink __process_list;
+struct SpinLock __process_lock;
 
 static void process_run(void *);
 static void arch_trap_frame_pop(struct TrapFrame *);
@@ -52,7 +52,7 @@ process_ctor(void *buf, size_t size)
 
   wchan_init(&proc->wait_queue);
   list_init(&proc->children);
-  list_init(&proc->pending_signals);
+  list_init(&proc->signal_queue);
 
   (void) size;
 }
@@ -66,14 +66,11 @@ process_init(void)
   if (process_cache == NULL)
     panic("cannot allocate process_cache");
   
-  signal_cache = object_pool_create("signal_cache", sizeof(struct Signal), 0, NULL, NULL);
-  if (signal_cache == NULL)
-    panic("cannot allocate signal_cache");
-
   HASH_INIT(pid_hash.table);
   spin_init(&pid_hash.lock, "pid_hash");
 
-  spin_init(&process_lock, "process_lock");
+  list_init(&__process_list);
+  spin_init(&__process_lock, "process_lock");
 
   // Create the init process
   if (process_create(_binary_obj_user_init_start, &init_process) != 0)
@@ -84,7 +81,6 @@ struct Process *
 process_alloc(void)
 {
   static pid_t next_pid;
-  int i;
   struct Process *process;
 
   if ((process = (struct Process *) object_pool_get(process_cache)) == NULL)
@@ -96,9 +92,9 @@ process_alloc(void)
     return NULL;
   }
 
-  list_init(&process->pending_signals);
-  for (i = 0; i < NSIG; i++)
-    process->signal_handlers[i].sa_handler = SIG_DFL;
+  signal_init(process);
+
+  list_init(&process->link);
 
   process->parent = NULL;
   process->zombie = 0;
@@ -205,6 +201,10 @@ process_create(const void *binary, struct Process **pstore)
   proc->rgid = proc->egid = 0;
   proc->cmask = 0;
 
+  process_lock();
+  list_add_back(&__process_list, &proc->link);
+  process_unlock();
+
   thread_resume(proc->thread);
 
   if (pstore != NULL)
@@ -228,6 +228,14 @@ fail1:
 void
 process_free(struct Process *process)
 {
+  process_lock();
+  list_remove(&process->link);
+  process_unlock();
+
+  spin_lock(&pid_hash.lock);
+  list_remove(&process->pid_link);
+  spin_unlock(&pid_hash.lock);
+
   // Return the process descriptor to the cache
   object_pool_put(process_cache, process);
 }
@@ -275,7 +283,7 @@ process_destroy(int status)
 
   assert(init_process != NULL);
 
-  spin_lock(&process_lock);
+  process_lock();
 
   // Move children to the init process
   has_zombies = 0;
@@ -303,7 +311,7 @@ process_destroy(int status)
   if (current->parent)
     wchan_wakeup_all(&current->parent->wait_queue);
 
-  spin_unlock(&process_lock);
+  process_unlock();
 
   thread_exit();
 }
@@ -312,7 +320,6 @@ pid_t
 process_copy(int share_vm)
 {
   struct Process *child, *current = process_current();
-  int i;
 
   if ((child = process_alloc()) == NULL)
     return -ENOMEM;
@@ -322,14 +329,14 @@ process_copy(int share_vm)
     return -ENOMEM;
   }
 
+  process_lock();
+
   child->parent         = current;
   *child->thread->tf    = *current->thread->tf;
   child->thread->tf->r0 = 0;
 
   fd_clone(current, child);
-
-  for (i = 0; i < NSIG; i++)
-    child->signal_handlers[i] = current->signal_handlers[i];
+  signal_clone(current, child);
 
   child->pgid  = current->pgid;
   child->ruid  = current->ruid;
@@ -339,30 +346,35 @@ process_copy(int share_vm)
   child->cmask = current->cmask;
   child->cwd   = fs_path_duplicate(current->cwd);
 
-  spin_lock(&process_lock);
+  list_add_back(&__process_list, &child->link);
   list_add_back(&current->children, &child->sibling_link);
-  spin_unlock(&process_lock);
+
+  process_unlock();
 
   thread_resume(child->thread);
 
   return child->pid;
 }
 
+/**
+ * Check whether the given process ID or group ID matches the given argument.
+ * 
+ * @param process The process
+ * @param pid     The PID argument (see waitpid or kill)
+ * 
+ * @return 1 if the process matches the given PID, 0 otherwise
+ */
 int
-process_wait_check(struct Process *current, struct Process *process, pid_t pid)
+process_match_pid(struct Process *process, pid_t pid)
 {
-  (void) current;
-
-  if (pid == process->pid)
+  if (pid == -1)            // Match all
     return 1;
-  if (pid == -1)
+  if (process->pid == pid)  // Exact match
     return 1;
-  if (pid == 0)
-    // TODO: compare the child group ID to the parent group ID
-    return 0;
-  if (pid < 0)
-    // TODO: compare the child group ID to (-pid)
-    return 0;
+  if (pid < 0)              // Match exact process group ID
+    return process->pgid == -pid;
+  if (pid == 0)             // Match current process group ID
+    return process->pgid == process_current()->pgid;
   return 0;
 }
 
@@ -375,7 +387,7 @@ process_wait(pid_t pid, uintptr_t stat_loc, int options)
   if (options & ~(WNOHANG | WUNTRACED))
     return -EINVAL;
 
-  spin_lock(&process_lock);
+  process_lock();
 
   for (;;) {
     struct ListLink *l;
@@ -384,14 +396,14 @@ process_wait(pid_t pid, uintptr_t stat_loc, int options)
     LIST_FOREACH(&current->children, l) {
       struct Process *process = LIST_CONTAINER(l, struct Process, sibling_link);
 
-      if (process_wait_check(current, process, pid))
+      if (process_match_pid(process, pid))
         match = process->pid;
 
       // Return immediately
       if (process->zombie) {
         list_remove(&process->sibling_link);
 
-        spin_unlock(&process_lock);
+        process_unlock();
 
         if (stat_loc) {
           r = vm_copy_out(current->vm->pgtab, &process->exit_code, stat_loc,
@@ -416,11 +428,11 @@ process_wait(pid_t pid, uintptr_t stat_loc, int options)
       break;
     }
 
-    if ((r = wchan_sleep(&current->wait_queue, &process_lock)) != 0)
+    if ((r = wchan_sleep(&current->wait_queue, &__process_lock)) != 0)
       break;
   }
 
-  spin_unlock(&process_lock);
+  process_unlock();
 
   return r;
 }
@@ -466,248 +478,6 @@ process_grow(ptrdiff_t increment)
   return NULL;
 }
 
-struct Signal *
-process_signal_create(int sig)
-{
-  struct Signal *signal;
-
-  if ((signal = (struct Signal *) object_pool_get(signal_cache)) == NULL)
-    panic("out of memory");
-  
-  signal->link.next = NULL;
-  signal->link.prev = NULL;
-  signal->info.si_signo = sig;
-  signal->info.si_code = 0;
-  signal->info.si_value.sival_int = 0;
-
-  return signal;
-}
-
-void
-process_signal_send(struct Process *process, struct Signal *signal)
-{
-  struct sigaction *handler;
-
-  spin_lock(&process_lock);
-
-  handler = &process->signal_handlers[signal->info.si_signo];
-  if (handler->sa_handler == SIG_IGN) {
-    spin_unlock(&process_lock);
-    object_pool_put(signal_cache, signal);
-    return;
-  }
-
-  list_add_back(&process->pending_signals, &signal->link);
-  // TODO: interrupt waiting
-
-  spin_unlock(&process_lock);
-}
-
-int
-process_signal_action(int sig, uintptr_t stub, struct sigaction *act,
-                      struct sigaction *oact)
-{
-  struct Process *current = process_current();
-  struct sigaction *handler;
-
-  if (stub >= VIRT_KERNEL_BASE)
-    return -EFAULT;
-  
-  if (sig < 0 || sig >= NSIG)
-    return -EINVAL;
-  if (sig == SIGKILL || sig == SIGSTOP)
-    return -EINVAL;
-  
-  if (stub != 0)
-    current->signal_stub = stub;
-
-  handler = &current->signal_handlers[sig];
-
-  if (oact != NULL)
-    *oact = *handler;
-
-  if (act != NULL)
-    *handler = *act;
-  
-  return 0;
-}
-
-void
-process_signal_default(struct Process *current, struct Signal *signal)
-{
-  int terminate = 0;
-
-  (void) current;
-  
-  switch (signal->info.si_signo) {
-  case SIGABRT:
-  case SIGBUS:
-  case SIGFPE:
-  case SIGILL:
-  case SIGQUIT:
-  case SIGSEGV:
-  case SIGSYS:
-  case SIGTRAP:
-  case SIGXCPU:
-  case SIGXFSZ:
-    // TODO: abnormal terminatio with additional actions
-    // fall through
-
-  case SIGALRM:
-  case SIGHUP:
-  case SIGINT:
-  case SIGKILL:
-  case SIGPIPE:
-  case SIGTERM:
-  case SIGUSR1:
-  case SIGUSR2:
-    // Abnormal termination
-    terminate = signal->info.si_signo;
-    break;
-
-  case SIGCHLD:
-  case SIGURG:
-    // Ignore
-    break;
-
-  case SIGSTOP:
-  case SIGTSTP:
-  case SIGTTIN:
-  case SIGTTOU:
-    // Stop
-    panic("not implemented");
-    break;
-
-  case SIGCONT:
-    // Continue
-    panic("not implemented");
-    break;
-  }
-
-  spin_unlock(&process_lock);
-
-  object_pool_put(signal_cache, signal);
-
-  if (terminate)
-    process_destroy(terminate);
-}
-
-struct SignalContext {
-  // Saved by user:
-  uint32_t s[32];
-  uint32_t fpscr;
-  uint32_t r1;
-  uint32_t r2;
-  uint32_t r3;
-  uint32_t r4;
-  uint32_t r5;
-  uint32_t r6;
-  uint32_t r7;
-  uint32_t r8;
-  uint32_t r9;
-  uint32_t r10;
-  uint32_t r11;
-  uint32_t r12;
-
-  // Saved by kernel:
-  uint32_t signo;
-  uint32_t handler;
-
-  uint32_t r0;
-  uint32_t sp;
-  uint32_t lr;
-  uint32_t pc;
-  uint32_t psr;
-  uint32_t trapno;
-};
-
-void
-process_signal_handle(struct Process *current, struct sigaction *handler, struct Signal *signal)
-{
-  int r;
-  struct SignalContext *ctx;
-
-  ctx = ((struct SignalContext *) current->thread->tf->sp) - 1;
-  if ((r = vm_space_check_buf(current->vm, ctx, sizeof(*ctx), PROT_WRITE)) < 0) {
-    spin_unlock(&process_lock);
-    object_pool_put(signal_cache, signal);
-    process_destroy(SIGSEGV);
-  }
-
-  ctx->r0     = current->thread->tf->r0;
-  ctx->sp     = current->thread->tf->sp;
-  ctx->lr     = current->thread->tf->lr;
-  ctx->pc     = current->thread->tf->pc;
-  ctx->psr    = current->thread->tf->psr;
-  ctx->trapno = current->thread->tf->trapno;
-  
-  ctx->signo = signal->info.si_signo;
-  ctx->handler = (uint32_t) handler->sa_handler;
-
-  current->thread->tf->r0 = (uint32_t) &ctx->signo;
-  current->thread->tf->sp = (uintptr_t) ctx;
-  current->thread->tf->pc = (uintptr_t) current->signal_stub;
-
-  spin_unlock(&process_lock);
-  object_pool_put(signal_cache, signal);
-}
-
-void
-process_signal_check(void)
-{
-  struct Process *current = process_current();
-  struct ListLink *link;
-
-  spin_lock(&process_lock);
-
-  link = current->pending_signals.next;
-  while (link != &current->pending_signals) {
-    struct Signal *signal;
-    struct sigaction *handler;
-
-    signal = LIST_CONTAINER(current->pending_signals.next, struct Signal, link);
-    handler = &current->signal_handlers[signal->info.si_signo];
-
-    // TODO: if blocked, continue
-
-    list_remove(&signal->link);
-
-    if (handler->sa_handler == SIG_DFL)
-      return process_signal_default(current, signal);
-
-    return process_signal_handle(current, handler, signal);
-  }
-
-  spin_unlock(&process_lock);
-}
-
-int
-process_signal_return(void)
-{
-  int r;
-  struct Process *current = process_current();
-  struct SignalContext *ctx;
-
-  spin_lock(&process_lock);
-
-  ctx = (struct SignalContext *) current->thread->tf->sp;
-  if ((r = vm_space_check_buf(current->vm, ctx, sizeof(*ctx), PROT_WRITE)) < 0) {
-    spin_unlock(&process_lock);
-    process_destroy(SIGSEGV);
-  }
-
-  current->thread->tf->r0 = ctx->r0;
-  current->thread->tf->sp = ctx->sp;
-  current->thread->tf->lr = ctx->lr;
-  current->thread->tf->pc = ctx->pc;
-  current->thread->tf->psr = ctx->psr;
-  current->thread->tf->trapno = ctx->trapno;
-  
-  spin_unlock(&process_lock);
-  
-  return current->thread->tf->r0;
-}
-
 int
 process_nanosleep(const struct timespec *rqtp, struct timespec *rmtp)
 {
@@ -746,7 +516,7 @@ process_get_gid(pid_t pid)
   if (pid < 0)
     return -EINVAL;
 
-  spin_lock(&process_lock);
+  process_lock();
 
   if ((process = pid_lookup(pid)) == NULL) {
     r = -ESRCH;
@@ -755,7 +525,7 @@ process_get_gid(pid_t pid)
     r = process->pgid;
   }
 
-  spin_unlock(&process_lock);
+  process_unlock();
 
   return r;
 }
@@ -774,7 +544,7 @@ process_set_gid(pid_t pid, pid_t pgid)
   if (pgid < 0)
     return -EINVAL;
 
-  spin_lock(&process_lock);
+  process_lock();
 
   if ((process = pid_lookup(pid)) == NULL) {
     r = -ESRCH;
@@ -784,7 +554,7 @@ process_set_gid(pid_t pid, pid_t pgid)
     r = 0;
   }
 
-  spin_unlock(&process_lock);
+  process_unlock();
 
   return r;
 }

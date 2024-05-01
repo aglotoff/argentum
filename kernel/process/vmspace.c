@@ -23,6 +23,20 @@ static struct ObjectPool *vm_areacache;
  */
 
 int
+vm_space_check_ptr(struct VMSpace *vm, uintptr_t va, unsigned perm)
+{
+  int curr_perm;
+
+  if (va >= VIRT_KERNEL_BASE)
+    return -EFAULT;
+  if (vm_page_lookup(vm->pgtab, va, &curr_perm) == NULL)
+    return -EFAULT;
+  if ((curr_perm & perm) != perm)
+    return -EFAULT;
+  return 0;
+}
+
+int
 vm_space_check_buf(struct VMSpace *vm, const void *va, size_t n, unsigned perm)
 {
   struct Page *page, *new_page;

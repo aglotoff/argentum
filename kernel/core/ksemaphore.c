@@ -45,7 +45,7 @@ ksem_get(struct KSemaphore *sem, unsigned long timeout, int blocking)
       return -EAGAIN;
     }
 
-    if ((r = sched_sleep(&sem->queue, timeout, NULL)) != 0) {
+    if ((r = sched_sleep(&sem->queue, 0, timeout, NULL)) != 0) {
       sched_unlock();
       return r;
     }

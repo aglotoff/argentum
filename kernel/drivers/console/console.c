@@ -19,11 +19,22 @@
 
 #define NCONSOLES 6
 
+struct SpinLock console_lock;
 struct Console consoles[NCONSOLES];
 struct Console *console_current = &consoles[0];
 
 #define IN_EOF  (1 << 0)
 #define IN_EOL  (1 << 1)
+
+static void
+console_send(struct Console *console, int signo)
+{
+  if (console->pgrp <= 1)
+    return;
+
+  if (signal_generate(-console->pgrp, signo, 0) != 0)
+    panic("sending signal failed");
+}
 
 /**
  * Initialize the console devices.
@@ -32,6 +43,8 @@ void
 console_init(void)
 {  
   struct Console *console;
+
+  spin_init(&console_lock, "console");
 
   for (console = consoles; console < &consoles[NCONSOLES]; console++) {
     unsigned i;
@@ -92,7 +105,6 @@ console_get(struct Inode *inode)
   int minor = inode->rdev & 0xFF;
   return minor < NCONSOLES ? &consoles[minor] : NULL;
 }
-
 
 /*
  * ----------------------------------------------------------------------------
@@ -194,8 +206,14 @@ console_print_char(struct Console *console, char c)
     break;
 
   default:
-    console_set_char(console, console->out.pos++, c);
-    ret++;
+    if (c < ' ') {
+      console_set_char(console, console->out.pos++, '^');
+      console_set_char(console, console->out.pos++, '@' + c);
+      ret += 2;
+    } else {
+      console_set_char(console, console->out.pos++, c);
+      ret++;
+    }
     break;
   }
 
@@ -506,8 +524,6 @@ console_write(struct Inode *inode, const void *buf, size_t nbytes)
   return i;
 }
 
-static int pgrp;
-
 int
 console_ioctl(struct Inode *inode, int request, int arg)
 {
@@ -533,10 +549,10 @@ console_ioctl(struct Inode *inode, int request, int arg)
                       sizeof(struct termios));
 
   case TIOCGPGRP:
-    return pgrp;
+    return console_current->pgrp;
   case TIOCSPGRP:
     // TODO: validate
-    pgrp = arg;
+    console_current->pgrp = arg;
     return 0;
   case TIOCGWINSZ:
     ws.ws_col = CONSOLE_COLS;
@@ -662,6 +678,26 @@ console_interrupt(char *buf)
       }
     }
 
+    // Recognize signals
+    if (cons->termios.c_lflag & ISIG) {
+      int sig;
+
+      if (c == cons->termios.c_cc[VINTR])
+        sig = SIGINT;
+      else if (c == cons->termios.c_cc[VQUIT])
+        sig = SIGQUIT;
+      else if (c == cons->termios.c_cc[VSUSP])
+        sig = SIGSTOP;
+      else
+        sig = 0;
+
+      if (sig) {
+        console_send(cons, sig);
+        console_echo(cons, c);
+        continue;
+      }
+    }
+
     if ((c != cons->termios.c_cc[VEOF]) && (cons->termios.c_lflag & ECHO))
       console_echo(cons, c);
     else if ((c == '\n') && (cons->termios.c_lflag & ECHONL))
@@ -732,9 +768,13 @@ console_read(struct Inode *inode, uintptr_t buf, size_t nbytes)
 
   while (i < nbytes) {
     char c;
+    int r;
 
     while (cons->in.size == 0)
-      wchan_sleep(&cons->in.queue, &cons->in.lock);
+      if ((r = wchan_sleep(&cons->in.queue, &cons->in.lock)) < 0) {
+        spin_unlock(&cons->in.lock);
+        return r;
+      }
 
     c = cons->in.buf[cons->in.read_pos];
     cons->in.read_pos = (cons->in.read_pos + 1) % CONSOLE_INPUT_MAX;

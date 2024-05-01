@@ -1,9 +1,8 @@
 #include <signal.h>
-#include <stdio.h>
+#include <sys/syscall.h>
 
 int
 sigpending(sigset_t *set)
 {
-  fprintf(stderr, "TODO: sigpending(%p)\n", set);
-  return -1;
+  return __syscall1(__SYS_SIGPENDING, set);
 }

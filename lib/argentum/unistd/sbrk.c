@@ -4,5 +4,5 @@
 void *
 _sbrk(ptrdiff_t increment)
 {
-  return (void *) __syscall(__SYS_SBRK, increment, 0, 0, 0, 0, 0);
+  return (void *) __syscall1(__SYS_SBRK, increment);
 }
