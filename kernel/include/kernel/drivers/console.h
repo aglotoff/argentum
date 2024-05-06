@@ -61,12 +61,13 @@ struct Console {
 };
 
 extern struct Console *console_current;
+extern struct Console *console_system;
 
 struct Inode;
 
 void    console_init(void);
 void    console_putc(char);
-void    console_interrupt(char *);
+void    console_interrupt(struct Console *, char *);
 int     console_getc(void);
 ssize_t console_read(struct Inode *, uintptr_t, size_t);
 ssize_t console_write(struct Inode *, const void *, size_t);

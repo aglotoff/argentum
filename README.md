@@ -37,6 +37,7 @@ for Cortex-A9.
    make ports-gzip
    make ports-sed
    make ports-ncurses
+   make ports-less
    ```
 7. Run the kernel in the emulator (you'll need `qemu-system-arm`):
    ```

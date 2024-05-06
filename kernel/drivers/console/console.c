@@ -17,23 +17,26 @@
 #include "display.h"
 #include "serial.h"
 
-#define NCONSOLES 6
+#define NCONSOLES   6   // The total number of virtual consoles
 
-struct SpinLock console_lock;
-struct Console consoles[NCONSOLES];
+static struct SpinLock console_lock;
+static struct Console consoles[NCONSOLES];
+
 struct Console *console_current = &consoles[0];
+struct Console *console_system  = &consoles[0];
 
 #define IN_EOF  (1 << 0)
 #define IN_EOL  (1 << 1)
 
+// Send a signal to all processes in the given console process group
 static void
-console_send(struct Console *console, int signo)
+console_notify(struct Console *console, int signo)
 {
   if (console->pgrp <= 1)
     return;
 
   if (signal_generate(-console->pgrp, signo, 0) != 0)
-    panic("sending signal failed");
+    panic("cannot generate signal");
 }
 
 /**
@@ -81,6 +84,8 @@ console_init(void)
     console->termios.c_cc[VSUSP]  = C('Z');
     console->termios.c_cc[VSTART] = C('Q');
     console->termios.c_cc[VSTOP]  = C('S');
+    console->termios.c_ispeed = B9600;
+    console->termios.c_ospeed = B9600;
   }
 
   serial_init();
@@ -99,22 +104,16 @@ console_out_flush(struct Console *console)
   }
 }
 
+// Use the device minor number to select the virtual console corresponding to
+// this inode
 static struct Console *
-console_get(struct Inode *inode)
+console_from_inode(struct Inode *inode)
 {
+  // No need to lock since rdev cannot change once we obtain an inode ref
+  // TODO: are we sure?
   int minor = inode->rdev & 0xFF;
   return minor < NCONSOLES ? &consoles[minor] : NULL;
 }
-
-/*
- * ----------------------------------------------------------------------------
- * Simple parser for ANSI escape sequences
- * ----------------------------------------------------------------------------
- * 
- * The following escape sequences are currently supported:
- *   CSI n m - Select Graphic Rendition
- *
- */
 
 static void
 console_erase(struct Console *console, unsigned from, unsigned to)
@@ -162,6 +161,28 @@ console_scroll_down(struct Console *console, unsigned n)
 
   if (console == console_current)
     display_scroll_down(console, n);
+}
+
+static void
+console_insert_rows(struct Console *cons, unsigned rows)
+{
+  unsigned max_rows, start_pos, end_pos, n;
+  
+  max_rows  = cons->out.rows - cons->out.pos / cons->out.cols;
+  rows      = MIN(max_rows, rows);
+
+  start_pos = cons->out.pos - (cons->out.pos % cons->out.cols);
+  end_pos   = start_pos + rows * cons->out.cols;
+  n         = (max_rows - rows) * cons->out.cols;
+
+  if (cons == console_current)
+    display_flush(cons);
+
+  memmove(&cons->out.buf[end_pos], &cons->out.buf[start_pos],
+          sizeof(cons->out.buf[0]) * n);
+  
+  if (cons == console_current)
+    display_flush(cons);
 }
 
 static int
@@ -325,6 +346,12 @@ console_handle_esc(struct Console *console, char c)
     }
     break;
 
+  // Insert Line
+  case 'L':
+    n = (console->out.esc_cur_param < 1) ? 1 : console->out.esc_params[0];
+    console_insert_rows(console, n);
+    break;
+
   // Cursor Vertical Position
   case 'd':
     n = (console->out.esc_cur_param < 1) ? 1 : console->out.esc_params[0];
@@ -421,7 +448,8 @@ console_out_char(struct Console *console, char c)
 {
   int i;
 
-  if (console == console_current)
+  // The first (aka system) console is also connected to the serial port
+  if (console == console_system)
     serial_putc(c);
 
   switch (console->out.state) {
@@ -488,7 +516,6 @@ console_echo(struct Console *console, char c)
   spin_unlock(&console->out.lock);
 }
 
-
 /**
  * Output character to the display.
  * 
@@ -497,13 +524,13 @@ console_echo(struct Console *console, char c)
 void
 console_putc(char c)
 {
-  console_echo(console_current, c);
+  console_echo(console_system, c);
 }
 
 ssize_t
 console_write(struct Inode *inode, const void *buf, size_t nbytes)
 {
-  struct Console *console = console_get(inode);
+  struct Console *console = console_from_inode(inode);
   const char *s = (const char *) buf;
   size_t i;
 
@@ -527,7 +554,7 @@ console_write(struct Inode *inode, const void *buf, size_t nbytes)
 int
 console_ioctl(struct Inode *inode, int request, int arg)
 {
-  struct Console *console = console_get(inode);
+  struct Console *console = console_from_inode(inode);
   struct winsize ws;
 
   if (console == NULL)
@@ -562,7 +589,7 @@ console_ioctl(struct Inode *inode, int request, int arg)
     return vm_copy_out(process_current()->vm->pgtab, &ws, arg, sizeof ws);
 
   default:
-    panic("TODO: %d\n", request & 0xFF);
+    panic("TODO: %d %c %d\n", request & 0xFF, (request >> 8) & 0xF, (request >> 16) & 0x1FFF);
     return -EINVAL;
   }
 }
@@ -596,9 +623,8 @@ console_back(struct Console *cons)
  *             if there is no data avalable.
  */
 void
-console_interrupt(char *buf)
+console_interrupt(struct Console *cons, char *buf)
 {
-  struct Console *cons = console_current;
   int c, status = 0;
 
   spin_lock(&cons->in.lock);
@@ -692,7 +718,7 @@ console_interrupt(char *buf)
         sig = 0;
 
       if (sig) {
-        console_send(cons, sig);
+        console_notify(cons, sig);
         console_echo(cons, c);
         continue;
       }
@@ -754,13 +780,22 @@ console_getc(void)
   return c;
 }
 
+/**
+ * Read from the console.
+ * 
+ * @param inode  The inode corresponding to the console
+ * @param buf    User virtual address where to store the data
+ * @param nbytes The number of bytes to read
+ * 
+ * @return The number of bytes read or a negative value if an error occured.
+ */
 ssize_t
 console_read(struct Inode *inode, uintptr_t buf, size_t nbytes)
 {
-  struct Console *cons = console_get(inode);
+  struct Console *cons = console_from_inode(inode);
   char *s = (char *) buf;
   size_t i = 0;
-  
+
   if (cons == NULL)
     return -EBADF;
 
@@ -770,22 +805,29 @@ console_read(struct Inode *inode, uintptr_t buf, size_t nbytes)
     char c;
     int r;
 
-    while (cons->in.size == 0)
+    // Wait for input
+    while (cons->in.size == 0) {
       if ((r = wchan_sleep(&cons->in.queue, &cons->in.lock)) < 0) {
         spin_unlock(&cons->in.lock);
         return r;
       }
+    }
 
+    // TODO: make sure buf is still valid user virtuall address
+
+    // Grab the next character
     c = cons->in.buf[cons->in.read_pos];
     cons->in.read_pos = (cons->in.read_pos + 1) % CONSOLE_INPUT_MAX;
     cons->in.size--;
 
     if (cons->termios.c_lflag & ICANON) {
+      // EOF is only recognized in canonical mode
       if (c == cons->termios.c_cc[VEOF])
         break;
 
       s[i++] = c;
 
+      // In canonical mode, we process at most a single line of input
       if ((c == cons->termios.c_cc[VEOL]) || (c == '\n'))
         break;
     } else {

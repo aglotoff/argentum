@@ -57,7 +57,7 @@ serial_irq(void)
     if (c != 0) {
       buf[0] = c;
       buf[1] = '\0';
-      console_interrupt(buf);
+      console_interrupt(console_system, buf);
     }
   }
 }

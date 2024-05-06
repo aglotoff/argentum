@@ -70,11 +70,11 @@ kbd_irq(void)
       continue;
 
     if (key_sequences[c] != NULL) {
-      console_interrupt(key_sequences[c]);
+      console_interrupt(console_current, key_sequences[c]);
     } else {
       buf[0] = c & 0xFF;
       buf[1] = '\0';
-      console_interrupt(buf);
+      console_interrupt(console_current, buf);
     }
   }
 }

@@ -152,12 +152,12 @@ signal_return(void)
 }
 
 int
-signal_action(int signo, uintptr_t stub, struct sigaction *new_action,
+signal_action(int no, uintptr_t stub, struct sigaction *action,
               struct sigaction *old_action)
 {
   struct Process *current = process_current();
 
-  if (!signal_valid_no(signo, 1))
+  if (!signal_valid_no(no, action && (action->_u._sa_handler != SIG_DFL)))
     return -EINVAL;
 
   if (stub && vm_space_check_ptr(current->vm, stub, PROT_READ | PROT_EXEC))
@@ -166,23 +166,23 @@ signal_action(int signo, uintptr_t stub, struct sigaction *new_action,
   process_lock();
 
   if (old_action != NULL) 
-    *old_action = current->signal_actions[signo - 1];
+    *old_action = current->signal_actions[no - 1];
 
-  if (new_action != NULL) {
-    if ((new_action->_u._sa_handler != SIG_IGN) &&
-        (new_action->_u._sa_handler != SIG_DFL) &&
-        vm_space_check_ptr(current->vm, (uintptr_t) new_action->_u._sa_handler,
+  if (action != NULL) {
+    if ((action->_u._sa_handler != SIG_IGN) &&
+        (action->_u._sa_handler != SIG_DFL) &&
+        vm_space_check_ptr(current->vm, (uintptr_t) action->_u._sa_handler,
                            PROT_READ | PROT_EXEC)) {
       process_unlock();
       return -EFAULT;
     }
 
-    if (!signal_valid_mask(&new_action->sa_mask)) {
+    if (!signal_valid_mask(&action->sa_mask)) {
       process_unlock();
       return -EINVAL;
     }
 
-    current->signal_actions[signo - 1] = *new_action;
+    current->signal_actions[no - 1] = *action;
   }
 
   if (stub)
@@ -386,12 +386,12 @@ signal_default_action(struct Process *current, struct Signal *signal)
   case SIGTTIN:
   case SIGTTOU:
     // Stop
-    panic("not implemented");
+    panic("not implemented %d", signal->info.si_signo);
     break;
 
   case SIGCONT:
     // Continue
-    panic("not implemented");
+    panic("not implemented %d", signal->info.si_signo);
     break;
   }
 
