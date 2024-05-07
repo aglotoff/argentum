@@ -20,7 +20,7 @@ static void
 ptimer_irq(void)
 {
   ptimer_eoi(&ptimer);
-  ktime_tick();
+  tick();
 }
 
 static void

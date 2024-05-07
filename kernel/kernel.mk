@@ -21,12 +21,12 @@ KERNEL_SRCFILES :=	\
 	kernel/core/kmutex.c \
 	kernel/core/ksemaphore.c \
 	kernel/core/kqueue.c \
-	kernel/core/ktime.c \
 	kernel/core/ktimer.c \
 	kernel/core/thread.c \
 	kernel/core/sched.c \
 	kernel/core/spin.c \
 	kernel/core/spin_arch.c \
+	kernel/core/tick.c \
 	kernel/core/wchan.c \
 	kernel/drivers/console/kbd.c \
 	kernel/drivers/console/display.c \

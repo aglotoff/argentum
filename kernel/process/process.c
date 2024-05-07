@@ -21,7 +21,7 @@
 #include <kernel/spin.h>
 #include <kernel/vmspace.h>
 #include <kernel/trap.h>
-#include <kernel/ktime.h>
+#include <kernel/tick.h>
 #include <kernel/ksemaphore.h>
 
 struct ObjectPool *process_cache;
@@ -485,18 +485,18 @@ process_nanosleep(const struct timespec *rqtp, struct timespec *rmtp)
   struct KSemaphore sem;
   int r;
 
-  start = ktime_get();
+  start = tick_get();
 
-  rq_timeout = rqtp->tv_sec * TICKS_PER_S + rqtp->tv_nsec / NS_PER_TICK;
+  rq_timeout = rqtp->tv_sec * TICKS_PER_SECOND + rqtp->tv_nsec / NS_PER_TICK;
 
   ksem_create(&sem, 0);
   r = ksem_get(&sem, rq_timeout, 1);
 
-  rm_timeout = MIN(ktime_get() - start, rq_timeout);
+  rm_timeout = MIN(tick_get() - start, rq_timeout);
 
   if (rmtp != NULL) {
-    rmtp->tv_sec  = rm_timeout / TICKS_PER_S;
-    rmtp->tv_nsec = (rm_timeout % TICKS_PER_S) * NS_PER_TICK;
+    rmtp->tv_sec  = rm_timeout / TICKS_PER_SECOND;
+    rmtp->tv_nsec = (rm_timeout % TICKS_PER_SECOND) * NS_PER_TICK;
   }
 
   ksem_destroy(&sem);

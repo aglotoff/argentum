@@ -4,8 +4,8 @@
 #include <kernel/kmutex.h>
 #include <kernel/kqueue.h>
 #include <kernel/ksemaphore.h>
-#include <kernel/ktime.h>
 #include <kernel/thread.h>
+#include <kernel/tick.h>
 #include <kernel/types.h>
 #include <lwip/sys.h>
 
@@ -92,12 +92,12 @@ sys_arch_sem_wait(sys_sem_t *sem, u32_t timeout)
 {
   unsigned long start, end;
 
-  start = ktime_get();
-  if (ksem_get(*sem, timeout / TICKS_PER_MS, 1) < 0)
+  start = tick_get();
+  if (ksem_get(*sem, timeout / MS_PER_TICK, 1) < 0)
     return SYS_ARCH_TIMEOUT;
-  end = ktime_get();
+  end = tick_get();
   
-  return MIN(timeout, (end - start) * TICKS_PER_MS);
+  return MIN(timeout, (end - start) * MS_PER_TICK);
 }
 
 void
@@ -163,10 +163,10 @@ sys_arch_mbox_fetch(sys_mbox_t *mbox, void **msg, u32_t timeout)
 {
   unsigned long start, end;
 
-  start = ktime_get();
+  start = tick_get();
   if (kqueue_receive(*mbox, msg, timeout / 10, 1) < 0)
     return SYS_ARCH_TIMEOUT;
-  end = ktime_get();
+  end = tick_get();
   
   return MIN(timeout, (end - start) * 10);
 }
@@ -233,13 +233,13 @@ int errno;
 u32_t
 sys_jiffies(void)
 {
-  return ktime_get();
+  return tick_get();
 }
 
 u32_t
 sys_now(void)
 {
-  return ktime_get() * 10;
+  return tick_get() * 10;
 }
 
 static struct SpinLock lwip_lock = SPIN_INITIALIZER("lwip");

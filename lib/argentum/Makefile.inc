@@ -115,6 +115,8 @@ libc_a_SOURCES += \
   %D%/unistd/sethostname.c \
   %D%/unistd/setpgid.c \
   %D%/unistd/setregid.c \
+  %D%/unistd/setresgid.c \
+  %D%/unistd/setresuid.c \
   %D%/unistd/setreuid.c \
   %D%/unistd/setuid.c \
   %D%/unistd/sync.c \

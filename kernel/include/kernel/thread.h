@@ -105,7 +105,7 @@ void         sched_wakeup_all(struct ListLink *, int);
 void         sched_wakeup_one(struct ListLink *, int);
 void         sched_init(void);
 void         sched_start(void);
-void         ktime_tick(void);
+void         tick(void);
 void         sched_isr_enter(void);
 void         sched_isr_exit(void);
 void         sched_resume(struct Thread *, int);

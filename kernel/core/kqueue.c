@@ -17,6 +17,7 @@ kqueue_init(struct KQueue *queue, size_t msg_size, void *start, size_t size)
   queue->msg_size  = msg_size;
   queue->max_size  = size / msg_size;
   queue->size      = 0;
+
   list_init(&queue->receive_list);
   list_init(&queue->send_list);
 
@@ -72,6 +73,7 @@ kqueue_receive(struct KQueue *queue, void *msg, unsigned long timeout,
     sched_wakeup_one(&queue->send_list, 0);
 
   sched_unlock();
+
   return r;
 }
 
@@ -115,5 +117,6 @@ kqueue_send(struct KQueue *queue, const void *msg, unsigned long timeout,
     sched_wakeup_one(&queue->receive_list, 0);
 
   sched_unlock();
+
   return ret;
 }

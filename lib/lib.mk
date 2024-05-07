@@ -144,6 +144,8 @@ LIB_SRCFILES := \
 	lib/argentum/unistd/sethostname.c \
 	lib/argentum/unistd/setpgid.c \
 	lib/argentum/unistd/setregid.c \
+	lib/argentum/unistd/setresgid.c \
+	lib/argentum/unistd/setresuid.c \
 	lib/argentum/unistd/setreuid.c \
 	lib/argentum/unistd/setuid.c \
 	lib/argentum/unistd/sync.c \
