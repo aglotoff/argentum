@@ -7,7 +7,7 @@
 #include <string.h>
 #include <sys/mman.h>
 
-static struct SpinLock vm_lock = SPIN_INITIALIZER("vm");
+static struct KSpinLock vm_lock = K_SPINLOCK_INITIALIZER("vm");
 
 /**
  * Find a physical page mapped at the given virtual address.
@@ -115,10 +115,10 @@ vm_range_alloc(void *vm, uintptr_t va, size_t n, int prot)
     return -EINVAL;
 
   for (a = start; a < end; a += PAGE_SIZE) {
-    spin_lock(&vm_lock);
+    k_spinlock_acquire(&vm_lock);
 
     if ((page = page_alloc_one(PAGE_ALLOC_ZERO)) == NULL) {
-      spin_unlock(&vm_lock);
+      k_spinlock_release(&vm_lock);
 
       vm_range_free(vm, (uintptr_t) start, a - start);
       
@@ -127,14 +127,14 @@ vm_range_alloc(void *vm, uintptr_t va, size_t n, int prot)
 
     if ((r = (vm_page_insert(vm, page, (uintptr_t) a, prot)) != 0)) {
       page_free_one(page);
-      spin_unlock(&vm_lock);
+      k_spinlock_release(&vm_lock);
 
       vm_range_free(vm, (uintptr_t) start, a - start);
 
       return r;
     }
 
-    spin_unlock(&vm_lock);
+    k_spinlock_release(&vm_lock);
   }
 
   return 0;
@@ -152,9 +152,9 @@ vm_range_free(void *vm, uintptr_t va, size_t n)
     panic("invalid range [%p,%p)", a, end);
 
   for ( ; a < end; a += PAGE_SIZE) {
-    spin_lock(&vm_lock);
+    k_spinlock_acquire(&vm_lock);
     vm_page_remove(vm, (uintptr_t) a);
-    spin_unlock(&vm_lock);
+    k_spinlock_release(&vm_lock);
   }
 }
 
@@ -171,10 +171,10 @@ vm_range_clone(void *src, void *dst, uintptr_t va, size_t n, int share)
   for ( ; a < end; a += PAGE_SIZE) {
     int perm;
 
-    spin_lock(&vm_lock);
+    k_spinlock_acquire(&vm_lock);
 
     if ((src_page = vm_page_lookup(src, (uintptr_t) a, &perm)) == NULL) {
-      spin_unlock(&vm_lock);
+      k_spinlock_release(&vm_lock);
       continue;
     }
 
@@ -186,18 +186,18 @@ vm_range_clone(void *src, void *dst, uintptr_t va, size_t n, int share)
         if (src_page->ref_count == 1) {
           if ((r = vm_page_insert(src, src_page, va, perm)) < 0) {
             page_free_one(dst_page);
-            spin_unlock(&vm_lock);
+            k_spinlock_release(&vm_lock);
             return r;
           }
         } else {
           if ((dst_page = page_alloc_one(0)) == NULL) {
-            spin_unlock(&vm_lock);
+            k_spinlock_release(&vm_lock);
             return -ENOMEM;
           }
 
           if ((r = vm_page_insert(src, dst_page, va, perm)) < 0) {
             page_free_one(dst_page);
-            spin_unlock(&vm_lock);
+            k_spinlock_release(&vm_lock);
             return r;
           }
 
@@ -207,7 +207,7 @@ vm_range_clone(void *src, void *dst, uintptr_t va, size_t n, int share)
       }
 
       if ((r = vm_page_insert(dst, src_page, va, perm)) < 0) {
-        spin_unlock(&vm_lock);
+        k_spinlock_release(&vm_lock);
         return r;
       }
     } else if ((perm & PROT_WRITE) || (perm & _PROT_COW)) {
@@ -215,30 +215,30 @@ vm_range_clone(void *src, void *dst, uintptr_t va, size_t n, int share)
       perm |= _PROT_COW;
 
       if ((r = vm_page_insert(src, src_page, (uintptr_t) a, perm)) < 0) {
-        spin_unlock(&vm_lock);
+        k_spinlock_release(&vm_lock);
         return r;
       }
 
       if ((r = vm_page_insert(dst, src_page, (uintptr_t) a, perm)) < 0) {
-        spin_unlock(&vm_lock);
+        k_spinlock_release(&vm_lock);
         return r;
       }
     } else {
       if ((dst_page = page_alloc_one(0)) == NULL) {
-        spin_unlock(&vm_lock);
+        k_spinlock_release(&vm_lock);
         return -ENOMEM;
       }
 
       if ((r = vm_page_insert(dst, dst_page, (uintptr_t) va, perm)) < 0) {
         page_free_one(dst_page);
-        spin_unlock(&vm_lock);
+        k_spinlock_release(&vm_lock);
         return r;
       }
 
       memcpy(page2kva(dst_page), page2kva(src_page), PAGE_SIZE);
     }
 
-    spin_unlock(&vm_lock);
+    k_spinlock_release(&vm_lock);
   }
 
   return 0;
@@ -264,10 +264,10 @@ vm_copy_out(void *pgtab, const void *src, uintptr_t dst_va, size_t n)
     offset = dst_va % PAGE_SIZE;
     ncopy  = MIN(PAGE_SIZE - offset, n);
 
-    spin_lock(&vm_lock);
+    k_spinlock_acquire(&vm_lock);
 
     if ((page = vm_page_lookup(pgtab, dst_va, &prot)) == NULL) {
-      spin_unlock(&vm_lock);
+      k_spinlock_release(&vm_lock);
       return -EFAULT;
     }
 
@@ -281,7 +281,7 @@ vm_copy_out(void *pgtab, const void *src, uintptr_t dst_va, size_t n)
       if (page->ref_count == 1) {
         // The page has only one reference, just update permission bits
         if ((r = vm_page_insert(pgtab, page, dst_va, prot)) < 0) {
-          spin_unlock(&vm_lock);
+          k_spinlock_release(&vm_lock);
           return r;
         }
       } else {
@@ -289,7 +289,7 @@ vm_copy_out(void *pgtab, const void *src, uintptr_t dst_va, size_t n)
         struct Page *page_copy;
 
         if ((page_copy = page_alloc_one(0)) == NULL) {
-          spin_unlock(&vm_lock);
+          k_spinlock_release(&vm_lock);
           return -ENOMEM;
         }
         
@@ -297,7 +297,7 @@ vm_copy_out(void *pgtab, const void *src, uintptr_t dst_va, size_t n)
 
         if ((r = vm_page_insert(pgtab, page_copy, dst_va, prot)) < 0) {
           page_free_one(page_copy);
-          spin_unlock(&vm_lock);
+          k_spinlock_release(&vm_lock);
           return r;
         }
       }
@@ -306,7 +306,7 @@ vm_copy_out(void *pgtab, const void *src, uintptr_t dst_va, size_t n)
     kva = (uint8_t *) page2kva(page);
     memmove(kva + offset, p, ncopy);
 
-    spin_unlock(&vm_lock);
+    k_spinlock_release(&vm_lock);
 
     p      += ncopy;
     dst_va += ncopy;
@@ -329,17 +329,17 @@ vm_copy_in(void *vm, void *dst, uintptr_t src_va, size_t n)
     offset = src_va % PAGE_SIZE;
     ncopy  = MIN(PAGE_SIZE - offset, n);
 
-    spin_lock(&vm_lock);
+    k_spinlock_acquire(&vm_lock);
 
     if ((page = vm_page_lookup(vm, src_va, NULL)) == NULL) {
-      spin_unlock(&vm_lock);
+      k_spinlock_release(&vm_lock);
       return -EFAULT;
     }
 
     kva = (uint8_t *) page2kva(page);
     memmove(p, kva + offset, ncopy);
 
-    spin_unlock(&vm_lock);
+    k_spinlock_release(&vm_lock);
 
     src_va += ncopy;
     p      += ncopy;

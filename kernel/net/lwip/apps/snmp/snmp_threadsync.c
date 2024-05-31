@@ -42,7 +42,7 @@
 #include <string.h>
 
 static void
-call_synced_function(struct threadsync_data *call_data, snmp_threadsync_called_fn fn)
+call_synced_function(struct KThreadsync_data *call_data, snmp_threadsync_called_fn fn)
 {
   sys_mutex_lock(&call_data->threadsync_node->instance->sem_usage_mutex);
   call_data->threadsync_node->instance->sync_fn(fn, call_data);
@@ -53,7 +53,7 @@ call_synced_function(struct threadsync_data *call_data, snmp_threadsync_called_f
 static void
 threadsync_get_value_synced(void *ctx)
 {
-  struct threadsync_data *call_data = (struct threadsync_data *)ctx;
+  struct KThreadsync_data *call_data = (struct KThreadsync_data *)ctx;
 
   if (call_data->proxy_instance.get_value != NULL) {
     call_data->retval.s16 = call_data->proxy_instance.get_value(&call_data->proxy_instance, call_data->arg1.value);
@@ -67,7 +67,7 @@ threadsync_get_value_synced(void *ctx)
 static s16_t
 threadsync_get_value(struct snmp_node_instance *instance, void *value)
 {
-  struct threadsync_data *call_data = (struct threadsync_data *)instance->reference.ptr;
+  struct KThreadsync_data *call_data = (struct KThreadsync_data *)instance->reference.ptr;
 
   call_data->arg1.value = value;
   call_synced_function(call_data, threadsync_get_value_synced);
@@ -78,7 +78,7 @@ threadsync_get_value(struct snmp_node_instance *instance, void *value)
 static void
 threadsync_set_test_synced(void *ctx)
 {
-  struct threadsync_data *call_data = (struct threadsync_data *)ctx;
+  struct KThreadsync_data *call_data = (struct KThreadsync_data *)ctx;
 
   if (call_data->proxy_instance.set_test != NULL) {
     call_data->retval.err = call_data->proxy_instance.set_test(&call_data->proxy_instance, call_data->arg2.len, call_data->arg1.value);
@@ -92,7 +92,7 @@ threadsync_set_test_synced(void *ctx)
 static snmp_err_t
 threadsync_set_test(struct snmp_node_instance *instance, u16_t len, void *value)
 {
-  struct threadsync_data *call_data = (struct threadsync_data *)instance->reference.ptr;
+  struct KThreadsync_data *call_data = (struct KThreadsync_data *)instance->reference.ptr;
 
   call_data->arg1.value = value;
   call_data->arg2.len = len;
@@ -104,7 +104,7 @@ threadsync_set_test(struct snmp_node_instance *instance, u16_t len, void *value)
 static void
 threadsync_set_value_synced(void *ctx)
 {
-  struct threadsync_data *call_data = (struct threadsync_data *)ctx;
+  struct KThreadsync_data *call_data = (struct KThreadsync_data *)ctx;
 
   if (call_data->proxy_instance.set_value != NULL) {
     call_data->retval.err = call_data->proxy_instance.set_value(&call_data->proxy_instance, call_data->arg2.len, call_data->arg1.value);
@@ -118,7 +118,7 @@ threadsync_set_value_synced(void *ctx)
 static snmp_err_t
 threadsync_set_value(struct snmp_node_instance *instance, u16_t len, void *value)
 {
-  struct threadsync_data *call_data = (struct threadsync_data *)instance->reference.ptr;
+  struct KThreadsync_data *call_data = (struct KThreadsync_data *)instance->reference.ptr;
 
   call_data->arg1.value = value;
   call_data->arg2.len = len;
@@ -130,7 +130,7 @@ threadsync_set_value(struct snmp_node_instance *instance, u16_t len, void *value
 static void
 threadsync_release_instance_synced(void *ctx)
 {
-  struct threadsync_data *call_data = (struct threadsync_data *)ctx;
+  struct KThreadsync_data *call_data = (struct KThreadsync_data *)ctx;
 
   call_data->proxy_instance.release_instance(&call_data->proxy_instance);
 
@@ -140,7 +140,7 @@ threadsync_release_instance_synced(void *ctx)
 static void
 threadsync_release_instance(struct snmp_node_instance *instance)
 {
-  struct threadsync_data *call_data = (struct threadsync_data *)instance->reference.ptr;
+  struct KThreadsync_data *call_data = (struct KThreadsync_data *)instance->reference.ptr;
 
   if (call_data->proxy_instance.release_instance != NULL) {
     call_synced_function(call_data, threadsync_release_instance_synced);
@@ -150,7 +150,7 @@ threadsync_release_instance(struct snmp_node_instance *instance)
 static void
 get_instance_synced(void *ctx)
 {
-  struct threadsync_data *call_data   = (struct threadsync_data *)ctx;
+  struct KThreadsync_data *call_data   = (struct KThreadsync_data *)ctx;
   const struct snmp_leaf_node *leaf   = (const struct snmp_leaf_node *)(const void *)call_data->proxy_instance.node;
 
   call_data->retval.err = leaf->get_instance(call_data->arg1.root_oid, call_data->arg2.root_oid_len, &call_data->proxy_instance);
@@ -161,7 +161,7 @@ get_instance_synced(void *ctx)
 static void
 get_next_instance_synced(void *ctx)
 {
-  struct threadsync_data *call_data   = (struct threadsync_data *)ctx;
+  struct KThreadsync_data *call_data   = (struct KThreadsync_data *)ctx;
   const struct snmp_leaf_node *leaf   = (const struct snmp_leaf_node *)(const void *)call_data->proxy_instance.node;
 
   call_data->retval.err = leaf->get_next_instance(call_data->arg1.root_oid, call_data->arg2.root_oid_len, &call_data->proxy_instance);
@@ -173,7 +173,7 @@ static snmp_err_t
 do_sync(const u32_t *root_oid, u8_t root_oid_len, struct snmp_node_instance *instance, snmp_threadsync_called_fn fn)
 {
   const struct snmp_threadsync_node *threadsync_node = (const struct snmp_threadsync_node *)(const void *)instance->node;
-  struct threadsync_data *call_data = &threadsync_node->instance->data;
+  struct KThreadsync_data *call_data = &threadsync_node->instance->data;
 
   if (threadsync_node->node.node.oid != threadsync_node->target->node.oid) {
     LWIP_DEBUGF(SNMP_DEBUG, ("Sync node OID does not match target node OID"));

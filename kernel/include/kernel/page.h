@@ -17,7 +17,7 @@
 #include <kernel/list.h>
 #include <kernel/mm/memlayout.h>
 
-struct ObjectSlab;
+struct KObjectSlab;
 
 /**
  * Physical page block descriptor.
@@ -27,7 +27,7 @@ struct Page {
     /** Link into the free list */
     struct ListLink    link;
     /** The slab this page block belongs to */
-    struct ObjectSlab *slab;
+    struct KObjectSlab *slab;
   };
   /** Reference counter */
   int ref_count;

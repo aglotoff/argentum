@@ -50,7 +50,7 @@ static struct {
   unsigned long  *bitmap;
 } page_free_list[PAGE_ORDER_MAX + 1];
 /** The spinlock protecting the allocator structures */
-static struct SpinLock page_lock;
+static struct KSpinLock page_lock;
 /** Whether the allocator is ready to be used */
 static int page_initialized = 0;
 
@@ -61,6 +61,7 @@ static int page_initialized = 0;
 #define BITMAP_MASK(n)    (1U << BITMAP_SHIFT(n))
 
 static void        *boot_alloc(size_t);
+
 static struct Page *page_buddy(struct Page *, unsigned);
 static void         page_list_add(struct Page *, unsigned);
 static void         page_list_remove(struct Page *, unsigned);
@@ -75,7 +76,7 @@ page_init_low(void)
   unsigned i;
   size_t bitmap_len;
 
-  spin_init(&page_lock, "page_lock");
+  k_spinlock_init(&page_lock, "page_lock");
 
   // TODO: detect the actual amount of physical memory!
   page_count = PHYS_LIMIT / PAGE_SIZE;
@@ -165,7 +166,7 @@ page_alloc_block(unsigned order, int flags)
   struct Page *page;
   unsigned o;
 
-  spin_lock(&page_lock);
+  k_spinlock_acquire(&page_lock);
 
   for (o = order; o <= PAGE_ORDER_MAX; o++)
     if (!list_empty(&page_free_list[o].link))
@@ -173,7 +174,7 @@ page_alloc_block(unsigned order, int flags)
 
   if (o > PAGE_ORDER_MAX) {
     // TODO: try to reclaim pages from the slab allocator
-    spin_unlock(&page_lock);
+    k_spinlock_release(&page_lock);
     return NULL;
   }
 
@@ -192,7 +193,7 @@ page_alloc_block(unsigned order, int flags)
   assert(page->ref_count == 0);
   assert(!page_list_contains(page, order));
 
-  spin_unlock(&page_lock);
+  k_spinlock_release(&page_lock);
 
   if (flags & PAGE_ALLOC_ZERO)
     memset(page2kva(page), 0, PAGE_SIZE << order);
@@ -214,7 +215,7 @@ page_free_block(struct Page *page, unsigned order)
   if (page->ref_count != 0)
     panic("page->ref_count != 0 (%u)", page->ref_count);
 
-  spin_lock(&page_lock);
+  k_spinlock_acquire(&page_lock);
 
   for ( ; order < PAGE_ORDER_MAX; order++) {
     buddy = page_buddy(page, order);
@@ -231,7 +232,7 @@ page_free_block(struct Page *page, unsigned order)
   page_list_add(page, order);
   page_free_count += 1U << order;
 
-  spin_unlock(&page_lock);
+  k_spinlock_release(&page_lock);
 }
 
 /**

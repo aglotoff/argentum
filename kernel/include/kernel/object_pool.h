@@ -14,14 +14,14 @@
 #include <kernel/list.h>
 #include <kernel/spin.h>
 
-#define OBJECT_POOL_NAME_MAX  64
+#define K_OBJECT_POOL_NAME_MAX  64
 
 /**
  * Object pool descriptor.
  */
-struct ObjectPool {
+struct KObjectPool {
   /** Spinlock protecting this pool. */
-  struct SpinLock   lock;
+  struct KSpinLock  lock;
   /** Various flags */
   int               flags;
 
@@ -58,45 +58,45 @@ struct ObjectPool {
   struct ListLink   link;
 
   /** Human-readable pool name (for debugging purposes). */
-  char              name[OBJECT_POOL_NAME_MAX + 1];
+  char              name[K_OBJECT_POOL_NAME_MAX + 1];
 };
 
 enum {
-  OBJECT_POOL_OFF_SLAB = (1 << 0)
+  K_OBJECT_POOL_OFF_SLAB = (1 << 0)
 };
 
-struct ObjectTag {
-  struct ObjectTag *next;
+struct KObjectTag {
+  struct KObjectTag *next;
 };
 
 /**
  * Object slab descriptor.
  */
-struct ObjectSlab {
+struct KObjectSlab {
   /** Linkage in the pool. */
-  struct ListLink    link;
+  struct ListLink     link;
   /** The pool this slab belongs to. */
-  struct ObjectPool *pool;
+  struct KObjectPool *pool;
   /** Address of the buffer containing all memory blocks. */
-  void              *data;
+  void               *data;
   /** Linked list of free block tags. */
-  struct ObjectTag  *free;
+  struct KObjectTag  *free;
   /** Reference count for allocated blocks. */       
-  unsigned           used_count;
+  unsigned            used_count;
     /** Address of the bufers containing all block tags. */
-  struct ObjectTag   tags[0];
+  struct KObjectTag   tags[0];
 };
 
-struct ObjectPool *object_pool_create(const char *, size_t, size_t,
+struct KObjectPool *k_object_pool_create(const char *, size_t, size_t,
                                       void (*)(void *, size_t),
                                       void (*)(void *, size_t));
-int                object_pool_destroy(struct ObjectPool *);
-void              *object_pool_get(struct ObjectPool *);
-void               object_pool_put(struct ObjectPool *, void *);
+int                k_object_pool_destroy(struct KObjectPool *);
+void              *k_object_pool_get(struct KObjectPool *);
+void               k_object_pool_put(struct KObjectPool *, void *);
 
-void               system_object_pool_init(void);
+void               k_object_pool_system_init(void);
 
-void              *kmalloc(size_t);
-void               kfree(void *);
+void              *k_malloc(size_t);
+void               k_free(void *);
 
 #endif  // !__KERNEL_OBJECT_POOL_H__

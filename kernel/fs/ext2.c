@@ -26,7 +26,7 @@ ext2_inode_get(struct FS *fs, ino_t inum)
 
   if (inode != NULL && inode->fs == NULL) {
     inode->fs = fs;
-    if ((inode->extra = kmalloc(sizeof(struct Ext2InodeExtra))) == NULL)
+    if ((inode->extra = k_malloc(sizeof(struct Ext2InodeExtra))) == NULL)
       panic("TODO");
   }
 
@@ -408,7 +408,7 @@ ext2_sb_sync(struct Ext2SuperblockData *sb, dev_t dev)
   struct Ext2Superblock *raw;
   struct Buf *buf;
 
-  kmutex_lock(&sb->mutex);
+  k_mutex_lock(&sb->mutex);
 
   sb->wtime = rtc_get_time();
 
@@ -424,7 +424,7 @@ ext2_sb_sync(struct Ext2SuperblockData *sb, dev_t dev)
 
   buf_release(buf);
 
-  kmutex_unlock(&sb->mutex);
+  k_mutex_unlock(&sb->mutex);
 }
 
 struct FSOps ext2fs_ops = {
@@ -452,12 +452,12 @@ ext2_mount(dev_t dev)
   struct Ext2SuperblockData *sb;
   struct FS *ext2fs;
 
-  if ((ext2fs = (struct FS *) kmalloc(sizeof(struct FS))) == NULL)
+  if ((ext2fs = (struct FS *) k_malloc(sizeof(struct FS))) == NULL)
     panic("cannot allocate FS");
-  if ((sb = (struct Ext2SuperblockData *) kmalloc(sizeof(struct Ext2SuperblockData))) == NULL)
+  if ((sb = (struct Ext2SuperblockData *) k_malloc(sizeof(struct Ext2SuperblockData))) == NULL)
     panic("cannt allocate superblock");
 
-  kmutex_init(&sb->mutex, "ext2_sb_mutex");
+  k_mutex_init(&sb->mutex, "ext2_sb_mutex");
   
   if ((buf = buf_read(1, 1024, dev)) == NULL)
     panic("cannot read the superblock");

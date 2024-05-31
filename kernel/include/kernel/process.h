@@ -10,15 +10,16 @@
 #include <sys/types.h>
 
 #include <kernel/cpu.h>
+#include <kernel/spin.h>
 #include <kernel/list.h>
 #include <kernel/vm.h>
 #include <kernel/thread.h>
 #include <kernel/trap.h>
-#include <kernel/wchan.h>
+#include <kernel/waitqueue.h>
 #include <time.h>
 
 struct File;
-struct SpinLock;
+struct KSpinLock;
 struct Inode;
 struct Process;
 struct PathNode;
@@ -37,7 +38,7 @@ struct Process {
   struct VMSpace       *vm;
 
   /** Main process thread */
-  struct Thread        *thread;
+  struct KThread        *thread;
 
   /** Unique thread identifier */
   pid_t                 pid;
@@ -54,7 +55,7 @@ struct Process {
   struct ListLink       sibling_link;
 
   /** Queue to sleep waiting for children */
-  struct WaitChannel    wait_queue;
+  struct KWaitQueue    wait_queue;
   /** Whether the process is a zombie */
   int                   zombie;
   /** Exit code */
@@ -82,7 +83,7 @@ struct Process {
   struct PathNode      *cwd;
 };
 
-extern struct SpinLock __process_lock;
+extern struct KSpinLock __process_lock;
 extern struct ListLink __process_list;
 
 struct Signal {
@@ -123,20 +124,20 @@ struct SignalFrame {
 static inline struct Process *
 process_current(void)
 {
-  struct Thread *task = thread_current();
+  struct KThread *task = k_thread_current();
   return task != NULL ? task->process : NULL;
 }
 
 static inline void
 process_lock(void)
 {
-  spin_lock(&__process_lock);
+  k_spinlock_acquire(&__process_lock);
 }
 
 static inline void
 process_unlock(void)
 {
-  spin_unlock(&__process_lock);
+  k_spinlock_release(&__process_lock);
 }
 
 void           signal_init_system(void);

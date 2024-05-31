@@ -26,7 +26,7 @@ struct VMSpaceMapEntry {
 
 struct VMSpace {
   l1_desc_t      *pgtab;
-  struct SpinLock lock;
+  struct KSpinLock lock;
   struct ListLink areas;
 };
 

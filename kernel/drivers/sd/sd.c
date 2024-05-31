@@ -51,7 +51,7 @@ static struct PL180 mmci;
 // The queue of pending buffer requests
 static struct {
   struct ListLink head;
-  struct SpinLock lock;
+  struct KSpinLock lock;
 } sd_queue;
 
 static void sd_irq(void);
@@ -95,10 +95,10 @@ sd_init(void)
 
   // Initialize the buffer queue.
   list_init(&sd_queue.head);
-  spin_init(&sd_queue.lock, "sd_queue");
+  k_spinlock_init(&sd_queue.lock, "sd_queue");
 
   // Enable interrupts.
-  pl180_cpu_irq_enable(&mmci);
+  pl180_k_irq_enable(&mmci);
   irq_attach(IRQ_MCIA, sd_irq, 0);
 
   return 0;
@@ -113,7 +113,7 @@ sd_init(void)
 void
 sd_request(struct Buf *buf)
 {
-  if (!kmutex_holding(&buf->mutex))
+  if (!k_mutex_holding(&buf->mutex))
     panic("buf not locked");
   if ((buf->flags & (BUF_DIRTY | BUF_VALID)) == BUF_VALID)
     panic("nothing to do");
@@ -122,7 +122,7 @@ sd_request(struct Buf *buf)
   if (buf->block_size % SD_BLOCKLEN != 0)
     panic("block size must be a multiple of %u", SD_BLOCKLEN);
 
-  spin_lock(&sd_queue.lock);
+  k_spinlock_acquire(&sd_queue.lock);
 
   // Add buffer to the queue.
   list_add_back(&sd_queue.head, &buf->queue_link);
@@ -135,9 +135,9 @@ sd_request(struct Buf *buf)
   // Wait for the R/W operation to finish.
   // TODO: deal with errors!
   while ((buf->flags & (BUF_DIRTY | BUF_VALID)) != BUF_VALID)
-    wchan_sleep(&buf->wait_queue, &sd_queue.lock);
+    k_waitqueue_sleep(&buf->wait_queue, &sd_queue.lock);
 
-  spin_unlock(&sd_queue.lock);
+  k_spinlock_release(&sd_queue.lock);
 }
 
 // Send the data transfer request to the hardware.
@@ -147,7 +147,7 @@ sd_start_transfer(struct Buf *buf)
   uint32_t cmd;
   size_t nblocks;
 
-  assert(spin_holding(&sd_queue.lock));
+  assert(k_spinlock_holding(&sd_queue.lock));
   assert(buf->queue_link.prev == &sd_queue.head);
   assert(buf->block_size % SD_BLOCKLEN == 0);
 
@@ -172,7 +172,7 @@ sd_irq(void)
   struct ListLink *link;
   struct Buf *buf, *next_buf;
 
-  spin_lock(&sd_queue.lock);
+  k_spinlock_acquire(&sd_queue.lock);
 
   // Grab the first buffer in the queue to find out whether a read or write
   // operation is happening
@@ -203,8 +203,8 @@ sd_irq(void)
     sd_start_transfer(next_buf);
   }
 
-  spin_unlock(&sd_queue.lock);
+  k_spinlock_release(&sd_queue.lock);
 
   // Resume the task waiting for the buf data.
-  wchan_wakeup_all(&buf->wait_queue);
+  k_waitqueue_wakeup_all(&buf->wait_queue);
 }

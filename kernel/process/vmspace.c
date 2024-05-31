@@ -13,8 +13,8 @@
 #include <kernel/vmspace.h>
 #include <kernel/process.h>
 
-static struct ObjectPool *vmcache;
-static struct ObjectPool *vm_areacache;
+static struct KObjectPool *vmcache;
+static struct KObjectPool *vm_areacache;
 
 /*
  * ----------------------------------------------------------------------------
@@ -147,15 +147,15 @@ vm_space_create(void)
 {
   struct VMSpace *vm;
 
-  if ((vm = (struct VMSpace *) object_pool_get(vmcache)) == NULL)
+  if ((vm = (struct VMSpace *) k_object_pool_get(vmcache)) == NULL)
     return NULL;
 
   if ((vm->pgtab = vm_arch_create()) == NULL) {
-    object_pool_put(vmcache, vm);
+    k_object_pool_put(vmcache, vm);
     return NULL;
   }
 
-  spin_init(&vm->lock, "vmspace");
+  k_spinlock_init(&vm->lock, "vmspace");
   list_init(&vm->areas);
 
   return vm;
@@ -174,12 +174,12 @@ vm_space_destroy(struct VMSpace *vm)
     vm_range_free(vm->pgtab, area->start, area->length);
 
     list_remove(&area->link);
-    object_pool_put(vm_areacache, area);
+    k_object_pool_put(vm_areacache, area);
   }
 
   vm_arch_destroy(vm->pgtab);
 
-  object_pool_put(vmcache, vm);
+  k_object_pool_put(vmcache, vm);
 }
 
 struct VMSpace   *
@@ -195,7 +195,7 @@ vm_space_clone(struct VMSpace *vm, int share)
   LIST_FOREACH(&vm->areas, l) {
     area = LIST_CONTAINER(l, struct VMSpaceMapEntry, link);
 
-    new_area = (struct VMSpaceMapEntry *) object_pool_get(vm_areacache);
+    new_area = (struct VMSpaceMapEntry *) k_object_pool_get(vm_areacache);
     if (new_area == NULL) {
       vm_space_destroy(new_vm);
       return NULL;
@@ -218,8 +218,8 @@ vm_space_clone(struct VMSpace *vm, int share)
 void
 vm_space_init(void)
 {
-  vmcache = object_pool_create("vmcache", sizeof(struct VMSpace), 0, NULL, NULL);
-  vm_areacache = object_pool_create("vm_areacache", sizeof(struct VMSpaceMapEntry), 0, NULL, NULL);
+  vmcache = k_object_pool_create("vmcache", sizeof(struct VMSpace), 0, NULL, NULL);
+  vm_areacache = k_object_pool_create("vm_areacache", sizeof(struct VMSpaceMapEntry), 0, NULL, NULL);
 }
 
 int
@@ -302,13 +302,13 @@ vmspace_map(struct VMSpace *vm, uintptr_t addr, size_t n, int flags)
     prev->length += next->length + n;
 
     list_remove(&next->link);
-    object_pool_put(vm_areacache, next);
+    k_object_pool_put(vm_areacache, next);
   } else if (prev != NULL) {
     prev->length += n;
   } else if (next != NULL) {
     next->start = va;
   } else {
-    area = (struct VMSpaceMapEntry *) object_pool_get(vm_areacache);
+    area = (struct VMSpaceMapEntry *) k_object_pool_get(vm_areacache);
     if (area == NULL) {
       vm_range_free(vm->pgtab, va, n);
       return -ENOMEM;

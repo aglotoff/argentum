@@ -43,7 +43,7 @@ spin_arch_unlock(volatile int *locked)
 // To properly generate stack backtrace structures, the code must be compiled
 // with the -mapcs-frame and -fno-omit-frame-pointer flags
 void
-spin_arch_pcs_save(struct SpinLock *spin)
+spin_arch_pcs_save(struct KSpinLock *spin)
 {
   uint32_t *fp;
   int i;
@@ -61,7 +61,7 @@ spin_arch_pcs_save(struct SpinLock *spin)
 
 // Display the recorded call stack along with debugging information
 void
-spin_arch_pcs_print(struct SpinLock *spin)
+spin_arch_pcs_print(struct KSpinLock *spin)
 {
   int i;
 

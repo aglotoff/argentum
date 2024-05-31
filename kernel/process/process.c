@@ -22,10 +22,10 @@
 #include <kernel/vmspace.h>
 #include <kernel/trap.h>
 #include <kernel/tick.h>
-#include <kernel/ksemaphore.h>
+#include <kernel/semaphore.h>
 
-struct ObjectPool *process_cache;
-struct ObjectPool *thread_cache;
+struct KObjectPool *process_cache;
+struct KObjectPool *thread_cache;
 
 // Size of PID hash table
 #define NBUCKET   256
@@ -33,12 +33,12 @@ struct ObjectPool *thread_cache;
 // Process ID hash table
 static struct {
   struct ListLink table[NBUCKET];
-  struct SpinLock lock;
+  struct KSpinLock lock;
 } pid_hash;
 
 // Lock to protect the parent/child relationships between the processes
 struct ListLink __process_list;
-struct SpinLock __process_lock;
+struct KSpinLock __process_lock;
 
 static void process_run(void *);
 static void arch_trap_frame_pop(struct TrapFrame *);
@@ -50,7 +50,7 @@ process_ctor(void *buf, size_t size)
 {
   struct Process *proc = (struct Process *) buf;
 
-  wchan_init(&proc->wait_queue);
+  k_waitqueue_init(&proc->wait_queue);
   list_init(&proc->children);
   list_init(&proc->signal_queue);
 
@@ -62,15 +62,15 @@ process_init(void)
 {
   extern uint8_t _binary_obj_user_init_start[];
 
-  process_cache = object_pool_create("process_cache", sizeof(struct Process), 0, process_ctor, NULL);
+  process_cache = k_object_pool_create("process_cache", sizeof(struct Process), 0, process_ctor, NULL);
   if (process_cache == NULL)
     panic("cannot allocate process_cache");
   
   HASH_INIT(pid_hash.table);
-  spin_init(&pid_hash.lock, "pid_hash");
+  k_spinlock_init(&pid_hash.lock, "pid_hash");
 
   list_init(&__process_list);
-  spin_init(&__process_lock, "process_lock");
+  k_spinlock_init(&__process_lock, "process_lock");
 
   // Create the init process
   if (process_create(_binary_obj_user_init_start, &init_process) != 0)
@@ -83,12 +83,12 @@ process_alloc(void)
   static pid_t next_pid;
   struct Process *process;
 
-  if ((process = (struct Process *) object_pool_get(process_cache)) == NULL)
+  if ((process = (struct Process *) k_object_pool_get(process_cache)) == NULL)
     return NULL;
 
-  process->thread = thread_create(process, process_run, process, NZERO);
+  process->thread = k_thread_create(process, process_run, process, NZERO);
   if (process->thread == NULL) {
-    object_pool_put(process_cache, process);
+    k_object_pool_put(process_cache, process);
     return NULL;
   }
 
@@ -101,14 +101,14 @@ process_alloc(void)
   process->sibling_link.next = NULL;
   process->sibling_link.prev = NULL;
 
-  spin_lock(&pid_hash.lock);
+  k_spinlock_acquire(&pid_hash.lock);
 
   if ((process->pid = ++next_pid) < 0)
     panic("pid overflow");
 
   HASH_PUT(pid_hash.table, &process->pid_link, process->pid);
 
-  spin_unlock(&pid_hash.lock);
+  k_spinlock_release(&pid_hash.lock);
 
   fd_init(process);
 
@@ -205,7 +205,7 @@ process_create(const void *binary, struct Process **pstore)
   list_add_back(&__process_list, &proc->link);
   process_unlock();
 
-  thread_resume(proc->thread);
+  k_thread_resume(proc->thread);
 
   if (pstore != NULL)
     *pstore = proc;
@@ -232,12 +232,12 @@ process_free(struct Process *process)
   list_remove(&process->link);
   process_unlock();
 
-  spin_lock(&pid_hash.lock);
+  k_spinlock_acquire(&pid_hash.lock);
   list_remove(&process->pid_link);
-  spin_unlock(&pid_hash.lock);
+  k_spinlock_release(&pid_hash.lock);
 
   // Return the process descriptor to the cache
-  object_pool_put(process_cache, process);
+  k_object_pool_put(process_cache, process);
 }
 
 struct Process *
@@ -246,17 +246,17 @@ pid_lookup(pid_t pid)
   struct ListLink *l;
   struct Process *proc;
 
-  spin_lock(&pid_hash.lock);
+  k_spinlock_acquire(&pid_hash.lock);
 
   HASH_FOREACH_ENTRY(pid_hash.table, l, pid) {
     proc = LIST_CONTAINER(l, struct Process, pid_link);
     if (proc->pid == pid) {
-      spin_unlock(&pid_hash.lock);
+      k_spinlock_release(&pid_hash.lock);
       return proc;
     }
   }
 
-  spin_unlock(&pid_hash.lock);
+  k_spinlock_release(&pid_hash.lock);
   return NULL;
 }
 
@@ -272,9 +272,9 @@ process_destroy(int status)
 
   // Remove the pid hash link
   // TODO: place this code somewhere else?
-  spin_lock(&pid_hash.lock);
+  k_spinlock_acquire(&pid_hash.lock);
   HASH_REMOVE(&current->pid_link);
-  spin_unlock(&pid_hash.lock);
+  k_spinlock_release(&pid_hash.lock);
 
   vm_space_destroy(current->vm);
 
@@ -302,18 +302,18 @@ process_destroy(int status)
 
   // Wake up the init process to cleanup zombie children
   if (has_zombies)
-    wchan_wakeup_all(&init_process->wait_queue);
+    k_waitqueue_wakeup_all(&init_process->wait_queue);
 
   current->zombie = 1;
   current->exit_code = status;
 
   // Wakeup the parent process
   if (current->parent)
-    wchan_wakeup_all(&current->parent->wait_queue);
+    k_waitqueue_wakeup_all(&current->parent->wait_queue);
 
   process_unlock();
 
-  thread_exit();
+  k_thread_exit();
 }
 
 pid_t
@@ -351,7 +351,7 @@ process_copy(int share_vm)
 
   process_unlock();
 
-  thread_resume(child->thread);
+  k_thread_resume(child->thread);
 
   return child->pid;
 }
@@ -428,7 +428,7 @@ process_wait(pid_t pid, uintptr_t stat_loc, int options)
       break;
     }
 
-    if ((r = wchan_sleep(&current->wait_queue, &__process_lock)) != 0)
+    if ((r = k_waitqueue_sleep(&current->wait_queue, &__process_lock)) != 0)
       break;
   }
 
@@ -489,8 +489,8 @@ process_nanosleep(const struct timespec *rqtp, struct timespec *rmtp)
 
   rq_timeout = rqtp->tv_sec * TICKS_PER_SECOND + rqtp->tv_nsec / NS_PER_TICK;
 
-  ksem_create(&sem, 0);
-  r = ksem_get(&sem, rq_timeout, 1);
+  k_semaphore_create(&sem, 0);
+  r = k_semaphore_get(&sem, rq_timeout, 1);
 
   rm_timeout = MIN(tick_get() - start, rq_timeout);
 
@@ -499,7 +499,7 @@ process_nanosleep(const struct timespec *rqtp, struct timespec *rmtp)
     rmtp->tv_nsec = (rm_timeout % TICKS_PER_SECOND) * NS_PER_TICK;
   }
 
-  ksem_destroy(&sem);
+  k_semaphore_destroy(&sem);
 
   return r;
 }

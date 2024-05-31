@@ -69,7 +69,7 @@ entry:
   and   r0, r0, #3
 
   // Set the kernel exception stack pointer for this CPU
-  // sp = kxstack + (KXSTACK_SIZE * <cpu_id>)
+  // sp = kxstack + (KXSTACK_SIZE * <k_cpu_id>)
   ldr   fp, =kxstack
   mov   r1, #KXSTACK_SIZE
   mul   r1, r0
@@ -83,7 +83,7 @@ entry:
   mov   sp, fp
 
   // Set the kernel supervisor mode stack pointer for this CPU
-  // sp = kstack_top - (KSTACK_SIZE * <cpu_id>)
+  // sp = kstack_top - (KSTACK_SIZE * <k_cpu_id>)
   msr   CPSR_c, #(PSR_I | PSR_F | PSR_M_SVC)
   ldr   sp, =kstack_top
   mov   r1, #KSTACK_SIZE

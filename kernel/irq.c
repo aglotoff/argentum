@@ -6,7 +6,7 @@
 #include <kernel/armv7/regs.h>
 #include <kernel/irq.h>
 #include <kernel/cprintf.h>
-#include <kernel/ktimer.h>
+#include <kernel/timer.h>
 #include <kernel/mm/memlayout.h>
 #include <kernel/vm.h>
 
@@ -84,18 +84,18 @@ irq_dispatch(void)
   gic_eoi(&gic, irq);
 
   // Enable nested IRQs
-  cpu_irq_enable();
+  k_irq_enable();
 
   if (irq_handlers[irq & 0xFFFFFF])
     irq_handlers[irq & 0xFFFFFF]();
   else 
-    cprintf("Unexpected IRQ %d from CPU %d\n", irq, cpu_id());
+    cprintf("Unexpected IRQ %d from CPU %d\n", irq, k_cpu_id());
 
   // Disable nested IRQs
-  // cpu_irq_disable();
+  // k_irq_disable();
 
   // Re-enable the IRQ
-  gic_enable(&gic, irq, cpu_id());
+  gic_enable(&gic, irq, k_cpu_id());
 
   sched_isr_exit();
 }

@@ -17,7 +17,7 @@
 
 static struct {
   struct Inode    buf[INODE_CACHE_SIZE];
-  struct SpinLock lock;
+  struct KSpinLock lock;
   struct ListLink head;
 } inode_cache;
 
@@ -26,11 +26,11 @@ fs_inode_cache_init(void)
 {
   struct Inode *ip;
   
-  spin_init(&inode_cache.lock, "inode_cache");
+  k_spinlock_init(&inode_cache.lock, "inode_cache");
   list_init(&inode_cache.head);
 
   for (ip = inode_cache.buf; ip < &inode_cache.buf[INODE_CACHE_SIZE]; ip++) {
-    kmutex_init(&ip->mutex, "inode");
+    k_mutex_init(&ip->mutex, "inode");
     list_add_back(&inode_cache.head, &ip->cache_link);
   }
 }
@@ -41,14 +41,14 @@ fs_inode_get(ino_t ino, dev_t dev)
   struct ListLink *l;
   struct Inode *ip, *empty;
 
-  spin_lock(&inode_cache.lock);
+  k_spinlock_acquire(&inode_cache.lock);
 
   empty = NULL;
   LIST_FOREACH(&inode_cache.head, l) {
     ip = LIST_CONTAINER(l, struct Inode, cache_link);
     if ((ip->ino == ino) && (ip->dev == dev)) {
       ip->ref_count++;
-      spin_unlock(&inode_cache.lock);
+      k_spinlock_release(&inode_cache.lock);
 
       return ip;
     }
@@ -63,12 +63,12 @@ fs_inode_get(ino_t ino, dev_t dev)
     empty->dev       = dev;
     empty->flags     = 0;
 
-    spin_unlock(&inode_cache.lock);
+    k_spinlock_release(&inode_cache.lock);
 
     return empty;
   }
 
-  spin_unlock(&inode_cache.lock);
+  k_spinlock_release(&inode_cache.lock);
 
   return NULL;
 }
@@ -83,9 +83,9 @@ fs_inode_get(ino_t ino, dev_t dev)
 struct Inode *
 fs_inode_duplicate(struct Inode *inode)
 {
-  spin_lock(&inode_cache.lock);
+  k_spinlock_acquire(&inode_cache.lock);
   inode->ref_count++;
-  spin_unlock(&inode_cache.lock);
+  k_spinlock_release(&inode_cache.lock);
 
   return inode;
 }
@@ -98,7 +98,7 @@ fs_inode_duplicate(struct Inode *inode)
 void
 fs_inode_put(struct Inode *inode)
 {   
-  kmutex_lock(&inode->mutex);
+  k_mutex_lock(&inode->mutex);
 
   if (inode->flags & FS_INODE_DIRTY)
     panic("inode dirty");
@@ -108,9 +108,9 @@ fs_inode_put(struct Inode *inode)
   if ((inode->flags & FS_INODE_VALID) && (inode->nlink == 0)) {
     int ref_count;
 
-    spin_lock(&inode_cache.lock);
+    k_spinlock_acquire(&inode_cache.lock);
     ref_count = inode->ref_count;
-    spin_unlock(&inode_cache.lock);
+    k_spinlock_release(&inode_cache.lock);
 
     // If this is the last reference to this inode
     if (ref_count == 1) {
@@ -119,21 +119,21 @@ fs_inode_put(struct Inode *inode)
     }
   }
 
-  kmutex_unlock(&inode->mutex);
+  k_mutex_unlock(&inode->mutex);
 
   // Return the inode to the cache
-  spin_lock(&inode_cache.lock);
+  k_spinlock_acquire(&inode_cache.lock);
   if (--inode->ref_count == 0) {
     list_remove(&inode->cache_link);
     list_add_front(&inode_cache.head, &inode->cache_link);
   }
-  spin_unlock(&inode_cache.lock);
+  k_spinlock_release(&inode_cache.lock);
 }
 
 static int
 fs_inode_holding(struct Inode *ip)
 {
-  return kmutex_holding(&ip->mutex);
+  return k_mutex_holding(&ip->mutex);
 }
 
 /**
@@ -144,7 +144,7 @@ fs_inode_holding(struct Inode *ip)
 void
 fs_inode_lock(struct Inode *ip)
 {
-  kmutex_lock(&ip->mutex);
+  k_mutex_lock(&ip->mutex);
 
   if (ip->flags & FS_INODE_VALID)
     return;
@@ -168,7 +168,7 @@ fs_inode_unlock(struct Inode *ip)
     ip->flags &= ~FS_INODE_DIRTY;
   }
 
-  kmutex_unlock(&ip->mutex);
+  k_mutex_unlock(&ip->mutex);
 }
 
 /**

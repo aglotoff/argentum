@@ -4,7 +4,7 @@
 #include <stdint.h>
 #include <sys/types.h>
 
-#include <kernel/kmutex.h>
+#include <kernel/mutex.h>
 #include <kernel/fs/fs.h>
 
 /**

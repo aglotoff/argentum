@@ -1,13 +1,11 @@
-#define _POSIX_SOURCE
-#include <signal.h>
+#include <arpa/inet.h>
 #include <stdio.h>
-#include <sys/types.h>
-#include <unistd.h>
-#include <sys/wait.h> /*FIX: used to be <wait.h>*/
-#include <stdlib.h>
 
 int
 main(void) {
-  for (;;);
+  struct in_addr aton = { 0xff };
+
+  inet_aton("127.2.1r6.0", &aton);
+  printf("%s\n", inet_ntoa(aton));
   return 0;
 }

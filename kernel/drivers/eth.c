@@ -288,7 +288,7 @@ eth_irq(void)
 {
   uint32_t status;
 
-  cpu_irq_save();
+  k_irq_save();
 
   // Wake up
   while (!(eth[PMT_CTRL]) & PMT_CTRL_READY)
@@ -307,7 +307,7 @@ eth_irq(void)
   if (status & ~(RSFL_INT))
     panic("Unexpected interupt %x", status & ~(RSFL_INT));
 
-  cpu_irq_restore();
+  k_irq_restore();
 }
 
 void
@@ -323,7 +323,7 @@ eth_write(const void *buf, size_t n)
   cmd_a = (((uintptr_t) buf & 0x3) << 16) | 0x00003000 | (n + 14);
   cmd_b = (last_tag++ << 16) | (n + 14);
 
-  cpu_irq_save();
+  k_irq_save();
 
   eth[TX_DATA_FIFO_PORT] = cmd_a;
   eth[TX_DATA_FIFO_PORT] = cmd_b;
@@ -335,5 +335,5 @@ eth_write(const void *buf, size_t n)
 
   eth[TX_CFG] = TX_CFG_STOP_TX;
 
-  cpu_irq_restore();
+  k_irq_restore();
 }

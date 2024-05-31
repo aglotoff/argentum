@@ -5,7 +5,7 @@
 #include <kernel/monitor.h>
 #include <kernel/spin.h>
 
-static struct SpinLock lock = SPIN_INITIALIZER("cprintf");
+static struct KSpinLock lock = K_SPINLOCK_INITIALIZER("cprintf");
 static int locking = 1;
 
 const char *panicstr;
@@ -30,12 +30,12 @@ void
 vcprintf(const char *format, va_list ap)
 {
   if (locking)
-    spin_lock(&lock);
+    k_spinlock_acquire(&lock);
 
   __printf(cputc, NULL, format, ap);
   
   if (locking)
-    spin_unlock(&lock);
+    k_spinlock_release(&lock);
 }
 
 /**

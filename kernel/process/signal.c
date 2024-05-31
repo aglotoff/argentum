@@ -17,12 +17,12 @@ static struct Signal *signal_dequeue(struct Process *);
 static int            signal_valid_no(int, int);
 static int            signal_valid_mask(const sigset_t *);
 
-static struct ObjectPool *signal_cache;
+static struct KObjectPool *signal_cache;
 
 void
 signal_init_system(void)
 {
-  signal_cache = object_pool_create("signal_cache", sizeof(struct Signal), 0, NULL, NULL);
+  signal_cache = k_object_pool_create("signal_cache", sizeof(struct Signal), 0, NULL, NULL);
   if (signal_cache == NULL)
     panic("cannot allocate signal_cache");
 }
@@ -51,7 +51,7 @@ signal_clone(struct Process *parent, struct Process *child)
 {
   int i;
 
-  if (!spin_holding(&__process_lock))
+  if (!k_spinlock_holding(&__process_lock))
     panic("process_lock not acquired");
 
   for (i = 0; i < NSIG; i++)
@@ -95,7 +95,7 @@ signal_generate(pid_t pid, int signo, int code)
     list_add_back(&process->signal_queue, &signal->link);
 
     if (!sigismember(&process->signal_mask, signo))
-      thread_interrupt(process->thread);
+      k_thread_interrupt(process->thread);
   }
 
   process_unlock();
@@ -243,6 +243,7 @@ signal_mask(int how, const sigset_t *set, sigset_t *oldset)
 int
 signal_suspend(const sigset_t *sigmask)
 {
+  struct KWaitQueue wait_chan;
   sigset_t newmask, oldmask;
   int r;
   
@@ -253,9 +254,12 @@ signal_suspend(const sigset_t *sigmask)
     signal_mask(SIG_BLOCK, &newmask, &oldmask);
   }
 
-  sched_lock();
-  r = sched_sleep(NULL, THREAD_STATE_SLEEPING_INTERRUPTILE, 0, NULL);
-  sched_unlock();
+  process_lock();
+
+  k_waitqueue_init(&wait_chan);
+  r = k_waitqueue_sleep(&wait_chan, &__process_lock);
+
+  process_unlock();
 
   if (sigmask != NULL)
     signal_mask(SIG_SETMASK, &oldmask, NULL);
@@ -268,7 +272,7 @@ signal_alloc(int signo, int code, int value)
 {
   struct Signal *signal;
 
-  if ((signal = (struct Signal *) object_pool_get(signal_cache)) == NULL)
+  if ((signal = (struct Signal *) k_object_pool_get(signal_cache)) == NULL)
     return NULL;
   
   signal->link.next = NULL;
@@ -283,7 +287,7 @@ signal_alloc(int signo, int code, int value)
 static void
 signal_free(struct Signal *signal)
 {
-  object_pool_put(signal_cache, signal);
+  k_object_pool_put(signal_cache, signal);
 }
 
 static int

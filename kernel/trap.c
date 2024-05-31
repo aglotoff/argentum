@@ -94,7 +94,7 @@ trap_handle_abort(struct TrapFrame *tf)
   // print_trapframe(tf);
   cprintf("[%d]: user fault va %p status %#x\n", process->pid, address, status);
 
-  cpu_irq_disable();
+  k_irq_disable();
   // monitor(tf);
 
   // TODO: SEGV_MAPERR or SEGV_ACCERR
@@ -141,7 +141,7 @@ print_trapframe(struct TrapFrame *tf)
     [PSR_M_SYS] = "SYS",
   };
 
-  cprintf("TRAP frame at %p from CPU %d\n", tf, cpu_id());
+  cprintf("TRAP frame at %p from CPU %d\n", tf, k_cpu_id());
   cprintf("  psr  %p    [%s%s%s%s]\n",
           tf->psr,
           tf->psr & PSR_I ? "I," : "",

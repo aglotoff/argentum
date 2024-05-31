@@ -16,7 +16,7 @@
  * @param name The name of the spinlock (for debugging purposes).
  */
 void
-spin_init(struct SpinLock *spin, const char *name)
+k_spinlock_init(struct KSpinLock *spin, const char *name)
 {
   spin->locked = 0;
   spin->cpu    = NULL;
@@ -29,19 +29,19 @@ spin_init(struct SpinLock *spin, const char *name)
  * @param lock A pointer to the spinlock to be acquired.
  */
 void
-spin_lock(struct SpinLock *spin)
+k_spinlock_acquire(struct KSpinLock *spin)
 {
-  if (spin_holding(spin)) {
+  if (k_spinlock_holding(spin)) {
     spin_arch_pcs_print(spin);
-    panic("CPU %x is already holding %s", cpu_id(), spin->name);
+    panic("CPU %x is already holding %s", k_cpu_id(), spin->name);
   }
 
   // Disable interrupts to avoid deadlocks
-  cpu_irq_save();
+  k_irq_save();
 
   spin_arch_lock(&spin->locked);
 
-  spin->cpu = cpu_current();
+  spin->cpu = k_cpu();
   spin_arch_pcs_save(spin);
 }
 
@@ -51,12 +51,12 @@ spin_lock(struct SpinLock *spin)
  * @param lock A pointer to the spinlock to be released.
  */
 void
-spin_unlock(struct SpinLock *spin)
+k_spinlock_release(struct KSpinLock *spin)
 {
-  if (!spin_holding(spin)) {
+  if (!k_spinlock_holding(spin)) {
     spin_arch_pcs_print(spin);
     panic("CPU %d cannot release %s: held by %d\n",
-          cpu_id(), spin->name, spin->cpu);
+          k_cpu_id(), spin->name, spin->cpu);
   }
 
   spin->cpu = NULL;
@@ -64,7 +64,7 @@ spin_unlock(struct SpinLock *spin)
 
   spin_arch_unlock(&spin->locked);
   
-  cpu_irq_restore();
+  k_irq_restore();
 }
 
 /**
@@ -74,13 +74,13 @@ spin_unlock(struct SpinLock *spin)
  * @return 1 if the current CPU is holding the lock, 0 otherwise.
  */
 int
-spin_holding(struct SpinLock *spin)
+k_spinlock_holding(struct KSpinLock *spin)
 {
   int r;
 
-  cpu_irq_save();
-  r = spin->locked && (spin->cpu == cpu_current());
-  cpu_irq_restore();
+  k_irq_save();
+  r = spin->locked && (spin->cpu == k_cpu());
+  k_irq_restore();
 
   return r;
 }

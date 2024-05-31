@@ -1,5 +1,5 @@
-#ifndef __KERNEL_INCLUDE_KERNEL_KQUEUE_H__
-#define __KERNEL_INCLUDE_KERNEL_KQUEUE_H__
+#ifndef __KERNEL_INCLUDE_KERNEL_k_mailbox_H__
+#define __KERNEL_INCLUDE_KERNEL_k_mailbox_H__
 
 #ifndef __ARGENTUM_KERNEL__
 #error "This is a kernel header; user programs should not #include it"
@@ -10,7 +10,7 @@
 #include <kernel/list.h>
 #include <kernel/spin.h>
 
-struct KQueue {
+struct KMailBox {
   uint8_t          *buf_start;
   uint8_t          *buf_end;
   uint8_t          *read_ptr;
@@ -22,9 +22,9 @@ struct KQueue {
   struct ListLink   send_list;
 };
 
-int kqueue_init(struct KQueue *, size_t, void *, size_t);
-int kqueue_destroy(struct KQueue *);
-int kqueue_receive(struct KQueue *, void *, unsigned long, int);
-int kqueue_send(struct KQueue *, const void *, unsigned long, int);
+int k_mailbox_init(struct KMailBox *, size_t, void *, size_t);
+int k_mailbox_destroy(struct KMailBox *);
+int k_mailbox_receive(struct KMailBox *, void *, unsigned long, int);
+int k_mailbox_send(struct KMailBox *, const void *, unsigned long, int);
 
-#endif  // !__KERNEL_INCLUDE_KERNEL_KQUEUE_H__
+#endif  // !__KERNEL_INCLUDE_KERNEL_k_mailbox_H__

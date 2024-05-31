@@ -11,9 +11,10 @@
 #include <kernel/fs/buf.h>
 #include <kernel/fs/file.h>
 #include <kernel/irq.h>
-#include <kernel/kqueue.h>
-#include <kernel/ksemaphore.h>
-#include <kernel/ktimer.h>
+#include <kernel/mailbox.h>
+#include <kernel/mutex.h>
+#include <kernel/semaphore.h>
+#include <kernel/timer.h>
 #include <kernel/object_pool.h>
 #include <kernel/vm.h>
 #include <kernel/page.h>
@@ -54,8 +55,10 @@ void main(void)
 
   // Complete the memory manager initialization
   page_init_high(); // Physical page allocator (higher memory)
-  system_object_pool_init();      // Object allocator
+  k_object_pool_system_init();      // Object allocator
   vm_space_init();  // Virtual memory manager
+
+  k_mutex_system_init();
 
   // Initialize the device drivers
   rtc_init(); // Real-time clock
@@ -65,7 +68,7 @@ void main(void)
   // Initialize the remaining kernel services
   buf_init();     // Buffer cache
   file_init();    // File table
-  sched_init();   // Scheduler
+  k_sched_init();   // Scheduler
   net_init();     // Network
   pipe_init();    // Pipes subsystem
   process_init(); // Process table
@@ -94,8 +97,8 @@ void mp_enter(void)
 static void
 mp_main(void)
 {
-  cprintf("Starting CPU %d\n", cpu_id());
+  cprintf("Starting CPU %d\n", k_cpu_id());
 
   // Enter the scheduler loop
-  sched_start();
+  k_sched_start();
 }

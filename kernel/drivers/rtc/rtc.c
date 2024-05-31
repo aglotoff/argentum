@@ -22,7 +22,7 @@
 static struct SBCon sbcon0;
 static struct DS1338 rtc;
 
-static struct SpinLock  rtc_lock;
+static struct KSpinLock  rtc_lock;
 
 /**
  * Initialize the RTC driver.
@@ -32,7 +32,7 @@ rtc_init(void)
 {
   sbcon_init(&sbcon0, PA2KVA(PHYS_CON0));
   ds1338_init(&rtc, &sbcon0, RTC_ADDR);
-  spin_init(&rtc_lock, "rtc");
+  k_spinlock_init(&rtc_lock, "rtc");
 }
 
 /**
@@ -45,9 +45,9 @@ rtc_get_time(void)
 {
   struct tm tm;
 
-  spin_lock(&rtc_lock);
+  k_spinlock_acquire(&rtc_lock);
   ds1338_get_time(&rtc, &tm);
-  spin_unlock(&rtc_lock);
+  k_spinlock_release(&rtc_lock);
 
   return mktime(&tm);
 }
@@ -60,7 +60,7 @@ rtc_get_time(void)
 void
 rtc_set_time(time_t time)
 {
-  spin_lock(&rtc_lock);
+  k_spinlock_acquire(&rtc_lock);
   ds1338_get_time(&rtc, gmtime(&time));
-  spin_unlock(&rtc_lock);
+  k_spinlock_release(&rtc_lock);
 }

@@ -19,7 +19,7 @@
 
 #define NCONSOLES   6   // The total number of virtual consoles
 
-static struct SpinLock console_lock;
+static struct KSpinLock console_lock;
 static struct Console consoles[NCONSOLES];
 
 struct Console *console_current = &consoles[0];
@@ -47,13 +47,13 @@ console_init(void)
 {  
   struct Console *console;
 
-  spin_init(&console_lock, "console");
+  k_spinlock_init(&console_lock, "console");
 
   for (console = consoles; console < &consoles[NCONSOLES]; console++) {
     unsigned i;
 
-    spin_init(&console->in.lock, "console.in");
-    wchan_init(&console->in.queue);
+    k_spinlock_init(&console->in.lock, "console.in");
+    k_waitqueue_init(&console->in.queue);
 
     console->out.fg_color      = COLOR_WHITE;
     console->out.bg_color      = COLOR_BLACK;
@@ -61,7 +61,7 @@ console_init(void)
     console->out.esc_cur_param = -1;
     console->out.cols          = CONSOLE_COLS;
     console->out.rows          = CONSOLE_ROWS;
-    spin_init(&console->out.lock, "console.out");
+    k_spinlock_init(&console->out.lock, "console.out");
 
     for (i = 0; i < console->out.cols * console->out.rows; i++) {
       console->out.buf[i].ch = ' ';
@@ -510,10 +510,10 @@ console_out_char(struct Console *console, char c)
 static void
 console_echo(struct Console *console, char c)
 {
-  spin_lock(&console->out.lock);
+  k_spinlock_acquire(&console->out.lock);
   console_out_char(console, c);
   console_out_flush(console);
-  spin_unlock(&console->out.lock);
+  k_spinlock_release(&console->out.lock);
 }
 
 /**
@@ -537,7 +537,7 @@ console_write(struct Inode *inode, const void *buf, size_t nbytes)
   if (console == NULL)
     return -EBADF;
 
-  spin_lock(&console->out.lock);
+  k_spinlock_acquire(&console->out.lock);
 
   if (!console->out.stopped) {
     // TODO: unlock periodically to not block the entire system?
@@ -546,7 +546,7 @@ console_write(struct Inode *inode, const void *buf, size_t nbytes)
     console_out_flush(console);
   }
 
-  spin_unlock(&console->out.lock);
+  k_spinlock_release(&console->out.lock);
   
   return i;
 }
@@ -627,7 +627,7 @@ console_interrupt(struct Console *cons, char *buf)
 {
   int c, status = 0;
 
-  spin_lock(&cons->in.lock);
+  k_spinlock_acquire(&cons->in.lock);
 
   while ((c = *buf++) != 0) {
     if (c == '\0')
@@ -681,9 +681,9 @@ console_interrupt(struct Console *cons, char *buf)
     // Handle flow control characters
     if (cons->termios.c_iflag & (IXON | IXOFF)) {
       if (c == cons->termios.c_cc[VSTOP]) {
-        spin_lock(&cons->out.lock);
+        k_spinlock_acquire(&cons->out.lock);
         cons->out.stopped = 1;
-        spin_unlock(&cons->out.lock);
+        k_spinlock_release(&cons->out.lock);
 
         if (cons->termios.c_iflag & IXOFF)
           console_echo(cons, c);
@@ -692,9 +692,9 @@ console_interrupt(struct Console *cons, char *buf)
       }
 
       if (c == cons->termios.c_cc[VSTART] || cons->termios.c_iflag & IXANY) {
-        spin_lock(&cons->out.lock);
+        k_spinlock_acquire(&cons->out.lock);
         cons->out.stopped = 0;
-        spin_unlock(&cons->out.lock);
+        k_spinlock_release(&cons->out.lock);
 
         if (c == cons->termios.c_cc[VSTART]) {
           if (cons->termios.c_iflag & IXOFF)
@@ -748,9 +748,9 @@ console_interrupt(struct Console *cons, char *buf)
   }
 
   if ((status & (IN_EOF | IN_EOL)) || !(cons->termios.c_lflag & ICANON))
-    wchan_wakeup_all(&cons->in.queue);
+    k_waitqueue_wakeup_all(&cons->in.queue);
 
-  spin_unlock(&cons->in.lock);
+  k_spinlock_release(&cons->in.lock);
 }
 
 void
@@ -799,7 +799,7 @@ console_read(struct Inode *inode, uintptr_t buf, size_t nbytes)
   if (cons == NULL)
     return -EBADF;
 
-  spin_lock(&cons->in.lock);
+  k_spinlock_acquire(&cons->in.lock);
 
   while (i < nbytes) {
     char c;
@@ -807,8 +807,8 @@ console_read(struct Inode *inode, uintptr_t buf, size_t nbytes)
 
     // Wait for input
     while (cons->in.size == 0) {
-      if ((r = wchan_sleep(&cons->in.queue, &cons->in.lock)) < 0) {
-        spin_unlock(&cons->in.lock);
+      if ((r = k_waitqueue_sleep(&cons->in.queue, &cons->in.lock)) < 0) {
+        k_spinlock_release(&cons->in.lock);
         return r;
       }
     }
@@ -835,7 +835,7 @@ console_read(struct Inode *inode, uintptr_t buf, size_t nbytes)
     }
   }
 
-  spin_unlock(&cons->in.lock);
+  k_spinlock_release(&cons->in.lock);
 
   return i;
 }

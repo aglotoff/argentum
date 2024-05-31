@@ -19,7 +19,7 @@
  * also allows to preserve the invariant portion of the object's state thus
  * reducing the allocation time.
  * 
- * General-purpose allocation routines ('kmalloc' and 'kfree') are implemented
+ * General-purpose allocation routines ('k_malloc' and 'k_free') are implemented
  * using an internal set of "anonymous" pools of various predefined sizes.
  * 
  * Implementation
@@ -43,34 +43,34 @@
  * For more info on the slab allocator, see the original paper.
  */
 
-static int                object_pool_init(struct ObjectPool *, const char *,
-                                           size_t, size_t,
-                                           void (*)(void *, size_t),
-                                           void (*)(void *, size_t));
-static struct ObjectSlab *object_pool_slab_create(struct ObjectPool *);
-static void               object_pool_slab_destroy(struct ObjectSlab *);
-static void              *object_pool_slab_get(struct ObjectSlab *);
-static void               object_pool_slab_put(struct ObjectSlab *, void *);                            
+static int                 k_object_pool_init(struct KObjectPool *, const char *,
+                                              size_t, size_t,
+                                              void (*)(void *, size_t),
+                                              void (*)(void *, size_t));
+static struct KObjectSlab *k_object_pool_slab_create(struct KObjectPool *);
+static void                k_object_pool_slab_destroy(struct KObjectSlab *);
+static void               *k_object_pool_slab_get(struct KObjectSlab *);
+static void                k_object_pool_slab_put(struct KObjectSlab *, void *);                            
 
 /** Linked list to keep track of all object pools in the system */
 static struct {
   struct ListLink head;
-  struct SpinLock lock;
+  struct KSpinLock lock;
 } pool_list = {
   LIST_INITIALIZER(pool_list.head),
-  SPIN_INITIALIZER("pool_list"),
+  K_SPINLOCK_INITIALIZER("pool_list"),
 };
 
 /** Pool of pool descriptors */
-static struct ObjectPool pool_of_pools;
+static struct KObjectPool pool_of_pools;
 
 // TODO: maybe there is a better sequence of sizes rather than just powers of 2
 #define ANON_POOLS_LENGTH     12
 #define ANON_POOLS_MIN_SIZE   8U
 #define ANON_POOLS_MAX_SIZE   (ANON_POOLS_MIN_SIZE << (ANON_POOLS_LENGTH - 1))
 
-/** Set of anonymous pools to be used by kmalloc */
-static struct ObjectPool *anon_pools[ANON_POOLS_LENGTH];
+/** Set of anonymous pools to be used by k_malloc */
+static struct KObjectPool *anon_pools[ANON_POOLS_LENGTH];
 
 /**
  * Create an object pool.
@@ -84,20 +84,20 @@ static struct ObjectPool *anon_pools[ANON_POOLS_LENGTH];
  *
  * @return Pointer to the pool descriptor or NULL if out of memory.
  */
-struct ObjectPool *
-object_pool_create(const char *name,
+struct KObjectPool *
+k_object_pool_create(const char *name,
                    size_t size,
                    size_t align,
                    void (*ctor)(void *, size_t),
                    void (*dtor)(void *, size_t))
 {
-  struct ObjectPool *pool;
+  struct KObjectPool *pool;
   
-  if ((pool = object_pool_get(&pool_of_pools)) == NULL)
+  if ((pool = k_object_pool_get(&pool_of_pools)) == NULL)
     return NULL;
 
-  if (object_pool_init(pool, name, size, align, ctor, dtor) < 0) {
-    object_pool_put(&pool_of_pools, pool);
+  if (k_object_pool_init(pool, name, size, align, ctor, dtor) < 0) {
+    k_object_pool_put(&pool_of_pools, pool);
     return NULL;
   }
 
@@ -110,35 +110,35 @@ object_pool_create(const char *name,
  * @param pool The pool descriptor to be destroyed.
  */
 int
-object_pool_destroy(struct ObjectPool *pool)
+k_object_pool_destroy(struct KObjectPool *pool)
 {
   if (pool == &pool_of_pools)
     panic("trying to destroy the pool of pools");
 
-  spin_lock(&pool->lock);
+  k_spinlock_acquire(&pool->lock);
 
   if (!list_empty(&pool->slabs_empty) || !list_empty(&pool->slabs_partial)) {
-    spin_unlock(&pool->lock);
+    k_spinlock_release(&pool->lock);
     return -EBUSY;
   }
 
   // Destroy all slabs
   while (!list_empty(&pool->slabs_full)) {
-    struct ObjectSlab *slab;
+    struct KObjectSlab *slab;
 
-    slab = LIST_CONTAINER(pool->slabs_full.next, struct ObjectSlab, link);
+    slab = LIST_CONTAINER(pool->slabs_full.next, struct KObjectSlab, link);
     list_remove(&slab->link);
 
-    object_pool_slab_destroy(slab);
+    k_object_pool_slab_destroy(slab);
   }
 
-  spin_unlock(&pool->lock);
+  k_spinlock_release(&pool->lock);
 
-  spin_lock(&pool_list.lock);
+  k_spinlock_acquire(&pool_list.lock);
   list_remove(&pool->link);
-  spin_unlock(&pool_list.lock);
+  k_spinlock_release(&pool_list.lock);
 
-  object_pool_put(&pool_of_pools, pool);
+  k_object_pool_put(&pool_of_pools, pool);
 
   return 0;
 }
@@ -150,35 +150,35 @@ object_pool_destroy(struct ObjectPool *pool)
  * @return The allocated object of NULL if out of memory.
  */
 void *
-object_pool_get(struct ObjectPool *pool)
+k_object_pool_get(struct KObjectPool *pool)
 {
-  struct ObjectSlab *slab;
+  struct KObjectSlab *slab;
   void *obj;
   
-  spin_lock(&pool->lock);
+  k_spinlock_acquire(&pool->lock);
 
   // First, try to use partially full slabs
   if (!list_empty(&pool->slabs_partial)) {
-    slab = LIST_CONTAINER(pool->slabs_partial.next, struct ObjectSlab, link);
+    slab = LIST_CONTAINER(pool->slabs_partial.next, struct KObjectSlab, link);
   } else {
     // Then full slabs
     if (!list_empty(&pool->slabs_full)) {
-      slab = LIST_CONTAINER(pool->slabs_full.next, struct ObjectSlab, link);
+      slab = LIST_CONTAINER(pool->slabs_full.next, struct KObjectSlab, link);
     // Then try to allocate a new slab
-    } else if ((slab = object_pool_slab_create(pool)) == NULL) {
-      spin_unlock(&pool->lock);
+    } else if ((slab = k_object_pool_slab_create(pool)) == NULL) {
+      k_spinlock_release(&pool->lock);
       return NULL;
     }
 
-    // Put the selected slab into the partial list. object_pool_slab_get() will
+    // Put the selected slab into the partial list. k_object_pool_slab_get() will
     // put it into the empty list later, if necessary
     list_remove(&slab->link);
     list_add_back(&pool->slabs_partial, &slab->link);
   } 
 
-  obj = object_pool_slab_get(slab);
+  obj = k_object_pool_slab_get(slab);
 
-  spin_unlock(&pool->lock);
+  k_spinlock_release(&pool->lock);
 
   return obj;
 }
@@ -190,19 +190,19 @@ object_pool_get(struct ObjectPool *pool)
  * @param obj  Pointer to the object to be deallocated
  */
 void
-object_pool_put(struct ObjectPool *pool, void *obj)
+k_object_pool_put(struct KObjectPool *pool, void *obj)
 {
   struct Page *page;
-  struct ObjectSlab *slab;
+  struct KObjectSlab *slab;
 
-  spin_lock(&pool->lock);
+  k_spinlock_acquire(&pool->lock);
 
   page = kva2page(ROUND_DOWN(obj, PAGE_SIZE << pool->slab_page_order));
   slab = page->slab;
 
-  object_pool_slab_put(slab, obj);
+  k_object_pool_slab_put(slab, obj);
 
-  spin_unlock(&pool->lock);
+  k_spinlock_release(&pool->lock);
 }
 
 /**
@@ -210,24 +210,24 @@ object_pool_put(struct ObjectPool *pool, void *obj)
  * allocator has been initialized.
  */
 void
-system_object_pool_init(void)
+k_object_pool_system_init(void)
 { 
   int i;
 
   // First, solve the "chicken and egg" problem by initializing the static
   // pool of pool descriptors
-  if (object_pool_init(&pool_of_pools, "pool_of_pools",
-                       sizeof(struct ObjectPool), 0, NULL, NULL) < 0)
+  if (k_object_pool_init(&pool_of_pools, "pool_of_pools",
+                       sizeof(struct KObjectPool), 0, NULL, NULL) < 0)
     panic("cannot initialize pool_of_pools");
 
-  // Then, initialize the set of anonymous pools used by kmalloc and kfree
+  // Then, initialize the set of anonymous pools used by k_malloc and k_free
   for (i = 0; i < ANON_POOLS_LENGTH; i++) {
     size_t size = ANON_POOLS_MIN_SIZE << i;
-    char name[OBJECT_POOL_NAME_MAX];
+    char name[K_OBJECT_POOL_NAME_MAX];
 
     snprintf(name, sizeof(name), "anon(%u)", size);
 
-    anon_pools[i] = object_pool_create(name, size, 0, NULL, NULL);
+    anon_pools[i] = k_object_pool_create(name, size, 0, NULL, NULL);
     if (anon_pools[i] == NULL)
       panic("cannot initialize %s", name);
   }
@@ -242,7 +242,7 @@ system_object_pool_init(void)
  * @return Pointer to the allocated block of memory or NULL if out of memory
  */
 void *
-kmalloc(size_t size)
+k_malloc(size_t size)
 {
   int i;
 
@@ -251,19 +251,19 @@ kmalloc(size_t size)
     size_t pool_size = ANON_POOLS_MIN_SIZE << i;
 
     if (size <= pool_size)
-      return object_pool_get(anon_pools[i]);
+      return k_object_pool_get(anon_pools[i]);
   }
 
   return NULL;
 }
 
 /**
- * Deallocate a block of memory previously allocated by 'kmalloc'.
+ * Deallocate a block of memory previously allocated by 'k_malloc'.
  * 
  * @param prt Pointer to the memory to be freed
  */
 void
-kfree(void *ptr)
+k_free(void *ptr)
 {
   struct Page *page;
 
@@ -272,7 +272,7 @@ kfree(void *ptr)
   if (page->slab == NULL)
     panic("bad pointer");
 
-  object_pool_put(page->slab->pool, ptr);
+  k_object_pool_put(page->slab->pool, ptr);
 }
 
 /**
@@ -289,7 +289,7 @@ kfree(void *ptr)
  * @return 0 on success, an error code otherwise
  */
 static int
-object_pool_init(struct ObjectPool *pool,
+k_object_pool_init(struct KObjectPool *pool,
                  const char *name,
                  size_t size,
                  size_t align,
@@ -310,7 +310,7 @@ object_pool_init(struct ObjectPool *pool,
   // To reduce wastage, store data structures for large allocations off-slab
   flags = 0;
   if (size > (PAGE_SIZE / 8))
-    flags |= OBJECT_POOL_OFF_SLAB;
+    flags |= K_OBJECT_POOL_OFF_SLAB;
 
   block_size = ROUND_UP(size, align);
 
@@ -323,12 +323,12 @@ object_pool_init(struct ObjectPool *pool,
     if (slab_page_order > PAGE_ORDER_MAX)
       return -EINVAL;
 
-    if (flags & OBJECT_POOL_OFF_SLAB) {
+    if (flags & K_OBJECT_POOL_OFF_SLAB) {
       extra = 0;
       extra_per_block = 0;
     } else {
-      extra = sizeof(struct ObjectSlab);
-      extra_per_block = sizeof(struct ObjectTag);
+      extra = sizeof(struct KObjectSlab);
+      extra_per_block = sizeof(struct KObjectTag);
     }
 
     slab_capacity = (total - extra) / (block_size + extra_per_block);
@@ -338,7 +338,7 @@ object_pool_init(struct ObjectPool *pool,
       break;
   }
 
-  spin_init(&pool->lock, name);
+  k_spinlock_init(&pool->lock, name);
 
   list_init(&pool->slabs_empty);
   list_init(&pool->slabs_partial);
@@ -355,25 +355,25 @@ object_pool_init(struct ObjectPool *pool,
   pool->color_max       = wastage;
   pool->color_next      = 0;
 
-  spin_lock(&pool_list.lock);
+  k_spinlock_acquire(&pool_list.lock);
   list_add_back(&pool_list.head, &pool->link);
-  spin_unlock(&pool_list.lock);
+  k_spinlock_release(&pool_list.lock);
 
-  strncpy(pool->name, name, OBJECT_POOL_NAME_MAX);
-  pool->name[OBJECT_POOL_NAME_MAX] = '\0';
+  strncpy(pool->name, name, K_OBJECT_POOL_NAME_MAX);
+  pool->name[K_OBJECT_POOL_NAME_MAX] = '\0';
 
   return 0;
 }
 
-static struct ObjectTag *
-object_to_tag(struct ObjectSlab *slab, void *obj)
+static struct KObjectTag *
+object_to_tag(struct KObjectSlab *slab, void *obj)
 {
   int i = ((uintptr_t) obj - (uintptr_t) slab->data) / slab->pool->block_size;
   return &slab->tags[i];
 }
 
 static void *
-tag_to_object(struct ObjectSlab *slab, struct ObjectTag *tag)
+tag_to_object(struct KObjectSlab *slab, struct KObjectTag *tag)
 {
   int i = tag - slab->tags;
   return (uint8_t *) slab->data + slab->pool->block_size * i;
@@ -385,16 +385,16 @@ tag_to_object(struct ObjectSlab *slab, struct ObjectTag *tag)
  * @param pool Pointer to the pool descritptor
  * @return Pointer to the slab descriptor, or NULL if out of memory
  */
-static struct ObjectSlab *
-object_pool_slab_create(struct ObjectPool *pool)
+static struct KObjectSlab *
+k_object_pool_slab_create(struct KObjectPool *pool)
 {
-  struct ObjectSlab *slab;
+  struct KObjectSlab *slab;
   struct Page *page;
   size_t extra_size;
   uint8_t *data, *end, *p;
   unsigned i;
 
-  assert(spin_holding(&pool->lock));
+  assert(k_spinlock_holding(&pool->lock));
 
   if ((page = page_alloc_block(pool->slab_page_order, 0)) == NULL)
     return NULL;
@@ -402,17 +402,17 @@ object_pool_slab_create(struct ObjectPool *pool)
   data = (uint8_t *) page2kva(page);
   end  = data + (PAGE_SIZE << pool->slab_page_order);
 
-  extra_size = sizeof(struct ObjectSlab);
-  extra_size += (pool->slab_capacity * sizeof(struct ObjectTag));
+  extra_size = sizeof(struct KObjectSlab);
+  extra_size += (pool->slab_capacity * sizeof(struct KObjectTag));
 
-  if (pool->flags & OBJECT_POOL_OFF_SLAB) {
-    if ((slab = (struct ObjectSlab *) kmalloc(extra_size)) == NULL) {
+  if (pool->flags & K_OBJECT_POOL_OFF_SLAB) {
+    if ((slab = (struct KObjectSlab *) k_malloc(extra_size)) == NULL) {
       page_free_block(page, pool->slab_page_order);
       return NULL;
     }
   } else {
     end -= extra_size;
-    slab = (struct ObjectSlab *) end;
+    slab = (struct KObjectSlab *) end;
   }
 
   // Store the pointer to the slab descriptor into each page descriptor to mark
@@ -436,7 +436,7 @@ object_pool_slab_create(struct ObjectPool *pool)
   // Initialize all objects in the slab
   p = data;
   for (i = 0; i < pool->slab_capacity; i++) {
-    struct ObjectTag *tag = object_to_tag(slab, p);
+    struct KObjectTag *tag = object_to_tag(slab, p);
 
     tag->next  = slab->free;
     slab->free = tag;
@@ -462,18 +462,18 @@ object_pool_slab_create(struct ObjectPool *pool)
  * @param slab Pointer to the slab descriptor
  */
 static void
-object_pool_slab_destroy(struct ObjectSlab *slab)
+k_object_pool_slab_destroy(struct KObjectSlab *slab)
 {
-  struct ObjectPool *pool = slab->pool;
+  struct KObjectPool *pool = slab->pool;
   struct Page *page;
   unsigned i;
   
-  assert(spin_holding(&slab->pool->lock));
+  assert(k_spinlock_holding(&slab->pool->lock));
   assert(slab->used_count == 0);
 
   // Call destructor for all objects
   if (slab->pool->obj_dtor != NULL) {
-    struct ObjectTag *tag;
+    struct KObjectTag *tag;
 
     for (tag = slab->free; tag != NULL; tag = tag->next)
       pool->obj_dtor(tag_to_object(slab, tag), pool->obj_size);
@@ -488,8 +488,8 @@ object_pool_slab_destroy(struct ObjectSlab *slab)
     page[i].slab = NULL;
   }
 
-  if (pool->flags & OBJECT_POOL_OFF_SLAB)
-    kfree(slab);
+  if (pool->flags & K_OBJECT_POOL_OFF_SLAB)
+    k_free(slab);
 
   page->ref_count--;
   page_free_block(page, pool->slab_page_order);
@@ -502,10 +502,10 @@ object_pool_slab_destroy(struct ObjectSlab *slab)
  * @return Pointer to the allocated object
  */
 static void *
-object_pool_slab_get(struct ObjectSlab *slab)
+k_object_pool_slab_get(struct KObjectSlab *slab)
 {
-  struct ObjectPool *pool = slab->pool;
-  struct ObjectTag *tag;
+  struct KObjectPool *pool = slab->pool;
+  struct KObjectTag *tag;
 
   // The slab must be on the partial list (even if it is full, the
   // object_pool_alloc function moves it to the partial list before calling this
@@ -535,10 +535,10 @@ object_pool_slab_get(struct ObjectSlab *slab)
  * @param obj Pointer to the object to be deallocated
  */
 static void
-object_pool_slab_put(struct ObjectSlab *slab, void *obj)
+k_object_pool_slab_put(struct KObjectSlab *slab, void *obj)
 {
-  struct ObjectPool *pool = slab->pool;
-  struct ObjectTag *tag;
+  struct KObjectPool *pool = slab->pool;
+  struct KObjectTag *tag;
   
   assert(slab->used_count > 0);
 

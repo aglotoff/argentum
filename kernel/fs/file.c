@@ -13,16 +13,16 @@
 #include <kernel/net.h>
 #include <kernel/pipe.h>
 
-static struct SpinLock file_lock;
-static struct ObjectPool *file_cache;
+static struct KSpinLock file_lock;
+static struct KObjectPool *file_cache;
 
 void
 file_init(void)
 {
-  if (!(file_cache = object_pool_create("file_cache", sizeof(struct File), 0, NULL, NULL)))
+  if (!(file_cache = k_object_pool_create("file_cache", sizeof(struct File), 0, NULL, NULL)))
     panic("Cannot allocate file cache");
 
-  spin_init(&file_lock, "file_lock");
+  k_spinlock_init(&file_lock, "file_lock");
 }
 
 int
@@ -30,7 +30,7 @@ file_alloc(struct File **fstore)
 {
   struct File *f;
 
-  if ((f = (struct File *) object_pool_get(file_cache)) == NULL)
+  if ((f = (struct File *) k_object_pool_get(file_cache)) == NULL)
     return -ENOMEM;
 
   f->type      = 0;
@@ -134,16 +134,16 @@ out2:
   fs_inode_unlock(pp->inode);
   fs_path_put(pp);
 out1:
-  object_pool_put(file_cache, f);
+  k_object_pool_put(file_cache, f);
   return r;
 }
 
 struct File *
 file_dup(struct File *f)
 {
-  spin_lock(&file_lock);
+  k_spinlock_acquire(&file_lock);
   f->ref_count++;
-  spin_unlock(&file_lock);
+  k_spinlock_release(&file_lock);
 
   return f;
 }
@@ -153,14 +153,14 @@ file_close(struct File *f)
 {
   int ref_count;
   
-  spin_lock(&file_lock);
+  k_spinlock_acquire(&file_lock);
 
   if (f->ref_count < 1)
     panic("Invalid ref_count");
 
   ref_count = --f->ref_count;
 
-  spin_unlock(&file_lock);
+  k_spinlock_release(&file_lock);
 
   if (ref_count > 0)
     return;
@@ -181,7 +181,7 @@ file_close(struct File *f)
       panic("Invalid type");
   }
 
-  object_pool_put(file_cache, f);
+  k_object_pool_put(file_cache, f);
 }
 
 off_t

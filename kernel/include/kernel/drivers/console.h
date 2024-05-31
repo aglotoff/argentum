@@ -16,7 +16,7 @@
 #include <sys/termios.h>
 
 #include <kernel/spin.h>
-#include <kernel/wchan.h>
+#include <kernel/waitqueue.h>
 
 #define CONSOLE_INPUT_MAX 256
 #define CONSOLE_ESC_MAX   16   // The maximum number of esc parameters
@@ -35,8 +35,8 @@ struct Console {
     size_t              size;
     size_t              read_pos;
     size_t              write_pos;
-    struct SpinLock     lock;
-    struct WaitChannel  queue;
+    struct KSpinLock     lock;
+    struct KWaitQueue  queue;
   } in;
   struct {
     int                 fg_color;                     // Current foreground color
@@ -54,7 +54,7 @@ struct Console {
     unsigned            rows;
     unsigned            pos;
     int                 stopped;
-    struct SpinLock     lock;
+    struct KSpinLock     lock;
   } out;
   struct termios        termios;
   pid_t                 pgrp;

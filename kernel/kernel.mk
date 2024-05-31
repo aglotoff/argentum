@@ -18,16 +18,17 @@ endif
 KERNEL_SRCFILES :=	\
 	kernel/core/context.S \
 	kernel/core/cpu.c \
-	kernel/core/kmutex.c \
-	kernel/core/ksemaphore.c \
-	kernel/core/kqueue.c \
-	kernel/core/ktimer.c \
+	kernel/core/mutex.c \
+	kernel/core/semaphore.c \
+	kernel/core/mailbox.c \
+	kernel/core/object_pool.c \
+	kernel/core/timer.c \
 	kernel/core/thread.c \
 	kernel/core/sched.c \
 	kernel/core/spin.c \
 	kernel/core/spin_arch.c \
 	kernel/core/tick.c \
-	kernel/core/wchan.c \
+	kernel/core/waitqueue.c \
 	kernel/drivers/console/kbd.c \
 	kernel/drivers/console/display.c \
 	kernel/drivers/console/pl011.c \
@@ -51,7 +52,6 @@ KERNEL_SRCFILES :=	\
 	kernel/fs/file.c \
 	kernel/fs/inode.c \
 	kernel/fs/path.c \
-	kernel/mm/object_pool.c \
 	kernel/mm/page.c \
 	kernel/mm/vm.c \
 	kernel/mm/vm_arch.c \

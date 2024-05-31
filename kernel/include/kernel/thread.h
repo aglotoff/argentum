@@ -8,9 +8,8 @@
 #include <limits.h>
 #include <stdint.h>
 
-#include <kernel/ktimer.h>
+#include <kernel/timer.h>
 #include <kernel/list.h>
-#include <kernel/spin.h>
 
 #define THREAD_MAX_PRIORITIES  (2 * NZERO)
 
@@ -47,15 +46,15 @@ struct Context {
   uint32_t lr;
 };
 
-struct ObjectPool;
-extern struct ObjectPool *thread_cache;
+struct KObjectPool;
+extern struct KObjectPool *thread_cache;
 
 struct Process;
 
 /**
  * Scheduler task state.
  */
-struct Thread {
+struct KThread {
   /** Link into the list containing this task */
   struct ListLink   link;
   /** Current task state */
@@ -65,7 +64,7 @@ struct Thread {
   /** Various flags */
   int               flags;
   /** CPU */
-  struct Cpu       *cpu;
+  struct KCpu       *cpu;
 
   /** Bottom of the kernel-mode stack */
   void             *kstack;
@@ -89,39 +88,18 @@ struct Thread {
   struct Process   *process;
 };
 
-struct Thread *thread_current(void);
-struct Thread *thread_create(struct Process *, void (*)(void *), void *, int);
-void         thread_exit(void);
-int          thread_resume(struct Thread *);
-void         thread_yield(void);
-int          sched_sleep(struct ListLink *, int, unsigned long, struct SpinLock *);
-void         thread_cleanup(struct Thread *);
-void         thread_interrupt(struct Thread *);
+struct KThread *k_thread_current(void);
+struct KThread *k_thread_create(struct Process *, void (*)(void *), void *, int);
+void         k_thread_exit(void);
+int          k_thread_resume(struct KThread *);
+void         k_thread_yield(void);
+void         thread_cleanup(struct KThread *);
+void         k_thread_interrupt(struct KThread *);
 
-void         sched_may_yield(struct Thread *);
-void         sched_yield(void);
-void         sched_enqueue(struct Thread *);
-void         sched_wakeup_all(struct ListLink *, int);
-void         sched_wakeup_one(struct ListLink *, int);
-void         sched_init(void);
-void         sched_start(void);
+void         k_sched_init(void);
+void         k_sched_start(void);
 void         tick(void);
 void         sched_isr_enter(void);
 void         sched_isr_exit(void);
-void         sched_resume(struct Thread *, int);
-
-extern struct SpinLock __sched_lock;
-
-static inline void
-sched_lock(void)
-{
-  spin_lock(&__sched_lock);
-}
-
-static inline void
-sched_unlock(void)
-{
-  spin_unlock(&__sched_lock);
-}
 
 #endif  // __KERNEL_INCLUDE_KERNEL_THREAD_H__

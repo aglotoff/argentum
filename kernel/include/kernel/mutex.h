@@ -1,5 +1,5 @@
-#ifndef __KERNEL_INCLUDE_KERNEL_KMUTEX_H__
-#define __KERNEL_INCLUDE_KERNEL_KMUTEX_H__
+#ifndef __KERNEL_INCLUDE_KERNEL_MUTEX_H__
+#define __KERNEL_INCLUDE_KERNEL_MUTEX_H__
 
 #ifndef __ARGENTUM_KERNEL__
 #error "This is a kernel header; user programs should not #include it"
@@ -10,7 +10,7 @@
 #include <kernel/list.h>
 #include <kernel/spin.h>
 
-struct Thread;
+struct KThread;
 
 /**
  * Mutex is a sleeping lock, i.e. when a task tries to acquire a mutex that
@@ -21,16 +21,20 @@ struct Thread;
  */
 struct KMutex {
   /** The task currently holding the mutex. */
-  struct Thread    *owner;
+  struct KThread    *owner;
   /** List of tasks waiting for this mutex to be released. */
   struct ListLink   queue;
   /** Mutex name (for debugging purposes). */
   const char       *name;
 };
 
-int kmutex_init(struct KMutex *, const char *);
-int kmutex_lock(struct KMutex *);
-int kmutex_unlock(struct KMutex *);
-int kmutex_holding(struct KMutex *);
+void           k_mutex_system_init(void);
+void           k_mutex_init(struct KMutex *, const char *);
+void           k_mutex_fini(struct KMutex *);
+struct KMutex *k_mutex_create(const char *);
+void           k_mutex_destroy(struct KMutex *);
+int            k_mutex_lock(struct KMutex *);
+int            k_mutex_unlock(struct KMutex *);
+int            k_mutex_holding(struct KMutex *);
 
-#endif  // !__KERNEL_INCLUDE_KERNEL_KMUTEX_H__
+#endif  // !__KERNEL_INCLUDE_KERNEL_MUTEX_H__

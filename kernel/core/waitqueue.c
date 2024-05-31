@@ -1,6 +1,8 @@
 #include <kernel/thread.h>
 #include <kernel/spin.h>
-#include <kernel/wchan.h>
+#include <kernel/waitqueue.h>
+
+#include "core_private.h"
 
 /**
  * Initialize the wait channel.
@@ -8,7 +10,7 @@
  * @param chan A pointer to the channel to be initialized.
  */
 void
-wchan_init(struct WaitChannel *chan)
+k_waitqueue_init(struct KWaitQueue *chan)
 {
   list_init(&chan->head);
 }
@@ -21,9 +23,9 @@ wchan_init(struct WaitChannel *chan)
  * @param lock A pointer to the spinlock to be released.
  */
 int
-wchan_sleep(struct WaitChannel *chan, struct SpinLock *lock)
+k_waitqueue_sleep(struct KWaitQueue *chan, struct KSpinLock *lock)
 {
-  return sched_sleep(&chan->head, 1, 0, lock);
+  return _k_sched_sleep(&chan->head, 1, 0, lock);
 }
 
 /**
@@ -32,11 +34,11 @@ wchan_sleep(struct WaitChannel *chan, struct SpinLock *lock)
  * @param chan A pointer to the wait channel
  */
 void
-wchan_wakeup_one(struct WaitChannel *chan)
+k_waitqueue_wakeup_one(struct KWaitQueue *chan)
 {
-  sched_lock();
-  sched_wakeup_one(&chan->head, 0);
-  sched_unlock();
+  _k_sched_lock();
+  _k_sched_wakeup_one(&chan->head, 0);
+  _k_sched_unlock();
 }
 
 /**
@@ -45,9 +47,9 @@ wchan_wakeup_one(struct WaitChannel *chan)
  * @param chan A pointer to the wait channel
  */
 void
-wchan_wakeup_all(struct WaitChannel *chan)
+k_waitqueue_wakeup_all(struct KWaitQueue *chan)
 {
-  sched_lock();
-  sched_wakeup_all(&chan->head, 0);
-  sched_unlock();
+  _k_sched_lock();
+  _k_sched_wakeup_all(&chan->head, 0);
+  _k_sched_unlock();
 }

@@ -8,7 +8,7 @@
 #include <kernel/spin.h>
 #include <kernel/page.h>
 
-struct ObjectPool *buf_desc_cache;
+struct KObjectPool *buf_desc_cache;
 
 // Maximum size of the buffer cache
 #define BUF_CACHE_MAX_SIZE   512
@@ -16,7 +16,7 @@ struct ObjectPool *buf_desc_cache;
 static struct {
   size_t          size;
   struct ListLink head;
-  struct SpinLock lock;
+  struct KSpinLock lock;
 } buf_cache;
 
 static void
@@ -24,8 +24,8 @@ buf_ctor(void *ptr, size_t size)
 {
   struct Buf *buf = (struct Buf *) ptr;
 
-  wchan_init(&buf->wait_queue);
-  kmutex_init(&buf->mutex, "buf");
+  k_waitqueue_init(&buf->wait_queue);
+  k_mutex_init(&buf->mutex, "buf");
 
   (void) size;
 }
@@ -36,12 +36,12 @@ buf_ctor(void *ptr, size_t size)
 void
 buf_init(void)
 {
-  buf_desc_cache = object_pool_create("buf_desc_cache", sizeof(struct Buf), 0,
+  buf_desc_cache = k_object_pool_create("buf_desc_cache", sizeof(struct Buf), 0,
                                       buf_ctor, NULL);
   if (buf_desc_cache == NULL)
     panic("cannot allocate buf_desc_cache");
 
-  spin_init(&buf_cache.lock, "buf_cache");
+  k_spinlock_init(&buf_cache.lock, "buf_cache");
   list_init(&buf_cache.head);
 }
 
@@ -52,7 +52,7 @@ buf_alloc_data(size_t block_size)
   struct Page *page;
 
   if (block_size < PAGE_SIZE)
-    return (uint8_t *) kmalloc(block_size);
+    return (uint8_t *) k_malloc(block_size);
 
   for (page_order = 0; (PAGE_SIZE << page_order) < block_size; page_order++)
     ;
@@ -71,7 +71,7 @@ buf_free_data(void *data, size_t block_size)
   struct Page *page;
 
   if (block_size < PAGE_SIZE) {
-    kfree(data);
+    k_free(data);
     return;
   }
 
@@ -89,14 +89,14 @@ buf_alloc(size_t block_size)
 {
   struct Buf *buf;
 
-  assert(spin_holding(&buf_cache.lock));
+  assert(k_spinlock_holding(&buf_cache.lock));
   assert(buf_cache.size < BUF_CACHE_MAX_SIZE);
 
-  if ((buf = (struct Buf *) object_pool_get(buf_desc_cache)) == NULL)
+  if ((buf = (struct Buf *) k_object_pool_get(buf_desc_cache)) == NULL)
     return NULL;
 
   if ((buf->data = buf_alloc_data(block_size)) == NULL) {
-    object_pool_put(buf_desc_cache, buf);
+    k_object_pool_put(buf_desc_cache, buf);
     return NULL;
   }
 
@@ -119,7 +119,7 @@ buf_get(unsigned block_no, size_t block_size, dev_t dev)
   struct ListLink *l;
   struct Buf *b, *unused = NULL;
 
-  spin_lock(&buf_cache.lock);
+  k_spinlock_acquire(&buf_cache.lock);
 
   // TODO: use a hash table for faster lookups
   LIST_FOREACH(&buf_cache.head, l) {
@@ -130,7 +130,7 @@ buf_get(unsigned block_no, size_t block_size, dev_t dev)
         (b->block_size == block_size)) {
       b->ref_count++;
 
-      spin_unlock(&buf_cache.lock);
+      k_spinlock_release(&buf_cache.lock);
 
       return b;
     }
@@ -148,7 +148,7 @@ buf_get(unsigned block_no, size_t block_size, dev_t dev)
 
   if (b == NULL) {
     // Out of free blocks.
-    spin_unlock(&buf_cache.lock);
+    k_spinlock_release(&buf_cache.lock);
     return NULL;
   }
 
@@ -158,9 +158,9 @@ buf_get(unsigned block_no, size_t block_size, dev_t dev)
 
     if ((b->data = buf_alloc_data(block_size)) == NULL) {
       list_remove(&b->cache_link);
-      object_pool_put(buf_desc_cache, b);
+      k_object_pool_put(buf_desc_cache, b);
 
-      spin_unlock(&buf_cache.lock);
+      k_spinlock_release(&buf_cache.lock);
 
       return NULL;
     }
@@ -174,7 +174,7 @@ buf_get(unsigned block_no, size_t block_size, dev_t dev)
   b->ref_count  = 1;
   b->flags      = 0;
 
-  spin_unlock(&buf_cache.lock);
+  k_spinlock_release(&buf_cache.lock);
 
   return b;
 }
@@ -195,7 +195,7 @@ buf_read(unsigned block_no, size_t block_size, dev_t dev)
   if ((buf = buf_get(block_no, block_size, dev)) == NULL)
     return NULL;
 
-  kmutex_lock(&buf->mutex);
+  k_mutex_lock(&buf->mutex);
 
   // If needed, read the block from the device.
   // TODO: check for I/O errors
@@ -217,7 +217,7 @@ buf_read(unsigned block_no, size_t block_size, dev_t dev)
 void
 buf_write(struct Buf *buf)
 {
-  if (!kmutex_holding(&buf->mutex))
+  if (!k_mutex_holding(&buf->mutex))
     panic("not holding buf->mutex");
 
   // TODO: check for I/O errors
@@ -243,9 +243,9 @@ buf_release(struct Buf *buf)
     }
   }
   
-  kmutex_unlock(&buf->mutex);
+  k_mutex_unlock(&buf->mutex);
 
-  spin_lock(&buf_cache.lock);
+  k_spinlock_acquire(&buf_cache.lock);
 
   if (--buf->ref_count == 0) {
     // Return the buffer to the cache.
@@ -253,5 +253,5 @@ buf_release(struct Buf *buf)
     list_add_front(&buf_cache.head, &buf->cache_link);
   }
 
-  spin_unlock(&buf_cache.lock);
+  k_spinlock_release(&buf_cache.lock);
 }

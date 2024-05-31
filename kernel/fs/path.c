@@ -16,15 +16,15 @@
 
 struct PathNode *fs_root;
 
-static struct ObjectPool *path_pool;
-static struct SpinLock path_lock = SPIN_INITIALIZER("path");
+static struct KObjectPool *path_pool;
+static struct KSpinLock path_lock = K_SPINLOCK_INITIALIZER("path");
 
 struct PathNode *
 fs_path_create(const char *name, struct Inode *inode, struct PathNode *parent)
 {
   struct PathNode *path;
 
-  if ((path = (struct PathNode *) object_pool_get(path_pool)) == NULL)
+  if ((path = (struct PathNode *) k_object_pool_get(path_pool)) == NULL)
     return NULL;
 
   if (name != NULL)
@@ -36,10 +36,10 @@ fs_path_create(const char *name, struct Inode *inode, struct PathNode *parent)
   path->mounted = NULL;
   list_init(&path->children);
   list_init(&path->siblings);
-  kmutex_init(&path->mutex, "path");
+  k_mutex_init(&path->mutex, "path");
 
   if (parent) {
-    spin_lock(&path_lock);
+    k_spinlock_acquire(&path_lock);
 
     path->parent = parent;
     parent->ref_count++;
@@ -47,7 +47,7 @@ fs_path_create(const char *name, struct Inode *inode, struct PathNode *parent)
     list_add_front(&parent->children, &path->siblings);
     path->ref_count++;
 
-    spin_unlock(&path_lock);
+    k_spinlock_release(&path_lock);
   }
 
   return path;
@@ -56,9 +56,9 @@ fs_path_create(const char *name, struct Inode *inode, struct PathNode *parent)
 struct PathNode *
 fs_path_duplicate(struct PathNode *path)
 {
-  spin_lock(&path_lock);
+  k_spinlock_acquire(&path_lock);
   path->ref_count++;
-  spin_unlock(&path_lock);
+  k_spinlock_release(&path_lock);
 
   // cprintf("[%s: %d]\n", path->name, path->ref_count);
 
@@ -68,7 +68,7 @@ fs_path_duplicate(struct PathNode *path)
 void
 fs_path_remove(struct PathNode *path)
 {
-  spin_lock(&path_lock);
+  k_spinlock_acquire(&path_lock);
 
   if (path->parent) {
     path->parent->ref_count--;
@@ -78,13 +78,13 @@ fs_path_remove(struct PathNode *path)
   list_remove(&path->siblings);
   path->ref_count--;
 
-  spin_unlock(&path_lock);
+  k_spinlock_release(&path_lock);
 }
 
 void
 fs_path_put(struct PathNode *path)
 {
-  spin_lock(&path_lock);
+  k_spinlock_acquire(&path_lock);
 
   path->ref_count--;
 
@@ -106,21 +106,21 @@ fs_path_put(struct PathNode *path)
       parent->ref_count--;
     }
 
-    spin_unlock(&path_lock);
+    k_spinlock_release(&path_lock);
 
     //cprintf("[drop %s %p]\n", path->name, path->inode);
 
     if (path->inode != NULL)
       fs_inode_put(path->inode);
 
-    object_pool_put(path_pool, path);
+    k_object_pool_put(path_pool, path);
     
-    spin_lock(&path_lock);
+    k_spinlock_acquire(&path_lock);
 
     path = parent;
   }
 
-  spin_unlock(&path_lock);
+  k_spinlock_release(&path_lock);
 }
 
 void
@@ -128,7 +128,7 @@ fs_path_lock(struct PathNode *node)
 {
   if ((node->ref_count == 1) && (node->parent != NULL))
     panic("bad path node reference");
-  kmutex_lock(&node->mutex);
+  k_mutex_lock(&node->mutex);
 }
 
 void
@@ -136,7 +136,7 @@ fs_path_unlock(struct PathNode *node)
 {
   if ((node->ref_count == 1) && (node->parent != NULL))
     panic("bad path node reference");
-  kmutex_unlock(&node->mutex);
+  k_mutex_unlock(&node->mutex);
 }
 
 int
@@ -176,19 +176,19 @@ fs_path_lookup_cached(struct PathNode *parent, const char *name)
 {
   struct ListLink *l;
 
-  spin_lock(&path_lock);
+  k_spinlock_acquire(&path_lock);
 
   LIST_FOREACH(&parent->children, l) {
     struct PathNode *p = LIST_CONTAINER(l, struct PathNode, siblings);
     
     if (strcmp(p->name, name) == 0) {
       p->ref_count++;
-      spin_unlock(&path_lock);
+      k_spinlock_release(&path_lock);
       return p;
     }
   }
 
-  spin_unlock(&path_lock);
+  k_spinlock_release(&path_lock);
   return NULL;
 }
 
@@ -308,7 +308,7 @@ fs_init(void)
 { 
   fs_inode_cache_init();
 
-  path_pool = object_pool_create("path_pool", sizeof(struct PathNode), 0,
+  path_pool = k_object_pool_create("path_pool", sizeof(struct PathNode), 0,
                                  NULL, NULL);
   if (path_pool == NULL)
     panic("cannot allocate path_pool");

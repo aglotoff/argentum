@@ -14,7 +14,9 @@
 #include <kernel/object_pool.h>
 #include <kernel/page.h>
 
-static void thread_run(void);
+#include "core_private.h"
+
+static void k_thread_run(void);
 
 /**
  * Resume execution of a previously suspended thread (or begin execution of a
@@ -23,19 +25,19 @@ static void thread_run(void);
  * @param thread The kernel thread to resume execution
  */
 int
-thread_resume(struct Thread *thread)
+k_thread_resume(struct KThread *thread)
 {
-  sched_lock();
+  _k_sched_lock();
 
   if (thread->state != THREAD_STATE_SUSPENDED) {
-    sched_unlock();
+    _k_sched_unlock();
     return -EINVAL;
   }
 
-  sched_enqueue(thread);
-  sched_may_yield(thread);
+  _k_sched_enqueue(thread);
+  _k_sched_may_yield(thread);
 
-  sched_unlock();
+  _k_sched_unlock();
 
   return 0;
 }
@@ -44,42 +46,42 @@ thread_resume(struct Thread *thread)
  * Relinguish the CPU allowing another thread to run.
  */
 void
-thread_yield(void)
+k_thread_yield(void)
 {
-  struct Thread *current = thread_current();
+  struct KThread *current = k_thread_current();
   
   if (current == NULL)
     panic("no current thread");
 
-  sched_lock();
+  _k_sched_lock();
 
-  sched_enqueue(current);
-  sched_yield();
+  _k_sched_enqueue(current);
+  _k_sched_yield();
 
-  sched_unlock();
+  _k_sched_unlock();
 }
 
 // Execution of each thread begins here.
 static void
-thread_run(void)
+k_thread_run(void)
 {
-  struct Thread *my_thread = thread_current();
+  struct KThread *my_thread = k_thread_current();
 
-  // Still holding the scheduler lock (acquired in sched_start)
-  sched_unlock();
+  // Still holding the scheduler lock (acquired in k_sched_start)
+  _k_sched_unlock();
 
   // Make sure IRQs are enabled
-  cpu_irq_enable();
+  k_irq_enable();
 
   // Jump to the thread entry point
   my_thread->entry(my_thread->arg);
 
   // Destroy the thread on exit
-  thread_exit();
+  k_thread_exit();
 }
 
 static void
-arch_thread_init_stack(struct Thread *thread)
+arch_thread_init_stack(struct KThread *thread)
 {
   uint8_t *sp = (uint8_t *) thread->kstack + PAGE_SIZE;
 
@@ -94,40 +96,40 @@ arch_thread_init_stack(struct Thread *thread)
   sp -= sizeof(struct Context);
   thread->context = (struct Context *) sp;
   memset(thread->context, 0, sizeof(struct Context));
-  thread->context->lr = (uint32_t) thread_run;
+  thread->context->lr = (uint32_t) k_thread_run;
 }
 
 static void
-thread_timeout_callback(void *arg)
+k_thread_timeout_callback(void *arg)
 {
-  struct Thread *thread = (struct Thread *) arg;
+  struct KThread *thread = (struct KThread *) arg;
 
-  sched_lock();
+  _k_sched_lock();
 
   if ((thread->state == THREAD_STATE_SLEEPING) ||
       (thread->state == THREAD_STATE_SLEEPING_INTERRUPTILE))
-    sched_resume(thread, -ETIMEDOUT);
+    _k_sched_resume(thread, -ETIMEDOUT);
 
-  sched_unlock();
+  _k_sched_unlock();
 }
 
 void
-thread_interrupt(struct Thread *thread)
+k_thread_interrupt(struct KThread *thread)
 {
-  sched_lock();
+  _k_sched_lock();
 
   // TODO: if thread is running, send an SGI
 
   if (thread->state == THREAD_STATE_SLEEPING_INTERRUPTILE)
-    sched_resume(thread, -EINTR);
+    _k_sched_resume(thread, -EINTR);
 
-  sched_unlock();
+  _k_sched_unlock();
 }
 
 /**
  * Initialize the kernel thread. After successful initialization, the thread
  * is placed into suspended state and must be explicitly made runnable by a call
- * to thread_resume().
+ * to k_thread_resume().
  * 
  * @param process  Pointer to a process the thread belongs to.
  * @param thread   Pointer to the kernel thread to be initialized.
@@ -137,19 +139,19 @@ thread_interrupt(struct Thread *thread)
  * 
  * @return 0 on success.
  */
-struct Thread *
-thread_create(struct Process *process, void (*entry)(void *), void *arg,
+struct KThread *
+k_thread_create(struct Process *process, void (*entry)(void *), void *arg,
               int priority)
 {
   struct Page *stack_page;
-  struct Thread *thread;
+  struct KThread *thread;
   uint8_t *stack;
 
-  if ((thread = (struct Thread *) object_pool_get(thread_cache)) == NULL)
+  if ((thread = (struct KThread *) k_object_pool_get(thread_cache)) == NULL)
     return NULL;
 
   if ((stack_page = page_alloc_one(0)) == NULL) {
-    object_pool_put(thread_cache, thread);
+    k_object_pool_put(thread_cache, thread);
     return NULL;
   }
 
@@ -166,7 +168,7 @@ thread_create(struct Process *process, void (*entry)(void *), void *arg,
   thread->kstack   = stack;
   thread->tf       = NULL;
 
-  ktimer_create(&thread->timer, thread_timeout_callback, thread, 0, 0, 0);
+  k_timer_create(&thread->timer, k_thread_timeout_callback, thread, 0, 0, 0);
 
   arch_thread_init_stack(thread);
 
@@ -177,20 +179,22 @@ thread_create(struct Process *process, void (*entry)(void *), void *arg,
  * Destroy the specified thread
  */
 void
-thread_exit(void)
+k_thread_exit(void)
 {
-  struct Thread *thread = thread_current();
+  struct KThread *thread = k_thread_current();
+  extern struct ListLink threads_to_destroy;
 
   if (thread == NULL)
     panic("no current thread");
 
-  ktimer_destroy(&thread->timer);
+  k_timer_destroy(&thread->timer);
 
-  sched_lock();
+  _k_sched_lock();
 
   thread->state = THREAD_STATE_DESTROYED;
+  list_add_back(&threads_to_destroy, &thread->link);
 
-  sched_yield();
+  _k_sched_yield();
 
   panic("should not return");
 }
@@ -200,14 +204,14 @@ thread_exit(void)
  * 
  * @return A pointer to the currently executing thread or NULL
  */
-struct Thread *
-thread_current(void)
+struct KThread *
+k_thread_current(void)
 {
-  struct Thread *thread;
+  struct KThread *thread;
 
-  cpu_irq_save();
-  thread = cpu_current()->thread;
-  cpu_irq_restore();
+  k_irq_save();
+  thread = k_cpu()->thread;
+  k_irq_restore();
 
   return thread;
 }

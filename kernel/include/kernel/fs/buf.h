@@ -15,8 +15,8 @@
 #include <sys/types.h>
 
 #include <kernel/list.h>
-#include <kernel/kmutex.h>
-#include <kernel/wchan.h>
+#include <kernel/mutex.h>
+#include <kernel/waitqueue.h>
 
 /**
  * 
@@ -30,7 +30,7 @@ struct Buf {
   int              ref_count;         ///< The number of references to the block
   struct ListLink  cache_link;        ///< Link into the buf cache
   struct ListLink  queue_link;        ///< Link into the driver queue
-  struct WaitChannel wait_queue;      ///< Processes waiting for the block data
+  struct KWaitQueue wait_queue;      ///< Processes waiting for the block data
   struct KMutex    mutex;             ///< Mutex protecting the block data
   size_t           block_size;        ///< Must be BLOCK_SIZE
   uint8_t         *data;              ///< Block data

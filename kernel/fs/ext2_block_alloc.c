@@ -77,22 +77,22 @@ ext2_block_alloc(struct Ext2SuperblockData *sb, dev_t dev, uint32_t *bstore)
 
   uint32_t g, gi;
 
-  kmutex_lock(&sb->mutex);
+  k_mutex_lock(&sb->mutex);
   
   if (sb->free_blocks_count == 0) {
-    kmutex_unlock(&sb->mutex);
+    k_mutex_unlock(&sb->mutex);
     return -ENOSPC;
   }
 
   if ((sb->free_blocks_count < sb->r_blocks_count) &&
       (my_process->euid != 0)) {
-    kmutex_unlock(&sb->mutex);
+    k_mutex_unlock(&sb->mutex);
     return -ENOSPC;
   }
 
   sb->free_blocks_count--;
 
-  kmutex_unlock(&sb->mutex);
+  k_mutex_unlock(&sb->mutex);
 
   // TODO: do not exceed r_blocks_count for ordinary users!
   // TODO: update free_blocks_count
@@ -131,9 +131,9 @@ ext2_block_alloc(struct Ext2SuperblockData *sb, dev_t dev, uint32_t *bstore)
     buf_release(buf);
   }
 
-  kmutex_lock(&sb->mutex);
+  k_mutex_lock(&sb->mutex);
   sb->free_blocks_count++;
-  kmutex_unlock(&sb->mutex);
+  k_mutex_unlock(&sb->mutex);
 
   return -ENOMEM;
 }
@@ -168,7 +168,7 @@ ext2_block_free(struct Ext2SuperblockData *sb, dev_t dev, uint32_t bno)
 
   buf_release(buf);
 
-  kmutex_lock(&sb->mutex);
+  k_mutex_lock(&sb->mutex);
   sb->free_blocks_count++;
-  kmutex_unlock(&sb->mutex);
+  k_mutex_unlock(&sb->mutex);
 }
