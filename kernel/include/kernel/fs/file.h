@@ -39,6 +39,10 @@ off_t        file_seek(struct File *, off_t, int);
 int          file_get_flags(struct File *);
 int          file_set_flags(struct File *, int);
 int          file_chmod(struct File *, mode_t);
+int          file_chown(struct File *, uid_t, gid_t);
 int          file_ioctl(struct File *, int, int);
+int          file_select(struct File *);
+int          file_sync(struct File *);
+int          file_truncate(struct File *, off_t);
 
 #endif  // !__KERNEL_INCLUDE_KERNEL_FS_FILE__

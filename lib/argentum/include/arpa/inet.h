@@ -1,7 +1,10 @@
 #ifndef _ARPA_INET_H
 # define _ARPA_INET_H
 
+#include <sys/cdefs.h>
 #include <inttypes.h>
+
+__BEGIN_DECLS
 
 typedef uint16_t in_port_t;
 typedef uint32_t in_addr_t;
@@ -30,5 +33,7 @@ in_addr_t inet_addr(const char *);
 int		    inet_aton(const char *, struct in_addr *);
 char     *inet_ntoa(struct in_addr);
 int       inet_pton(int, const char *, void *);
+
+__END_DECLS
 
 #endif

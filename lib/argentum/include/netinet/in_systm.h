@@ -32,7 +32,10 @@
 #ifndef _NETINET_IN_SYSTM_H_
 #define _NETINET_IN_SYSTM_H_
 
+#include <sys/cdefs.h>
 #include <sys/types.h>
+
+__BEGIN_DECLS
 
 /*
  * Miscellaneous internetwork
@@ -53,5 +56,7 @@ typedef u_int32_t n_long;		/* long as received from the net */
 typedef u_int32_t n_time;		/* ms since 00:00 GMT, byte rev */
 
 n_time	 iptime (void);
+
+__END_DECLS
 
 #endif /* !_NETINET_IN_SYSTM_H_ */

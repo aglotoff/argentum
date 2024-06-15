@@ -82,6 +82,10 @@ static int32_t (*syscalls[])(void) = {
   [__SYS_SELECT]      = sys_select,
   [__SYS_SIGSUSPEND]  = sys_sigsuspend,
   [__SYS_KILL]        = sys_kill,
+  [__SYS_FSYNC]       = sys_fsync,
+  [__SYS_FTRUNCATE]   = sys_ftruncate,
+  [__SYS_FCHOWN]      = sys_fchown,
+  [__SYS_READLINK]    = sys_readlink,
 };
 
 int32_t
@@ -924,6 +928,27 @@ sys_fchmod(void)
 }
 
 int32_t
+sys_fchown(void)
+{
+  struct File *file;
+  int r, fd;
+  uid_t uid;
+  gid_t gid;
+
+  if ((r = sys_arg_int(0, &fd)) < 0)
+    return r;
+  if ((r = sys_arg_short(1, (short *) &uid)) < 0)
+    return r;
+  if ((r = sys_arg_short(2, (short *) &gid)) < 0)
+    return r;
+
+  if ((file = fd_lookup(process_current(), fd)) == NULL)
+    return -EBADF;
+
+  return file_chown(file, uid, gid);
+}
+
+int32_t
 sys_sigaction(void)
 {
   int sig;
@@ -1176,14 +1201,43 @@ sys_mmap(void)
 int32_t
 sys_select(void)
 {
-  int r, fd;
+  int r, fd, nfds;
+  fd_set *readfds, *writefds, *errorfds;
+  struct timeval *timeout;
 
-  if ((r = sys_arg_int(0, &fd)) < 0)
+  if ((r = sys_arg_int(0, &nfds)) < 0)
+    return r;
+  if ((r = sys_arg_buf(1, (void *) &readfds, sizeof(fd_set), PROT_READ, 1)) < 0)
+    return r;
+  if ((r = sys_arg_buf(2, (void *) &writefds, sizeof(fd_set), PROT_READ, 1)) < 0)
+    return r;
+  if ((r = sys_arg_buf(3, (void *) &errorfds, sizeof(fd_set), PROT_READ, 1)) < 0)
+    return r;
+  if ((r = sys_arg_buf(4, (void *) &timeout, sizeof(struct timeval), PROT_READ, 1)) < 0)
     return r;
 
-  // TODO: implement
+  // TODO: writefds
+  // TODO: errorfds
+  // TODO: timeout
 
-  return 1;
+  if (readfds == NULL)
+    return 0;
+  
+  r = 0;
+
+  for (fd = 0; fd < FD_SETSIZE; fd++) {
+    struct File *file;
+
+    if (!FD_ISSET(fd, readfds))
+      continue;
+
+    if ((file = fd_lookup(process_current(), fd)) == NULL)
+      return -EBADF;
+
+    r += file_select(file);
+  }
+
+  return r;
 }
 
 int32_t
@@ -1238,4 +1292,55 @@ sys_kill(void)
     return r;
 
   return signal_generate(pid, sig, 0);
+}
+
+int32_t
+sys_ftruncate(void)
+{
+  struct File *file;
+  int r, fd;
+  off_t length;
+
+  if ((r = sys_arg_int(0, &fd)) < 0)
+    return r;
+  if ((r = sys_arg_long(1, (long *) &length)) < 0)
+    return r;
+
+  if ((file = fd_lookup(process_current(), fd)) == NULL)
+    return -EBADF;
+
+  return file_truncate(file, length);
+}
+
+int32_t
+sys_fsync(void)
+{
+  struct File *file;
+  int r, fd;
+
+  if ((r = sys_arg_int(0, &fd)) < 0)
+    return r;
+
+  if ((file = fd_lookup(process_current(), fd)) == NULL)
+    return -EBADF;
+
+  return file_sync(file);
+}
+
+int32_t
+sys_readlink(void)
+{
+  void *buf;
+  size_t n;
+  int r;
+  const char *path;
+
+  if ((r = sys_arg_str(0, &path, PROT_READ)) < 0)
+    return r;
+  if ((r = sys_arg_int(2, (int *) &n)) < 0)
+    return r;
+  if ((r = sys_arg_buf(1, &buf, n, PROT_WRITE, 0)) < 0)
+    return r;
+
+  return fs_readlink(path, buf, n);
 }

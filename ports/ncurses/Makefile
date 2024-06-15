@@ -23,6 +23,7 @@ $(SRC_DIR): $(TARBALL_FILE)
 
 $(SRC_DIR)/Makefile: | $(SRC_DIR)
 	cd $(@D) && ./configure --host=arm-none-argentum \
+	                        --enable-termcap \
 	                        --build=$(shell $(SRC_DIR)/config.guess) \
 	                        --prefix=/usr \
 													--disable-stripping

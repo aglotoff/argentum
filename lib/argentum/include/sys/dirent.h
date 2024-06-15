@@ -1,9 +1,9 @@
 #ifndef _SYS_DIRENT_H
 # define _SYS_DIRENT_H
 
-#ifdef __cplusplus
-extern "C" {
-#endif
+#include <sys/cdefs.h>
+
+__BEGIN_DECLS
 
 /*
  * This file was written to be compatible with the BSD directory
@@ -60,9 +60,6 @@ int scandir ( const char *dirname,
    int (*dcomp)(const struct dirent **, const struct dirent **)
 );
 
-#ifdef __cplusplus
-}
-#endif
-
+__END_DECLS
 
 #endif

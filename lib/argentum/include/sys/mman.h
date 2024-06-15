@@ -1,6 +1,7 @@
 #ifndef _SYS_MMAN_H
 #define _SYS_MMAN_H
 
+#include <sys/cdefs.h>
 #include <sys/types.h>
 
 #define PROT_NONE     0
@@ -12,12 +13,19 @@
 #define _PROT_COW     (1 << 5)
 #define _PROT_PAGE    (1 << 6)
 
-#define MAP_FIXED   (1 << 0)
-#define MAP_PRIVATE (1 << 1)
-#define MAP_SHARED  (1 << 2)
+#define MAP_FIXED     (1 << 0)
+#define MAP_PRIVATE   (1 << 1)
+#define MAP_SHARED    (1 << 2)
+#define MAP_ANONYMOUS (1 << 3)
+
+#define MAP_FAILED    ((void *) -1)
+
+__BEGIN_DECLS
 
 void  *mmap(void *, size_t, int, int, int, off_t);
 int    mprotect(void *, size_t, int);
 int    munmap(void *, size_t);
+
+__END_DECLS
 
 #endif /* !_SYS_MMAN_H */

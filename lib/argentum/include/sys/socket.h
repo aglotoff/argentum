@@ -3,8 +3,11 @@
 
 // Keep these values in sync with lwip!
 
+#include <sys/cdefs.h>
 #include <stdint.h>
 #include <sys/types.h>
+
+__BEGIN_DECLS
 
 typedef uint32_t socklen_t;
 typedef uint8_t  sa_family_t;
@@ -70,5 +73,7 @@ ssize_t recvfrom(int, void *, size_t, int, struct sockaddr *, socklen_t *);
 ssize_t recv(int, void *, size_t, int);
 ssize_t send(int, const void *, size_t, int);
 int     shutdown(int, int);
+
+__END_DECLS
 
 #endif

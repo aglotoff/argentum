@@ -32,9 +32,12 @@
 #ifndef _NETINET_IP_H_
 #define _NETINET_IP_H_
 
+#include <sys/cdefs.h>
 #include <netinet/in.h>
 #include <netinet/in_systm.h>	/* for n_time */
 #include <sys/types.h>
+
+__BEGIN_DECLS
 
 /*
  * Definitions for internet protocol version 4.
@@ -244,5 +247,7 @@ struct ippseudo {
 	u_int8_t	ippseudo_p;	/* protocol */
 	u_int16_t	ippseudo_len;	/* protocol length */
 } __packed;
+
+__END_DECLS
 
 #endif /* !_NETINET_IP_H_ */

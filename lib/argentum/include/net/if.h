@@ -1,6 +1,10 @@
 #ifndef _NET_IF_H
 #define _NET_IF_H
 
+#include <sys/cdefs.h>
+
+__BEGIN_DECLS
+
 struct if_nameindex {
   unsigned  if_index;
   char     *if_name;
@@ -27,5 +31,7 @@ struct if_nameindex {
 #define	IFF_MULTICAST	0x8000		/* supports multicast */
 
 struct if_nameindex  *if_nameindex(void);
+
+__END_DECLS
 
 #endif

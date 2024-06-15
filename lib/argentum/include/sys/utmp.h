@@ -1,6 +1,10 @@
 #ifndef _UTMP_H
 # define _UTMP_H
 
+#include <sys/cdefs.h>
+
+__BEGIN_DECLS
+
 #define UTMP_FILE     "/etc/utmp"
 #define WTMP_FILE     "/etc/wtmp"
 
@@ -30,6 +34,6 @@ struct utmp {
 
 #define ut_name ut_user
 
+__END_DECLS
+
 #endif	/* _UTMP_H */
-
-

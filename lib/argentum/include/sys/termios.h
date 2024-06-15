@@ -1,6 +1,10 @@
 #ifndef _SYS_TERMIOS_H
 #define _SYS_TERMIOS_H
 
+#include <sys/cdefs.h>
+
+__BEGIN_DECLS
+
 typedef unsigned char   cc_t;
 typedef long            speed_t;
 typedef unsigned long   tcflag_t;
@@ -104,5 +108,7 @@ int     cfsetospeed(struct termios *, speed_t);
 #ifndef _POSIX_VDISABLE
 #define	_POSIX_VDISABLE		((unsigned char)'\377')
 #endif /* POSIX_VDISABLE */
+
+__END_DECLS
 
 #endif

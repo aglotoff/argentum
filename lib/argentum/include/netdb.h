@@ -1,7 +1,10 @@
 #ifndef _NETDB_H
 # define _NETDB_H
 
+#include <sys/cdefs.h>
 #include <netinet/in.h>
+
+__BEGIN_DECLS
 
 struct hostent {
   char   *h_name;
@@ -38,5 +41,7 @@ struct protoent *getprotobyname(const char *);
 struct servent  *getservbyname(const char *, const char *);
 
 extern int h_errno;
+
+__END_DECLS
 
 #endif

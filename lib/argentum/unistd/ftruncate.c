@@ -1,9 +1,8 @@
-#include <stdio.h>
+#include <sys/syscall.h>
 #include <unistd.h>
 
 int
 ftruncate(int fildes, off_t length)
 {
-  fprintf(stderr, "TODO: ftruncate(%d,%d)\n", fildes, length);
-  return -1;
+  return __syscall2(__SYS_FTRUNCATE, fildes, length);
 }

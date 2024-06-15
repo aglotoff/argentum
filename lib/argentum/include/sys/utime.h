@@ -1,11 +1,10 @@
 #ifndef _SYS_UTIME_H
 #define _SYS_UTIME_H
 
+#include <sys/cdefs.h>
 #include <time.h>
 
-#ifdef __cplusplus
-extern "C" {
-#endif
+__BEGIN_DECLS
 
 struct utimbuf 
 {
@@ -15,8 +14,6 @@ struct utimbuf
 
 int utime (const char *, const struct utimbuf *);
 
-#ifdef __cplusplus
-};
-#endif
+__END_DECLS
 
 #endif /* _SYS_UTIME_H */

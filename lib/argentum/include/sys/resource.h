@@ -1,7 +1,10 @@
 #ifndef __SYS_RESOURCE_H__
 #define __SYS_RESOURCE_H__
 
+#include <sys/cdefs.h>
 #include <sys/time.h>
+
+__BEGIN_DECLS
 
 typedef unsigned long rlim_t;
 
@@ -29,5 +32,7 @@ struct rusage {
 
 #define	RUSAGE_SELF			0
 #define	RUSAGE_CHILDREN -1
+
+__END_DECLS
 
 #endif  // !__SYS_RESOURCE_H__

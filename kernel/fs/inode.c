@@ -171,18 +171,6 @@ fs_inode_unlock(struct Inode *ip)
   k_mutex_unlock(&ip->mutex);
 }
 
-/**
- * Common pattern: unlock inode and then put.
- *
- * @param ip Pointer to the inode.
- */
-// void
-// fs_inode_unlock_put(struct Inode *ip)
-// {  
-//   fs_inode_unlock(ip);
-//   fs_inode_put(ip);
-// }
-
 ssize_t
 fs_inode_read(struct Inode *ip, void *buf, size_t nbyte, off_t *off)
 {
@@ -353,25 +341,34 @@ fs_inode_stat(struct Inode *ip, struct stat *buf)
   buf->st_gid   = ip->gid;
   buf->st_size  = ip->size;
   buf->st_rdev  = ip->rdev;
-  buf->st_atime = ip->atime;
-  buf->st_mtime = ip->mtime;
-  buf->st_ctime = ip->ctime;
+
+  buf->st_atim.tv_sec  = ip->atime;
+  buf->st_atim.tv_nsec = 0;
+  buf->st_mtim.tv_sec  = ip->mtime;
+  buf->st_mtim.tv_nsec = 0;
+  buf->st_ctim.tv_sec  = ip->ctime;
+  buf->st_ctim.tv_nsec = 0;
 
   return 0;
 }
 
 int
-fs_inode_truncate(struct Inode *inode)
+fs_inode_truncate(struct Inode *inode, off_t length)
 {
   if (!fs_inode_holding(inode))
     panic("not locked");
 
+  if (length < 0)
+    return -EINVAL;
+  if (length > inode->size)
+    return -EFBIG;
+
   if (!fs_permission(inode, FS_PERM_WRITE, 0))
     return -EPERM;
 
-  inode->fs->ops->trunc(inode, 0);
+  inode->fs->ops->trunc(inode, length);
   
-  inode->size = 0;
+  inode->size = length;
   inode->ctime = inode->mtime = rtc_get_time();
   inode->flags |= FS_INODE_DIRTY;
 
@@ -786,4 +783,98 @@ fs_inode_ioctl(struct Inode *inode, int request, int arg)
   }
 
   return -ENOTTY;
+}
+
+int
+fs_inode_select(struct Inode *inode)
+{
+  int ret;
+
+  if (!fs_inode_holding(inode))
+    panic("not locked");
+
+  // TODO: check perm
+
+  if (S_ISCHR(inode->mode) || S_ISBLK(inode->mode)) {
+    if ((inode->rdev & 0xFF00) == 0x0100) {
+      fs_inode_unlock(inode);
+
+      // TODO: support other devices
+      ret = console_select(inode);
+
+      fs_inode_lock(inode);
+      return ret;
+    }
+  }
+
+  return 0;
+}
+
+int
+fs_inode_sync(struct Inode *inode)
+{
+  if (!fs_inode_holding(inode))
+    panic("not locked");
+
+  // TODO: implement
+
+  return 0;
+}
+
+int
+fs_inode_chown(struct Inode *inode, uid_t uid, gid_t gid)
+{
+  struct Process *current = process_current();
+  int r;
+
+  fs_inode_lock(inode);
+
+  if ((uid != (uid_t) -1) &&
+      (current->euid != 0) &&
+      (current->euid != inode->uid)) {
+    r = -EPERM;
+    goto out;
+  }
+
+  if ((gid != (gid_t) -1) &&
+      (current->euid != 0) &&
+      (current->euid != inode->uid) &&
+      ((uid != (uid_t) -1) || (current->egid != inode->gid))) {
+    r = -EPERM;
+    goto out;
+  }
+
+  if (uid != (uid_t) -1)
+    inode->uid = uid;
+
+  if (gid != (gid_t) -1)
+    inode->gid = gid;
+
+  r = 0;
+
+out:
+  fs_inode_unlock(inode);
+
+  return r;
+}
+
+ssize_t
+fs_inode_readlink(struct Inode *inode, char *buf, size_t bufsize)
+{ 
+  fs_inode_lock(inode);
+
+  if (!fs_permission(inode, FS_PERM_READ, 0))
+    return -EPERM;
+
+  if (!S_ISLNK(inode->mode))
+    return -EINVAL;
+
+  panic("not implemented");
+
+  (void) buf;
+  (void) bufsize;
+
+  fs_inode_unlock(inode);
+
+  return 0;
 }

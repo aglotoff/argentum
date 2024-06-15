@@ -1,8 +1,11 @@
 #ifndef _SYS_NETINET_IN_H
 # define _SYS_NETINET_IN_H
 
+#include <sys/cdefs.h>
 #include <arpa/inet.h>
 #include <sys/socket.h>
+
+__BEGIN_DECLS
 
 struct sockaddr_in {
   uint8_t         sin_len;
@@ -46,5 +49,7 @@ struct sockaddr_in6 {
 #define IP_TTL          2
 
 #define IPPORT_RESERVED 1024
+
+__END_DECLS
 
 #endif

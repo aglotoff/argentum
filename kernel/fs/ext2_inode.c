@@ -100,7 +100,7 @@ ext2_inode_read(struct Inode *inode)
 }
 
 int
-ext2_inode_writee(struct Inode *inode)
+ext2_inode_write(struct Inode *inode)
 {
   struct Buf *buf;
   struct Ext2Inode *raw;

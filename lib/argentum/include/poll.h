@@ -1,6 +1,10 @@
 #ifndef _POLL_H
 #define _POLL_H
 
+#include <sys/cdefs.h>
+
+__BEGIN_DECLS
+
 struct pollfd {
   int    fd;
   short  events;
@@ -17,5 +21,7 @@ typedef unsigned nfds_t;
 #define POLLNVAL    0x0020
 
 int poll(struct pollfd[], nfds_t, int);
+
+__END_DECLS
 
 #endif

@@ -64,6 +64,10 @@
 #define __SYS_SELECT        58
 #define __SYS_SIGSUSPEND    59
 #define __SYS_GETHOSTBYNAME 60
+#define __SYS_FSYNC         61
+#define __SYS_FTRUNCATE     62
+#define __SYS_FCHOWN        63
+#define __SYS_READLINK      64
 
 #ifndef __ASSEMBLER__
 

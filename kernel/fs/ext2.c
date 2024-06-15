@@ -388,7 +388,7 @@ ext2_inode_delete(struct Inode *ip)
 
   ip->mode = 0;
   ip->size = 0;
-  ext2_inode_writee(ip);
+  ext2_inode_write(ip);
 
   ext2_inode_free((struct Ext2SuperblockData *) (ip->fs->extra), ip->dev, ip->ino);
 }
@@ -429,7 +429,7 @@ ext2_sb_sync(struct Ext2SuperblockData *sb, dev_t dev)
 
 struct FSOps ext2fs_ops = {
   .inode_read   = ext2_inode_read,
-  .inode_write  = ext2_inode_writee,
+  .inode_write  = ext2_inode_write,
   .inode_delete = ext2_inode_delete,
   .read         = ext2_read,
   .write        = ext2_write,

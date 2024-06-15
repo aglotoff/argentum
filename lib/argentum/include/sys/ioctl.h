@@ -36,6 +36,10 @@
 #ifndef	_IOCTL_H_
 #define	_IOCTL_H_
 
+#include <sys/cdefs.h>
+
+__BEGIN_DECLS
+
 /*
  * Window/terminal size structure.  This information is stored by the kernel
  * in order to provide a consistent interface, but is not used by the kernel.
@@ -203,5 +207,7 @@ struct ttysize {
 #define	SIOCSIFMTU	_IOW('i', 127, struct ifreq)	/* set ifnet mtu */
 
 int	ioctl(int, int, ...);
+
+__END_DECLS
 
 #endif /* !_IOCTL_H_ */

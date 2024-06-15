@@ -337,3 +337,22 @@ fs_access(const char *path, int amode)
 
   return r;
 }
+
+ssize_t
+fs_readlink(const char *path, char *buf, size_t bufsize)
+{
+  struct PathNode *pp;
+  int r;
+
+  if ((r = fs_lookup(path, 0, &pp)) < 0)
+    return r;
+
+  if (pp == NULL)
+    return -ENOENT;
+
+  r = fs_inode_readlink(pp->inode, buf, bufsize);
+
+  fs_path_put(pp);
+
+  return r;
+}

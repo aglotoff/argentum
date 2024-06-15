@@ -95,8 +95,10 @@ struct FS {
 extern struct PathNode *fs_root;
 
 void          fs_init(void);
+
 int           fs_lookup(const char *, int, struct PathNode **);
 int           fs_path_lookup(const char *, char *, int, struct PathNode **, struct PathNode **);
+int           fs_set_pwd(struct PathNode *);
 
 struct Inode *fs_inode_get(ino_t ino, dev_t dev);
 void          fs_inode_put(struct Inode *);
@@ -113,10 +115,13 @@ ssize_t       fs_inode_getdents(struct Inode *, void *, size_t, off_t *);
 int           fs_inode_stat(struct Inode *, struct stat *);
 int           fs_create(const char *, mode_t, dev_t, struct PathNode **);
 void          fs_inode_cache_init(void);
-int           fs_inode_truncate(struct Inode *);
+int           fs_inode_truncate(struct Inode *, off_t length);
 int           fs_inode_chmod(struct Inode *, mode_t);
 int           fs_inode_ioctl(struct Inode *, int, int);
-int           fs_set_pwd(struct PathNode *);
+int           fs_inode_select(struct Inode *);
+int           fs_inode_sync(struct Inode *);
+int           fs_inode_chown(struct Inode *, uid_t, gid_t);
+ssize_t       fs_inode_readlink(struct Inode *, char *, size_t);
 
 int           fs_unlink(const char *);
 int           fs_rmdir(const char *);
@@ -124,6 +129,7 @@ int           fs_permission(struct Inode *, mode_t, int);
 int           fs_link(char *, char *);
 int           fs_chdir(const char *);
 int           fs_access(const char *, int);
+ssize_t       fs_readlink(const char *, char *, size_t);
 
 struct PathNode *fs_path_create(const char *, struct Inode *, struct PathNode *);
 struct PathNode *fs_path_duplicate(struct PathNode *);

@@ -62,5 +62,9 @@ int32_t sys_sigpending(void);
 int32_t sys_sigprocmask(void);
 int32_t sys_sigsuspend(void);
 int32_t sys_kill(void);
+int32_t sys_fsync(void);
+int32_t sys_ftruncate(void);
+int32_t sys_fchown(void);
+int32_t sys_readlink(void);
 
 #endif  // !__KERNEL_INCLUDE_KERNEL_SYSCALL_H__

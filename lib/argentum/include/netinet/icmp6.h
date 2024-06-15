@@ -61,8 +61,11 @@
 #ifndef _NETINET_ICMP6_H_
 #define _NETINET_ICMP6_H_
 
+#include <sys/cdefs.h>
 #include <netinet/in.h>
 #include <sys/types.h>
+
+__BEGIN_DECLS
 
 #define ICMPV6_PLD_MAXLEN	1232	/* IPV6_MMTU - sizeof(struct ip6_hdr) - sizeof(struct icmp6_hdr) */
 
@@ -772,5 +775,7 @@ static const char * const icmp6_code_paramprob[] = {
 
 /* not all informational icmps that have codes have a names array */
 #endif
+
+__END_DECLS
 
 #endif /* !_NETINET_ICMP6_H_ */

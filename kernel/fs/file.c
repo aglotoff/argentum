@@ -97,7 +97,7 @@ file_open(const char *path, int oflag, mode_t mode, struct File **fstore)
   // TODO: EROFS
 
   if ((oflag & O_WRONLY) && (oflag & O_TRUNC)) {
-    if ((r = fs_inode_truncate(pp->inode)) < 0)
+    if ((r = fs_inode_truncate(pp->inode, 0)) < 0)
       goto out2;
   }
 
@@ -386,16 +386,23 @@ file_set_flags(struct File *file, int flags)
 int
 file_chmod(struct File *file, mode_t mode)
 {
-  int r;
-  
   if (file->type != FD_INODE) 
     return -EINVAL;
 
   assert(file->node != NULL);
 
-  r = fs_inode_chmod(file->node->inode, mode);
+  return fs_inode_chmod(file->node->inode, mode);
+}
 
-  return r;
+int
+file_chown(struct File *file, uid_t uid, gid_t gid)
+{
+  if (file->type != FD_INODE) 
+    return -EINVAL;
+
+  assert(file->node != NULL);
+
+  return fs_inode_chown(file->node->inode, uid, gid);
 }
 
 int
@@ -416,5 +423,65 @@ file_ioctl(struct File *f, int request, int arg)
   default:
     panic("ioctl %d\n", f->type);
     return -EINVAL;
+  }
+}
+
+int
+file_select(struct File *file)
+{
+  int r;
+
+  if (file->type != FD_INODE) 
+    return -EBADF;
+
+  assert(file->node != NULL);
+
+  fs_inode_lock(file->node->inode);
+  r = fs_inode_select(file->node->inode);
+  fs_inode_unlock(file->node->inode);
+
+  return r;
+}
+
+int
+file_truncate(struct File *file, off_t length)
+{
+  int r;
+
+  if ((file->flags & O_ACCMODE) == O_RDONLY)
+    return -EBADF;
+
+  switch (file->type) {
+  case FD_INODE:
+    assert(file->node != NULL);
+
+    fs_inode_lock(file->node->inode);
+    r = fs_inode_truncate(file->node->inode, length);
+    fs_inode_unlock(file->node->inode);
+
+    return r;
+
+  default:
+    return -EBADF;
+  }
+}
+
+int
+file_sync(struct File *file)
+{
+  int r;
+
+  switch (file->type) {
+  case FD_INODE:
+    assert(file->node != NULL);
+
+    fs_inode_lock(file->node->inode);
+    r = fs_inode_sync(file->node->inode);
+    fs_inode_unlock(file->node->inode);
+
+    return r;
+
+  default:
+    return -EBADF;
   }
 }

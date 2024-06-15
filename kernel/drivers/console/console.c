@@ -1,5 +1,6 @@
 #include <errno.h>
 #include <stdint.h>
+#include <stdio.h>
 #include <sys/ioctl.h>
 #include <string.h>
 
@@ -226,6 +227,10 @@ console_print_char(struct Console *console, char c)
     } while ((console->out.pos % DISPLAY_TAB_WIDTH) != 0);
     break;
 
+  case C('G'):
+    // TODO: beep;
+    break;
+
   default:
     if (c < ' ') {
       console_set_char(console, console->out.pos++, '^');
@@ -292,7 +297,6 @@ console_handle_esc(struct Console *console, char c)
 
   // Cursor Forward
   case 'C':
-    for (;;);
     n = (console->out.esc_cur_param == 0) ? 1 : console->out.esc_params[0];
     n = MIN(n, console->out.cols - console->out.pos % console->out.cols - 1);
     console->out.pos += n;
@@ -316,9 +320,11 @@ console_handle_esc(struct Console *console, char c)
   // Cursor Position
   case 'H':
     n = (console->out.esc_cur_param < 1) ? 1 : console->out.esc_params[0];
-    m = (console->out.esc_cur_param < 2) ? 1 : console->out.esc_params[1];
     n = MIN(n, console->out.rows);
+
+    m = (console->out.esc_cur_param < 2) ? 1 : console->out.esc_params[1];
     m = MIN(m, console->out.cols);
+
     console->out.pos = (n - 1) * console->out.cols + m - 1;
     break;
 
@@ -430,6 +436,11 @@ console_handle_esc(struct Console *console, char c)
       console_print_char(console, console->out.buf[console->out.pos - 1].ch);
     break;
 
+  case 'n':
+  case '%':
+  case 'r':
+    break;
+
   // TODO: handle other control sequences here
 
   default:
@@ -468,6 +479,7 @@ console_out_char(struct Console *console, char c)
       for (i = 0; i < CONSOLE_ESC_MAX; i++)
         console->out.esc_params[i] = 0;
 		} else {
+      // console_dump(console, c);
 			console->out.state = PARSER_NORMAL;
 		}
 		break;
@@ -592,6 +604,25 @@ console_ioctl(struct Inode *inode, int request, int arg)
     panic("TODO: %d %c %d\n", request & 0xFF, (request >> 8) & 0xF, (request >> 16) & 0x1FFF);
     return -EINVAL;
   }
+}
+
+int
+console_select(struct Inode *inode)
+{
+  struct Console *console = console_from_inode(inode);
+
+  if (console == NULL)
+    return -EBADF;
+
+  if (console->in.size > 0) {
+    if (!(console->termios.c_lflag & ICANON)) {
+      return 1;
+    } else {
+      // TODO: check whether EOL or EOF seen
+      return 0;
+    }
+  }
+  return 0;
 }
 
 static int
@@ -832,6 +863,9 @@ console_read(struct Inode *inode, uintptr_t buf, size_t nbytes)
         break;
     } else {
       s[i++] = c;
+
+      if (i >= cons->termios.c_cc[VMIN])
+        break;
     }
   }
 

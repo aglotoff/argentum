@@ -27,10 +27,9 @@ getrlimit(int resource, struct rlimit *rlim)
   case RLIMIT_CPU:
   case RLIMIT_DATA:
   case RLIMIT_FSIZE:
-    // TODO: implement
-    fprintf(stderr, "TODO: getrlimit(%d)\n", resource);
-    errno = ENOSYS;
-    return -1;
+    rlim->rlim_cur = RLIM_INFINITY;
+    rlim->rlim_max = RLIM_INFINITY;
+    break;
   default:
     errno = EINVAL;
     return -1;

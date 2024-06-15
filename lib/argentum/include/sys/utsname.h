@@ -7,6 +7,10 @@
  * System name structure.
  */
 
+#include <sys/cdefs.h>
+
+__BEGIN_DECLS
+
 #define __UTSNAME_LENGTH  65
 
 /**
@@ -37,5 +41,7 @@ struct utsname {
 };
 
 int uname(struct utsname *);
+
+__END_DECLS
 
 #endif  // !__SYS_UTSNAME_H__

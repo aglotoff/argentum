@@ -172,7 +172,7 @@ void          ext2_inode_free(struct Ext2SuperblockData *, dev_t, uint32_t);
 void          ext2_sb_sync(struct Ext2SuperblockData *, dev_t);
 struct Inode *ext2_mount(dev_t);
 int           ext2_inode_read(struct Inode *);
-int           ext2_inode_writee(struct Inode *);
+int           ext2_inode_write(struct Inode *);
 void          ext2_inode_delete(struct Inode *);
 
 int           ext2_create(struct Inode *, char *, mode_t,

@@ -1,20 +1,14 @@
-#include <stdio.h>
-#include <stdlib.h>
+#include <sys/syscall.h>
 #include <unistd.h>
 
 int 
-_fsync(int fd)
+_fsync(int fildes)
 {
-  (void) fd;
-
-  fprintf(stderr, "TODO: fsync()\n");
-  // abort();
-
-  return 0;
+  return __syscall1(__SYS_FSYNC, fildes);
 }
 
 int
-fsync(int fd)
+fsync(int fildes)
 {
-  return _fsync(fd);
+  return _fsync(fildes);
 }

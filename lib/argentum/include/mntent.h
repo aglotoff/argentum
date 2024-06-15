@@ -1,7 +1,10 @@
 #ifndef _MNTENT_H
 # define _MNTENT_H
 
+#include <sys/cdefs.h>
 #include <stdio.h>
+
+__BEGIN_DECLS
 
 #define MOUNTED   "/etc/mtab"
 
@@ -13,5 +16,7 @@ struct mntent {
 };
 
 struct mntent *getmntent(FILE *filep);
+
+__END_DECLS
 
 #endif

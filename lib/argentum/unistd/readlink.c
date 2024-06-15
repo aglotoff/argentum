@@ -1,13 +1,8 @@
-#include <stdio.h>
+#include <sys/syscall.h>
 #include <unistd.h>
 
 ssize_t
 readlink(const char *path, char *buf, size_t bufsize)
 {
-  (void) path;
-  (void) buf;
-  (void) bufsize;
-
-  fprintf(stderr, "TODO: readlink\n");
-  return -1;
+  return __syscall3(__SYS_READLINK, path, buf, bufsize);
 }

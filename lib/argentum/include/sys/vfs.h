@@ -1,7 +1,10 @@
 #ifndef _SYS_VFS_H
 # define _SYS_VFS_H
 
+#include <sys/cdefs.h>
 #include <sys/types.h>
+
+__BEGIN_DECLS
 
 typedef struct fsid {
   int32_t val[2];
@@ -20,5 +23,7 @@ struct statfs {
 };
 
 int statfs(const char *path, struct statfs *buf);
+
+__END_DECLS
 
 #endif

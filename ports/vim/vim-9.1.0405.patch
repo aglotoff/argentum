@@ -1,0 +1,12 @@
+diff -ruN old/src/feature.h new/src/feature.h
+--- old/src/feature.h	2024-05-10 21:03:21.000000000 +0300
++++ new/src/feature.h	2024-06-14 19:50:37.317813135 +0300
+@@ -701,7 +701,7 @@
+ /*
+  * SYS_VIMRC_FILE	Name of the system-wide .vimrc file.
+  */
+-// #define SYS_VIMRC_FILE	"/etc/vimrc"
++#define SYS_VIMRC_FILE	"/etc/vimrc"
+ 
+ /*
+  * SYS_GVIMRC_FILE	Name of the system-wide .gvimrc file.
