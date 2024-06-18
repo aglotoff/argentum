@@ -11,6 +11,9 @@
 #include <kernel/irq.h>
 #include <kernel/monitor.h>
 
+#include "gic.h"
+#include "ptimer.h"
+
 static void trap_handle_abort(struct TrapFrame *);
 
 /**
@@ -157,4 +160,90 @@ print_trapframe(struct TrapFrame *tf)
   cprintf("  r8   %p    r9   %p\n", tf->r8,  tf->r9);
   cprintf("  r10  %p    r11  %p\n", tf->r10, tf->r11);
   cprintf("  r12  %p    pc   %p\n", tf->r12, tf->pc);
+}
+
+static struct Gic gic;
+static struct PTimer ptimer;
+
+static void
+ptimer_irq(void)
+{
+  ptimer_eoi(&ptimer);
+  tick();
+}
+
+static void
+ipi_irq(void)
+{
+  return;
+}
+
+void
+irq_ipi(void)
+{
+  gic_sgi(&gic, 0);
+}
+
+static int
+irq_id(void)
+{
+  return gic_intid(&gic);
+}
+
+void
+irq_mask(int irq)
+{
+  gic_disable(&gic, irq);
+}
+
+void
+irq_unmask(int irq)
+{
+  gic_enable(&gic, irq, k_cpu_id());
+}
+
+void
+interrupt_init(void)
+{
+  gic_init(&gic, PA2KVA(PHYS_GICC), PA2KVA(PHYS_GICD));
+  ptimer_init(&ptimer, PA2KVA(PHYS_PTIMER));
+
+  k_irq_attach(IRQ_PTIMER, ptimer_irq);
+  k_irq_attach(0, ipi_irq);
+}
+
+void
+interrupt_init_percpu(void)
+{
+  gic_init_percpu(&gic);
+  ptimer_init_percpu(&ptimer);
+
+  irq_unmask(IRQ_PTIMER);
+  irq_unmask(0);
+}
+
+static void
+irq_eoi(int irq)
+{
+  gic_eoi(&gic, irq);
+}
+
+void
+irq_dispatch(void)
+{
+  int irq = irq_id();
+
+  irq_mask(irq);
+  irq_eoi(irq);
+
+  k_irq_begin();
+
+  // Enable nested interrupts
+  k_irq_enable();
+
+  k_irq_dispatch(irq & 0xFFFFFF);
+
+  irq_unmask(irq);
+
+  k_irq_end();
 }

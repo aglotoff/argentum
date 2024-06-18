@@ -16,8 +16,11 @@ ifdef PROCESS_NAME
 endif
 
 KERNEL_SRCFILES :=	\
-	kernel/core/context.S \
+	kernel/core/arch_irq.c \
+	kernel/core/arch_spinlock.c \
+	kernel/core/arch_switch.S \
 	kernel/core/cpu.c \
+	kernel/core/irq.c \
 	kernel/core/mutex.c \
 	kernel/core/semaphore.c \
 	kernel/core/mailbox.c \
@@ -25,8 +28,7 @@ KERNEL_SRCFILES :=	\
 	kernel/core/timer.c \
 	kernel/core/thread.c \
 	kernel/core/sched.c \
-	kernel/core/spin.c \
-	kernel/core/spin_arch.c \
+	kernel/core/spinlock.c \
 	kernel/core/tick.c \
 	kernel/core/waitqueue.c \
 	kernel/drivers/console/kbd.c \
@@ -63,7 +65,6 @@ KERNEL_SRCFILES :=	\
 	kernel/process/vmspace.c \
 	kernel/cprintf.c \
 	kernel/entry.S \
-	kernel/irq.c \
 	kernel/kdebug.c \
 	kernel/monitor.c \
 	kernel/pipe.c \

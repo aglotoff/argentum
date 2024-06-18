@@ -1,6 +1,7 @@
 #include <kernel/drivers/console.h>
 #include <kernel/mm/memlayout.h>
 #include <kernel/irq.h>
+#include <kernel/trap.h>
 
 #include "pl011.h"
 #include "serial.h"
@@ -20,7 +21,7 @@ void
 serial_init(void)
 {
   pl011_init(&uart0, PA2KVA(PHYS_UART0), UART_CLOCK, UART_BAUD_RATE);
-  irq_attach(IRQ_UART0, serial_irq, 0);
+  k_irq_attach(IRQ_UART0, serial_irq);
 }
 
 /**

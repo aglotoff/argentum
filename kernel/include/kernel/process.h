@@ -10,7 +10,7 @@
 #include <sys/types.h>
 
 #include <kernel/cpu.h>
-#include <kernel/spin.h>
+#include <kernel/spinlock.h>
 #include <kernel/list.h>
 #include <kernel/vm.h>
 #include <kernel/thread.h>

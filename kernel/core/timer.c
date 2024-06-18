@@ -3,7 +3,7 @@
 
 #include <kernel/cprintf.h>
 #include <kernel/timer.h>
-#include <kernel/spin.h>
+#include <kernel/spinlock.h>
 
 static void k_timer_enqueue(struct KTimer *);
 static void k_timer_dequeue(struct KTimer *);

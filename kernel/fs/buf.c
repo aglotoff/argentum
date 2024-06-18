@@ -5,7 +5,7 @@
 #include <kernel/fs/buf.h>
 #include <kernel/list.h>
 #include <kernel/object_pool.h>
-#include <kernel/spin.h>
+#include <kernel/spinlock.h>
 #include <kernel/page.h>
 
 struct KObjectPool *buf_desc_cache;

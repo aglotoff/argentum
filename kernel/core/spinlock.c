@@ -7,7 +7,9 @@
 #include <kernel/irq.h>
 #include <kernel/kdebug.h>
 #include <kernel/process.h>
-#include <kernel/spin.h>
+#include <kernel/spinlock.h>
+
+#include "core_private.h"
 
 /**
  * Initialize a spinlock.
@@ -39,9 +41,9 @@ k_spinlock_acquire(struct KSpinLock *spin)
   // Disable interrupts to avoid deadlocks
   k_irq_save();
 
-  spin_arch_lock(&spin->locked);
+  k_arch_spinlock_acquire(&spin->locked);
 
-  spin->cpu = k_cpu();
+  spin->cpu = _k_cpu();
   spin_arch_pcs_save(spin);
 }
 
@@ -62,7 +64,7 @@ k_spinlock_release(struct KSpinLock *spin)
   spin->cpu = NULL;
   spin->pcs[0] = 0;
 
-  spin_arch_unlock(&spin->locked);
+  k_arch_spinlock_release(&spin->locked);
   
   k_irq_restore();
 }
@@ -79,7 +81,7 @@ k_spinlock_holding(struct KSpinLock *spin)
   int r;
 
   k_irq_save();
-  r = spin->locked && (spin->cpu == k_cpu());
+  r = spin->locked && (spin->cpu == _k_cpu());
   k_irq_restore();
 
   return r;

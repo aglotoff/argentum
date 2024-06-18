@@ -15,7 +15,7 @@
 #include <sys/types.h>
 #include <sys/termios.h>
 
-#include <kernel/spin.h>
+#include <kernel/spinlock.h>
 #include <kernel/waitqueue.h>
 
 #define CONSOLE_INPUT_MAX 256

@@ -6,7 +6,7 @@
 #include <kernel/cpu.h>
 #include <kernel/irq.h>
 #include <kernel/thread.h>
-#include <kernel/spin.h>
+#include <kernel/spinlock.h>
 #include <kernel/process.h>
 #include <kernel/vmspace.h>
 #include <kernel/vm.h>
@@ -16,7 +16,7 @@
 
 #include "core_private.h"
 
-void arch_context_switch(struct Context **, struct Context *);
+void k_arch_switch(struct Context **, struct Context *);
 
 LIST_DECLARE(threads_to_destroy);
 static struct ListLink sched_queue[THREAD_MAX_PRIORITIES];
@@ -77,7 +77,7 @@ k_sched_dequeue(void)
 static void
 k_sched_switch(struct KThread *thread)
 {
-  struct KCpu *my_cpu = k_cpu();
+  struct KCpu *my_cpu = _k_cpu();
 
   if (thread->process != NULL)
     vm_arch_load(thread->process->vm->pgtab);
@@ -87,7 +87,7 @@ k_sched_switch(struct KThread *thread)
   thread->cpu = my_cpu;
   my_cpu->thread = thread;
 
-  arch_context_switch(&my_cpu->sched_context, thread->context);
+  k_arch_switch(&my_cpu->sched_context, thread->context);
 
   my_cpu->thread = NULL;
   thread->cpu = NULL;
@@ -107,7 +107,7 @@ k_sched_idle(void)
     thread = LIST_CONTAINER(threads_to_destroy.next, struct KThread, link);
     list_remove(&thread->link);
 
-    _k_sched_unlock();
+    _k_sched_spin_unlock();
 
     // Free the thread kernel stack
     kstack_page = kva2page(thread->kstack);
@@ -117,15 +117,15 @@ k_sched_idle(void)
     // Free the thread object
     k_object_pool_put(thread_cache, thread);
 
-    _k_sched_lock();
+    _k_sched_spin_lock();
   }
 
-  _k_sched_unlock();
+  _k_sched_spin_unlock();
 
   k_irq_enable();
   asm volatile("wfi");
 
-  _k_sched_lock();
+  _k_sched_spin_lock();
 }
 
 /**
@@ -134,7 +134,7 @@ k_sched_idle(void)
 void
 k_sched_start(void)
 {
-  _k_sched_lock();
+  _k_sched_spin_lock();
 
   for (;;) {
     struct KThread *next = k_sched_dequeue();
@@ -157,49 +157,9 @@ _k_sched_yield(void)
   if (!k_spinlock_holding(&_k_sched_spinlock))
     panic("scheduler not locked");
 
-  irq_flags = k_cpu()->irq_flags;
-  arch_context_switch(&k_thread_current()->context, k_cpu()->sched_context);
-  k_cpu()->irq_flags = irq_flags;
-}
-
-/**
- * Notify the kernel that an ISR processing has started.
- */
-void
-sched_isr_enter(void)
-{
-  k_cpu()->isr_nesting++;
-}
-
-/**
- * Notify the kernel that an ISR processing is finished.
- */
-void
-sched_isr_exit(void)
-{
-  struct KCpu *my_cpu;
-
-  _k_sched_lock();
-
-  my_cpu = k_cpu();
-
-  if (my_cpu->isr_nesting <= 0)
-    panic("isr_nesting <= 0");
-
-  if (--my_cpu->isr_nesting == 0) {
-    struct KThread *my_thread = my_cpu->thread;
-
-    // Before resuming the current thread, check whether it must give up the CPU
-    // or exit.
-    if ((my_thread != NULL) && (my_thread->flags & THREAD_FLAG_RESCHEDULE)) {
-      my_thread->flags &= ~THREAD_FLAG_RESCHEDULE;
-
-      _k_sched_enqueue(my_thread);
-      _k_sched_yield();
-    }
-  }
-
-  _k_sched_unlock();
+  irq_flags = _k_cpu()->irq_flags;
+  k_arch_switch(&k_thread_current()->context, _k_cpu()->sched_context);
+  _k_cpu()->irq_flags = irq_flags;
 }
 
 // Compare thread priorities. Note that a smaller priority value corresponds
@@ -223,12 +183,12 @@ _k_sched_may_yield(struct KThread *candidate)
   if (!k_spinlock_holding(&_k_sched_spinlock))
     panic("scheduler not locked");
 
-  my_cpu = k_cpu();
+  my_cpu = _k_cpu();
   my_thread = my_cpu->thread;
 
   if ((my_thread != NULL) && (k_sched_priority_cmp(candidate, my_thread) > 0)) {
-    if (my_cpu->isr_nesting > 0) {
-      // Cannot yield right now, delay until the last call to sched_isr_exit()
+    if (my_cpu->lock_count > 0) {
+      // Cannot yield right now, delay until the last call to k_irq_end()
       // or thread_unlock().
       my_thread->flags |= THREAD_FLAG_RESCHEDULE;
     } else {
@@ -252,7 +212,7 @@ _k_sched_sleep(struct ListLink *queue, int interruptible, unsigned long timeout,
   struct KThread *my_thread = k_thread_current();
 
   if (lock != NULL) {
-    _k_sched_lock();
+    _k_sched_spin_lock();
     k_spinlock_release(lock);
   }
 
@@ -278,7 +238,7 @@ _k_sched_sleep(struct ListLink *queue, int interruptible, unsigned long timeout,
 
   // someone may call this function while holding _k_sched_spinlock?
   if (lock != NULL) {
-    _k_sched_unlock();
+    _k_sched_spin_unlock();
     k_spinlock_acquire(lock);
   }
 

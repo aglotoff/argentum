@@ -50,7 +50,7 @@ void main(void)
   vm_arch_init();       // Memory management unit and kernel mappings
 
   // Now we can initialize the console to print messages during initialization
-  irq_init();     // Interrupt controller
+  interrupt_init();     // Interrupt controller
   console_init(); // Console driver
 
   // Complete the memory manager initialization
@@ -89,7 +89,7 @@ void mp_enter(void)
 {
   // Per-CPU initialization
   vm_arch_init_percpu(); // Load the kernel page table
-  irq_init_percpu();
+  interrupt_init_percpu();
 
   mp_main();
 }

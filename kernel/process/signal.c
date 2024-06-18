@@ -8,6 +8,8 @@
 #include <kernel/thread.h>
 #include <kernel/cprintf.h>
 
+#include <kernel/armv7/regs.h>
+
 static struct Signal *signal_alloc(int, int, int);
 static void           signal_free(struct Signal *);
 static int            signal_default_action(struct Process *, struct Signal *);

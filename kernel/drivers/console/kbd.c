@@ -3,6 +3,7 @@
 #include <kernel/drivers/console.h>
 #include <kernel/mm/memlayout.h>
 #include <kernel/vm.h>
+#include <kernel/trap.h>
 #include <kernel/irq.h>
 
 #include "kbd.h"
@@ -26,7 +27,7 @@ kbd_init(void)
   pl050_putc(&kmi0, 0xF0);
   pl050_putc(&kmi0, 1);
 
-  irq_attach(IRQ_KMI0, kbd_irq, 0);
+  k_irq_attach(IRQ_KMI0, kbd_irq);
 }
 
 #define KEY_MAX             512

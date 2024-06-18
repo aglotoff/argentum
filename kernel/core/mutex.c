@@ -38,9 +38,9 @@ k_mutex_init(struct KMutex *mutex, const char *name)
 void
 k_mutex_fini(struct KMutex *mutex)
 {
-  _k_sched_lock();
+  _k_sched_spin_lock();
   _k_sched_wakeup_all(&mutex->queue, -EINVAL);
-  _k_sched_unlock();
+  _k_sched_spin_unlock();
 }
 
 struct KMutex *
@@ -75,26 +75,26 @@ k_mutex_lock(struct KMutex *mutex)
   struct KThread *my_task = k_thread_current();
   int r;
 
-  _k_sched_lock();
+  _k_sched_spin_lock();
 
   // Sleep until the mutex becomes available.
   while (mutex->owner != NULL) {
     if (mutex->owner == my_task) {
-      _k_sched_unlock();
+      _k_sched_spin_unlock();
       return -EDEADLK;
     }
 
     // TODO: priority inheritance
 
     if ((r = _k_sched_sleep(&mutex->queue, 0, 0, NULL)) != 0) {
-      _k_sched_unlock();
+      _k_sched_spin_unlock();
       return r;
     }
   }
 
   mutex->owner = my_task;
 
-  _k_sched_unlock();
+  _k_sched_spin_unlock();
   return 0;
 }
 
@@ -109,14 +109,14 @@ k_mutex_unlock(struct KMutex *mutex)
   if (!k_mutex_holding(mutex))
     panic("not holding");
   
-  _k_sched_lock();
+  _k_sched_spin_lock();
 
   // TODO: priority inheritance
 
   mutex->owner = NULL;
   _k_sched_wakeup_one(&mutex->queue, 0);
 
-  _k_sched_unlock();
+  _k_sched_spin_unlock();
   return 0;
 }
 
@@ -131,9 +131,9 @@ k_mutex_holding(struct KMutex *mutex)
 {
   struct KThread *owner;
 
-  _k_sched_lock();
+  _k_sched_spin_lock();
   owner = mutex->owner;
-  _k_sched_unlock();
+  _k_sched_spin_unlock();
 
   return (owner != NULL) && (owner == k_thread_current());
 }

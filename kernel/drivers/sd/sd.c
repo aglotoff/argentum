@@ -9,7 +9,8 @@
 #include <kernel/mm/memlayout.h>
 #include <kernel/thread.h>
 #include <kernel/sd.h>
-#include <kernel/spin.h>
+#include <kernel/spinlock.h>
+#include <kernel/trap.h>
 
 #include "pl180.h"
 
@@ -99,7 +100,7 @@ sd_init(void)
 
   // Enable interrupts.
   pl180_k_irq_enable(&mmci);
-  irq_attach(IRQ_MCIA, sd_irq, 0);
+  k_irq_attach(IRQ_MCIA, sd_irq);
 
   return 0;
 }

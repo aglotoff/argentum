@@ -1,19 +1,37 @@
 #ifndef __KERNEL_INCLUDE_KERNEL_IRQ_H__
 #define __KERNEL_INCLUDE_KERNEL_IRQ_H__
 
-// IRQ numbers
-#define IRQ_PTIMER    29
-#define IRQ_UART0     44
-#define IRQ_MCIA      49
-#define IRQ_MCIB      50
-#define IRQ_KMI0      52
-#define IRQ_ETH       60
-#define IRQ_MAX       64
+int             k_arch_irq_is_enabled(void);
+void            k_arch_irq_enable(void);
+void            k_arch_irq_disable(void);
+int             k_arch_irq_save(void);
+void            k_arch_irq_restore(int);
 
-void         irq_init(void);
-void         irq_init_percpu(void);
-void         irq_dispatch(void);
-int          irq_attach(int, void (*)(void), int);
-void         irq_ipi(void);
+typedef void (*k_irq_handler_t)(void);
+
+k_irq_handler_t k_irq_attach(int, k_irq_handler_t);
+void            k_irq_save(void);
+void            k_irq_restore(void);
+void            k_irq_begin(void);
+void            k_irq_end(void);
+void            k_irq_dispatch(int);
+
+/**
+ * Disable all interrupts on the local (current) processor core.
+ */
+static inline void
+k_irq_disable(void)
+{
+  k_arch_irq_disable();
+}
+
+/**
+ * Enable all interrupts on the local (current) processor core.
+ */
+static inline void
+k_irq_enable(void)
+{
+  k_arch_irq_enable();
+}
 
 #endif  // !__KERNEL_INCLUDE_KERNEL_IRQ_H__

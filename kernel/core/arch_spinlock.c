@@ -1,12 +1,12 @@
 #include <kernel/armv7/regs.h>
 #include <kernel/cprintf.h>
 #include <kernel/kdebug.h>
-#include <kernel/spin.h>
+#include <kernel/spinlock.h>
 #include <kernel/types.h>
 
 // ARMv7-specific code to acquire a spinlock
 void
-spin_arch_lock(volatile int *locked)
+k_arch_spinlock_acquire(volatile int *locked)
 {
   int tmp1, tmp2;
 
@@ -26,7 +26,7 @@ spin_arch_lock(volatile int *locked)
 
 // ARMv7-specific code to release a spinlock
 void
-spin_arch_unlock(volatile int *locked)
+k_arch_spinlock_release(volatile int *locked)
 {
   int tmp;
 

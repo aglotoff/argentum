@@ -2,7 +2,7 @@
 
 #include <kernel/cprintf.h>
 #include <kernel/page.h>
-#include <kernel/spin.h>
+#include <kernel/spinlock.h>
 #include <kernel/types.h>
 
 /**

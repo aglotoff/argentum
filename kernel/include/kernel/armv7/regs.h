@@ -107,7 +107,7 @@
 #define CP15_DACR_DN(n, x)  ((x) << (n * 2))
 
 /** Cortex-A9 MPCore CPU ID */
-#define CP15_MPIDR_k_cpu_id   3
+#define CP15_MPIDR_CPU_ID   3
 
 #ifndef __ASSEMBLER__
 

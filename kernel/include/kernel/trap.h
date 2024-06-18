@@ -15,6 +15,15 @@
 #define T_IRQ       6         ///< IRQ (Interrupt)
 #define T_FIQ       7         ///< FIQ (Fast Interrupt)
 
+// IRQ numbers
+#define IRQ_PTIMER    29
+#define IRQ_UART0     44
+#define IRQ_MCIA      49
+#define IRQ_MCIB      50
+#define IRQ_KMI0      52
+#define IRQ_ETH       60
+#define IRQ_MAX       64
+
 #ifndef __ASSEMBLER__
 
 #include <stdint.h>
@@ -47,6 +56,13 @@ void trap(struct TrapFrame *tf);
  * Print the contents of the provided trap frame.
  */
 void print_trapframe(struct TrapFrame *tf);
+
+void interrupt_init(void);
+void interrupt_init_percpu(void);
+void irq_dispatch(void);
+void irq_ipi(void);
+void irq_mask(int);
+void irq_unmask(int);
 
 #endif  // !__ASSEMBLER__
 

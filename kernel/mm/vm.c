@@ -3,7 +3,7 @@
 #include <kernel/page.h>
 #include <kernel/vm.h>
 #include <kernel/types.h>
-#include <kernel/spin.h>
+#include <kernel/spinlock.h>
 #include <string.h>
 #include <sys/mman.h>
 

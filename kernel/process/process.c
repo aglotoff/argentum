@@ -18,7 +18,7 @@
 #include <kernel/page.h>
 #include <kernel/monitor.h>
 #include <kernel/process.h>
-#include <kernel/spin.h>
+#include <kernel/spinlock.h>
 #include <kernel/vmspace.h>
 #include <kernel/trap.h>
 #include <kernel/tick.h>

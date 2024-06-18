@@ -6,7 +6,7 @@
 #include <kernel/cpu.h>
 #include <kernel/irq.h>
 #include <kernel/thread.h>
-#include <kernel/spin.h>
+#include <kernel/spinlock.h>
 #include <kernel/process.h>
 #include <kernel/vmspace.h>
 #include <kernel/vm.h>
@@ -27,17 +27,17 @@ static void k_thread_run(void);
 int
 k_thread_resume(struct KThread *thread)
 {
-  _k_sched_lock();
+  _k_sched_spin_lock();
 
   if (thread->state != THREAD_STATE_SUSPENDED) {
-    _k_sched_unlock();
+    _k_sched_spin_unlock();
     return -EINVAL;
   }
 
   _k_sched_enqueue(thread);
   _k_sched_may_yield(thread);
 
-  _k_sched_unlock();
+  _k_sched_spin_unlock();
 
   return 0;
 }
@@ -53,12 +53,12 @@ k_thread_yield(void)
   if (current == NULL)
     panic("no current thread");
 
-  _k_sched_lock();
+  _k_sched_spin_lock();
 
   _k_sched_enqueue(current);
   _k_sched_yield();
 
-  _k_sched_unlock();
+  _k_sched_spin_unlock();
 }
 
 // Execution of each thread begins here.
@@ -68,7 +68,7 @@ k_thread_run(void)
   struct KThread *my_thread = k_thread_current();
 
   // Still holding the scheduler lock (acquired in k_sched_start)
-  _k_sched_unlock();
+  _k_sched_spin_unlock();
 
   // Make sure IRQs are enabled
   k_irq_enable();
@@ -104,26 +104,26 @@ k_thread_timeout_callback(void *arg)
 {
   struct KThread *thread = (struct KThread *) arg;
 
-  _k_sched_lock();
+  _k_sched_spin_lock();
 
   if ((thread->state == THREAD_STATE_SLEEPING) ||
       (thread->state == THREAD_STATE_SLEEPING_INTERRUPTILE))
     _k_sched_resume(thread, -ETIMEDOUT);
 
-  _k_sched_unlock();
+  _k_sched_spin_unlock();
 }
 
 void
 k_thread_interrupt(struct KThread *thread)
 {
-  _k_sched_lock();
+  _k_sched_spin_lock();
 
   // TODO: if thread is running, send an SGI
 
   if (thread->state == THREAD_STATE_SLEEPING_INTERRUPTILE)
     _k_sched_resume(thread, -EINTR);
 
-  _k_sched_unlock();
+  _k_sched_spin_unlock();
 }
 
 /**
@@ -189,7 +189,7 @@ k_thread_exit(void)
 
   k_timer_destroy(&thread->timer);
 
-  _k_sched_lock();
+  _k_sched_spin_lock();
 
   thread->state = THREAD_STATE_DESTROYED;
   list_add_back(&threads_to_destroy, &thread->link);
@@ -210,7 +210,7 @@ k_thread_current(void)
   struct KThread *thread;
 
   k_irq_save();
-  thread = k_cpu()->thread;
+  thread = _k_cpu()->thread;
   k_irq_restore();
 
   return thread;

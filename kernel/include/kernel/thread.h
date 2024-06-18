@@ -99,7 +99,5 @@ void         k_thread_interrupt(struct KThread *);
 void         k_sched_init(void);
 void         k_sched_start(void);
 void         tick(void);
-void         sched_isr_enter(void);
-void         sched_isr_exit(void);
 
 #endif  // __KERNEL_INCLUDE_KERNEL_THREAD_H__

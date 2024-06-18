@@ -29,10 +29,10 @@ k_mailbox_init(struct KMailBox *mbox, size_t msg_size, void *start, size_t size)
 int
 k_mailbox_destroy(struct KMailBox *mbox)
 {
-  _k_sched_lock();
+  _k_sched_spin_lock();
   _k_sched_wakeup_all(&mbox->receive_list, -EINVAL);
   _k_sched_wakeup_all(&mbox->send_list, -EINVAL);
-  _k_sched_unlock();
+  _k_sched_spin_unlock();
 
   return 0;
 }
@@ -48,19 +48,19 @@ k_mailbox_receive(struct KMailBox *mbox, void *msg, unsigned long timeout,
     // TODO: choose another value to indicate an error?
     return -EAGAIN;
 
-  _k_sched_lock();
+  _k_sched_spin_lock();
 
   while (mbox->size == 0) {
-    struct KCpu *my_cpu = k_cpu();
+    struct KCpu *my_cpu = _k_cpu();
 
-    if (!blocking || (my_cpu->isr_nesting > 0)) {
+    if (!blocking || (my_cpu->lock_count > 0)) {
       // Can't block
-      _k_sched_unlock();
+      _k_sched_spin_unlock();
       return -EAGAIN;
     }
 
     if ((r = _k_sched_sleep(&mbox->receive_list, 0, timeout, NULL)) != 0) {
-      _k_sched_unlock();
+      _k_sched_spin_unlock();
       return r;
     }
   }
@@ -74,7 +74,7 @@ k_mailbox_receive(struct KMailBox *mbox, void *msg, unsigned long timeout,
   if (mbox->size-- == mbox->max_size)
     _k_sched_wakeup_one(&mbox->send_list, 0);
 
-  _k_sched_unlock();
+  _k_sched_spin_unlock();
 
   return r;
 }
@@ -90,21 +90,21 @@ k_mailbox_send(struct KMailBox *mbox, const void *msg, unsigned long timeout,
     // TODO: choose another value to indicate an error?
     return -EAGAIN;
 
-  _k_sched_lock();
+  _k_sched_spin_lock();
 
   while (mbox->size == mbox->max_size) {
-    struct KCpu *my_cpu = k_cpu();
+    struct KCpu *my_cpu = _k_cpu();
 
-    if (!blocking || (my_cpu->isr_nesting > 0)) {
+    if (!blocking || (my_cpu->lock_count > 0)) {
       // Can't block
-      _k_sched_unlock();
+      _k_sched_spin_unlock();
       return -EAGAIN;
     }
 
     _k_sched_sleep(&mbox->send_list, 0, timeout, NULL);
 
     if ((ret = my_task->sleep_result) != 0) {
-      _k_sched_unlock();
+      _k_sched_spin_unlock();
       return ret;
     }
   }
@@ -118,7 +118,7 @@ k_mailbox_send(struct KMailBox *mbox, const void *msg, unsigned long timeout,
   if (mbox->size++ == 0)
     _k_sched_wakeup_one(&mbox->receive_list, 0);
 
-  _k_sched_unlock();
+  _k_sched_spin_unlock();
 
   return ret;
 }

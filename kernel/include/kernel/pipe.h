@@ -2,7 +2,7 @@
 #define __KERNEL_INCLUDE_KERNEL_PIPE_H__
 
 #include <kernel/waitqueue.h>
-#include <kernel/spin.h>
+#include <kernel/spinlock.h>
 
 struct Pipe {
   struct KSpinLock lock;

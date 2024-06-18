@@ -19,9 +19,9 @@ k_semaphore_create(struct KSemaphore *sem, unsigned long initial_count)
 int
 k_semaphore_destroy(struct KSemaphore *sem)
 {
-  _k_sched_lock();
+  _k_sched_spin_lock();
   _k_sched_wakeup_all(&sem->queue, -EINVAL);
-  _k_sched_unlock();
+  _k_sched_spin_unlock();
 
   return 0;
 }
@@ -36,38 +36,38 @@ k_semaphore_get(struct KSemaphore *sem, unsigned long timeout, int blocking)
     // TODO: choose another value to indicate an error?
     return -EAGAIN;
 
-  _k_sched_lock();
+  _k_sched_spin_lock();
 
   while (sem->count == 0) {
-    struct KCpu *my_cpu = k_cpu();
+    struct KCpu *my_cpu = _k_cpu();
 
-    if (!blocking || (my_cpu->isr_nesting > 0)) {
+    if (!blocking || (my_cpu->lock_count > 0)) {
       // Can't block
-      _k_sched_unlock();
+      _k_sched_spin_unlock();
       return -EAGAIN;
     }
 
     if ((r = _k_sched_sleep(&sem->queue, 0, timeout, NULL)) != 0) {
-      _k_sched_unlock();
+      _k_sched_spin_unlock();
       return r;
     }
   }
 
   r = --sem->count;
 
-  _k_sched_unlock();
+  _k_sched_spin_unlock();
   return r;
 }
 
 int
 k_semaphore_put(struct KSemaphore *sem)
 {
-  _k_sched_lock();
+  _k_sched_spin_lock();
 
   sem->count++;
   _k_sched_wakeup_one(&sem->queue, 0);
 
-  _k_sched_unlock();
+  _k_sched_spin_unlock();
 
   return 0;
 }

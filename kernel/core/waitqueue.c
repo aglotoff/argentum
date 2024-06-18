@@ -1,5 +1,5 @@
 #include <kernel/thread.h>
-#include <kernel/spin.h>
+#include <kernel/spinlock.h>
 #include <kernel/waitqueue.h>
 
 #include "core_private.h"
@@ -36,9 +36,9 @@ k_waitqueue_sleep(struct KWaitQueue *chan, struct KSpinLock *lock)
 void
 k_waitqueue_wakeup_one(struct KWaitQueue *chan)
 {
-  _k_sched_lock();
+  _k_sched_spin_lock();
   _k_sched_wakeup_one(&chan->head, 0);
-  _k_sched_unlock();
+  _k_sched_spin_unlock();
 }
 
 /**
@@ -49,7 +49,7 @@ k_waitqueue_wakeup_one(struct KWaitQueue *chan)
 void
 k_waitqueue_wakeup_all(struct KWaitQueue *chan)
 {
-  _k_sched_lock();
+  _k_sched_spin_lock();
   _k_sched_wakeup_all(&chan->head, 0);
-  _k_sched_unlock();
+  _k_sched_spin_unlock();
 }

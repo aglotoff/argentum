@@ -8,7 +8,7 @@
 #include <stdint.h>
 
 #include <kernel/list.h>
-#include <kernel/spin.h>
+#include <kernel/spinlock.h>
 
 struct KMailBox {
   uint8_t          *buf_start;

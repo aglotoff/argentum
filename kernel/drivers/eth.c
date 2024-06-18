@@ -9,6 +9,7 @@
 #include <kernel/irq.h>
 #include <kernel/net.h>
 #include <kernel/types.h>
+#include <kernel/trap.h>
 
 // RX an TX FIFO ports, divided by 4 for use as uint32_t[] indices
 #define RX_DATA_FIFO_PORT   (0x00 / 4)
@@ -238,7 +239,7 @@ eth_init(void)
   // Enable interrupts
   eth[INT_EN] |= RSFL_INT;
 
-  irq_attach(IRQ_ETH, eth_irq, 0);
+  k_irq_attach(IRQ_ETH, eth_irq);
 }
 
 static void

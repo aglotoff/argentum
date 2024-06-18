@@ -49,8 +49,8 @@ void k_spinlock_acquire(struct KSpinLock *);
 void k_spinlock_release(struct KSpinLock *);
 int  k_spinlock_holding(struct KSpinLock *);
 
-void spin_arch_lock(volatile int *);
-void spin_arch_unlock(volatile int *);
+void k_arch_spinlock_acquire(volatile int *);
+void k_arch_spinlock_release(volatile int *);
 void spin_arch_pcs_save(struct KSpinLock *);
 void spin_arch_pcs_print(struct KSpinLock *);
 

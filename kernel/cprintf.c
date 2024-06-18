@@ -3,7 +3,7 @@
 #include <kernel/cprintf.h>
 #include <kernel/drivers/console.h>
 #include <kernel/monitor.h>
-#include <kernel/spin.h>
+#include <kernel/spinlock.h>
 
 static struct KSpinLock lock = K_SPINLOCK_INITIALIZER("cprintf");
 static int locking = 1;
