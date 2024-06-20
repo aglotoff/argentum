@@ -47,421 +47,251 @@ file_alloc(struct File **fstore)
   return 0;
 }
 
+struct File *
+file_dup(struct File *file)
+{
+  k_spinlock_acquire(&file_lock);
+  file->ref_count++;
+  k_spinlock_release(&file_lock);
+
+  return file;
+}
+
 #define STATUS_MASK (O_APPEND | O_NONBLOCK | O_SYNC)
 
 int
-file_open(const char *path, int oflag, mode_t mode, struct File **fstore)
+file_get_flags(struct File *file)
 {
-  struct File *f;
-  struct PathNode *pp;
   int r;
 
-  // TODO: ENFILE
-  if ((r = file_alloc(&f)) != 0)
-    return r;
+  k_spinlock_acquire(&file_lock);
+  r = file->flags & STATUS_MASK;
+  k_spinlock_release(&file_lock);
 
-  f->flags = oflag & (STATUS_MASK | O_ACCMODE);
-  f->type  = FD_INODE;
-
-  // TODO: the check and the file creation should be atomic
-  if ((r = fs_lookup(path, 0, &pp)) < 0)
-    goto out1;
-
-  if (pp == NULL) {
-    if (!(oflag & O_CREAT)) {
-      r = -ENOENT;
-      goto out1;
-    }
-    
-    mode &= (S_IRWXU | S_IRWXG | S_IRWXO);
-
-    if ((r = fs_create(path, S_IFREG | mode, 0, &pp)) < 0)
-      goto out1;
-  } else {
-    fs_inode_lock(pp->inode);
-
-    if ((oflag & O_CREAT) && (oflag & O_EXCL)) {
-      r = -EEXIST;
-      goto out2;
-    }
-  }
-
-  if (S_ISDIR(pp->inode->mode) && (oflag & O_WRONLY)) {
-    r = -ENOTDIR;
-    goto out2;
-  }
-
-  // TODO: O_NOCTTY
-  // TODO: O_NONBLOCK
-  // TODO: ENXIO
-  // TODO: EROFS
-
-  if ((oflag & O_WRONLY) && (oflag & O_TRUNC)) {
-    if ((r = fs_inode_truncate(pp->inode, 0)) < 0)
-      goto out2;
-  }
-
-  f->node = pp;
-
-  if (oflag & O_RDONLY) {
-    // TODO: check group and other permissions
-    if (!(f->node->inode->mode & S_IRUSR)) {
-      r = -EPERM;
-      goto out2;
-    }
-  }
-
-  if (oflag & O_WRONLY) {
-    // TODO: check group and other permissions
-    if (!(f->node->inode->mode & S_IWUSR)) {
-      r = -EPERM;
-      goto out2;
-    }
-  }
-
-  if (oflag & O_APPEND)
-    f->offset = pp->inode->size;
-
-  fs_inode_unlock(pp->inode);
-
-  f->ref_count++;
-
-  *fstore = f;
-
-  return 0;
-
-out2:
-  fs_inode_unlock(pp->inode);
-  fs_path_put(pp);
-out1:
-  k_object_pool_put(file_cache, f);
   return r;
 }
 
-struct File *
-file_dup(struct File *f)
+int
+file_set_flags(struct File *file, int flags)
 {
   k_spinlock_acquire(&file_lock);
-  f->ref_count++;
+  file->flags = (file->flags & ~STATUS_MASK) | (flags & STATUS_MASK);
   k_spinlock_release(&file_lock);
-
-  return f;
+  return 0;
 }
 
 void
-file_close(struct File *f)
+file_put(struct File *file)
 {
   int ref_count;
   
   k_spinlock_acquire(&file_lock);
 
-  if (f->ref_count < 1)
-    panic("Invalid ref_count");
+  if (file->ref_count < 1)
+    panic("bad ref_count %d", ref_count);
 
-  ref_count = --f->ref_count;
+  ref_count = --file->ref_count;
 
   k_spinlock_release(&file_lock);
 
   if (ref_count > 0)
     return;
 
-  switch (f->type) {
+  switch (file->type) {
     case FD_INODE:
-      assert(f->node != NULL);
-      fs_path_put(f->node);
+      fs_close(file);
       break;
     case FD_PIPE:
-      assert(f->pipe != NULL);
-      pipe_close(f->pipe, (f->flags & O_ACCMODE) != O_RDONLY);
+      pipe_close(file);
       break;
     case FD_SOCKET:
-      net_close(f->socket);
+      net_close(file);
       break;
     default:
-      panic("Invalid type");
+      panic("bad file type");
   }
 
-  k_object_pool_put(file_cache, f);
+  k_object_pool_put(file_cache, file);
 }
 
 off_t
-file_seek(struct File *f, off_t offset, int whence)
+file_seek(struct File *file, off_t offset, int whence)
 {
-  // TODO: validate
-  off_t new_offset;
+  if ((whence != SEEK_SET) && (whence != SEEK_CUR) && (whence != SEEK_SET))
+    return -EINVAL;
 
-  switch (f->type) {
+  switch (file->type) {
   case FD_INODE:
-    assert(f->node != NULL);
-
-    switch (whence) {
-    case SEEK_SET:
-      new_offset = offset;
-      break;
-    case SEEK_CUR:
-      new_offset = f->offset + offset;
-      break;
-    case SEEK_END:
-      fs_inode_lock(f->node->inode);
-      new_offset = f->node->inode->size + offset;
-      fs_inode_unlock(f->node->inode);
-      break;
-    default:
-      return -EINVAL;
-    }
-
-    if (new_offset < 0)
-      return -EOVERFLOW;
-
-    f->offset = new_offset;
-
-    return new_offset;
-
+    return fs_seek(file, offset, whence);
   case FD_PIPE:
   case FD_SOCKET:
     return -ESPIPE;
-
   default:
-    panic("Invalid type");
-    return 0;
+    panic("bad file type");
+    return -EBADF;
   }
 }
 
 ssize_t
-file_read(struct File *f, void *buf, size_t nbytes)
+file_read(struct File *file, void *buf, size_t nbytes)
 {
-  int r;
-
-  if ((f->flags & O_ACCMODE) == O_WRONLY)
+  if ((file->flags & O_ACCMODE) == O_WRONLY)
     return -EBADF;
   
-  switch (f->type) {
+  switch (file->type) {
   case FD_INODE:
-    assert(f->node != NULL);
-
-    fs_inode_lock(f->node->inode);
-
-    // TODO: check group and other permissions
-    // TODO: what if permissions change?
-    if (!(f->node->inode->mode & S_IRUSR)) {
-      fs_inode_unlock(f->node->inode);
-      return -EPERM;
-    }
-
-    r = fs_inode_read(f->node->inode, buf, nbytes, &f->offset);
-
-    fs_inode_unlock(f->node->inode);
-
-    return r;
-
+    return fs_read(file, buf, nbytes);
   case FD_SOCKET:
-    return net_recvfrom(f->socket, buf, nbytes, 0, NULL, NULL);
-
+    return net_read(file, buf, nbytes);
   case FD_PIPE:
-    assert(f->pipe != NULL);
-    return pipe_read(f->pipe, buf, nbytes);
-
+    return pipe_read(file, buf, nbytes);
   default:
-    panic("Invalid type");
-    return 0;
+    panic("bad file type");
+    return -EBADF;
   }
 }
 
 ssize_t
-file_getdents(struct File *f, void *buf, size_t nbytes)
+file_write(struct File *file, const void *buf, size_t nbytes)
 {
-  int r;
-
-  if ((f->flags & O_ACCMODE) == O_WRONLY)
+  if ((file->flags & O_ACCMODE) == O_RDONLY)
     return -EBADF;
 
-  if ((f->type != FD_INODE) || !S_ISDIR(f->node->inode->mode))
+  switch (file->type) {
+  case FD_INODE:
+    return fs_write(file, buf, nbytes);
+  case FD_SOCKET:
+    return net_write(file, buf, nbytes);
+  case FD_PIPE:
+    return pipe_write(file, buf, nbytes);
+  default:
+    panic("bad file type");
+    return -EBADF;
+  }
+}
+
+ssize_t
+file_getdents(struct File *file, void *buf, size_t nbytes)
+{
+  if ((file->flags & O_ACCMODE) == O_WRONLY)
+    return -EBADF;
+
+  switch (file->type) {
+  case FD_INODE:
+    return fs_getdents(file, buf, nbytes);
+  case FD_SOCKET:
+  case FD_PIPE:
     return -ENOTDIR;
-
-  fs_inode_lock(f->node->inode);
-
-  // TODO: check group and other permissions
-  // TODO: what if permissions change?
-  if (!(f->node->inode->mode & S_IRUSR)) {
-    fs_inode_unlock(f->node->inode);
-    return -EPERM;
-  }
-
-  r = fs_inode_read_dir(f->node->inode, buf, nbytes, &f->offset);
-
-  fs_inode_unlock(f->node->inode);
-
-  return r;
-}
-
-ssize_t
-file_write(struct File *f, const void *buf, size_t nbytes)
-{
-  int r;
-
-  if ((f->flags & O_ACCMODE) == O_RDONLY)
-    return -EBADF;
-
-  switch (f->type) {
-  case FD_INODE:
-    assert(f->node != NULL);
-
-    fs_inode_lock(f->node->inode);
-
-    // TODO: check group and other permissions
-    // TODO: what if permissions change?
-    if (!(f->node->inode->mode & S_IWUSR)) {
-      fs_inode_unlock(f->node->inode);
-      return -EPERM;
-    }
-
-    if (f->flags & O_APPEND)
-      f->offset = f->node->inode->size;
-
-    r = fs_inode_write(f->node->inode, buf, nbytes, &f->offset);
-
-    fs_inode_unlock(f->node->inode);
-
-    return r;
-  
-  case FD_SOCKET:
-    return net_sendto(f->socket, buf, nbytes, 0, NULL, 0);
-
-  case FD_PIPE:
-    assert(f->pipe != NULL);
-    return pipe_write(f->pipe, buf, nbytes);
-
   default:
-    panic("Invalid type");
-    return 0;
+    panic("bad file type");
+    return -EBADF;
   }
 }
 
 int
-file_stat(struct File *fp, struct stat *buf)
+file_stat(struct File *file, struct stat *buf)
 {
-  int r;
-  
-  if (fp->type != FD_INODE) 
+  switch (file->type) {
+  case FD_INODE:
+    return fs_fstat(file, buf);
+  case FD_SOCKET:
+  case FD_PIPE:
     return -EBADF;
-
-  assert(fp->node != NULL);
-
-  fs_inode_lock(fp->node->inode);
-  r = fs_inode_stat(fp->node->inode, buf);
-  fs_inode_unlock(fp->node->inode);
-
-  return r;
+  default:
+    panic("bad file type");
+    return -EBADF;
+  }
 }
 
 int
 file_chdir(struct File *file)
 {
-  int r;
-
-  if (file->type != FD_INODE)
+  switch (file->type) {
+  case FD_INODE:
+    return fs_fchdir(file);
+  case FD_SOCKET:
+  case FD_PIPE:
     return -ENOTDIR;
-
-  assert(file->node != NULL);
-
-  if ((r = fs_set_pwd(fs_path_duplicate(file->node))) != 0)
-    fs_path_put(file->node);
-
-  return r;
-}
-
-int
-file_get_flags(struct File *file)
-{
-  return file->flags & STATUS_MASK;
-}
-
-int
-file_set_flags(struct File *file, int flags)
-{
-  file->flags = (file->flags & ~STATUS_MASK) | (flags & STATUS_MASK);
-  return 0;
+  default:
+    panic("bad file type");
+    return -EBADF;
+  }
 }
 
 int
 file_chmod(struct File *file, mode_t mode)
 {
-  if (file->type != FD_INODE) 
-    return -EINVAL;
-
-  assert(file->node != NULL);
-
-  return fs_inode_chmod(file->node->inode, mode);
+  switch (file->type) {
+  case FD_INODE:
+    return fs_fchmod(file, mode);
+  case FD_SOCKET:
+  case FD_PIPE:
+    return -EBADF;
+  default:
+    panic("bad file type");
+    return -EBADF;
+  }
 }
 
 int
 file_chown(struct File *file, uid_t uid, gid_t gid)
 {
-  if (file->type != FD_INODE) 
-    return -EINVAL;
-
-  assert(file->node != NULL);
-
-  return fs_inode_chown(file->node->inode, uid, gid);
+  switch (file->type) {
+  case FD_INODE:
+    return fs_fchown(file, uid, gid);
+  case FD_SOCKET:
+  case FD_PIPE:
+    return -EBADF;
+  default:
+    panic("bad file type");
+    return -EBADF;
+  }
 }
 
 int
-file_ioctl(struct File *f, int request, int arg)
+file_ioctl(struct File *file, int request, int arg)
 {
-  int r;
-
-  switch (f->type) {
+  switch (file->type) {
   case FD_INODE:
-    assert(f->node != NULL);
-
-    fs_inode_lock(f->node->inode);
-    r = fs_inode_ioctl(f->node->inode, request, arg);
-    fs_inode_unlock(f->node->inode);
-
-    return r;
-
+    return fs_ioctl(file, request, arg);
+  case FD_SOCKET:
+  case FD_PIPE:
+    return -EBADF;
   default:
-    panic("ioctl %d\n", f->type);
-    return -EINVAL;
+    panic("bad file type");
+    return -EBADF;
   }
 }
 
 int
 file_select(struct File *file)
 {
-  int r;
-
-  if (file->type != FD_INODE) 
+  switch (file->type) {
+  case FD_INODE:
+    return fs_select(file);
+  case FD_SOCKET:
+  case FD_PIPE:
     return -EBADF;
-
-  assert(file->node != NULL);
-
-  fs_inode_lock(file->node->inode);
-  r = fs_inode_select(file->node->inode);
-  fs_inode_unlock(file->node->inode);
-
-  return r;
+  default:
+    panic("bad file type");
+    return -EBADF;
+  }
 }
 
 int
 file_truncate(struct File *file, off_t length)
 {
-  int r;
-
   if ((file->flags & O_ACCMODE) == O_RDONLY)
     return -EBADF;
 
   switch (file->type) {
   case FD_INODE:
-    assert(file->node != NULL);
-
-    fs_inode_lock(file->node->inode);
-    r = fs_inode_truncate(file->node->inode, length);
-    fs_inode_unlock(file->node->inode);
-
-    return r;
-
+    return fs_ftruncate(file, length);
+  case FD_SOCKET:
+  case FD_PIPE:
+    return -EBADF;
   default:
+    panic("bad file type");
     return -EBADF;
   }
 }
@@ -469,19 +299,14 @@ file_truncate(struct File *file, off_t length)
 int
 file_sync(struct File *file)
 {
-  int r;
-
   switch (file->type) {
   case FD_INODE:
-    assert(file->node != NULL);
-
-    fs_inode_lock(file->node->inode);
-    r = fs_inode_sync(file->node->inode);
-    fs_inode_unlock(file->node->inode);
-
-    return r;
-
+    return fs_fsync(file);
+  case FD_SOCKET:
+  case FD_PIPE:
+    return -EBADF;
   default:
+    panic("bad file type");
     return -EBADF;
   }
 }

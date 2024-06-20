@@ -7,7 +7,7 @@
 #include <kernel/fd.h>
 #include <kernel/fs/file.h>
 
-static struct FileDesc *_fd_lookup(struct Process*, int);
+static struct FileDesc *_fd_lookup(struct Process *, int);
 static void             _fd_close(struct FileDesc *);
 
 void
@@ -19,6 +19,8 @@ fd_init(struct Process *process)
     process->fd[i].file  = NULL;
     process->fd[i].flags = 0;
   }
+
+  k_spinlock_init(&process->fd_lock, "fd_lock");
 }
 
 void
@@ -26,10 +28,11 @@ fd_close_all(struct Process *process)
 {
   int i;
 
+  // TODO: no need to lock?
+
   for (i = 0; i < OPEN_MAX; i++)
-    if (process->fd[i].file != NULL) {
+    if (process->fd[i].file != NULL)
       _fd_close(&process->fd[i]);
-    }
 }
 
 void
@@ -37,10 +40,11 @@ fd_close_on_exec(struct Process *process)
 {
   int i;
 
+  // TODO: no need to lock the parent?
+
   for (i = 0; i < OPEN_MAX; i++)
-    if (process->fd[i].flags & FD_CLOEXEC)  {
+    if (process->fd[i].flags & FD_CLOEXEC) 
       _fd_close(&process->fd[i]);
-    }
 }
 
 void
@@ -48,12 +52,18 @@ fd_clone(struct Process *parent, struct Process *child)
 {
   int i;
 
+  // TODO: no need to lock the parent?
+
+  k_spinlock_acquire(&child->fd_lock);
+
   for (i = 0; i < OPEN_MAX; i++) {
     if (parent->fd[i].file != NULL){
       child->fd[i].file  = file_dup(parent->fd[i].file);
       child->fd[i].flags = parent->fd[i].flags;
     }
   }
+
+  k_spinlock_release(&child->fd_lock);
 }
 
 int
@@ -64,16 +74,20 @@ fd_alloc(struct Process *process, struct File *f, int start)
   if (start < 0 || start >= OPEN_MAX)
     return -EINVAL;
 
+  k_spinlock_acquire(&process->fd_lock);
+
   for (i = start; i < OPEN_MAX; i++) {
     if (process->fd[i].file == NULL) {
       process->fd[i].file  = f;
       process->fd[i].flags = 0;
 
-      // cprintf("fd_alloc(%d): %d\n", process->pid, i);
+      k_spinlock_release(&process->fd_lock);
 
       return i;
     }
   }
+
+  k_spinlock_release(&process->fd_lock);
 
   return -EMFILE;
 }
@@ -95,26 +109,36 @@ fd_lookup(struct Process *process, int n)
 {
   struct FileDesc *fd;
 
-  if ((fd = _fd_lookup(process, n)) == NULL)
-    return NULL;
+  k_spinlock_acquire(&process->fd_lock);
+  fd = _fd_lookup(process, n);
+  k_spinlock_release(&process->fd_lock);
 
-  return fd->file;
+  return (fd == NULL || fd->file == NULL) ?  NULL : file_dup(fd->file);
 }
 
 int
 fd_close(struct Process *process, int n)
 {
   struct FileDesc *fd;
+  struct File *file;
 
-  if ((fd = _fd_lookup(process, n)) == NULL)
+  k_spinlock_acquire(&process->fd_lock);
+
+  fd = _fd_lookup(process, n);
+
+  if ((fd == NULL) || (fd->file == NULL)) {
+    k_spinlock_release(&process->fd_lock);
     return -EBADF;
+  }
 
-  if (fd->file == NULL)
-    return -EBADF;
+  file = fd->file;
 
-  // cprintf("fd_close(%d): %d\n", process->pid, n);
+  fd->file  = NULL;
+  fd->flags = 0;
 
-  _fd_close(fd);
+  k_spinlock_release(&process->fd_lock);
+
+  file_put(file);
 
   return 0;
 }
@@ -123,13 +147,22 @@ int
 fd_get_flags(struct Process *process, int n)
 {
   struct FileDesc *fd;
+  int flags = 0;
 
-  if ((fd = _fd_lookup(process, n)) == NULL)
-    return -EBADF;
-  if (fd->file == NULL)
-    return -EBADF;
+  k_spinlock_acquire(&process->fd_lock);
 
-  return fd->flags;
+  fd = _fd_lookup(process, n);
+
+  if ((fd == NULL) || (fd->file == NULL)) {
+    k_spinlock_release(&process->fd_lock);
+    return -EBADF;
+  }
+
+  flags = fd->flags;
+
+  k_spinlock_release(&process->fd_lock);
+
+  return flags;
 }
 
 int
@@ -140,12 +173,18 @@ fd_set_flags(struct Process *process, int n, int flags)
   if (flags & ~FD_CLOEXEC)
     return -EINVAL;
 
-  if ((fd = _fd_lookup(process, n)) == NULL)
+  k_spinlock_acquire(&process->fd_lock);
+
+  fd = _fd_lookup(process, n);
+
+  if ((fd == NULL) || (fd->file == NULL)) {
+    k_spinlock_release(&process->fd_lock);
     return -EBADF;
-  if (fd->file == NULL)
-    return -EBADF;
+  }
 
   fd->flags = flags;
+
+  k_spinlock_release(&process->fd_lock);
 
   return 0;
 }
@@ -164,7 +203,7 @@ _fd_close(struct FileDesc *fd)
 {
   assert(fd->file != NULL);
   
-  file_close(fd->file);
+  file_put(fd->file);
 
   fd->file  = NULL;
   fd->flags = 0;

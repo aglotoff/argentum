@@ -28,6 +28,7 @@ main(void)
 {
   struct DevFile *df;
   int status;
+  struct stat st;
   int i;
 
   char *const argv[] = { "/bin/sh", "-l", NULL };
@@ -38,7 +39,7 @@ main(void)
 
   // Create missing device files.
   for (df = dev_files; df < &dev_files[NDEV]; df++)
-    if ((stat(df->name, NULL) < 0) && (errno == ENOENT))
+    if ((stat(df->name, &st) < 0) && (errno == ENOENT))
       mknod(df->name, df->mode, df->dev);
 
   open("/etc/passwd", O_WRONLY | O_CREAT | O_TRUNC, 0777);

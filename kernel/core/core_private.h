@@ -19,13 +19,13 @@ void _k_sched_set_priority(struct KThread *, int);
 extern struct KSpinLock _k_sched_spinlock;
 
 static inline void
-_k_sched_spin_lock(void)
+_k_sched_lock(void)
 {
   k_spinlock_acquire(&_k_sched_spinlock);
 }
 
 static inline void
-_k_sched_spin_unlock(void)
+_k_sched_unlock(void)
 {
   k_spinlock_release(&_k_sched_spinlock);
 }
@@ -33,17 +33,17 @@ _k_sched_spin_unlock(void)
 static inline void
 _k_sched_wakeup_all(struct KListLink *thread_list, int result)
 {
-  _k_sched_spin_lock();
+  _k_sched_lock();
   _k_sched_wakeup_all_locked(thread_list, result);
-  _k_sched_spin_unlock();
+  _k_sched_unlock();
 }
 
 static inline void
 _k_sched_wakeup_one(struct KListLink *queue, int result)
 {
-  _k_sched_spin_lock();
+  _k_sched_lock();
   _k_sched_wakeup_one_locked(queue, result);
-  _k_sched_spin_unlock();
+  _k_sched_unlock();
 }
 
 /**

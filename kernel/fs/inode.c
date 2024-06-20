@@ -702,10 +702,7 @@ fs_inode_chmod(struct Inode *inode, mode_t mode)
 {
   struct Process *current = process_current();
 
-  fs_inode_lock(inode);
-
   if ((current->euid != 0) && (inode->uid != current->euid)) {
-    fs_inode_unlock(inode);
     return -EPERM;
   }
 
@@ -714,8 +711,6 @@ fs_inode_chmod(struct Inode *inode, mode_t mode)
   inode->mode  = (inode->mode & ~CHMOD_MASK) | (mode & CHMOD_MASK);
   inode->ctime = rtc_get_time();
   inode->flags |= FS_INODE_DIRTY;
-
-  fs_inode_unlock(inode);
 
   return 0;
 }
@@ -825,24 +820,17 @@ int
 fs_inode_chown(struct Inode *inode, uid_t uid, gid_t gid)
 {
   struct Process *current = process_current();
-  int r;
-
-  fs_inode_lock(inode);
 
   if ((uid != (uid_t) -1) &&
       (current->euid != 0) &&
-      (current->euid != inode->uid)) {
-    r = -EPERM;
-    goto out;
-  }
+      (current->euid != inode->uid))
+    return -EPERM;
 
   if ((gid != (gid_t) -1) &&
       (current->euid != 0) &&
       (current->euid != inode->uid) &&
-      ((uid != (uid_t) -1) || (current->egid != inode->gid))) {
-    r = -EPERM;
-    goto out;
-  }
+      ((uid != (uid_t) -1) || (current->egid != inode->gid)))
+    return -EPERM;
 
   if (uid != (uid_t) -1)
     inode->uid = uid;
@@ -850,12 +838,7 @@ fs_inode_chown(struct Inode *inode, uid_t uid, gid_t gid)
   if (gid != (gid_t) -1)
     inode->gid = gid;
 
-  r = 0;
-
-out:
-  fs_inode_unlock(inode);
-
-  return r;
+  return 0;
 }
 
 ssize_t

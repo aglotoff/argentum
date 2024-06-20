@@ -121,37 +121,52 @@ net_socket(int domain, int type, int protocol, struct File **fstore)
 }
 
 int
-net_bind(int socket, const struct sockaddr *address, socklen_t address_len)
+net_bind(struct File *file, const struct sockaddr *address, socklen_t address_len)
 {
-  if (lwip_bind(socket, address, address_len) != 0)
+  if (file->type != FD_SOCKET)
+    return -EBADF;
+
+  if (lwip_bind(file->socket, address, address_len) != 0)
     return -errno;
+
   return 0;
 }
 
 int
-net_listen(int socket, int backlog)
+net_listen(struct File *file, int backlog)
 {
-  if (lwip_listen(socket, backlog) != 0)
+  if (file->type != FD_SOCKET)
+    return -EBADF;
+
+  if (lwip_listen(file->socket, backlog) != 0)
     return -errno;
+
   return 0;
 }
 
 int
-net_connect(int socket, const struct sockaddr *address, socklen_t address_len)
+net_connect(struct File *file, const struct sockaddr *address, socklen_t address_len)
 {
-  if (lwip_connect(socket, address, address_len) != 0)
+  if (file->type != FD_SOCKET)
+    return -EBADF;
+
+  if (lwip_connect(file->socket, address, address_len) != 0)
     return -errno;
+
   return 0;
 }
 
 int
-net_accept(int socket, struct sockaddr *address, socklen_t * address_len,
+net_accept(struct File *file, struct sockaddr *address, socklen_t * address_len,
            struct File **fstore)
 {
   int r, conn;
   struct File *f;
 
-  if ((conn = lwip_accept(socket, address, address_len)) < 0)
+  if (file->type != FD_SOCKET)
+    return -EBADF;
+
+  if ((conn = lwip_accept(file->socket, address, address_len)) < 0)
     return -errno;
   
   if ((r = file_alloc(&f)) != 0) {
@@ -171,43 +186,71 @@ net_accept(int socket, struct sockaddr *address, socklen_t * address_len,
 }
 
 int
-net_close(int socket)
+net_close(struct File *file)
 {
-  if (lwip_close(socket) != 0)
+  if (file->type != FD_SOCKET)
+    return -EBADF;
+
+  if (lwip_close(file->socket) != 0)
     return -errno;
+
   return 0;
 }
 
 ssize_t
-net_recvfrom(int socket, void *buf, size_t nbytes, int flags,
+net_recvfrom(struct File *file, void *buf, size_t nbytes, int flags,
              struct sockaddr *address, socklen_t *address_len)
 {
   ssize_t r;
 
-  if ((r = lwip_recvfrom(socket, buf, nbytes, flags, address, address_len)) < 0)
+  if (file->type != FD_SOCKET)
+    return -EBADF;
+
+  if ((r = lwip_recvfrom(file->socket, buf, nbytes, flags, address, address_len)) < 0)
     return -errno;
+
   return r;
 }
 
 ssize_t
-net_sendto(int socket, const void *buf, size_t nbytes, int flags,
+net_read(struct File *file, void *buf, size_t nbytes)
+{
+  return net_recvfrom(file, buf, nbytes, 0, NULL, NULL);
+}
+
+ssize_t
+net_sendto(struct File *file, const void *buf, size_t nbytes, int flags,
            const struct sockaddr *dest_addr, socklen_t dest_len)
 {
   ssize_t r;
 
-  if ((r = lwip_sendto(socket, buf, nbytes, flags, dest_addr, dest_len)) < 0)
+  if (file->type != FD_SOCKET)
+    return -EBADF;
+
+  if ((r = lwip_sendto(file->socket, buf, nbytes, flags, dest_addr, dest_len)) < 0)
     return -errno;
+
   return r;
 }
 
+ssize_t
+net_write(struct File *file, const void *buf, size_t nbytes)
+{
+  return net_sendto(file, buf, nbytes, 0, NULL, 0);
+}
+
 int
-net_setsockopt(int socket, int level, int option_name, const void *option_value,
+net_setsockopt(struct File *file, int level, int option_name, const void *option_value,
                socklen_t option_len)
 {
   ssize_t r;
 
-  if ((r = lwip_setsockopt(socket, level, option_name, option_value,
+  if (file->type != FD_SOCKET)
+    return -EBADF;
+
+  if ((r = lwip_setsockopt(file->socket, level, option_name, option_value,
                            option_len)) < 0)
     return -errno;
+
   return r;
 }

@@ -107,7 +107,7 @@ k_sched_idle(void)
     thread = KLIST_CONTAINER(threads_to_destroy.next, struct KThread, link);
     k_list_remove(&thread->link);
 
-    _k_sched_spin_unlock();
+    _k_sched_unlock();
 
     // Free the thread kernel stack
     kstack_page = kva2page(thread->kstack);
@@ -117,15 +117,15 @@ k_sched_idle(void)
     // Free the thread object
     k_object_pool_put(thread_cache, thread);
 
-    _k_sched_spin_lock();
+    _k_sched_lock();
   }
 
-  _k_sched_spin_unlock();
+  _k_sched_unlock();
 
   k_irq_enable();
   asm volatile("wfi");
 
-  _k_sched_spin_lock();
+  _k_sched_lock();
 }
 
 /**
@@ -134,7 +134,7 @@ k_sched_idle(void)
 void
 k_sched_start(void)
 {
-  _k_sched_spin_lock();
+  _k_sched_lock();
 
   for (;;) {
     struct KThread *next = k_sched_dequeue();
@@ -213,7 +213,7 @@ _k_sched_sleep(struct KListLink *queue, int state, unsigned long timeout,
   struct KThread *my_thread;
 
   if (lock != NULL) {
-    _k_sched_spin_lock();
+    _k_sched_lock();
     k_spinlock_release(lock);
   }
 
@@ -245,7 +245,7 @@ _k_sched_sleep(struct KListLink *queue, int state, unsigned long timeout,
 
   // someone may call this function while holding _k_sched_spinlock?
   if (lock != NULL) {
-    _k_sched_spin_unlock();
+    _k_sched_unlock();
     k_spinlock_acquire(lock);
   }
 
@@ -289,9 +289,8 @@ _k_sched_resume(struct KThread *thread, int result)
   case THREAD_STATE_MUTEX:
     // TODO
     break;
-  
   default:
-    panic("thread is not sleeping");
+    return;
   }
 
   thread->sleep_result = result;

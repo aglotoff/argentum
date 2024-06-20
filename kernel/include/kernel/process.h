@@ -77,10 +77,14 @@ struct Process {
   gid_t                 egid;
   /** File mode creation mask */
   mode_t                cmask;
-  /** Open file descriptors */
-  struct FileDesc       fd[OPEN_MAX];
+
   /** Current working directory */
   struct PathNode      *cwd;
+
+  /** Open file descriptors */
+  struct FileDesc       fd[OPEN_MAX];
+  /** Lock protecting the file descriptors */
+  struct KSpinLock      fd_lock;
 };
 
 extern struct KSpinLock __process_lock;

@@ -36,9 +36,9 @@ k_waitqueue_sleep(struct KWaitQueue *chan, struct KSpinLock *lock)
 void
 k_waitqueue_wakeup_one(struct KWaitQueue *chan)
 {
-  _k_sched_spin_lock();
+  _k_sched_lock();
   _k_sched_wakeup_one_locked(&chan->head, 0);
-  _k_sched_spin_unlock();
+  _k_sched_unlock();
 }
 
 /**
@@ -49,7 +49,7 @@ k_waitqueue_wakeup_one(struct KWaitQueue *chan)
 void
 k_waitqueue_wakeup_all(struct KWaitQueue *chan)
 {
-  _k_sched_spin_lock();
+  _k_sched_lock();
   _k_sched_wakeup_all_locked(&chan->head, 0);
-  _k_sched_spin_unlock();
+  _k_sched_unlock();
 }

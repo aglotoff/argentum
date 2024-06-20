@@ -27,9 +27,8 @@ struct File {
 
 int          file_alloc(struct File **);
 void         file_init(void);
-int          file_open(const char *, int, mode_t, struct File **);
 struct File *file_dup(struct File *);
-void         file_close(struct File *);
+void         file_put(struct File *);
 ssize_t      file_read(struct File *, void *, size_t);
 ssize_t      file_write(struct File *, const void *, size_t);
 ssize_t      file_getdents(struct File *, void *, size_t);

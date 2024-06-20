@@ -37,9 +37,9 @@ k_mutex_init(struct KMutex *mutex, const char *name)
 void
 k_mutex_fini(struct KMutex *mutex)
 {
-  _k_sched_spin_lock();
+  _k_sched_lock();
   _k_sched_wakeup_all_locked(&mutex->queue, -EINVAL);
-  _k_sched_spin_unlock();
+  _k_sched_unlock();
 }
 
 struct KMutex *
@@ -76,34 +76,36 @@ k_mutex_lock(struct KMutex *mutex)
 
   k_spinlock_acquire(&mutex->lock);
 
-  // Sleep until the mutex becomes available.
+  // Sleep until the mutex becomes available
   while (mutex->owner != NULL) {
     if (mutex->owner == my_task) {
       k_spinlock_release(&mutex->lock);
       return -EDEADLK;
     }
 
-    _k_sched_spin_lock();
+    _k_sched_lock();
 
     // Priority inheritance
     if (mutex->owner->priority > my_task->priority)
       _k_sched_set_priority(mutex->owner, my_task->priority);
 
+    k_spinlock_release(&mutex->lock);
+
     r = _k_sched_sleep(&mutex->queue, THREAD_STATE_MUTEX, 0, NULL);
 
-    _k_sched_spin_unlock();
+    _k_sched_unlock();
 
-    if (r < 0) {
-      k_spinlock_release(&mutex->lock);
+    if (r < 0)
       return r;
-    }
+
+    k_spinlock_acquire(&mutex->lock);
   }
 
   mutex->owner = my_task;
 
-  _k_sched_spin_lock();
+  _k_sched_lock();
   mutex->original_priority = my_task->priority;
-  _k_sched_spin_unlock();
+  _k_sched_unlock();
 
   k_spinlock_release(&mutex->lock);
 
@@ -125,12 +127,12 @@ k_mutex_unlock(struct KMutex *mutex)
   
   k_spinlock_acquire(&mutex->lock);
 
-  _k_sched_spin_lock();
+  _k_sched_lock();
 
   _k_sched_wakeup_one_locked(&mutex->queue, 0);
   _k_sched_set_priority(my_task, mutex->original_priority);
 
-  _k_sched_spin_unlock();
+  _k_sched_unlock();
   
   mutex->owner = NULL;
 

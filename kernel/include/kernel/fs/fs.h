@@ -16,7 +16,7 @@
 #define INODE_CACHE_SIZE  32
 
 struct stat;
-
+struct File;
 struct FS;
 
 struct Inode {
@@ -122,14 +122,32 @@ int           fs_inode_select(struct Inode *);
 int           fs_inode_sync(struct Inode *);
 int           fs_inode_chown(struct Inode *, uid_t, gid_t);
 ssize_t       fs_inode_readlink(struct Inode *, char *, size_t);
-
-int           fs_unlink(const char *);
-int           fs_rmdir(const char *);
 int           fs_permission(struct Inode *, mode_t, int);
-int           fs_link(char *, char *);
-int           fs_chdir(const char *);
-int           fs_access(const char *, int);
-ssize_t       fs_readlink(const char *, char *, size_t);
+
+// Path operations
+int              fs_chmod(const char *, mode_t);
+int              fs_open(const char *, int, mode_t, struct File **);
+int              fs_link(char *, char *);
+int              fs_chdir(const char *);
+int              fs_unlink(const char *);
+int              fs_rmdir(const char *);
+int              fs_access(const char *, int);
+ssize_t          fs_readlink(const char *, char *, size_t);
+
+// File operations
+int              fs_close(struct File *);
+off_t            fs_seek(struct File *, off_t, int);
+ssize_t          fs_read(struct File *, void *, size_t);
+ssize_t          fs_write(struct File *, const void *, size_t);
+ssize_t          fs_getdents(struct File *, void *, size_t);
+int              fs_fstat(struct File *, struct stat *);
+int              fs_fchdir(struct File *);
+int              fs_fchmod(struct File *, mode_t);
+int              fs_fchown(struct File *, uid_t, gid_t);
+int              fs_ioctl(struct File *, int, int);
+int              fs_select(struct File *);
+int              fs_ftruncate(struct File *, off_t);
+int              fs_fsync(struct File *);
 
 struct PathNode *fs_path_create(const char *, struct Inode *, struct PathNode *);
 struct PathNode *fs_path_duplicate(struct PathNode *);

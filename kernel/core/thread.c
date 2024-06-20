@@ -27,17 +27,17 @@ static void k_thread_run(void);
 int
 k_thread_resume(struct KThread *thread)
 {
-  _k_sched_spin_lock();
+  _k_sched_lock();
 
   if (thread->state != THREAD_STATE_SUSPENDED) {
-    _k_sched_spin_unlock();
+    _k_sched_unlock();
     return -EINVAL;
   }
 
   _k_sched_enqueue(thread);
   _k_sched_may_yield(thread);
 
-  _k_sched_spin_unlock();
+  _k_sched_unlock();
 
   return 0;
 }
@@ -53,12 +53,12 @@ k_thread_yield(void)
   if (current == NULL)
     panic("no current thread");
 
-  _k_sched_spin_lock();
+  _k_sched_lock();
 
   _k_sched_enqueue(current);
   _k_sched_yield_locked();
 
-  _k_sched_spin_unlock();
+  _k_sched_unlock();
 }
 
 // Execution of each thread begins here.
@@ -68,15 +68,12 @@ k_thread_run(void)
   struct KThread *my_thread = k_thread_current();
 
   // Still holding the scheduler lock (acquired in k_sched_start)
-  _k_sched_spin_unlock();
+  _k_sched_unlock();
 
-  // Make sure IRQs are enabled
   k_irq_enable();
 
-  // Jump to the thread entry point
   my_thread->entry(my_thread->arg);
 
-  // Destroy the thread on exit
   k_thread_exit();
 }
 
@@ -104,7 +101,7 @@ k_thread_timeout_callback(void *arg)
 {
   struct KThread *thread = (struct KThread *) arg;
 
-  _k_sched_spin_lock();
+  _k_sched_lock();
 
   switch (thread->state) {
   case THREAD_STATE_MUTEX:
@@ -116,19 +113,19 @@ k_thread_timeout_callback(void *arg)
     break;
   }
 
-  _k_sched_spin_unlock();
+  _k_sched_unlock();
 }
 
 void
 k_thread_interrupt(struct KThread *thread)
 {
-  _k_sched_spin_lock();
+  _k_sched_lock();
 
   // TODO: if thread is running, send an SGI
 
   _k_sched_resume(thread, -EINTR);
 
-  _k_sched_spin_unlock();
+  _k_sched_unlock();
 }
 
 /**
@@ -194,7 +191,7 @@ k_thread_exit(void)
 
   k_timer_destroy(&thread->timer);
 
-  _k_sched_spin_lock();
+  _k_sched_lock();
 
   thread->state = THREAD_STATE_DESTROYED;
   k_list_add_back(&threads_to_destroy, &thread->link);

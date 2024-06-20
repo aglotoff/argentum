@@ -28,9 +28,9 @@ tick(void)
   // Tell the scheduler that the current task has used up its time slice
   // TODO: add support for other sheduling policies
   if (current_task != NULL) {
-    _k_sched_spin_lock();
+    _k_sched_lock();
     current_task->flags |= THREAD_FLAG_RESCHEDULE;
-    _k_sched_spin_unlock();
+    _k_sched_unlock();
   }
 
   // TODO: all timeouts are processed by CPU #0, is it ok?

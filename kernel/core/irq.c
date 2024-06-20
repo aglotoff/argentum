@@ -46,9 +46,9 @@ k_irq_restore(void)
 void
 k_irq_begin(void)
 {
-  _k_sched_spin_lock();
+  _k_sched_lock();
   _k_cpu()->lock_count++;
-  _k_sched_spin_unlock();
+  _k_sched_unlock();
 }
 
 /**
@@ -59,7 +59,7 @@ k_irq_end(void)
 {
   struct KCpu *my_cpu;
 
-  _k_sched_spin_lock();
+  _k_sched_lock();
 
   my_cpu = _k_cpu();
 
@@ -79,7 +79,7 @@ k_irq_end(void)
     }
   }
 
-  _k_sched_spin_unlock();
+  _k_sched_unlock();
 }
 
 static k_irq_handler_t irq_handlers[IRQ_MAX];

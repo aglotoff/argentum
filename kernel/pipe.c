@@ -19,7 +19,7 @@ pipe_init(void)
 }
 
 int
-pipe_alloc(struct File **read_store, struct File **write_store)
+pipe_open(struct File **read_store, struct File **write_store)
 {
   struct Pipe *pipe;
   struct Page *page;
@@ -70,7 +70,7 @@ pipe_alloc(struct File **read_store, struct File **write_store)
   return 0;
 
 fail4:
-  file_close(read);
+  file_put(read);
 fail3:
   page->ref_count--;
   page_free_one(page);
@@ -80,10 +80,15 @@ fail1:
   return r;
 }
 
-void
-pipe_close(struct Pipe *pipe, int write)
+int
+pipe_close(struct File *file)
 {
   struct Page *page;
+  struct Pipe *pipe = file->pipe;
+  int write = (file->flags & O_ACCMODE) != O_RDONLY;
+
+  if (file->type != FD_PIPE)
+    return -EBADF;
 
   k_spinlock_acquire(&pipe->lock);
 
@@ -101,7 +106,7 @@ pipe_close(struct Pipe *pipe, int write)
 
   if (pipe->read_open || pipe->write_open) {
     k_spinlock_release(&pipe->lock);
-    return;
+    return 0;
   }
 
   k_spinlock_release(&pipe->lock);
@@ -110,15 +115,21 @@ pipe_close(struct Pipe *pipe, int write)
   page->ref_count--;
   page_free_one(page);
 
-  //k_object_pool_put(pipe_cache, pipe);
+  k_object_pool_put(pipe_cache, pipe);
+
+  return 0;
 }
 
 ssize_t
-pipe_read(struct Pipe *pipe, void *buf, size_t n)
+pipe_read(struct File *file, void *buf, size_t n)
 {
   char *dst = (char *) buf;
   size_t i;
-  
+  struct Pipe *pipe = file->pipe;
+
+  if (file->type != FD_PIPE)
+    return -EBADF;
+
   k_spinlock_acquire(&pipe->lock);
 
   while (pipe->write_open && (pipe->size == 0)) {
@@ -145,10 +156,14 @@ pipe_read(struct Pipe *pipe, void *buf, size_t n)
 }
 
 ssize_t
-pipe_write(struct Pipe *pipe, const void *buf, size_t n)
+pipe_write(struct File *file, const void *buf, size_t n)
 {
   const char *src = (const char *) buf;
   size_t i;
+  struct Pipe *pipe = file->pipe;
+
+  if (file->type != FD_PIPE)
+    return -EBADF;
   
   k_spinlock_acquire(&pipe->lock);
 

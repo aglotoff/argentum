@@ -98,8 +98,8 @@ sys_dispatch(void)
 
   if ((num < (int) ARRAY_SIZE(syscalls)) && syscalls[num]) {
     int r = syscalls[num]();
-    // if (r < 0 || num == __SYS_FCNTL) 
-    //   cprintf("syscall(%d) -> %d\n", num, r);
+    //  if (r < 0 || num == __SYS_FCNTL) 
+    //    cprintf("syscall(%d) -> %d\n", num, r);
     return r;
   }
 
@@ -456,7 +456,11 @@ sys_getdents(void)
   if ((file = fd_lookup(process_current(), fd)) == NULL)
     return -EBADF;
 
-  return file_getdents(file, buf, n);
+  r = file_getdents(file, buf, n);
+
+  file_put(file);
+
+  return r;
 }
 
 int32_t
@@ -475,7 +479,6 @@ int32_t
 sys_chmod(void)
 {
   const char *path;
-  struct PathNode *node;
   mode_t mode;
   int r;
 
@@ -484,14 +487,7 @@ sys_chmod(void)
   if ((r = sys_arg_short(1, (short *) &mode)) < 0)
     return r;
 
-  if ((r = fs_lookup(path, 0, &node)) < 0)
-    return r;
-
-  r = fs_inode_chmod(node->inode, mode);
-
-  fs_path_put(node);
-
-  return r;
+  return fs_chmod(path, mode);
 }
 
 int32_t
@@ -506,7 +502,11 @@ sys_fchdir(void)
   if ((file = fd_lookup(process_current(), fd)) == NULL)
     return -EBADF;
 
-  return file_chdir(file);
+  r = file_chdir(file);
+
+  file_put(file);
+
+  return r;
 }
 
 int32_t
@@ -524,13 +524,11 @@ sys_open(void)
   if ((r = sys_arg_short(2, (short *) &mode)) < 0)
     return r;
 
-  // cprintf("want top open %s\n", path);
-
-  if ((r = file_open(path, oflag, mode, &file)) < 0)
+  if ((r = fs_open(path, oflag, mode, &file)) < 0)
     return r;
 
   if ((r = fd_alloc(process_current(), file, 0)) < 0)
-    file_close(file);
+    file_put(file);
 
   return r;
 }
@@ -622,7 +620,11 @@ sys_stat(void)
   if ((file = fd_lookup(process_current(), fd)) == NULL)
     return -EBADF;
 
-  return file_stat(file, buf);
+  r = file_stat(file, buf);
+
+  file_put(file);
+
+  return r;
 }
 
 int32_t
@@ -654,7 +656,11 @@ sys_read(void)
   if ((file = fd_lookup(process_current(), fd)) == NULL)
     return -EBADF;
 
-  return file_read(file, buf, n);
+  r = file_read(file, buf, n);
+
+  file_put(file);
+
+  return r;
 }
 
 int32_t
@@ -674,7 +680,11 @@ sys_seek(void)
   if ((file = fd_lookup(process_current(), fd)) == NULL)
     return -EBADF;
 
-  return file_seek(file, offset, whence);
+  r = file_seek(file, offset, whence);
+
+  file_put(file);
+
+  return r;
 }
 
 int32_t
@@ -695,17 +705,19 @@ sys_fcntl(void)
 
   switch (cmd) {
   case F_DUPFD:
-    if ((r = fd_alloc(process_current(), file, arg)) >= 0)
-      file_dup(file);
-    return r;
+    return fd_alloc(process_current(), file, arg);
   case F_GETFL:
-    return file_get_flags(file);
+    r = file_get_flags(file);
+    break;
   case F_SETFL:
-    return file_set_flags(file, arg);
+    r = file_set_flags(file, arg);
+    break;
   case F_GETFD:
-    return fd_get_flags(process_current(), fd);
+    r = fd_get_flags(process_current(), fd);
+    break;
   case F_SETFD:
-    return fd_set_flags(process_current(), fd, arg);
+    r = fd_set_flags(process_current(), fd, arg);
+    break;
 
   case F_GETOWN:
   case F_SETOWN:
@@ -713,11 +725,16 @@ sys_fcntl(void)
   case F_SETLK:
   case F_SETLKW:
     cprintf("TODO: fcntl(%d)\n", cmd);
-    return -ENOSYS;
+    r = -ENOSYS;
+    break;
 
   default:
-    return -EINVAL;
+    r = -EINVAL;
+    break;
   }
+
+  file_put(file);
+  return r;
 }
 
 int32_t
@@ -738,7 +755,10 @@ sys_write(void)
   if ((file = fd_lookup(process_current(), fd)) == NULL)
     return -EBADF;
 
-  return file_write(file, buf, n);
+  r = file_write(file, buf, n);
+
+  file_put(file);
+  return r;
 }
 
 int32_t
@@ -791,7 +811,7 @@ sys_socket(void)
     return r;
 
   if ((r = fd_alloc(process_current(), file, 0)) < 0)
-    file_close(file);
+    file_put(file);
 
   return r;
 }
@@ -814,10 +834,11 @@ sys_bind(void)
   if ((file = fd_lookup(process_current(), fd)) == NULL)
     return -EBADF;
 
-  if (file->type != FD_SOCKET)
-    return -EBADF;
+  r = net_bind(file, address, address_len);
 
-  return net_bind(file->socket, address, address_len);
+  file_put(file);
+
+  return r;
 }
 
 int32_t
@@ -838,10 +859,11 @@ sys_connect(void)
   if ((file = fd_lookup(process_current(), fd)) == NULL)
     return -EBADF;
 
-  if (file->type != FD_SOCKET)
-    return -EBADF;
+  r = net_connect(file, address, address_len);
 
-  return net_connect(file->socket, address, address_len);
+  file_put(file);
+
+  return r;
 }
 
 int32_t
@@ -858,10 +880,11 @@ sys_listen(void)
   if ((file = fd_lookup(process_current(), fd)) == NULL)
     return -EBADF;
 
-  if (file->type != FD_SOCKET)
-    return -EBADF;
+  r = net_listen(file, backlog);
 
-  return net_listen(file->socket, backlog);
+  file_put(file);
+
+  return r;
 }
 
 int32_t
@@ -882,14 +905,15 @@ sys_accept(void)
   if ((sockf = fd_lookup(process_current(), fd)) == NULL)
     return -EBADF;
 
-  if (sockf->type != FD_SOCKET)
-    return -EBADF;
-
-  if ((r = net_accept(sockf->socket, address, address_len, &connf)) < 0)
+  if ((r = net_accept(sockf, address, address_len, &connf)) < 0) {
+    file_put(sockf);
     return r;
+  }
 
   if ((r = fd_alloc(process_current(), connf, 0)) < 0)
-    file_close(connf);
+    file_put(connf);
+
+  file_put(sockf);
 
   return r;
 }
@@ -924,7 +948,11 @@ sys_fchmod(void)
   if ((file = fd_lookup(process_current(), fd)) == NULL)
     return -EBADF;
 
-  return file_chmod(file, mode);
+  r = file_chmod(file, mode);
+
+  file_put(file);
+
+  return r;
 }
 
 int32_t
@@ -945,7 +973,11 @@ sys_fchown(void)
   if ((file = fd_lookup(process_current(), fd)) == NULL)
     return -EBADF;
 
-  return file_chown(file, uid, gid);
+  r = file_chown(file, uid, gid);
+
+  file_put(file);
+
+  return r;
 }
 
 int32_t
@@ -1015,10 +1047,11 @@ sys_recvfrom(void)
   if ((file = fd_lookup(process_current(), fd)) == NULL)
     return -EBADF;
 
-  if (file->type != FD_SOCKET)
-    return -EBADF;
+  r = net_recvfrom(file, buffer, length, flags, address, address_len);
 
-  return net_recvfrom(file->socket, buffer, length, flags, address, address_len);
+  file_put(file);
+
+  return r;
 }
 
 int32_t
@@ -1048,10 +1081,11 @@ sys_sendto(void)
   if ((file = fd_lookup(process_current(), fd)) == NULL)
     return -EBADF;
 
-  if (file->type != FD_SOCKET)
-    return -EBADF;
+  r = net_sendto(file, message, length, flags, dest_addr, dest_len);
 
-  return net_sendto(file->socket, message, length, flags, dest_addr, dest_len);
+  file_put(file);
+
+  return r;
 }
 
 int32_t
@@ -1078,10 +1112,11 @@ sys_setsockopt(void)
   if ((file = fd_lookup(process_current(), fd)) == NULL)
     return -EBADF;
 
-  if (file->type != FD_SOCKET)
-    return -EBADF;
+  r = net_setsockopt(file, level, option_name, option_value, option_len);
 
-  return net_setsockopt(file->socket, level, option_name, option_value, option_len);
+  file_put(file);
+
+  return r;
 }
 
 int32_t
@@ -1134,18 +1169,18 @@ sys_pipe(void)
   if ((r = sys_arg_buf(0, (void **) &fildes, sizeof(int)*2, PROT_WRITE, 0)) < 0)
     return r;
 
-  if ((r = pipe_alloc(&read, &write)) < 0)
+  if ((r = pipe_open(&read, &write)) < 0)
     return r;
 
   if ((fildes[0] = r = fd_alloc(process_current(), read, 0)) < 0) {
-    file_close(read);
-    file_close(write);
+    file_put(read);
+    file_put(write);
     return r;
   }
 
   if ((fildes[1] = r = fd_alloc(process_current(), write, 0)) < 0) {
-    file_close(read);
-    file_close(write);
+    file_put(read);
+    file_put(write);
     return r;
   }
 
@@ -1169,7 +1204,9 @@ sys_ioctl(void)
     return -EBADF;
 
   r = file_ioctl(file, request, arg);
-  //cprintf("ioctl(%x, %d) -> %d\n", request, arg, r);
+  
+  file_put(file);
+
   return r;
 }
 
@@ -1235,6 +1272,8 @@ sys_select(void)
       return -EBADF;
 
     r += file_select(file);
+
+    file_put(file);
   }
 
   return r;
@@ -1309,7 +1348,11 @@ sys_ftruncate(void)
   if ((file = fd_lookup(process_current(), fd)) == NULL)
     return -EBADF;
 
-  return file_truncate(file, length);
+  r = file_truncate(file, length);
+
+  file_put(file);
+
+  return r;
 }
 
 int32_t
@@ -1324,7 +1367,11 @@ sys_fsync(void)
   if ((file = fd_lookup(process_current(), fd)) == NULL)
     return -EBADF;
 
-  return file_sync(file);
+  r = file_sync(file);
+
+  file_put(file);
+
+  return r;
 }
 
 int32_t
