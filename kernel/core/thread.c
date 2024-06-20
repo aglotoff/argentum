@@ -56,7 +56,7 @@ k_thread_yield(void)
   _k_sched_spin_lock();
 
   _k_sched_enqueue(current);
-  _k_sched_yield();
+  _k_sched_yield_locked();
 
   _k_sched_spin_unlock();
 }
@@ -106,9 +106,15 @@ k_thread_timeout_callback(void *arg)
 
   _k_sched_spin_lock();
 
-  if ((thread->state == THREAD_STATE_SLEEPING) ||
-      (thread->state == THREAD_STATE_SLEEPING_INTERRUPTILE))
+  switch (thread->state) {
+  case THREAD_STATE_MUTEX:
+    // TODO
+    // fall through
+  case THREAD_STATE_SLEEP:
+  case THREAD_STATE_SEMAPHORE:
     _k_sched_resume(thread, -ETIMEDOUT);
+    break;
+  }
 
   _k_sched_spin_unlock();
 }
@@ -120,8 +126,7 @@ k_thread_interrupt(struct KThread *thread)
 
   // TODO: if thread is running, send an SGI
 
-  if (thread->state == THREAD_STATE_SLEEPING_INTERRUPTILE)
-    _k_sched_resume(thread, -EINTR);
+  _k_sched_resume(thread, -EINTR);
 
   _k_sched_spin_unlock();
 }
@@ -141,7 +146,7 @@ k_thread_interrupt(struct KThread *thread)
  */
 struct KThread *
 k_thread_create(struct Process *process, void (*entry)(void *), void *arg,
-              int priority)
+                int priority)
 {
   struct Page *stack_page;
   struct KThread *thread;
@@ -194,7 +199,7 @@ k_thread_exit(void)
   thread->state = THREAD_STATE_DESTROYED;
   k_list_add_back(&threads_to_destroy, &thread->link);
 
-  _k_sched_yield();
+  _k_sched_yield_locked();
 
   panic("should not return");
 }

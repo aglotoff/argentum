@@ -9,11 +9,12 @@ struct KListLink;
 
 void _k_sched_resume(struct KThread *, int);
 void _k_sched_may_yield(struct KThread *);
-void _k_sched_yield(void);
+void _k_sched_yield_locked(void);
 void _k_sched_enqueue(struct KThread *);
 void _k_sched_wakeup_all_locked(struct KListLink *, int);
 void _k_sched_wakeup_one_locked(struct KListLink *, int);
 int  _k_sched_sleep(struct KListLink *, int, unsigned long, struct KSpinLock *);
+void _k_sched_set_priority(struct KThread *, int);
 
 extern struct KSpinLock _k_sched_spinlock;
 

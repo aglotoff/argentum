@@ -75,7 +75,7 @@ k_irq_end(void)
       my_thread->flags &= ~THREAD_FLAG_RESCHEDULE;
 
       _k_sched_enqueue(my_thread);
-      _k_sched_yield();
+      _k_sched_yield_locked();
     }
   }
 

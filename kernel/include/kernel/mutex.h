@@ -20,12 +20,14 @@ struct KThread;
  * while holding the lock.
  */
 struct KMutex {
+  struct KSpinLock  lock;
   /** The task currently holding the mutex. */
-  struct KThread    *owner;
+  struct KThread   *owner;
   /** List of tasks waiting for this mutex to be released. */
-  struct KListLink   queue;
+  struct KListLink  queue;
   /** Mutex name (for debugging purposes). */
   const char       *name;
+  int               original_priority;
 };
 
 void           k_mutex_system_init(void);

@@ -39,6 +39,71 @@ struct utsname utsname = {
   .machine = "arm",
 };
 
+char test_stacks[3][PAGE_SIZE];
+struct KThread *test1, *test2, *test3;
+
+struct KMutex *test_mux;
+
+void
+test_func1(void *unused)
+{
+  (void) unused;
+
+  cprintf("1: Starting\n");
+  cprintf("1: Acquiring mutex\n");
+
+  k_mutex_lock(test_mux);
+
+  cprintf("1: Mutex acquired\n");
+
+  k_thread_yield();
+
+  cprintf("1: Releasing mutex\n");
+
+  k_mutex_unlock(test_mux);
+
+  cprintf("1: Mutex released\n");
+
+  k_thread_exit();
+}
+
+void
+test_func2(void *unused)
+{
+  (void) unused;
+
+  cprintf("2: Starting\n");
+  k_thread_resume(test1);
+
+  for (;;) {
+    k_thread_yield();
+  }
+}
+
+void
+test_func3(void *unused)
+{
+  (void) unused;
+
+  cprintf("3: Starting\n");
+  cprintf("3: Acquiring mutex\n");
+
+  k_mutex_lock(test_mux);
+
+  cprintf("3: Mutex acquired\n");
+
+  k_thread_resume(test2);
+  k_thread_yield();
+
+  cprintf("3: Releasing mutex\n");
+
+  k_mutex_unlock(test_mux);
+
+  cprintf("3: Mutex released\n");
+
+  k_thread_exit();
+}
+
 /**
  * Main kernel function.
  *
@@ -75,6 +140,16 @@ void main(void)
   pipe_init();    // Pipes subsystem
   process_init(); // Process table
   signal_init_system();
+
+  // test_mux = k_mutex_create("test");
+
+  // test1 = k_thread_create(NULL, test_func1, NULL, 1);
+  // test2 = k_thread_create(NULL, test_func2, NULL, 2);
+  // test3 = k_thread_create(NULL, test_func3, NULL, 3);
+
+  // k_thread_resume(test1);
+  // 
+  // k_thread_resume(test3);
 
   // Unblock other CPUs
   bsp_started = 1;

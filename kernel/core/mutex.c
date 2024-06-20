@@ -4,6 +4,7 @@
 #include <kernel/mutex.h>
 #include <kernel/object_pool.h>
 #include <kernel/thread.h>
+#include <kernel/cprintf.h>
 
 #include "core_private.h"
 
@@ -73,26 +74,39 @@ k_mutex_lock(struct KMutex *mutex)
   struct KThread *my_task = k_thread_current();
   int r;
 
-  _k_sched_spin_lock();
+  k_spinlock_acquire(&mutex->lock);
 
   // Sleep until the mutex becomes available.
   while (mutex->owner != NULL) {
     if (mutex->owner == my_task) {
-      _k_sched_spin_unlock();
+      k_spinlock_release(&mutex->lock);
       return -EDEADLK;
     }
 
-    // TODO: priority inheritance
+    _k_sched_spin_lock();
 
-    if ((r = _k_sched_sleep(&mutex->queue, 0, 0, NULL)) != 0) {
-      _k_sched_spin_unlock();
+    // Priority inheritance
+    if (mutex->owner->priority > my_task->priority)
+      _k_sched_set_priority(mutex->owner, my_task->priority);
+
+    r = _k_sched_sleep(&mutex->queue, THREAD_STATE_MUTEX, 0, NULL);
+
+    _k_sched_spin_unlock();
+
+    if (r < 0) {
+      k_spinlock_release(&mutex->lock);
       return r;
     }
   }
 
   mutex->owner = my_task;
 
+  _k_sched_spin_lock();
+  mutex->original_priority = my_task->priority;
   _k_sched_spin_unlock();
+
+  k_spinlock_release(&mutex->lock);
+
   return 0;
 }
 
@@ -104,17 +118,24 @@ k_mutex_lock(struct KMutex *mutex)
 int
 k_mutex_unlock(struct KMutex *mutex)
 {
+  struct KThread *my_task = k_thread_current();
+
   if (!k_mutex_holding(mutex))
     panic("not holding");
   
+  k_spinlock_acquire(&mutex->lock);
+
   _k_sched_spin_lock();
 
-  // TODO: priority inheritance
-
-  mutex->owner = NULL;
   _k_sched_wakeup_one_locked(&mutex->queue, 0);
+  _k_sched_set_priority(my_task, mutex->original_priority);
 
   _k_sched_spin_unlock();
+  
+  mutex->owner = NULL;
+
+  k_spinlock_release(&mutex->lock);
+
   return 0;
 }
 
@@ -129,9 +150,9 @@ k_mutex_holding(struct KMutex *mutex)
 {
   struct KThread *owner;
 
-  _k_sched_spin_lock();
+  k_spinlock_acquire(&mutex->lock);
   owner = mutex->owner;
-  _k_sched_spin_unlock();
+  k_spinlock_release(&mutex->lock);
 
   return (owner != NULL) && (owner == k_thread_current());
 }
@@ -142,6 +163,7 @@ k_mutex_ctor(void *p, size_t n)
   struct KMutex *mutex = (struct KMutex *) p;
   (void) n;
 
+  k_spinlock_init(&mutex->lock, "k_mutex");
   k_list_init(&mutex->queue);
   mutex->owner = NULL;
 }

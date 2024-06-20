@@ -25,7 +25,7 @@ k_waitqueue_init(struct KWaitQueue *chan)
 int
 k_waitqueue_sleep(struct KWaitQueue *chan, struct KSpinLock *lock)
 {
-  return _k_sched_sleep(&chan->head, 1, 0, lock);
+  return _k_sched_sleep(&chan->head, THREAD_STATE_SLEEP, 0, lock);
 }
 
 /**

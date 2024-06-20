@@ -86,7 +86,7 @@ sys_arch_sem_wait(sys_sem_t *sem, u32_t timeout)
 
   start = tick_get();
   if (k_semaphore_timed_get(*sem, timeout / MS_PER_TICK) < 0)
-    return SYS_ARCH_TIMEOUT;
+    return SYS_ARCH_TIMEOUT; 
   end = tick_get();
   
   return MIN(timeout, (end - start) * MS_PER_TICK);

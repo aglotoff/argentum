@@ -17,8 +17,9 @@ enum {
   THREAD_STATE_NONE = 0,
   THREAD_STATE_READY,
   THREAD_STATE_RUNNING,
-  THREAD_STATE_SLEEPING,
-  THREAD_STATE_SLEEPING_INTERRUPTILE,
+  THREAD_STATE_SLEEP,
+  THREAD_STATE_MUTEX,
+  THREAD_STATE_SEMAPHORE,
   THREAD_STATE_SUSPENDED,
   THREAD_STATE_DESTROYED,
 };
@@ -90,14 +91,14 @@ struct KThread {
 
 struct KThread *k_thread_current(void);
 struct KThread *k_thread_create(struct Process *, void (*)(void *), void *, int);
-void         k_thread_exit(void);
-int          k_thread_resume(struct KThread *);
-void         k_thread_yield(void);
-void         thread_cleanup(struct KThread *);
-void         k_thread_interrupt(struct KThread *);
+void            k_thread_exit(void);
+int             k_thread_resume(struct KThread *);
+void            k_thread_yield(void);
+void            thread_cleanup(struct KThread *);
+void            k_thread_interrupt(struct KThread *);
 
-void         k_sched_init(void);
-void         k_sched_start(void);
-void         tick(void);
+void            k_sched_init(void);
+void            k_sched_start(void);
+void            tick(void);
 
 #endif  // __KERNEL_INCLUDE_KERNEL_THREAD_H__

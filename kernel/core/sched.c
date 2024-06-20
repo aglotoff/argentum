@@ -150,7 +150,7 @@ k_sched_start(void)
 
 // Switch back from the current thread context back to the scheduler loop
 void
-_k_sched_yield(void)
+_k_sched_yield_locked(void)
 {
   int irq_flags;
 
@@ -193,7 +193,7 @@ _k_sched_may_yield(struct KThread *candidate)
       my_thread->flags |= THREAD_FLAG_RESCHEDULE;
     } else {
       _k_sched_enqueue(my_thread);
-      _k_sched_yield();
+      _k_sched_yield_locked();
     }
   }
 }
@@ -206,7 +206,7 @@ _k_sched_may_yield(struct KThread *candidate)
  * @param lock  An optional spinlock to release while going to sleep.
  */
 int
-_k_sched_sleep(struct KListLink *queue, int interruptible, unsigned long timeout,
+_k_sched_sleep(struct KListLink *queue, int state, unsigned long timeout,
                struct KSpinLock *lock)
 {
   struct KCpu *my_cpu;
@@ -233,14 +233,12 @@ _k_sched_sleep(struct KListLink *queue, int interruptible, unsigned long timeout
     k_timer_start(&my_thread->timer);
   }
 
-  my_thread->state = interruptible
-    ? THREAD_STATE_SLEEPING_INTERRUPTILE
-    : THREAD_STATE_SLEEPING;
+  my_thread->state = state;
 
   if (queue != NULL)
     k_list_add_back(queue, &my_thread->link);
 
-  _k_sched_yield();
+  _k_sched_yield_locked();
 
   if (timeout != 0)
     k_timer_stop(&my_thread->timer);
@@ -255,14 +253,46 @@ _k_sched_sleep(struct KListLink *queue, int interruptible, unsigned long timeout
 }
 
 void
+_k_sched_set_priority(struct KThread *thread, int priority)
+{
+  if (!k_spinlock_holding(&_k_sched_spinlock))
+    panic("sched not locked");
+
+  thread->priority = priority;
+
+  // TODO: change priorities for all owned mutexes
+
+  switch (thread->state) {
+  case THREAD_STATE_READY:
+    k_list_remove(&thread->link);
+    _k_sched_enqueue(thread);
+    break;
+  case THREAD_STATE_MUTEX:
+    // TODO
+  default:
+    break;
+  }
+}
+
+void
 _k_sched_resume(struct KThread *thread, int result)
 {
   if (!k_spinlock_holding(&_k_sched_spinlock))
     panic("sched not locked");
+
+  switch (thread->state) {
+  case THREAD_STATE_SEMAPHORE:
+    // TODO
+    break;
+  case THREAD_STATE_SLEEP:
+    break;
+  case THREAD_STATE_MUTEX:
+    // TODO
+    break;
   
-  if ((thread->state != THREAD_STATE_SLEEPING) &&
-      (thread->state != THREAD_STATE_SLEEPING_INTERRUPTILE))
+  default:
     panic("thread is not sleeping");
+  }
 
   thread->sleep_result = result;
 

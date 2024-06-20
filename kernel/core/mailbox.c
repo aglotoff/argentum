@@ -59,7 +59,7 @@ k_mailbox_receive(struct KMailBox *mbox, void *msg, unsigned long timeout,
       return -EAGAIN;
     }
 
-    if ((r = _k_sched_sleep(&mbox->receive_list, 0, timeout, NULL)) != 0) {
+    if ((r = _k_sched_sleep(&mbox->receive_list, THREAD_STATE_SLEEP, timeout, NULL)) != 0) {
       _k_sched_spin_unlock();
       return r;
     }
@@ -101,7 +101,7 @@ k_mailbox_send(struct KMailBox *mbox, const void *msg, unsigned long timeout,
       return -EAGAIN;
     }
 
-    _k_sched_sleep(&mbox->send_list, 0, timeout, NULL);
+    _k_sched_sleep(&mbox->send_list, THREAD_STATE_SLEEP, timeout, NULL);
 
     if ((ret = my_task->sleep_result) != 0) {
       _k_sched_spin_unlock();
