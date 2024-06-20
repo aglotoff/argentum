@@ -23,6 +23,7 @@
 #include <kernel/process.h>
 #include <kernel/sd.h>
 #include <kernel/net.h>
+#include <kernel/semaphore.h>
 
 static void mp_main(void);
 
@@ -59,6 +60,7 @@ void main(void)
   vm_space_init();  // Virtual memory manager
 
   k_mutex_system_init();
+  k_semaphore_system_init();
 
   // Initialize the device drivers
   rtc_init(); // Real-time clock

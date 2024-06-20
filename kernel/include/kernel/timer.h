@@ -4,7 +4,7 @@
 #include <kernel/list.h>
 
 struct KTimer {
-  struct ListLink link;
+  struct KListLink link;
   unsigned long   remain;
   unsigned long   period;
   int             state;

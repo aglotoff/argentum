@@ -8,25 +8,25 @@
 #include <kernel/list.h>
 #include <kernel/types.h>
 
-#define HASH_DECLARE(name, n)  struct ListLink name[n]
+#define HASH_DECLARE(name, n)  struct KListLink name[n]
 
 #define HASH_FOREACH(hash, lp) \
   for (lp = hash; lp < &hash[ARRAY_SIZE(hash)]; lp++)
 
 #define HASH_FOREACH_ENTRY(hash, lp, key) \
-  LIST_FOREACH(&hash[key % ARRAY_SIZE(hash)], lp)
+  KLIST_FOREACH(&hash[key % ARRAY_SIZE(hash)], lp)
 
 #define HASH_INIT(hash)     \
   do {                      \
-    struct ListLink *_lp;   \
+    struct KListLink *_lp;   \
                             \
     HASH_FOREACH(hash, _lp) \
-      list_init(_lp);       \
+      k_list_init(_lp);       \
   } while (0)
 
 #define HASH_PUT(hash, node, key) \
-  list_add_back(&hash[key % ARRAY_SIZE(hash)], node);
+  k_list_add_back(&hash[key % ARRAY_SIZE(hash)], node);
 
-#define HASH_REMOVE(node)   list_remove(node)
+#define HASH_REMOVE(node)   k_list_remove(node)
 
 #endif  // !__KERNEL_INCLUDE_KERNEL_HASH_H__

@@ -39,7 +39,7 @@ signal_init(struct Process *process)
 {
   int i;
 
-  list_init(&process->signal_queue);
+  k_list_init(&process->signal_queue);
   process->signal_stub = 0;
   process->signal_mask = 0;
   process->signal_pending = 0;
@@ -66,12 +66,12 @@ signal_clone(struct Process *parent, struct Process *child)
 int
 signal_generate(pid_t pid, int signo, int code)
 {
-  struct ListLink *l;
+  struct KListLink *l;
 
   process_lock();
 
-  LIST_FOREACH(&__process_list, l) {
-    struct Process *process = LIST_CONTAINER(l, struct Process, link);
+  KLIST_FOREACH(&__process_list, l) {
+    struct Process *process = KLIST_CONTAINER(l, struct Process, link);
     struct sigaction *action = &process->signal_actions[signo - 1];
     struct Signal *signal;
 
@@ -94,7 +94,7 @@ signal_generate(pid_t pid, int signo, int code)
     }
 
     // Notify the thread that a signal is pending
-    list_add_back(&process->signal_queue, &signal->link);
+    k_list_add_back(&process->signal_queue, &signal->link);
 
     if (!sigismember(&process->signal_mask, signo))
       k_thread_interrupt(process->thread);
@@ -407,16 +407,16 @@ signal_default_action(struct Process *current, struct Signal *signal)
 static struct Signal *
 signal_dequeue(struct Process *process)
 {
-  struct ListLink *link;
+  struct KListLink *link;
 
-  LIST_FOREACH(&process->signal_queue, link) {
-    struct Signal *signal = LIST_CONTAINER(link, struct Signal, link);
+  KLIST_FOREACH(&process->signal_queue, link) {
+    struct Signal *signal = KLIST_CONTAINER(link, struct Signal, link);
 
     // Signal blocked: remain pending until unblocked or accepted
     if (sigismember(&process->signal_mask, signal->info.si_signo))
       continue;
 
-    list_remove(&signal->link);
+    k_list_remove(&signal->link);
     return signal;
   }
 

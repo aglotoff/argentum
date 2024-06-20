@@ -18,8 +18,8 @@
 
 void k_arch_switch(struct Context **, struct Context *);
 
-LIST_DECLARE(threads_to_destroy);
-static struct ListLink sched_queue[THREAD_MAX_PRIORITIES];
+KLIST_DECLARE(threads_to_destroy);
+static struct KListLink sched_queue[THREAD_MAX_PRIORITIES];
 struct KSpinLock _k_sched_spinlock = K_SPINLOCK_INITIALIZER("sched");
 
 /**
@@ -38,7 +38,7 @@ k_sched_init(void)
     panic("cannot allocate thread cache");
 
   for (i = 0; i < THREAD_MAX_PRIORITIES; i++)
-    list_init(&sched_queue[i]);
+    k_list_init(&sched_queue[i]);
 }
 
 // Add the specified thread to the run queue with the corresponding priority
@@ -49,25 +49,25 @@ _k_sched_enqueue(struct KThread *th)
     panic("scheduler not locked");
 
   th->state = THREAD_STATE_READY;
-  list_add_back(&sched_queue[th->priority], &th->link);
+  k_list_add_back(&sched_queue[th->priority], &th->link);
 }
 
 // Retrieve the highest-priority thread from the run queue
 static struct KThread *
 k_sched_dequeue(void)
 {
-  struct ListLink *link;
+  struct KListLink *link;
   int i;
   
   if (!k_spinlock_holding(&_k_sched_spinlock))
     panic("scheduler not locked");
 
   for (i = 0; i < THREAD_MAX_PRIORITIES; i++) {
-    if (!list_empty(&sched_queue[i])) {
+    if (!k_list_empty(&sched_queue[i])) {
       link = sched_queue[i].next;
-      list_remove(link);
+      k_list_remove(link);
 
-      return LIST_CONTAINER(link, struct KThread, link);
+      return KLIST_CONTAINER(link, struct KThread, link);
     }
   }
 
@@ -100,12 +100,12 @@ static void
 k_sched_idle(void)
 {
   // Cleanup destroyed threads
-  while (!list_empty(&threads_to_destroy)) {
+  while (!k_list_empty(&threads_to_destroy)) {
     struct KThread *thread;
     struct Page *kstack_page;
     
-    thread = LIST_CONTAINER(threads_to_destroy.next, struct KThread, link);
-    list_remove(&thread->link);
+    thread = KLIST_CONTAINER(threads_to_destroy.next, struct KThread, link);
+    k_list_remove(&thread->link);
 
     _k_sched_spin_unlock();
 
@@ -206,10 +206,11 @@ _k_sched_may_yield(struct KThread *candidate)
  * @param lock  An optional spinlock to release while going to sleep.
  */
 int
-_k_sched_sleep(struct ListLink *queue, int interruptible, unsigned long timeout,
+_k_sched_sleep(struct KListLink *queue, int interruptible, unsigned long timeout,
                struct KSpinLock *lock)
 {
-  struct KThread *my_thread = k_thread_current();
+  struct KCpu *my_cpu;
+  struct KThread *my_thread;
 
   if (lock != NULL) {
     _k_sched_spin_lock();
@@ -218,6 +219,14 @@ _k_sched_sleep(struct ListLink *queue, int interruptible, unsigned long timeout,
 
   if (!k_spinlock_holding(&_k_sched_spinlock))
     panic("scheduler not locked");
+
+  my_cpu = _k_cpu();
+  my_thread = my_cpu->thread;
+
+  if (my_cpu->lock_count > 0)
+    panic("called from an IRQ context");
+  if (my_cpu->thread == NULL)
+    panic("called not by a thread");
 
   if (timeout != 0) {
     my_thread->timer.remain = timeout;
@@ -229,7 +238,7 @@ _k_sched_sleep(struct ListLink *queue, int interruptible, unsigned long timeout,
     : THREAD_STATE_SLEEPING;
 
   if (queue != NULL)
-    list_add_back(queue, &my_thread->link);
+    k_list_add_back(queue, &my_thread->link);
 
   _k_sched_yield();
 
@@ -257,21 +266,21 @@ _k_sched_resume(struct KThread *thread, int result)
 
   thread->sleep_result = result;
 
-  list_remove(&thread->link);
+  k_list_remove(&thread->link);
 
   _k_sched_enqueue(thread);
   _k_sched_may_yield(thread);
 }
 
 void
-_k_sched_wakeup_all(struct ListLink *thread_list, int result)
+_k_sched_wakeup_all_locked(struct KListLink *thread_list, int result)
 {
   if (!k_spinlock_holding(&_k_sched_spinlock))
     panic("sched not locked");
   
-  while (!list_empty(thread_list)) {
-    struct ListLink *link = thread_list->next;
-    struct KThread *thread = LIST_CONTAINER(link, struct KThread, link);
+  while (!k_list_empty(thread_list)) {
+    struct KListLink *link = thread_list->next;
+    struct KThread *thread = KLIST_CONTAINER(link, struct KThread, link);
 
     _k_sched_resume(thread, result);
   }
@@ -283,9 +292,9 @@ _k_sched_wakeup_all(struct ListLink *thread_list, int result)
  * @param queue Pointer to the head of the wait queue.
  */
 void
-_k_sched_wakeup_one(struct ListLink *queue, int result)
+_k_sched_wakeup_one_locked(struct KListLink *queue, int result)
 {
-  struct ListLink *l;
+  struct KListLink *l;
   struct KThread *highest;
 
   if (!k_spinlock_holding(&_k_sched_spinlock))
@@ -293,8 +302,8 @@ _k_sched_wakeup_one(struct ListLink *queue, int result)
 
   highest = NULL;
 
-  LIST_FOREACH(queue, l) {
-    struct KThread *t = LIST_CONTAINER(l, struct KThread, link);
+  KLIST_FOREACH(queue, l) {
+    struct KThread *t = KLIST_CONTAINER(l, struct KThread, link);
     
     if ((highest == NULL) || (k_sched_priority_cmp(t, highest) > 0))
       highest = t;
@@ -302,4 +311,6 @@ _k_sched_wakeup_one(struct ListLink *queue, int result)
 
   if (highest != NULL)
     _k_sched_resume(highest, result);
+
+  // TODO: may be of a higher priority than the current thread
 }

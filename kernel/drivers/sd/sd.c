@@ -51,7 +51,7 @@ static struct PL180 mmci;
 
 // The queue of pending buffer requests
 static struct {
-  struct ListLink head;
+  struct KListLink head;
   struct KSpinLock lock;
 } sd_queue;
 
@@ -95,7 +95,7 @@ sd_init(void)
   pl180_send_cmd(&mmci, CMD_SET_BLOCKLEN, SD_BLOCKLEN, SD_RESPONSE_R1, NULL);
 
   // Initialize the buffer queue.
-  list_init(&sd_queue.head);
+  k_list_init(&sd_queue.head);
   k_spinlock_init(&sd_queue.lock, "sd_queue");
 
   // Enable interrupts.
@@ -126,7 +126,7 @@ sd_request(struct Buf *buf)
   k_spinlock_acquire(&sd_queue.lock);
 
   // Add buffer to the queue.
-  list_add_back(&sd_queue.head, &buf->queue_link);
+  k_list_add_back(&sd_queue.head, &buf->queue_link);
 
   // If the buffer is at the front of the queue, immediately send it to the
   // hardware.
@@ -170,7 +170,7 @@ sd_start_transfer(struct Buf *buf)
 static void
 sd_irq(void)
 {
-  struct ListLink *link;
+  struct KListLink *link;
   struct Buf *buf, *next_buf;
 
   k_spinlock_acquire(&sd_queue.lock);
@@ -178,9 +178,9 @@ sd_irq(void)
   // Grab the first buffer in the queue to find out whether a read or write
   // operation is happening
   link = sd_queue.head.next;
-  list_remove(link);
+  k_list_remove(link);
 
-  buf = LIST_CONTAINER(link, struct Buf, queue_link);
+  buf = KLIST_CONTAINER(link, struct Buf, queue_link);
 
   assert((buf->flags & (BUF_DIRTY | BUF_VALID)) != BUF_VALID);
   assert(buf->block_size % SD_BLOCKLEN == 0);
@@ -199,8 +199,8 @@ sd_irq(void)
     pl180_send_cmd(&mmci, CMD_STOP_TRANSMISSION, 0, SD_RESPONSE_R1B, NULL);
 
   // Begin processing the next buffer in the queue.
-  if (!list_empty(&sd_queue.head)) {
-    next_buf = LIST_CONTAINER(sd_queue.head.next, struct Buf, queue_link);
+  if (!k_list_empty(&sd_queue.head)) {
+    next_buf = KLIST_CONTAINER(sd_queue.head.next, struct Buf, queue_link);
     sd_start_transfer(next_buf);
   }
 

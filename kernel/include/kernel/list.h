@@ -1,40 +1,40 @@
-#ifndef __KERNEL_INCLUDE_KERNEL__LIST_H__
-#define __KERNEL_INCLUDE_KERNEL__LIST_H__
+#ifndef __KERNEL_INCLUDE_KERNEL_LIST_H__
+#define __KERNEL_INCLUDE_KERNEL_LIST_H__
 
 #ifndef __ARGENTUM_KERNEL__
 #error "This is a kernel header; user programs should not #include it"
 #endif
 
 /**
- * @file include/list.h
+ * @file
  * 
  * Intrusive doubly linked list implementation.
  */
 
 #include <stddef.h>
 
-struct ListLink {
-  struct ListLink *next;
-  struct ListLink *prev;
+struct KListLink {
+  struct KListLink *next;
+  struct KListLink *prev;
 };
 
-#define LIST_DECLARE(name)      struct ListLink name = { &name, &name }
-#define LIST_INITIALIZER(head)  { &(head), &(head) }
+#define KLIST_DECLARE(name)     struct KListLink name = { &name, &name }
+#define KLIST_INITIALIZER(head) { &(head), &(head) }
 
 static inline void
-list_init(struct ListLink *head)
+k_list_init(struct KListLink *head)
 {
   head->prev = head->next = head;
 }
 
 static inline int
-list_empty(struct ListLink *head)
+k_list_empty(struct KListLink *head)
 {
   return head->next == head;
 }
 
 static inline void
-list_add_front(struct ListLink *head, struct ListLink *link)
+k_list_add_front(struct KListLink *head, struct KListLink *link)
 {
   link->next = head->next;
   head->next->prev = link;
@@ -43,7 +43,7 @@ list_add_front(struct ListLink *head, struct ListLink *link)
 }
 
 static inline void
-list_add_back(struct ListLink *head, struct ListLink *link)
+k_list_add_back(struct KListLink *head, struct KListLink *link)
 {
   link->prev = head->prev;
   head->prev->next = link;
@@ -52,7 +52,7 @@ list_add_back(struct ListLink *head, struct ListLink *link)
 }
 
 static inline void
-list_remove(struct ListLink *link)
+k_list_remove(struct KListLink *link)
 {
   if (link->prev != NULL)
     link->prev->next = link->next;
@@ -63,10 +63,10 @@ list_remove(struct ListLink *link)
   link->prev = link->next = NULL;
 }
 
-#define LIST_CONTAINER(link, type, member) \
+#define KLIST_CONTAINER(link, type, member) \
   ((type *) ((size_t) (link) - offsetof(type, member)))
 
-#define LIST_FOREACH(head, lp) \
+#define KLIST_FOREACH(head, lp) \
   for (lp = (head)->next; lp != (head); lp = lp->next)
 
-#endif  // !__KERNEL_INCLUDE_KERNEL__LIST_H__
+#endif  // !__KERNEL_INCLUDE_KERNEL_LIST_H__

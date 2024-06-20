@@ -18,8 +18,8 @@ struct KMailBox {
   size_t            size;
   size_t            max_size;
   size_t            msg_size;
-  struct ListLink   receive_list;
-  struct ListLink   send_list;
+  struct KListLink   receive_list;
+  struct KListLink   send_list;
 };
 
 int k_mailbox_init(struct KMailBox *, size_t, void *, size_t);

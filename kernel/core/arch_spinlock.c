@@ -43,7 +43,7 @@ k_arch_spinlock_release(volatile int *locked)
 // To properly generate stack backtrace structures, the code must be compiled
 // with the -mapcs-frame and -fno-omit-frame-pointer flags
 void
-spin_arch_pcs_save(struct KSpinLock *spin)
+k_arch_spinlock_save_callstack(struct KSpinLock *spin)
 {
   uint32_t *fp;
   int i;
@@ -59,18 +59,24 @@ spin_arch_pcs_save(struct KSpinLock *spin)
     spin->pcs[i] = 0;
 }
 
+static void
+print_info(uintptr_t pc)
+{
+  struct PcDebugInfo info;
+
+  debug_info_pc(pc, &info);
+  cprintf("  [%p] %s (%s at line %d)\n",
+          pc,
+          info.fn_name, info.file, info.line);
+}
+
 // Display the recorded call stack along with debugging information
 void
-spin_arch_pcs_print(struct KSpinLock *spin)
+k_arch_spinlock_print_callstack(struct KSpinLock *spin)
 {
   int i;
 
   for (i = 0; i < SPIN_MAX_PCS && spin->pcs[i]; i++) {
-    struct PcDebugInfo info;
-
-    debug_info_pc(spin->pcs[i], &info);
-    cprintf("  [%p] %s (%s at line %d)\n",
-            spin->pcs[i],
-            info.fn_name, info.file, info.line);
+    print_info(spin->pcs[i]);
   }
 }

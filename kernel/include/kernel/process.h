@@ -33,7 +33,7 @@ struct FileDesc {
  * Process descriptor.
  */
 struct Process {
-  struct ListLink       link;
+  struct KListLink       link;
   /** The process' address space */
   struct VMSpace       *vm;
 
@@ -43,16 +43,16 @@ struct Process {
   /** Unique thread identifier */
   pid_t                 pid;
   /** Link into the PID hash table */
-  struct ListLink       pid_link;
+  struct KListLink       pid_link;
   /** Process group ID */
   pid_t                 pgid;
 
   /** The parent process */
   struct Process       *parent;
   /** List of child processes */
-  struct ListLink       children;
+  struct KListLink       children;
   /** Link into the siblings list */
-  struct ListLink       sibling_link;
+  struct KListLink       sibling_link;
 
   /** Queue to sleep waiting for children */
   struct KWaitQueue    wait_queue;
@@ -63,7 +63,7 @@ struct Process {
 
   uintptr_t             signal_stub;
   struct sigaction      signal_actions[NSIG];
-  struct ListLink       signal_queue;
+  struct KListLink       signal_queue;
   sigset_t              signal_mask;
   sigset_t              signal_pending;
 
@@ -84,10 +84,10 @@ struct Process {
 };
 
 extern struct KSpinLock __process_lock;
-extern struct ListLink __process_list;
+extern struct KListLink __process_list;
 
 struct Signal {
-  struct ListLink link;
+  struct KListLink link;
   siginfo_t       info;
 };
 

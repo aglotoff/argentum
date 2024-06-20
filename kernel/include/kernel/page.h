@@ -25,7 +25,7 @@ struct KObjectSlab;
 struct Page {
   union {
     /** Link into the free list */
-    struct ListLink    link;
+    struct KListLink    link;
     /** The slab this page block belongs to */
     struct KObjectSlab *slab;
   };

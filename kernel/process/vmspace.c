@@ -156,7 +156,7 @@ vm_space_create(void)
   }
 
   k_spinlock_init(&vm->lock, "vmspace");
-  list_init(&vm->areas);
+  k_list_init(&vm->areas);
 
   return vm;
 }
@@ -169,11 +169,11 @@ vm_space_destroy(struct VMSpace *vm)
   // vm_range_free(vm->pgtab, 0, ROUND_UP(vm->heap, PAGE_SIZE));
   // vm_range_free(vm->pgtab, vm->stack, USTACK_SIZE);
   
-  while (!list_empty(&vm->areas)) {
-    area = LIST_CONTAINER(vm->areas.next, struct VMSpaceMapEntry, link);
+  while (!k_list_empty(&vm->areas)) {
+    area = KLIST_CONTAINER(vm->areas.next, struct VMSpaceMapEntry, link);
     vm_range_free(vm->pgtab, area->start, area->length);
 
-    list_remove(&area->link);
+    k_list_remove(&area->link);
     k_object_pool_put(vm_areacache, area);
   }
 
@@ -186,14 +186,14 @@ struct VMSpace   *
 vm_space_clone(struct VMSpace *vm, int share)
 {
   struct VMSpace *new_vm;
-  struct ListLink *l;
+  struct KListLink *l;
   struct VMSpaceMapEntry *area, *new_area;
 
   if ((new_vm = vm_space_create()) == NULL)
     return NULL;
 
-  LIST_FOREACH(&vm->areas, l) {
-    area = LIST_CONTAINER(l, struct VMSpaceMapEntry, link);
+  KLIST_FOREACH(&vm->areas, l) {
+    area = KLIST_CONTAINER(l, struct VMSpaceMapEntry, link);
 
     new_area = (struct VMSpaceMapEntry *) k_object_pool_get(vm_areacache);
     if (new_area == NULL) {
@@ -204,7 +204,7 @@ vm_space_clone(struct VMSpace *vm, int share)
     new_area->start  = area->start;
     new_area->length = area->length;
     new_area->flags  = area->flags;
-    list_add_back(&new_vm->areas, &new_area->link);
+    k_list_add_back(&new_vm->areas, &new_area->link);
 
     if (vm_range_clone(vm->pgtab, new_vm->pgtab, area->start, area->length, share) < 0) {
       vm_space_destroy(new_vm);
@@ -252,7 +252,7 @@ intptr_t
 vmspace_map(struct VMSpace *vm, uintptr_t addr, size_t n, int flags)
 {
   uintptr_t va;
-  struct ListLink *l;
+  struct KListLink *l;
   struct VMSpaceMapEntry *area, *prev, *next;
   int r;
 
@@ -264,7 +264,7 @@ vmspace_map(struct VMSpace *vm, uintptr_t addr, size_t n, int flags)
 
   // Find Vm area to insert before
   for (l = vm->areas.next; l != &vm->areas; l = l->next) {
-    area = LIST_CONTAINER(l, struct VMSpaceMapEntry, link);
+    area = KLIST_CONTAINER(l, struct VMSpaceMapEntry, link);
 
     // Can insert before
     if ((va + n) <= area->start)
@@ -285,7 +285,7 @@ vmspace_map(struct VMSpace *vm, uintptr_t addr, size_t n, int flags)
   // Can merge with previous?
   prev = NULL;
   if (l->prev != &vm->areas) {
-    prev = LIST_CONTAINER(l->prev, struct VMSpaceMapEntry, link);
+    prev = KLIST_CONTAINER(l->prev, struct VMSpaceMapEntry, link);
     if (((prev->start + prev->length) != va) || (prev->flags != flags))
       prev = NULL;
   }
@@ -293,7 +293,7 @@ vmspace_map(struct VMSpace *vm, uintptr_t addr, size_t n, int flags)
   // Can merge with next?
   next = NULL;
   if (l != &vm->areas) {
-    next = LIST_CONTAINER(l, struct VMSpaceMapEntry, link);
+    next = KLIST_CONTAINER(l, struct VMSpaceMapEntry, link);
     if ((next->start != (va + n)) || (next->flags != flags))
       next = NULL;
   }
@@ -301,7 +301,7 @@ vmspace_map(struct VMSpace *vm, uintptr_t addr, size_t n, int flags)
   if ((prev != NULL) && (next != NULL)) {
     prev->length += next->length + n;
 
-    list_remove(&next->link);
+    k_list_remove(&next->link);
     k_object_pool_put(vm_areacache, next);
   } else if (prev != NULL) {
     prev->length += n;
@@ -318,7 +318,7 @@ vmspace_map(struct VMSpace *vm, uintptr_t addr, size_t n, int flags)
     area->length = n;
     area->flags  = flags;
 
-    list_add_back(l, &area->link);
+    k_list_add_back(l, &area->link);
   }
 
   // cprintf("[page_free_count %d]\n", page_free_count);
@@ -329,12 +329,12 @@ vmspace_map(struct VMSpace *vm, uintptr_t addr, size_t n, int flags)
 void
 vm_print_areas(struct VMSpace *vm)
 {
-  struct ListLink *l;
+  struct KListLink *l;
   struct VMSpaceMapEntry *area;
   
   cprintf("vm:\n");
-  LIST_FOREACH(&vm->areas, l) {
-    area = LIST_CONTAINER(l, struct VMSpaceMapEntry, link);
+  KLIST_FOREACH(&vm->areas, l) {
+    area = KLIST_CONTAINER(l, struct VMSpaceMapEntry, link);
     cprintf("  [%x-%x)\n", area->start, area->start + area->length);
   }
 }

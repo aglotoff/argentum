@@ -15,7 +15,7 @@ struct KObjectPool *buf_desc_cache;
 
 static struct {
   size_t          size;
-  struct ListLink head;
+  struct KListLink head;
   struct KSpinLock lock;
 } buf_cache;
 
@@ -42,7 +42,7 @@ buf_init(void)
     panic("cannot allocate buf_desc_cache");
 
   k_spinlock_init(&buf_cache.lock, "buf_cache");
-  list_init(&buf_cache.head);
+  k_list_init(&buf_cache.head);
 }
 
 static uint8_t *
@@ -106,7 +106,7 @@ buf_alloc(size_t block_size)
   buf->ref_count  = 0;
   buf->block_size = block_size;
 
-  list_add_front(&buf_cache.head, &buf->cache_link);
+  k_list_add_front(&buf_cache.head, &buf->cache_link);
   buf_cache.size++;
 
   return buf;
@@ -116,14 +116,14 @@ buf_alloc(size_t block_size)
 static struct Buf *
 buf_get(unsigned block_no, size_t block_size, dev_t dev)
 {
-  struct ListLink *l;
+  struct KListLink *l;
   struct Buf *b, *unused = NULL;
 
   k_spinlock_acquire(&buf_cache.lock);
 
   // TODO: use a hash table for faster lookups
-  LIST_FOREACH(&buf_cache.head, l) {
-    b = LIST_CONTAINER(l, struct Buf, cache_link);
+  KLIST_FOREACH(&buf_cache.head, l) {
+    b = KLIST_CONTAINER(l, struct Buf, cache_link);
 
     if ((b->block_no == block_no) &&
         (b->dev == dev) &&
@@ -157,7 +157,7 @@ buf_get(unsigned block_no, size_t block_size, dev_t dev)
     buf_free_data(b->data, b->block_size);
 
     if ((b->data = buf_alloc_data(block_size)) == NULL) {
-      list_remove(&b->cache_link);
+      k_list_remove(&b->cache_link);
       k_object_pool_put(buf_desc_cache, b);
 
       k_spinlock_release(&buf_cache.lock);
@@ -249,8 +249,8 @@ buf_release(struct Buf *buf)
 
   if (--buf->ref_count == 0) {
     // Return the buffer to the cache.
-    list_remove(&buf->cache_link);
-    list_add_front(&buf_cache.head, &buf->cache_link);
+    k_list_remove(&buf->cache_link);
+    k_list_add_front(&buf_cache.head, &buf->cache_link);
   }
 
   k_spinlock_release(&buf_cache.lock);

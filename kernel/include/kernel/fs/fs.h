@@ -26,7 +26,7 @@ struct Inode {
 
   // These two fields are protected by inode_cache.lock
   int             ref_count;
-  struct ListLink cache_link;
+  struct KListLink cache_link;
 
   struct KMutex   mutex;
 
@@ -53,8 +53,8 @@ struct PathNode {
   struct KMutex   mutex;
 
   struct PathNode    *parent;
-  struct ListLink children;
-  struct ListLink siblings;
+  struct KListLink children;
+  struct KListLink siblings;
 
   struct Inode   *inode;
   struct Inode   *mounted;

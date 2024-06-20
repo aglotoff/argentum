@@ -5,15 +5,15 @@
 
 struct Context;
 struct KThread;
-struct ListLink;
+struct KListLink;
 
 void _k_sched_resume(struct KThread *, int);
 void _k_sched_may_yield(struct KThread *);
 void _k_sched_yield(void);
 void _k_sched_enqueue(struct KThread *);
-void _k_sched_wakeup_all(struct ListLink *, int);
-void _k_sched_wakeup_one(struct ListLink *, int);
-int  _k_sched_sleep(struct ListLink *, int, unsigned long, struct KSpinLock *);
+void _k_sched_wakeup_all_locked(struct KListLink *, int);
+void _k_sched_wakeup_one_locked(struct KListLink *, int);
+int  _k_sched_sleep(struct KListLink *, int, unsigned long, struct KSpinLock *);
 
 extern struct KSpinLock _k_sched_spinlock;
 
@@ -27,6 +27,22 @@ static inline void
 _k_sched_spin_unlock(void)
 {
   k_spinlock_release(&_k_sched_spinlock);
+}
+
+static inline void
+_k_sched_wakeup_all(struct KListLink *thread_list, int result)
+{
+  _k_sched_spin_lock();
+  _k_sched_wakeup_all_locked(thread_list, result);
+  _k_sched_spin_unlock();
+}
+
+static inline void
+_k_sched_wakeup_one(struct KListLink *queue, int result)
+{
+  _k_sched_spin_lock();
+  _k_sched_wakeup_one_locked(queue, result);
+  _k_sched_spin_unlock();
 }
 
 /**

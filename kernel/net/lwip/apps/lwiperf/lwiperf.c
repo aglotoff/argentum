@@ -192,7 +192,7 @@ lwiperf_list_add(lwiperf_state_base_t *item)
 
 /** Remove an iperf session from the 'active' list */
 static void
-lwiperf_list_remove(lwiperf_state_base_t *item)
+lwiperf_k_list_remove(lwiperf_state_base_t *item)
 {
   lwiperf_state_base_t *prev = NULL;
   lwiperf_state_base_t *iter;
@@ -250,7 +250,7 @@ lwiperf_tcp_close(lwiperf_state_tcp_t *conn, enum lwiperf_report_type report_typ
 {
   err_t err;
 
-  lwiperf_list_remove(&conn->base);
+  lwiperf_k_list_remove(&conn->base);
   lwip_tcp_conn_report(conn, report_type);
   if (conn->conn_pcb != NULL) {
     tcp_arg(conn->conn_pcb, NULL);

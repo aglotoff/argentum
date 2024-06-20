@@ -23,7 +23,7 @@ struct KMutex {
   /** The task currently holding the mutex. */
   struct KThread    *owner;
   /** List of tasks waiting for this mutex to be released. */
-  struct ListLink   queue;
+  struct KListLink   queue;
   /** Mutex name (for debugging purposes). */
   const char       *name;
 };

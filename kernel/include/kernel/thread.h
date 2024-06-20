@@ -56,7 +56,7 @@ struct Process;
  */
 struct KThread {
   /** Link into the list containing this task */
-  struct ListLink   link;
+  struct KListLink   link;
   /** Current task state */
   int               state;
   /** Task priority value */

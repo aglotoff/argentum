@@ -51,7 +51,7 @@ int  k_spinlock_holding(struct KSpinLock *);
 
 void k_arch_spinlock_acquire(volatile int *);
 void k_arch_spinlock_release(volatile int *);
-void spin_arch_pcs_save(struct KSpinLock *);
-void spin_arch_pcs_print(struct KSpinLock *);
+void k_arch_spinlock_save_callstack(struct KSpinLock *);
+void k_arch_spinlock_print_callstack(struct KSpinLock *);
 
 #endif  // !__KERNEL_INCLUDE_KERNEL_SPINLOCK_H__

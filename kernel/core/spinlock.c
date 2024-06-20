@@ -34,7 +34,7 @@ void
 k_spinlock_acquire(struct KSpinLock *spin)
 {
   if (k_spinlock_holding(spin)) {
-    spin_arch_pcs_print(spin);
+    k_arch_spinlock_print_callstack(spin);
     panic("CPU %x is already holding %s", k_cpu_id(), spin->name);
   }
 
@@ -44,7 +44,7 @@ k_spinlock_acquire(struct KSpinLock *spin)
   k_arch_spinlock_acquire(&spin->locked);
 
   spin->cpu = _k_cpu();
-  spin_arch_pcs_save(spin);
+  k_arch_spinlock_save_callstack(spin);
 }
 
 /**
@@ -56,7 +56,7 @@ void
 k_spinlock_release(struct KSpinLock *spin)
 {
   if (!k_spinlock_holding(spin)) {
-    spin_arch_pcs_print(spin);
+    k_arch_spinlock_print_callstack(spin);
     panic("CPU %d cannot release %s: held by %d\n",
           k_cpu_id(), spin->name, spin->cpu);
   }

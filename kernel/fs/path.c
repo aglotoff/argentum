@@ -34,8 +34,8 @@ fs_path_create(const char *name, struct Inode *inode, struct PathNode *parent)
   path->ref_count = 1;
   path->parent = NULL;
   path->mounted = NULL;
-  list_init(&path->children);
-  list_init(&path->siblings);
+  k_list_init(&path->children);
+  k_list_init(&path->siblings);
   k_mutex_init(&path->mutex, "path");
 
   if (parent) {
@@ -44,7 +44,7 @@ fs_path_create(const char *name, struct Inode *inode, struct PathNode *parent)
     path->parent = parent;
     parent->ref_count++;
     
-    list_add_front(&parent->children, &path->siblings);
+    k_list_add_front(&parent->children, &path->siblings);
     path->ref_count++;
 
     k_spinlock_release(&path_lock);
@@ -75,7 +75,7 @@ fs_path_remove(struct PathNode *path)
     path->parent = NULL;
   }
 
-  list_remove(&path->siblings);
+  k_list_remove(&path->siblings);
   path->ref_count--;
 
   k_spinlock_release(&path_lock);
@@ -102,7 +102,7 @@ fs_path_put(struct PathNode *path)
     if (parent) {
       assert(path->ref_count == 1);
 
-      list_remove(&path->siblings);
+      k_list_remove(&path->siblings);
       parent->ref_count--;
     }
 
@@ -174,12 +174,12 @@ fs_path_next(const char *path, char *name_buf, char **result)
 static struct PathNode *
 fs_path_lookup_cached(struct PathNode *parent, const char *name)
 {
-  struct ListLink *l;
+  struct KListLink *l;
 
   k_spinlock_acquire(&path_lock);
 
-  LIST_FOREACH(&parent->children, l) {
-    struct PathNode *p = LIST_CONTAINER(l, struct PathNode, siblings);
+  KLIST_FOREACH(&parent->children, l) {
+    struct PathNode *p = KLIST_CONTAINER(l, struct PathNode, siblings);
     
     if (strcmp(p->name, name) == 0) {
       p->ref_count++;

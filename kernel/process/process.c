@@ -32,12 +32,12 @@ struct KObjectPool *thread_cache;
 
 // Process ID hash table
 static struct {
-  struct ListLink table[NBUCKET];
+  struct KListLink table[NBUCKET];
   struct KSpinLock lock;
 } pid_hash;
 
 // Lock to protect the parent/child relationships between the processes
-struct ListLink __process_list;
+struct KListLink __process_list;
 struct KSpinLock __process_lock;
 
 static void process_run(void *);
@@ -51,8 +51,8 @@ process_ctor(void *buf, size_t size)
   struct Process *proc = (struct Process *) buf;
 
   k_waitqueue_init(&proc->wait_queue);
-  list_init(&proc->children);
-  list_init(&proc->signal_queue);
+  k_list_init(&proc->children);
+  k_list_init(&proc->signal_queue);
 
   (void) size;
 }
@@ -69,7 +69,7 @@ process_init(void)
   HASH_INIT(pid_hash.table);
   k_spinlock_init(&pid_hash.lock, "pid_hash");
 
-  list_init(&__process_list);
+  k_list_init(&__process_list);
   k_spinlock_init(&__process_lock, "process_lock");
 
   // Create the init process
@@ -94,7 +94,7 @@ process_alloc(void)
 
   signal_init(process);
 
-  list_init(&process->link);
+  k_list_init(&process->link);
 
   process->parent = NULL;
   process->zombie = 0;
@@ -202,7 +202,7 @@ process_create(const void *binary, struct Process **pstore)
   proc->cmask = 0;
 
   process_lock();
-  list_add_back(&__process_list, &proc->link);
+  k_list_add_back(&__process_list, &proc->link);
   process_unlock();
 
   k_thread_resume(proc->thread);
@@ -229,11 +229,11 @@ void
 process_free(struct Process *process)
 {
   process_lock();
-  list_remove(&process->link);
+  k_list_remove(&process->link);
   process_unlock();
 
   k_spinlock_acquire(&pid_hash.lock);
-  list_remove(&process->pid_link);
+  k_list_remove(&process->pid_link);
   k_spinlock_release(&pid_hash.lock);
 
   // Return the process descriptor to the cache
@@ -243,13 +243,13 @@ process_free(struct Process *process)
 struct Process *
 pid_lookup(pid_t pid)
 {
-  struct ListLink *l;
+  struct KListLink *l;
   struct Process *proc;
 
   k_spinlock_acquire(&pid_hash.lock);
 
   HASH_FOREACH_ENTRY(pid_hash.table, l, pid) {
-    proc = LIST_CONTAINER(l, struct Process, pid_link);
+    proc = KLIST_CONTAINER(l, struct Process, pid_link);
     if (proc->pid == pid) {
       k_spinlock_release(&pid_hash.lock);
       return proc;
@@ -263,7 +263,7 @@ pid_lookup(pid_t pid)
 void
 process_destroy(int status)
 {
-  struct ListLink *l;
+  struct KListLink *l;
   struct Process *child, *current = process_current();
   int has_zombies;
 
@@ -287,13 +287,13 @@ process_destroy(int status)
 
   // Move children to the init process
   has_zombies = 0;
-  while (!list_empty(&current->children)) {
+  while (!k_list_empty(&current->children)) {
     l = current->children.next;
-    list_remove(l);
+    k_list_remove(l);
 
-    child = LIST_CONTAINER(l, struct Process, sibling_link);
+    child = KLIST_CONTAINER(l, struct Process, sibling_link);
     child->parent = init_process;
-    list_add_back(&init_process->children, l);
+    k_list_add_back(&init_process->children, l);
 
     // Check whether there is a child available to be cleaned up
     if (child->zombie)
@@ -346,8 +346,8 @@ process_copy(int share_vm)
   child->cmask = current->cmask;
   child->cwd   = fs_path_duplicate(current->cwd);
 
-  list_add_back(&__process_list, &child->link);
-  list_add_back(&current->children, &child->sibling_link);
+  k_list_add_back(&__process_list, &child->link);
+  k_list_add_back(&current->children, &child->sibling_link);
 
   process_unlock();
 
@@ -390,18 +390,18 @@ process_wait(pid_t pid, uintptr_t stat_loc, int options)
   process_lock();
 
   for (;;) {
-    struct ListLink *l;
+    struct KListLink *l;
     pid_t match = 0;
 
-    LIST_FOREACH(&current->children, l) {
-      struct Process *process = LIST_CONTAINER(l, struct Process, sibling_link);
+    KLIST_FOREACH(&current->children, l) {
+      struct Process *process = KLIST_CONTAINER(l, struct Process, sibling_link);
 
       if (process_match_pid(process, pid))
         match = process->pid;
 
       // Return immediately
       if (process->zombie) {
-        list_remove(&process->sibling_link);
+        k_list_remove(&process->sibling_link);
 
         process_unlock();
 
@@ -489,8 +489,8 @@ process_nanosleep(const struct timespec *rqtp, struct timespec *rmtp)
 
   rq_timeout = rqtp->tv_sec * TICKS_PER_SECOND + rqtp->tv_nsec / NS_PER_TICK;
 
-  k_semaphore_create(&sem, 0);
-  r = k_semaphore_get(&sem, rq_timeout, 1);
+  k_semaphore_init(&sem, 0);
+  r = k_semaphore_timed_get(&sem, rq_timeout);
 
   rm_timeout = MIN(tick_get() - start, rq_timeout);
 
@@ -499,7 +499,7 @@ process_nanosleep(const struct timespec *rqtp, struct timespec *rmtp)
     rmtp->tv_nsec = (rm_timeout % TICKS_PER_SECOND) * NS_PER_TICK;
   }
 
-  k_semaphore_destroy(&sem);
+  k_semaphore_fini(&sem);
 
   return r;
 }

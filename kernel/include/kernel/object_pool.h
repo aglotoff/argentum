@@ -26,11 +26,11 @@ struct KObjectPool {
   int               flags;
 
   /** Empty slabs (all blocks allocated). */
-  struct ListLink   slabs_empty;
+  struct KListLink   slabs_empty;
   /** Partial slabs (some blocks allocated, some free). */
-  struct ListLink   slabs_partial;
+  struct KListLink   slabs_partial;
   /** Complete slabs (all blocks free). */
-  struct ListLink   slabs_full;
+  struct KListLink   slabs_full;
 
   /** The number of object per one slab. */
   unsigned          slab_capacity;
@@ -55,7 +55,7 @@ struct KObjectPool {
   size_t            color_next;
 
   /** Link into the global list of pool descriptors. */
-  struct ListLink   link;
+  struct KListLink   link;
 
   /** Human-readable pool name (for debugging purposes). */
   char              name[K_OBJECT_POOL_NAME_MAX + 1];
@@ -74,7 +74,7 @@ struct KObjectTag {
  */
 struct KObjectSlab {
   /** Linkage in the pool. */
-  struct ListLink     link;
+  struct KListLink     link;
   /** The pool this slab belongs to. */
   struct KObjectPool *pool;
   /** Address of the buffer containing all memory blocks. */

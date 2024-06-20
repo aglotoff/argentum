@@ -54,10 +54,10 @@ static void                k_object_pool_slab_put(struct KObjectSlab *, void *);
 
 /** Linked list to keep track of all object pools in the system */
 static struct {
-  struct ListLink head;
+  struct KListLink head;
   struct KSpinLock lock;
 } pool_list = {
-  LIST_INITIALIZER(pool_list.head),
+  KLIST_INITIALIZER(pool_list.head),
   K_SPINLOCK_INITIALIZER("pool_list"),
 };
 
@@ -117,17 +117,17 @@ k_object_pool_destroy(struct KObjectPool *pool)
 
   k_spinlock_acquire(&pool->lock);
 
-  if (!list_empty(&pool->slabs_empty) || !list_empty(&pool->slabs_partial)) {
+  if (!k_list_empty(&pool->slabs_empty) || !k_list_empty(&pool->slabs_partial)) {
     k_spinlock_release(&pool->lock);
     return -EBUSY;
   }
 
   // Destroy all slabs
-  while (!list_empty(&pool->slabs_full)) {
+  while (!k_list_empty(&pool->slabs_full)) {
     struct KObjectSlab *slab;
 
-    slab = LIST_CONTAINER(pool->slabs_full.next, struct KObjectSlab, link);
-    list_remove(&slab->link);
+    slab = KLIST_CONTAINER(pool->slabs_full.next, struct KObjectSlab, link);
+    k_list_remove(&slab->link);
 
     k_object_pool_slab_destroy(slab);
   }
@@ -135,7 +135,7 @@ k_object_pool_destroy(struct KObjectPool *pool)
   k_spinlock_release(&pool->lock);
 
   k_spinlock_acquire(&pool_list.lock);
-  list_remove(&pool->link);
+  k_list_remove(&pool->link);
   k_spinlock_release(&pool_list.lock);
 
   k_object_pool_put(&pool_of_pools, pool);
@@ -158,12 +158,12 @@ k_object_pool_get(struct KObjectPool *pool)
   k_spinlock_acquire(&pool->lock);
 
   // First, try to use partially full slabs
-  if (!list_empty(&pool->slabs_partial)) {
-    slab = LIST_CONTAINER(pool->slabs_partial.next, struct KObjectSlab, link);
+  if (!k_list_empty(&pool->slabs_partial)) {
+    slab = KLIST_CONTAINER(pool->slabs_partial.next, struct KObjectSlab, link);
   } else {
     // Then full slabs
-    if (!list_empty(&pool->slabs_full)) {
-      slab = LIST_CONTAINER(pool->slabs_full.next, struct KObjectSlab, link);
+    if (!k_list_empty(&pool->slabs_full)) {
+      slab = KLIST_CONTAINER(pool->slabs_full.next, struct KObjectSlab, link);
     // Then try to allocate a new slab
     } else if ((slab = k_object_pool_slab_create(pool)) == NULL) {
       k_spinlock_release(&pool->lock);
@@ -172,8 +172,8 @@ k_object_pool_get(struct KObjectPool *pool)
 
     // Put the selected slab into the partial list. k_object_pool_slab_get() will
     // put it into the empty list later, if necessary
-    list_remove(&slab->link);
-    list_add_back(&pool->slabs_partial, &slab->link);
+    k_list_remove(&slab->link);
+    k_list_add_back(&pool->slabs_partial, &slab->link);
   } 
 
   obj = k_object_pool_slab_get(slab);
@@ -340,9 +340,9 @@ k_object_pool_init(struct KObjectPool *pool,
 
   k_spinlock_init(&pool->lock, name);
 
-  list_init(&pool->slabs_empty);
-  list_init(&pool->slabs_partial);
-  list_init(&pool->slabs_full);
+  k_list_init(&pool->slabs_empty);
+  k_list_init(&pool->slabs_partial);
+  k_list_init(&pool->slabs_full);
 
   pool->flags           = flags;
   pool->slab_capacity   = slab_capacity;
@@ -356,7 +356,7 @@ k_object_pool_init(struct KObjectPool *pool,
   pool->color_next      = 0;
 
   k_spinlock_acquire(&pool_list.lock);
-  list_add_back(&pool_list.head, &pool->link);
+  k_list_add_back(&pool_list.head, &pool->link);
   k_spinlock_release(&pool_list.lock);
 
   strncpy(pool->name, name, K_OBJECT_POOL_NAME_MAX);
@@ -451,7 +451,7 @@ k_object_pool_slab_create(struct KObjectPool *pool)
 
   // Add the newly allocated slab to the full list
   // object_pool_alloc will move it to the partial list
-  list_add_back(&pool->slabs_full, &slab->link);
+  k_list_add_back(&pool->slabs_full, &slab->link);
 
   return slab;
 }
@@ -521,8 +521,8 @@ k_object_pool_slab_get(struct KObjectSlab *slab)
   if (slab->used_count == pool->slab_capacity) {
     assert(slab->free == NULL);
 
-    list_remove(&slab->link);
-    list_add_back(&pool->slabs_empty, &slab->link);
+    k_list_remove(&slab->link);
+    k_list_add_back(&pool->slabs_empty, &slab->link);
   }
 
   return tag_to_object(slab, tag);
@@ -553,11 +553,11 @@ k_object_pool_slab_put(struct KObjectSlab *slab, void *obj)
 
   if (slab->used_count == 0) {
     // Slab becomes full
-    list_remove(&slab->link);
-    list_add_front(&pool->slabs_full, &slab->link);
+    k_list_remove(&slab->link);
+    k_list_add_front(&pool->slabs_full, &slab->link);
   } else if (slab->used_count == pool->slab_capacity - 1) {
     // Slab becomes partially full
-    list_remove(&slab->link);
-    list_add_front(&pool->slabs_partial, &slab->link);
+    k_list_remove(&slab->link);
+    k_list_add_front(&pool->slabs_partial, &slab->link);
   }
 }

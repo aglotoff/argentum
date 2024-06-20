@@ -18,7 +18,7 @@ struct Inode;
 struct Page;
 
 struct VMSpaceMapEntry {
-  struct ListLink link;
+  struct KListLink link;
   uintptr_t       start;
   size_t          length;
   int             flags;
@@ -27,7 +27,7 @@ struct VMSpaceMapEntry {
 struct VMSpace {
   l1_desc_t      *pgtab;
   struct KSpinLock lock;
-  struct ListLink areas;
+  struct KListLink areas;
 };
 
 void              vm_space_init(void);

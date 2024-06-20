@@ -15,7 +15,6 @@
 // Not good in multithreaded environment!
 
 static struct KObjectPool *queue_cache;
-static struct KObjectPool *sem_cache;
 
 /* Mutex functions: */
 err_t
@@ -65,15 +64,12 @@ sys_mutex_set_invalid(sys_mutex_t *mutex)
 err_t
 sys_sem_new(sys_sem_t *sem, u8_t count)
 {
-  struct KSemaphore *semaphore;
+  struct KSemaphore *ksemaphore;
 
-  if ((semaphore = (struct KSemaphore *) k_object_pool_get(sem_cache)) == NULL)
-    panic("k_object_pool_get");
-  if (k_semaphore_create(semaphore, count) != 0)
-    panic("k_semaphore_create");
+  if ((ksemaphore = k_semaphore_create(count)) == NULL)
+    return ERR_MEM;
 
-  *sem = semaphore;
-
+  *sem = ksemaphore;
   return ERR_OK;
 }
 
@@ -89,7 +85,7 @@ sys_arch_sem_wait(sys_sem_t *sem, u32_t timeout)
   unsigned long start, end;
 
   start = tick_get();
-  if (k_semaphore_get(*sem, timeout / MS_PER_TICK, 1) < 0)
+  if (k_semaphore_timed_get(*sem, timeout / MS_PER_TICK) < 0)
     return SYS_ARCH_TIMEOUT;
   end = tick_get();
   
@@ -99,7 +95,7 @@ sys_arch_sem_wait(sys_sem_t *sem, u32_t timeout)
 void
 sys_sem_free(sys_sem_t *sem)
 {
-  k_object_pool_put(sem_cache, *sem);
+  k_semaphore_destroy(*sem);
 }
 
 int
@@ -220,7 +216,6 @@ void
 sys_init(void)
 {
   queue_cache = k_object_pool_create("queue", sizeof(struct KMailBox), 0, NULL, NULL);
-  sem_cache   = k_object_pool_create("sem", sizeof(struct KSemaphore), 0, NULL, NULL);
 }
 
 int errno;

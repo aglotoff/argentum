@@ -16,7 +16,7 @@ void
 k_mutex_system_init(void)
 {
   if ((mutex_pool = k_object_pool_create("mutex", sizeof(struct KMutex), 0,
-                                       k_mutex_ctor, k_mutex_dtor)) == NULL)
+                                         k_mutex_ctor, k_mutex_dtor)) == NULL)
     panic("cannot create mutex pool");
 }
 
@@ -30,8 +30,6 @@ void
 k_mutex_init(struct KMutex *mutex, const char *name)
 {
   k_mutex_ctor(mutex, sizeof(struct KMutex));
-
-  mutex->owner = NULL;
   mutex->name  = name;
 }
 
@@ -39,7 +37,7 @@ void
 k_mutex_fini(struct KMutex *mutex)
 {
   _k_sched_spin_lock();
-  _k_sched_wakeup_all(&mutex->queue, -EINVAL);
+  _k_sched_wakeup_all_locked(&mutex->queue, -EINVAL);
   _k_sched_spin_unlock();
 }
 
@@ -114,7 +112,7 @@ k_mutex_unlock(struct KMutex *mutex)
   // TODO: priority inheritance
 
   mutex->owner = NULL;
-  _k_sched_wakeup_one(&mutex->queue, 0);
+  _k_sched_wakeup_one_locked(&mutex->queue, 0);
 
   _k_sched_spin_unlock();
   return 0;
@@ -144,7 +142,8 @@ k_mutex_ctor(void *p, size_t n)
   struct KMutex *mutex = (struct KMutex *) p;
   (void) n;
 
-  list_init(&mutex->queue);
+  k_list_init(&mutex->queue);
+  mutex->owner = NULL;
 }
 
 static void
@@ -153,5 +152,5 @@ k_mutex_dtor(void *p, size_t n)
   struct KMutex *mutex = (struct KMutex *) p;
   (void) n;
 
- assert(!list_empty(&mutex->queue));
+  assert(!k_list_empty(&mutex->queue));
 }

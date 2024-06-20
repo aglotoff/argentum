@@ -20,8 +20,8 @@ k_mailbox_init(struct KMailBox *mbox, size_t msg_size, void *start, size_t size)
   mbox->max_size  = size / msg_size;
   mbox->size      = 0;
 
-  list_init(&mbox->receive_list);
-  list_init(&mbox->send_list);
+  k_list_init(&mbox->receive_list);
+  k_list_init(&mbox->send_list);
 
   return 0;
 }
@@ -30,8 +30,8 @@ int
 k_mailbox_destroy(struct KMailBox *mbox)
 {
   _k_sched_spin_lock();
-  _k_sched_wakeup_all(&mbox->receive_list, -EINVAL);
-  _k_sched_wakeup_all(&mbox->send_list, -EINVAL);
+  _k_sched_wakeup_all_locked(&mbox->receive_list, -EINVAL);
+  _k_sched_wakeup_all_locked(&mbox->send_list, -EINVAL);
   _k_sched_spin_unlock();
 
   return 0;
@@ -72,7 +72,7 @@ k_mailbox_receive(struct KMailBox *mbox, void *msg, unsigned long timeout,
     mbox->read_ptr = mbox->buf_start;
 
   if (mbox->size-- == mbox->max_size)
-    _k_sched_wakeup_one(&mbox->send_list, 0);
+    _k_sched_wakeup_one_locked(&mbox->send_list, 0);
 
   _k_sched_spin_unlock();
 
@@ -116,7 +116,7 @@ k_mailbox_send(struct KMailBox *mbox, const void *msg, unsigned long timeout,
     mbox->write_ptr = mbox->buf_start;
 
   if (mbox->size++ == 0)
-    _k_sched_wakeup_one(&mbox->receive_list, 0);
+    _k_sched_wakeup_one_locked(&mbox->receive_list, 0);
 
   _k_sched_spin_unlock();
 

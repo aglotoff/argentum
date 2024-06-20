@@ -505,10 +505,10 @@ breakbreak:;
        * got service name, concentrator name, and/or host unique.
        * ignore if we have no interfaces with IFF_PASSIVE|IFF_UP.
        */
-      if (LIST_EMPTY(&pppoe_softc_list)) {
+      if (k_list_empty(&pppoe_softc_list)) {
         goto done;
       }
-      LIST_FOREACH(sc, &pppoe_softc_list, sc_list) {
+      KLIST_FOREACH(sc, &pppoe_softc_list, sc_list) {
         if (!(sc->sc_sppp.pp_if.if_flags & IFF_UP)) {
           continue;
         }
@@ -552,7 +552,7 @@ breakbreak:;
       sc = pppoe_find_softc_by_hunique(ac_cookie, ac_cookie_len, netif);
       if (sc == NULL) {
         /* be quiet if there is not a single pppoe instance */
-        if (!LIST_EMPTY(&pppoe_softc_list)) {
+        if (!k_list_empty(&pppoe_softc_list)) {
           PPPDEBUG(LOG_DEBUG, ("pppoe: received PADR but could not find request for it\n"));
         }
         goto done;
@@ -1165,7 +1165,7 @@ pppoe_ifattach_hook(void *arg, struct pbuf **mp, struct netif *ifp, int dir)
     return 0;
   }
 
-  LIST_FOREACH(sc, &pppoe_softc_list, sc_list) {
+  KLIST_FOREACH(sc, &pppoe_softc_list, sc_list) {
     if (sc->sc_ethif != ifp) {
       continue;
     }

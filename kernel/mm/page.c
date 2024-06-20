@@ -46,7 +46,7 @@ unsigned page_free_count = 0;
 
 /** The list of free pages, grouped by block order */
 static struct {
-  struct ListLink link;
+  struct KListLink link;
   unsigned long  *bitmap;
 } page_free_list[PAGE_ORDER_MAX + 1];
 /** The spinlock protecting the allocator structures */
@@ -64,7 +64,7 @@ static void        *boot_alloc(size_t);
 
 static struct Page *page_buddy(struct Page *, unsigned);
 static void         page_list_add(struct Page *, unsigned);
-static void         page_list_remove(struct Page *, unsigned);
+static void         page_k_list_remove(struct Page *, unsigned);
 static int          page_list_contains(struct Page *, unsigned);
 
 /**
@@ -86,7 +86,7 @@ page_init_low(void)
 
   // Initialize the free page list
   for (i = 0; i <= PAGE_ORDER_MAX; i++) {
-    list_init(&page_free_list[i].link);
+    k_list_init(&page_free_list[i].link);
 
     bitmap_len = ROUND_UP(page_count / (1U << i), BITS_PER_BYTE);
     page_free_list[i].bitmap = (unsigned long *) boot_alloc(bitmap_len);
@@ -169,7 +169,7 @@ page_alloc_block(unsigned order, int flags)
   k_spinlock_acquire(&page_lock);
 
   for (o = order; o <= PAGE_ORDER_MAX; o++)
-    if (!list_empty(&page_free_list[o].link))
+    if (!k_list_empty(&page_free_list[o].link))
       break;
 
   if (o > PAGE_ORDER_MAX) {
@@ -178,9 +178,9 @@ page_alloc_block(unsigned order, int flags)
     return NULL;
   }
 
-  page = LIST_CONTAINER(page_free_list[o].link.next, struct Page, link);
+  page = KLIST_CONTAINER(page_free_list[o].link.next, struct Page, link);
 
-  page_list_remove(page, o);
+  page_k_list_remove(page, o);
   page_free_count -= 1U << order;
 
   // Split
@@ -224,7 +224,7 @@ page_free_block(struct Page *page, unsigned order)
       break;
 
     // Combine with buddy
-    page_list_remove(buddy, order);
+    page_k_list_remove(buddy, order);
     if (buddy < page)
       page = buddy;
   }
@@ -317,7 +317,7 @@ page_list_add(struct Page *page, unsigned order)
   assert((block_idx % (1U << order)) == 0);
   assert(!page_list_contains(page, order));
 
-  list_add_front(&page_free_list[order].link, &page->link);
+  k_list_add_front(&page_free_list[order].link, &page->link);
 
   map_idx = block_idx / (1 << order);
   page_free_list[order].bitmap[BITMAP_OFFSET(map_idx)] |= BITMAP_MASK(map_idx);
@@ -330,7 +330,7 @@ page_list_add(struct Page *page, unsigned order)
  * @param order The block order.
  */
 static void
-page_list_remove(struct Page *page, unsigned order)
+page_k_list_remove(struct Page *page, unsigned order)
 {
   unsigned block_idx, map_idx;
 
@@ -339,7 +339,7 @@ page_list_remove(struct Page *page, unsigned order)
   assert((block_idx % (1U << order)) == 0);
   assert(page_list_contains(page, order));
 
-  list_remove(&page->link);
+  k_list_remove(&page->link);
 
   map_idx = block_idx / (1U << order);
   page_free_list[order].bitmap[BITMAP_OFFSET(map_idx)] &= ~BITMAP_MASK(map_idx);

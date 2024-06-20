@@ -182,7 +182,7 @@ void
 k_thread_exit(void)
 {
   struct KThread *thread = k_thread_current();
-  extern struct ListLink threads_to_destroy;
+  extern struct KListLink threads_to_destroy;
 
   if (thread == NULL)
     panic("no current thread");
@@ -192,7 +192,7 @@ k_thread_exit(void)
   _k_sched_spin_lock();
 
   thread->state = THREAD_STATE_DESTROYED;
-  list_add_back(&threads_to_destroy, &thread->link);
+  k_list_add_back(&threads_to_destroy, &thread->link);
 
   _k_sched_yield();
 

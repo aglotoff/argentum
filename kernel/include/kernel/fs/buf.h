@@ -28,8 +28,8 @@ struct Buf {
   dev_t            dev;               ///< ID of the device this block belongs to
   int              flags;             ///< Status flags
   int              ref_count;         ///< The number of references to the block
-  struct ListLink  cache_link;        ///< Link into the buf cache
-  struct ListLink  queue_link;        ///< Link into the driver queue
+  struct KListLink  cache_link;        ///< Link into the buf cache
+  struct KListLink  queue_link;        ///< Link into the driver queue
   struct KWaitQueue wait_queue;      ///< Processes waiting for the block data
   struct KMutex    mutex;             ///< Mutex protecting the block data
   size_t           block_size;        ///< Must be BLOCK_SIZE
