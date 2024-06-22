@@ -20,6 +20,7 @@ struct KThread;
  * while holding the lock.
  */
 struct KMutex {
+  struct KListLink  link;
   struct KSpinLock  lock;
   /** The task currently holding the mutex. */
   struct KThread   *owner;

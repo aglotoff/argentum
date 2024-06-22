@@ -67,12 +67,14 @@ struct KThread {
   /** CPU */
   struct KCpu       *cpu;
 
+  struct KListLink   mutex_list;
+
   /** Bottom of the kernel-mode stack */
-  void             *kstack;
+  void              *kstack;
   /** Address of the current trap frame on the stack */
-  struct TrapFrame *tf;
+  struct TrapFrame  *tf;
   /** Saved kernel context */
-  struct Context   *context;
+  struct Context    *context;
 
   /** Entry point function */
   void            (*entry)(void *);

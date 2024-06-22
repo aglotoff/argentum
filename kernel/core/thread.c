@@ -160,6 +160,7 @@ k_thread_create(struct Process *process, void (*entry)(void *), void *arg,
   stack = (uint8_t *) page2kva(stack_page);
   stack_page->ref_count++;
 
+  k_list_init(&thread->mutex_list);
   thread->flags    = 0;
   thread->priority = priority;
   thread->state    = THREAD_STATE_SUSPENDED;

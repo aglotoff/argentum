@@ -8,15 +8,15 @@
 
 #include "core_private.h"
 
-static struct KObjectPool *mutex_pool;
-
 static void k_mutex_ctor(void *, size_t);
 static void k_mutex_dtor(void *, size_t);
+
+static struct KObjectPool *k_mutex_pool;
 
 void
 k_mutex_system_init(void)
 {
-  if ((mutex_pool = k_object_pool_create("mutex", sizeof(struct KMutex), 0,
+  if ((k_mutex_pool = k_object_pool_create("mutex", sizeof(struct KMutex), 0,
                                          k_mutex_ctor, k_mutex_dtor)) == NULL)
     panic("cannot create mutex pool");
 }
@@ -47,7 +47,7 @@ k_mutex_create(const char *name)
 {
   struct KMutex *mutex;
 
-  if ((mutex = (struct KMutex *) k_object_pool_get(mutex_pool)) == NULL)
+  if ((mutex = (struct KMutex *) k_object_pool_get(k_mutex_pool)) == NULL)
     return NULL;
 
   mutex->owner = NULL;
@@ -60,7 +60,7 @@ void
 k_mutex_destroy(struct KMutex *mutex)
 {
   k_mutex_fini(mutex);
-  k_object_pool_put(mutex_pool, mutex);
+  k_object_pool_put(k_mutex_pool, mutex);
 }
 
 /**
@@ -105,6 +105,7 @@ k_mutex_lock(struct KMutex *mutex)
 
   _k_sched_lock();
   mutex->original_priority = my_task->priority;
+  k_list_add_front(&my_task->mutex_list, &mutex->link);
   _k_sched_unlock();
 
   k_spinlock_release(&mutex->lock);
@@ -129,8 +130,11 @@ k_mutex_unlock(struct KMutex *mutex)
 
   _k_sched_lock();
 
-  _k_sched_wakeup_one_locked(&mutex->queue, 0);
+  k_list_remove(&mutex->link);
+  // TODO: restore priority?
   _k_sched_set_priority(my_task, mutex->original_priority);
+
+  _k_sched_wakeup_one_locked(&mutex->queue, 0);
 
   _k_sched_unlock();
   

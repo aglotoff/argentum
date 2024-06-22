@@ -129,6 +129,7 @@ sys_get_num(void)
 }
 
 // Get the n-th argument from the current process' trap frame.
+// Support up to 6 system call arguments
 static int32_t
 sys_get_arg(int n)
 {
@@ -148,10 +149,7 @@ sys_get_arg(int n)
   case 5:
     return current->thread->tf->r5;
   default:
-    if (n < 0)
-      panic("Invalid argument number: %d", n);
-
-    // TODO: grab additional parameters from the user stack.
+    panic("Invalid argument number: %d", n);
     return 0;
   }
 }

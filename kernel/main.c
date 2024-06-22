@@ -22,6 +22,7 @@
 #include <kernel/pipe.h>
 #include <kernel/process.h>
 #include <kernel/sd.h>
+#include <kernel/mailbox.h>
 #include <kernel/net.h>
 #include <kernel/semaphore.h>
 
@@ -121,11 +122,15 @@ void main(void)
 
   // Complete the memory manager initialization
   page_init_high(); // Physical page allocator (higher memory)
-  k_object_pool_system_init();      // Object allocator
-  vm_space_init();  // Virtual memory manager
 
+  // Initialize core services
+  k_object_pool_system_init();
   k_mutex_system_init();
   k_semaphore_system_init();
+  k_mailbox_system_init();
+  k_sched_init();
+
+  vm_space_init();  // Virtual memory manager
 
   // Initialize the device drivers
   rtc_init(); // Real-time clock
@@ -135,7 +140,7 @@ void main(void)
   // Initialize the remaining kernel services
   buf_init();     // Buffer cache
   file_init();    // File table
-  k_sched_init();   // Scheduler
+  
   net_init();     // Network
   pipe_init();    // Pipes subsystem
   process_init(); // Process table

@@ -12,10 +12,6 @@
 #include "cc.h"
 #include "sys_arch.h"
 
-// Not good in multithreaded environment!
-
-static struct KObjectPool *queue_cache;
-
 /* Mutex functions: */
 err_t
 sys_mutex_new(sys_mutex_t *mutex)
@@ -115,21 +111,13 @@ sys_sem_set_invalid(sys_sem_t *sem)
 err_t
 sys_mbox_new(sys_mbox_t *mbox, int size)
 {
-  struct KMailBox *queue;
-  struct Page *page;
+  struct KMailBox *kmailbox;
 
-  (void) size;
+  if ((kmailbox = k_mailbox_create(sizeof(void *), size)) == NULL)
+    return ERR_MEM;
 
-  if ((queue = (struct KMailBox *) k_object_pool_get(queue_cache)) == NULL)
-    panic("k_object_pool_get");
-  if ((page = page_alloc_one(0)) == NULL)
-    panic("page_alloc");
-  if (k_mailbox_init(queue, sizeof(void *), page2kva(page), PAGE_SIZE) < 0)
-    panic("k_mailbox_init");
-
-  *mbox = queue;
-
-  return 0;
+  *mbox = kmailbox;
+  return ERR_OK;
 }
 
 void
@@ -174,7 +162,7 @@ sys_arch_mbox_tryfetch(sys_mbox_t *mbox, void **msg)
 void
 sys_mbox_free(sys_mbox_t *mbox)
 {
-  k_object_pool_put(queue_cache, *mbox);
+  k_mailbox_destroy(*mbox);
 }
 
 int
@@ -215,7 +203,6 @@ __errno(void)
 void
 sys_init(void)
 {
-  queue_cache = k_object_pool_create("queue", sizeof(struct KMailBox), 0, NULL, NULL);
 }
 
 int errno;
