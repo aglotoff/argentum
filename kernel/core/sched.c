@@ -6,6 +6,7 @@
 #include <kernel/cpu.h>
 #include <kernel/irq.h>
 #include <kernel/thread.h>
+#include <kernel/mutex.h>
 #include <kernel/spinlock.h>
 #include <kernel/process.h>
 #include <kernel/vmspace.h>
@@ -162,40 +163,18 @@ _k_sched_yield_locked(void)
   _k_cpu()->irq_flags = irq_flags;
 }
 
-// Compare thread priorities. Note that a smaller priority value corresponds
-// to a higher priority! Returns a number less than, equal to, or greater than
-// zero if t1's priority is correspondingly less than, equal to, or greater than
-// t2's priority.
-static int
-k_sched_priority_cmp(struct KThread *t1, struct KThread *t2)
-{
-  return t2->priority - t1->priority; 
-}
-
-// Check whether a reschedule is required (taking into account the priority
-// of a thread most recently added to the run queue)
 void
-_k_sched_may_yield(struct KThread *candidate)
+_k_sched_add(struct KListLink *queue, struct KThread *thread)
 {
-  struct KCpu *my_cpu;
-  struct KThread *my_thread;
+  struct KListLink *l;
 
-  if (!k_spinlock_holding(&_k_sched_spinlock))
-    panic("scheduler not locked");
-
-  my_cpu = _k_cpu();
-  my_thread = my_cpu->thread;
-
-  if ((my_thread != NULL) && (k_sched_priority_cmp(candidate, my_thread) > 0)) {
-    if (my_cpu->lock_count > 0) {
-      // Cannot yield right now, delay until the last call to k_irq_end()
-      // or thread_unlock().
-      my_thread->flags |= THREAD_FLAG_RESCHEDULE;
-    } else {
-      _k_sched_enqueue(my_thread);
-      _k_sched_yield_locked();
-    }
+  for (l = queue->next; l != queue; l++) {
+    struct KThread *other_thread = KLIST_CONTAINER(l, struct KThread, link);
+    if (_k_sched_priority_cmp(thread, other_thread) > 0)
+      break;
   }
+
+  k_list_add_back(l, &thread->link);
 }
 
 /**
@@ -236,7 +215,7 @@ _k_sched_sleep(struct KListLink *queue, int state, unsigned long timeout,
   my_thread->state = state;
 
   if (queue != NULL)
-    k_list_add_back(queue, &my_thread->link);
+    _k_sched_add(queue, my_thread);
 
   _k_sched_yield_locked();
 
@@ -268,7 +247,8 @@ _k_sched_set_priority(struct KThread *thread, int priority)
     _k_sched_enqueue(thread);
     break;
   case THREAD_STATE_MUTEX:
-    // TODO
+    // Update mutex priority and its owner priority
+    
   default:
     break;
   }
@@ -282,12 +262,24 @@ _k_sched_resume(struct KThread *thread, int result)
 
   switch (thread->state) {
   case THREAD_STATE_SEMAPHORE:
-    // TODO
+    k_list_remove(&thread->link);
     break;
   case THREAD_STATE_SLEEP:
+    k_list_remove(&thread->link);
     break;
   case THREAD_STATE_MUTEX:
-    // TODO
+    assert(thread->wait_mutex != NULL);
+    assert(thread->wait_mutex->owner != NULL);
+
+    k_list_remove(&thread->link);
+    _k_mutex_recalc_priority(thread->wait_mutex);
+
+    //_k_sched_calc_priority(thread->wait_mutex->owner);
+    thread->wait_mutex = NULL;
+
+    // TODO: update the owner's priority (probably triggering entire chain of
+    // priority updates)
+
     break;
   default:
     return;
@@ -295,51 +287,67 @@ _k_sched_resume(struct KThread *thread, int result)
 
   thread->sleep_result = result;
 
-  k_list_remove(&thread->link);
-
   _k_sched_enqueue(thread);
   _k_sched_may_yield(thread);
 }
 
+// Resume all threads waiting on the given queue
+// The caller must be holding the scheduler lock
 void
-_k_sched_wakeup_all_locked(struct KListLink *thread_list, int result)
+_k_sched_wakeup_all_locked(struct KListLink *queue, int result)
 {
   if (!k_spinlock_holding(&_k_sched_spinlock))
     panic("sched not locked");
-  
-  while (!k_list_empty(thread_list)) {
-    struct KListLink *link = thread_list->next;
+
+  while (!k_list_empty(queue)) {
+    struct KListLink *link = queue->next;
     struct KThread *thread = KLIST_CONTAINER(link, struct KThread, link);
 
     _k_sched_resume(thread, result);
   }
 }
 
-/**
- * Wake up the thread with the highest priority.
- *
- * @param queue Pointer to the head of the wait queue.
- */
-void
+// Resume and return the highest priority thread waiting on the given queue
+// The caller must be holding the scheduler lock
+struct KThread *
 _k_sched_wakeup_one_locked(struct KListLink *queue, int result)
 {
-  struct KListLink *l;
-  struct KThread *highest;
+  struct KThread *thread;
 
   if (!k_spinlock_holding(&_k_sched_spinlock))
     panic("sched not locked");
 
-  highest = NULL;
+  if (k_list_empty(queue))
+    return NULL;
 
-  KLIST_FOREACH(queue, l) {
-    struct KThread *t = KLIST_CONTAINER(l, struct KThread, link);
-    
-    if ((highest == NULL) || (k_sched_priority_cmp(t, highest) > 0))
-      highest = t;
+  thread = KLIST_CONTAINER(queue->next, struct KThread, link);
+  _k_sched_resume(thread, result);
+
+  return thread;
+}
+
+// Check whether a reschedule is required (taking into account the priority
+// of a thread most recently added to the run queue)
+void
+_k_sched_may_yield(struct KThread *thread)
+{
+  struct KCpu *my_cpu;
+  struct KThread *my_thread;
+
+  if (!k_spinlock_holding(&_k_sched_spinlock))
+    panic("scheduler not locked");
+
+  my_cpu = _k_cpu();
+  my_thread = my_cpu->thread;
+
+  if ((my_thread != NULL) && (_k_sched_priority_cmp(thread, my_thread) > 0)) {
+    if (my_cpu->lock_count > 0) {
+      // Cannot yield right now, delay until the last call to k_irq_end()
+      // or thread_unlock().
+      my_thread->flags |= THREAD_FLAG_RESCHEDULE;
+    } else {
+      _k_sched_enqueue(my_thread);
+      _k_sched_yield_locked();
+    }
   }
-
-  if (highest != NULL)
-    _k_sched_resume(highest, result);
-
-  // TODO: may be of a higher priority than the current thread
 }

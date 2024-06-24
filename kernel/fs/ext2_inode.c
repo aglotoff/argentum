@@ -326,6 +326,8 @@ ext2_read(struct Inode *inode, void *buf, size_t nbyte, off_t off)
       // Read the block contents
       struct Buf *buf;
 
+      // cprintf("Read block %d\n", block_id);
+
       if ((buf = buf_read(block_id, sb->block_size, inode->dev)) == NULL) {
         buf_release(buf);
         return -EIO;

@@ -51,23 +51,26 @@ struct KObjectPool;
 extern struct KObjectPool *thread_cache;
 
 struct Process;
+struct KMutex;
 
 /**
  * Scheduler task state.
  */
 struct KThread {
   /** Link into the list containing this task */
-  struct KListLink   link;
+  struct KListLink  link;
   /** Current task state */
   int               state;
   /** Task priority value */
   int               priority;
+  int               saved_priority;
   /** Various flags */
   int               flags;
   /** CPU */
   struct KCpu       *cpu;
 
   struct KListLink   mutex_list;
+  struct KMutex     *wait_mutex;
 
   /** Bottom of the kernel-mode stack */
   void              *kstack;

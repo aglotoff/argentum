@@ -98,8 +98,8 @@ sys_dispatch(void)
 
   if ((num < (int) ARRAY_SIZE(syscalls)) && syscalls[num]) {
     int r = syscalls[num]();
-    //  if (r < 0 || num == __SYS_FCNTL) 
-    //    cprintf("syscall(%d) -> %d\n", num, r);
+    // if (r < 0)
+    //   cprintf("syscall(%d) -> %d\n", num, r);
     return r;
   }
 

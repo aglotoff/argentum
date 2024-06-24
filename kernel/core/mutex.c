@@ -10,15 +10,19 @@
 
 static void k_mutex_ctor(void *, size_t);
 static void k_mutex_dtor(void *, size_t);
+static void k_mutex_init_common(struct KMutex *, const char *);
 
 static struct KObjectPool *k_mutex_pool;
 
 void
 k_mutex_system_init(void)
 {
-  if ((k_mutex_pool = k_object_pool_create("mutex", sizeof(struct KMutex), 0,
-                                         k_mutex_ctor, k_mutex_dtor)) == NULL)
-    panic("cannot create mutex pool");
+  if ((k_mutex_pool = k_object_pool_create("mutex",
+                                           sizeof(struct KMutex),
+                                           0,
+                                           k_mutex_ctor,
+                                           k_mutex_dtor)) == NULL)
+    panic("cannot create the mutex pool");
 }
 
 /**
@@ -31,7 +35,7 @@ void
 k_mutex_init(struct KMutex *mutex, const char *name)
 {
   k_mutex_ctor(mutex, sizeof(struct KMutex));
-  mutex->name  = name;
+  k_mutex_init_common(mutex, name);
 }
 
 void
@@ -50,8 +54,7 @@ k_mutex_create(const char *name)
   if ((mutex = (struct KMutex *) k_object_pool_get(k_mutex_pool)) == NULL)
     return NULL;
 
-  mutex->owner = NULL;
-  mutex->name  = name;
+  k_mutex_init_common(mutex, name);
 
   return mutex;
 }
@@ -74,43 +77,75 @@ k_mutex_lock(struct KMutex *mutex)
   struct KThread *my_task = k_thread_current();
   int r;
 
-  k_spinlock_acquire(&mutex->lock);
+  _k_sched_lock();
 
   // Sleep until the mutex becomes available
   while (mutex->owner != NULL) {
     if (mutex->owner == my_task) {
-      k_spinlock_release(&mutex->lock);
+      _k_sched_unlock();
       return -EDEADLK;
     }
 
-    _k_sched_lock();
+    if (mutex->priority > my_task->priority) {
+      mutex->priority = my_task->priority;
+      
+      // Temporarily raise the owner's priority
+      if (my_task->priority < mutex->owner->priority)
+        _k_sched_set_priority(mutex->owner, my_task->priority);
+    }
 
-    // Priority inheritance
-    if (mutex->owner->priority > my_task->priority)
-      _k_sched_set_priority(mutex->owner, my_task->priority);
-
-    k_spinlock_release(&mutex->lock);
-
+    my_task->wait_mutex = mutex;
     r = _k_sched_sleep(&mutex->queue, THREAD_STATE_MUTEX, 0, NULL);
 
-    _k_sched_unlock();
-
-    if (r < 0)
+    if (r < 0) {
+      _k_sched_unlock();
       return r;
-
-    k_spinlock_acquire(&mutex->lock);
+    }
   }
 
   mutex->owner = my_task;
 
-  _k_sched_lock();
-  mutex->original_priority = my_task->priority;
+  // The highest-priority thread always locks the mutex first
+  assert(my_task->priority < mutex->priority);
+
   k_list_add_front(&my_task->mutex_list, &mutex->link);
+
   _k_sched_unlock();
 
-  k_spinlock_release(&mutex->lock);
-
   return 0;
+}
+
+void
+_k_sched_calc_priority(struct KThread *thread)
+{
+  struct KListLink *l;
+  int priority;
+  
+  priority = thread->saved_priority;
+  KLIST_FOREACH(&thread->mutex_list, l) {
+    struct KMutex *mutex = KLIST_CONTAINER(l, struct KMutex, link);
+
+    if (mutex->priority < priority)
+      priority = mutex->priority;
+  }
+
+  assert(priority >= thread->priority);
+
+  if (priority > thread->priority)
+    _k_sched_set_priority(thread, priority);
+}
+
+void
+_k_mutex_recalc_priority(struct KMutex *mutex)
+{
+  if (k_list_empty(&mutex->queue)) {
+    mutex->priority = THREAD_MAX_PRIORITIES;
+  } else {
+    struct KThread *thread;
+
+    thread = KLIST_CONTAINER(mutex->queue.next, struct KThread, link);
+    mutex->priority = thread->priority;
+  }
 }
 
 /**
@@ -121,26 +156,21 @@ k_mutex_lock(struct KMutex *mutex)
 int
 k_mutex_unlock(struct KMutex *mutex)
 {
-  struct KThread *my_task = k_thread_current();
-
   if (!k_mutex_holding(mutex))
     panic("not holding");
-  
-  k_spinlock_acquire(&mutex->lock);
 
   _k_sched_lock();
 
   k_list_remove(&mutex->link);
-  // TODO: restore priority?
-  _k_sched_set_priority(my_task, mutex->original_priority);
 
   _k_sched_wakeup_one_locked(&mutex->queue, 0);
+  _k_mutex_recalc_priority(mutex);
 
-  _k_sched_unlock();
-  
+  _k_sched_calc_priority(k_thread_current());
+
   mutex->owner = NULL;
 
-  k_spinlock_release(&mutex->lock);
+  _k_sched_unlock();
 
   return 0;
 }
@@ -156,9 +186,9 @@ k_mutex_holding(struct KMutex *mutex)
 {
   struct KThread *owner;
 
-  k_spinlock_acquire(&mutex->lock);
+  _k_sched_lock();
   owner = mutex->owner;
-  k_spinlock_release(&mutex->lock);
+  _k_sched_unlock();
 
   return (owner != NULL) && (owner == k_thread_current());
 }
@@ -169,9 +199,7 @@ k_mutex_ctor(void *p, size_t n)
   struct KMutex *mutex = (struct KMutex *) p;
   (void) n;
 
-  k_spinlock_init(&mutex->lock, "k_mutex");
   k_list_init(&mutex->queue);
-  mutex->owner = NULL;
 }
 
 static void
@@ -181,4 +209,12 @@ k_mutex_dtor(void *p, size_t n)
   (void) n;
 
   assert(!k_list_empty(&mutex->queue));
+}
+
+static void
+k_mutex_init_common(struct KMutex *mutex, const char *name)
+{
+  mutex->owner    = NULL;
+  mutex->name     = name;
+  mutex->priority = THREAD_MAX_PRIORITIES;
 }

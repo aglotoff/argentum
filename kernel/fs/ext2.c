@@ -436,6 +436,7 @@ struct FSOps ext2fs_ops = {
   .trunc        = ext2_trunc,
   .rmdir        = ext2_rmdir,
   .readdir      = ext2_readdir,
+  .readlink     = ext2_readlink,
   .create       = ext2_create,
   .mkdir        = ext2_mkdir,
   .mknod        = ext2_mknod,
@@ -497,8 +498,7 @@ ext2_readdir(struct Inode *dir, void *buf, FillDirFunc filldir, off_t off)
   struct Ext2DirEntry de;
   ssize_t nread;
 
-  if (!S_ISDIR(dir->mode))
-    panic("not a directory");
+  assert(S_ISDIR(dir->mode));
 
   if (off >= dir->size)
     return 0;
@@ -509,4 +509,22 @@ ext2_readdir(struct Inode *dir, void *buf, FillDirFunc filldir, off_t off)
   filldir(buf, de.inode, de.name, de.name_len);
 
   return de.rec_len;
+}
+
+#define MAX_FAST_SYMLINK_NAMELEN  60
+
+ssize_t
+ext2_readlink(struct Inode *inode, char *buf, size_t n)
+{
+  struct Ext2InodeExtra *extra = (struct Ext2InodeExtra *) inode->extra;
+
+  assert(IS_ISLNK(inode->mode));
+
+  if ((inode->size <= MAX_FAST_SYMLINK_NAMELEN) && (extra->blocks == 0)) {
+    ssize_t nread = MIN((size_t) inode->size, n);
+    memmove(buf, extra->block, nread);
+    return nread;
+  }
+
+  return ext2_read(inode, buf, n, 0);
 }

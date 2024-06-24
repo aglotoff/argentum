@@ -5,6 +5,7 @@
 
 #include <kernel/fs/fs.h>
 #include <kernel/fs/file.h>
+#include <kernel/cprintf.h>
 
 #define STATUS_MASK (O_APPEND | O_NONBLOCK | O_SYNC)
 
@@ -84,8 +85,6 @@ fs_open(const char *path, int oflag, mode_t mode, struct File **fstore)
     f->offset = pp->inode->size;
 
   fs_inode_unlock(pp->inode);
-
-  f->ref_count++;
 
   *fstore = f;
 

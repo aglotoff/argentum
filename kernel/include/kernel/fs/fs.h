@@ -70,6 +70,7 @@ struct FSOps {
   ssize_t         (*write)(struct Inode *, const void *, size_t, off_t);
   int             (*rmdir)(struct Inode *, struct Inode *);
   ssize_t         (*readdir)(struct Inode *, void *, FillDirFunc, off_t);
+  ssize_t         (*readlink)(struct Inode *, char *, size_t);
   int             (*create)(struct Inode *, char *, mode_t, struct Inode **);
   int             (*mkdir)(struct Inode *, char *, mode_t, struct Inode **);
   int             (*mknod)(struct Inode *, char *, mode_t, dev_t, struct Inode **);

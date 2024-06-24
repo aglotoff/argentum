@@ -50,6 +50,8 @@ fs_path_create(const char *name, struct Inode *inode, struct PathNode *parent)
     k_spinlock_release(&path_lock);
   }
 
+  // cprintf("[create %s]\n", name);
+
   return path;
 }
 
@@ -60,7 +62,7 @@ fs_path_duplicate(struct PathNode *path)
   path->ref_count++;
   k_spinlock_release(&path_lock);
 
-  // cprintf("[%s: %d]\n", path->name, path->ref_count);
+  // cprintf("[dup %s]\n", path->name);
 
   return path;
 }
@@ -88,6 +90,8 @@ fs_path_put(struct PathNode *path)
 
   path->ref_count--;
 
+  // cprintf("[put %s]\n", path->name);
+
   // Move up the tree and remove all unused nodes. A node is considered unused
   // in one of two cases:
   // a) the reference count is 0
@@ -108,7 +112,7 @@ fs_path_put(struct PathNode *path)
 
     k_spinlock_release(&path_lock);
 
-    //cprintf("[drop %s %p]\n", path->name, path->inode);
+    // cprintf("[drop %s %p]\n", path->name, path->inode);
 
     if (path->inode != NULL)
       fs_inode_put(path->inode);

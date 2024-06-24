@@ -844,6 +844,8 @@ fs_inode_chown(struct Inode *inode, uid_t uid, gid_t gid)
 ssize_t
 fs_inode_readlink(struct Inode *inode, char *buf, size_t bufsize)
 { 
+  ssize_t r;
+  
   fs_inode_lock(inode);
 
   if (!fs_permission(inode, FS_PERM_READ, 0))
@@ -852,12 +854,9 @@ fs_inode_readlink(struct Inode *inode, char *buf, size_t bufsize)
   if (!S_ISLNK(inode->mode))
     return -EINVAL;
 
-  panic("not implemented");
-
-  (void) buf;
-  (void) bufsize;
+  r = inode->fs->ops->readlink(inode, buf, bufsize);
 
   fs_inode_unlock(inode);
 
-  return 0;
+  return r;
 }

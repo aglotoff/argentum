@@ -145,7 +145,7 @@ sd_request(struct Buf *buf)
 static void
 sd_start_transfer(struct Buf *buf)
 {
-  uint32_t cmd;
+  uint32_t cmd, arg;
   size_t nblocks;
 
   assert(k_spinlock_holding(&sd_queue.lock));
@@ -162,7 +162,10 @@ sd_start_transfer(struct Buf *buf)
     cmd = (nblocks > 1) ? CMD_READ_MULTIPLE_BLOCK : CMD_READ_SINGLE_BLOCK;
   }
 
-  pl180_send_cmd(&mmci, cmd, buf->block_no * buf->block_size, SD_RESPONSE_R1, NULL);
+  arg = buf->block_no * buf->block_size;
+
+  if (pl180_send_cmd(&mmci, cmd, arg, SD_RESPONSE_R1, NULL) != 0)
+    panic("error sending cmd %d, arg %d", cmd, arg);
 }
 
 // Handle the SD card interrupt. Complete the current data transfer operation
@@ -187,10 +190,12 @@ sd_irq(void)
 
   // Transfer the data and update the corresponding buffer flags.
   if (buf->flags & BUF_DIRTY) {
-    pl180_send_data(&mmci, buf->data, buf->block_size);
+    if (pl180_send_data(&mmci, buf->data, buf->block_size) != 0)
+      panic("error writing block %d", buf->block_no);
     buf->flags &= ~BUF_DIRTY;
   } else {
-    pl180_receive_data(&mmci, buf->data, buf->block_size);
+    if (pl180_receive_data(&mmci, buf->data, buf->block_size) != 0)
+      panic("error reading block %d", buf->block_no);
     buf->flags |= BUF_VALID;
   }
 

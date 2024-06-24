@@ -161,15 +161,17 @@ k_thread_create(struct Process *process, void (*entry)(void *), void *arg,
   stack_page->ref_count++;
 
   k_list_init(&thread->mutex_list);
-  thread->flags    = 0;
-  thread->priority = priority;
-  thread->state    = THREAD_STATE_SUSPENDED;
-  thread->entry    = entry;
-  thread->arg      = arg;
-  thread->err      = 0;
-  thread->process  = process;
-  thread->kstack   = stack;
-  thread->tf       = NULL;
+  thread->flags          = 0;
+  thread->saved_priority = priority;
+  thread->priority       = priority;
+  thread->state          = THREAD_STATE_SUSPENDED;
+  thread->entry          = entry;
+  thread->arg            = arg;
+  thread->err            = 0;
+  thread->process        = process;
+  thread->wait_mutex     = NULL;
+  thread->kstack         = stack;
+  thread->tf             = NULL;
 
   k_timer_create(&thread->timer, k_thread_timeout_callback, thread, 0, 0, 0);
 

@@ -138,6 +138,8 @@ fd_close(struct Process *process, int n)
 
   k_spinlock_release(&process->fd_lock);
 
+  // cprintf("     file_put %d %d\n", n, file->ref_count);
+
   file_put(file);
 
   return 0;
