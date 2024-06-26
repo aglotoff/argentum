@@ -7,6 +7,7 @@
 
 #include <limits.h>
 #include <signal.h>
+#include <sys/times.h>
 #include <sys/types.h>
 
 #include <kernel/cpu.h>
@@ -50,12 +51,13 @@ struct Process {
   /** The parent process */
   struct Process       *parent;
   /** List of child processes */
-  struct KListLink       children;
+  struct KListLink      children;
   /** Link into the siblings list */
-  struct KListLink       sibling_link;
+  struct KListLink      sibling_link;
+  struct tms            times;
 
   /** Queue to sleep waiting for children */
-  struct KWaitQueue    wait_queue;
+  struct KWaitQueue     wait_queue;
   /** Whether the process is a zombie */
   int                   zombie;
   /** Exit code */
@@ -63,7 +65,7 @@ struct Process {
 
   uintptr_t             signal_stub;
   struct sigaction      signal_actions[NSIG];
-  struct KListLink       signal_queue;
+  struct KListLink      signal_queue;
   sigset_t              signal_mask;
   sigset_t              signal_pending;
 
@@ -150,10 +152,12 @@ int            process_create(const void *, struct Process **);
 void           process_destroy(int);
 void           process_free(struct Process *);
 pid_t          process_copy(int);
-pid_t          process_wait(pid_t, uintptr_t, int);
+pid_t          process_wait(pid_t, int *, int);
 int            process_exec(const char *, char *const[], char *const[]);
 void          *process_grow(ptrdiff_t);
 void           arch_trap_frame_init(struct Process *, uintptr_t, uintptr_t, uintptr_t, uintptr_t, uintptr_t);
+void           process_update_times(struct Process *, clock_t, clock_t);
+void           process_get_times(struct Process *, struct tms *);
 
 void           signal_init(struct Process *);
 int            signal_generate(pid_t, int, int);

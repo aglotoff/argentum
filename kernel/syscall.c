@@ -86,6 +86,7 @@ static int32_t (*syscalls[])(void) = {
   [__SYS_FTRUNCATE]   = sys_ftruncate,
   [__SYS_FCHOWN]      = sys_fchown,
   [__SYS_READLINK]    = sys_readlink,
+  [__SYS_TIMES]       = sys_times,
 };
 
 int32_t
@@ -306,7 +307,7 @@ sys_arg_args(int n, char ***store)
 
 /*
  * ----------------------------------------------------------------------------
- * System Call Implementations
+ * Process system calls
  * ----------------------------------------------------------------------------
  */
 
@@ -342,16 +343,29 @@ int32_t
 sys_wait(void)
 {
   pid_t pid;
-  int *stat_loc;
-  int r;
+  uintptr_t stat_loc;
+  int r, stat, options;
   
   if ((r = sys_arg_int(0, &pid)) < 0)
     return r;
-
   if ((r = sys_arg_buf(1, (void **) &stat_loc, sizeof(int), PROT_WRITE, 1)) < 0)
     return r;
+  if ((r = sys_arg_int(2, &options)) < 0)
+    return r;
 
-  return process_wait(pid, (uintptr_t) stat_loc, 0);
+  if ((r = process_wait(pid, &stat, options)) < 0)
+    return r;
+
+  if (!stat_loc)
+    return r;
+
+  pid = r;
+
+  r = vm_copy_out(process_current()->vm->pgtab, &stat, stat_loc, sizeof(int));
+  if (r < 0)
+    return r;
+
+  return pid;
 }
 
 int32_t
@@ -1388,4 +1402,21 @@ sys_readlink(void)
     return r;
 
   return fs_readlink(path, buf, n);
+}
+
+int32_t
+sys_times(void)
+{
+  uintptr_t times_addr;
+  struct tms times;
+  int r;
+
+  if ((r = sys_arg_buf(0, (void **) &times_addr, sizeof times,
+                       PROT_WRITE, 0)) < 0)
+    return r;
+
+  process_get_times(process_current(), &times);
+
+  return vm_copy_out(process_current()->vm->pgtab, &times, times_addr,
+                     sizeof times);
 }

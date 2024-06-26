@@ -518,7 +518,7 @@ ext2_readlink(struct Inode *inode, char *buf, size_t n)
 {
   struct Ext2InodeExtra *extra = (struct Ext2InodeExtra *) inode->extra;
 
-  assert(IS_ISLNK(inode->mode));
+  assert(S_ISLNK(inode->mode));
 
   if ((inode->size <= MAX_FAST_SYMLINK_NAMELEN) && (extra->blocks == 0)) {
     ssize_t nread = MIN((size_t) inode->size, n);

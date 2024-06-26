@@ -168,6 +168,16 @@ static struct PTimer ptimer;
 static void
 ptimer_irq(void)
 {
+  struct Process *my_process = process_current();
+
+  if (my_process != NULL) {
+    if ((my_process->thread->tf->psr & PSR_M_MASK) != PSR_M_USR) {
+      process_update_times(my_process, 0, 1);
+    } else {
+      process_update_times(my_process, 1, 0);
+    }
+  }
+
   ptimer_eoi(&ptimer);
   tick();
 }
@@ -243,7 +253,7 @@ irq_dispatch(void)
 
   k_irq_dispatch(irq & 0xFFFFFF);
 
-  irq_unmask(irq);
-
   k_irq_end();
+
+  irq_unmask(irq);
 }

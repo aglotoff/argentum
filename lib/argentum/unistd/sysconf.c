@@ -6,6 +6,8 @@ sysconf(int name)
 {
   // TODO: map system page read-only to each process' address space
   switch (name) {
+  case _SC_CLK_TCK:
+    return 100;
   case _SC_PAGE_SIZE:
     return 4096;
   case _SC_PHYS_PAGES:

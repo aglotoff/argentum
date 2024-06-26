@@ -189,6 +189,9 @@ k_timer_dequeue(struct KTimer *timer)
   next = timer->link.next;
   k_list_remove(&timer->link);
 
+  assert(timer != NULL);
+  assert(next != NULL);
+
   if (next != &k_timer_queue) {
     struct KTimer *next_timer;
     

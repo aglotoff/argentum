@@ -101,6 +101,11 @@ process_alloc(void)
   process->sibling_link.next = NULL;
   process->sibling_link.prev = NULL;
 
+  process->times.tms_utime  = 0;
+  process->times.tms_stime  = 0;
+  process->times.tms_cutime = 0;
+  process->times.tms_cstime = 0;
+
   k_spinlock_acquire(&pid_hash.lock);
 
   if ((process->pid = ++next_pid) < 0)
@@ -379,7 +384,7 @@ process_match_pid(struct Process *process, pid_t pid)
 }
 
 pid_t
-process_wait(pid_t pid, uintptr_t stat_loc, int options)
+process_wait(pid_t pid, int *stat_loc, int options)
 {
   struct Process *current = process_current();
   int r;
@@ -394,36 +399,43 @@ process_wait(pid_t pid, uintptr_t stat_loc, int options)
     pid_t match = 0;
 
     KLIST_FOREACH(&current->children, l) {
-      struct Process *process = KLIST_CONTAINER(l, struct Process, sibling_link);
+      struct Process *process;
 
-      if (process_match_pid(process, pid))
-        match = process->pid;
+      process = KLIST_CONTAINER(l, struct Process, sibling_link);
 
-      // Return immediately
+      if (!process_match_pid(process, pid))
+        continue;
+
+      // Rememeber that we have at least one match
+      match = process->pid;
+
+      // TODO: WUNTRACED
+
       if (process->zombie) {
         k_list_remove(&process->sibling_link);
 
+        // Include the times of the terminated child process in the parent's
+        // times structure. Thus, only the times of children for which wait
+        // successfully returns will be included.
+        current->times.tms_cutime += process->times.tms_utime;
+        current->times.tms_cstime += process->times.tms_stime;
+
         process_unlock();
 
-        if (stat_loc) {
-          r = vm_copy_out(current->vm->pgtab, &process->exit_code, stat_loc,
-                          sizeof process->exit_code);
-        } else {
-          r = 0;
-        }
+        *stat_loc = process->exit_code;
 
         process_free(process);
 
-        return r == 0 ? match : r;
+        return match;
       }
     }
 
-    if (!match) {
+    if (!match) { // No children matched
       r = -ECHILD;
       break;
     }
 
-    if (options & WNOHANG) {
+    if (options & WNOHANG) {  // Do not sleep
       r = 0;
       break;
     }
@@ -435,6 +447,14 @@ process_wait(pid_t pid, uintptr_t stat_loc, int options)
   process_unlock();
 
   return r;
+}
+
+void 
+process_get_times(struct Process *process, struct tms *times)
+{
+  process_lock();
+  memmove(times, &process->times, sizeof process->times);
+  process_unlock();
 }
 
 static void
@@ -557,4 +577,13 @@ process_set_gid(pid_t pid, pid_t pgid)
   process_unlock();
 
   return r;
+}
+
+void
+process_update_times(struct Process *process, clock_t user, clock_t system)
+{
+  process_lock();
+  process->times.tms_utime += user;
+  process->times.tms_stime += system;
+  process_unlock();
 }
