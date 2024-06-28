@@ -360,3 +360,44 @@ vm_copy_in(void *vm, void *dst, uintptr_t src_va, size_t n)
 
   return 0;
 }
+
+int
+vm_check_str(void *vm, uintptr_t va, size_t *len_ptr, int perm)
+{
+  const char *s = (const char *) va;
+
+  while (va < VIRT_KERNEL_BASE) {
+    const char *p;
+    struct Page *page;
+    unsigned off;
+    int flags;
+
+    vm_lock();
+
+    page = vm_page_lookup(vm, va, &flags);
+
+    if ((page == NULL) || ((flags & perm) != perm)) {
+      vm_unlock();
+      return -EFAULT;
+    }
+
+    p = (const char *) page2kva(page);
+
+    for (off = va % PAGE_SIZE; off < PAGE_SIZE; off++) {
+      if (p[off] == '\0') {
+        if (len_ptr)
+          *len_ptr = ROUND_DOWN(va, PAGE_SIZE) + off - (uintptr_t) s;
+
+        vm_unlock();
+
+        return 0;
+      }
+    }
+
+    va += off;
+  }
+
+  vm_unlock();
+
+  return -EFAULT;
+}

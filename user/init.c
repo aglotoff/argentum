@@ -46,10 +46,6 @@ main(void)
   write(0, "root:x:0:0:root:/root:/bin/sh\n", 37);
   close(0);
 
-  open("/etc/profile", O_WRONLY | O_CREAT, 0777);
-  write(0, "export PS1=\"\033[1;32m[\033[0m$PWD\033[1;32m]$ \033[0m\"", 44);
-  close(0);
-
   // Spawn the shells
   for (i = 0; i < 1; i++) {
     if (fork() == 0) {

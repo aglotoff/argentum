@@ -22,11 +22,12 @@
 #include <kernel/process.h>
 #include <kernel/sys.h>
 #include <kernel/types.h>
+#include <kernel/object_pool.h>
 
 #include <lwip/sockets.h>
 
-static int     sys_get_num(void);
-static int32_t sys_get_arg(int);
+static int     sys_arch_get_num(void);
+static int32_t sys_arch_get_arg(int);
 
 static int32_t (*syscalls[])(void) = {
   [__SYS_FORK]        = sys_fork,
@@ -94,7 +95,7 @@ sys_dispatch(void)
 {
   int num;
 
-  if ((num = sys_get_num()) < 0)
+  if ((num = sys_arch_get_num()) < 0)
     return num;
 
   if ((num < (int) ARRAY_SIZE(syscalls)) && syscalls[num]) {
@@ -116,7 +117,7 @@ sys_dispatch(void)
 
 // Extract the system call number from the SVC instruction opcode
 static int
-sys_get_num(void)
+sys_arch_get_num(void)
 {
   struct Process *current = process_current();
 
@@ -132,7 +133,7 @@ sys_get_num(void)
 // Get the n-th argument from the current process' trap frame.
 // Support up to 6 system call arguments
 static int32_t
-sys_get_arg(int n)
+sys_arch_get_arg(int n)
 {
   struct Process *current = process_current();
 
@@ -155,49 +156,52 @@ sys_get_arg(int n)
   }
 }
 
-/**
- * Fetch the nth system call argument as an integer.
- * 
- * @param n The argument number.
- * @param ip Pointer to the memory address to store the argument value.
- * 
- * @retval 0 on success.
- * @retval -EINVAL if an invalid argument number is specified.
- */
 static int
 sys_arg_int(int n, int *ip)
 {
-  *ip = sys_get_arg(n);
+  *ip = sys_arch_get_arg(n);
   return 0;
 }
 
-/**
- * Fetch the nth system call argument as a long integer.
- * 
- * @param n The argument number.
- * @param ip Pointer to the memory address to store the argument value.
- * 
- * @retval 0 on success.
- * @retval -EINVAL if an invalid argument number is specified.
- */
+static int
+sys_arg_uint(int n, unsigned int *ip)
+{
+  *ip = sys_arch_get_arg(n);
+  return 0;
+}
+
 static int
 sys_arg_short(int n, short *ip)
 {
-  *ip = (short) sys_get_arg(n);
+  *ip = (short) sys_arch_get_arg(n);
+  return 0;
+}
+
+static int
+sys_arg_ushort(int n, unsigned short *ip)
+{
+  *ip = (unsigned short) sys_arch_get_arg(n);
   return 0;
 }
 
 static int
 sys_arg_long(int n, long *ip)
 {
-  *ip = (long) sys_get_arg(n);
+  *ip = (long) sys_arch_get_arg(n);
+  return 0;
+}
+
+static int
+sys_arg_ulong(int n, unsigned long *ip)
+{
+  *ip = (unsigned long) sys_arch_get_arg(n);
   return 0;
 }
 
 static int
 sys_arg_ptr(int n, uintptr_t *pp, int perm, int can_be_null)
 {
-  uintptr_t ptr = sys_get_arg(n);
+  uintptr_t ptr = sys_arch_get_arg(n);
   int r;
 
   if (ptr == 0) {
@@ -229,20 +233,20 @@ sys_arg_ptr(int n, uintptr_t *pp, int perm, int can_be_null)
  * @retval -EFAULT if the arguments doesn't point to a valid memory region.
  */
 static int32_t
-sys_arg_buf(int n, void **pp, size_t len, int perm, int can_be_null)
+sys_arg_buf(int n, uintptr_t *pp, size_t len, int perm, int can_be_null)
 { 
-  void *ptr = (void *) sys_get_arg(n);
+  uintptr_t ptr = sys_arch_get_arg(n);
   int r;
 
-  if (ptr == NULL) {
+  if (!ptr) {
     if (can_be_null) {
-      *pp = NULL;
+      *pp = 0;
       return 0;
     }
     return -EFAULT;
   }
 
-  if ((r = vm_space_check_buf(process_current()->vm, ptr, len, perm)) < 0)
+  if ((r = vm_space_check_buf(process_current()->vm, (void *) ptr, len, perm)) < 0)
     return r;
 
   *pp = ptr;
@@ -250,28 +254,38 @@ sys_arg_buf(int n, void **pp, size_t len, int perm, int can_be_null)
   return 0;
 }
 
-/**
- * Fetch the nth system call argument as a string pointer. Check that the
- * pointer is valid, the user has right permissions and the string is
- * null-terminated.
- * 
- * @param n    The argument number.
- * @param strp Pointer to the memory address to store the argument value.
- * @param perm The permissions to be checked.
- * 
- * @retval 0 on success.
- * @retval -EFAULT if the arguments doesn't point to a valid string.
- */
+
+// Fetch the nth system call argument as a C string pointer. Check that the
+// pointer is valid, the user has right permissions and the string is properly
+// terminated. If strp is not null, allocate a temporary buffer to copy the
+// string into. Tha caller must deallocate this buffer by calling k_free().
 static int32_t
-sys_arg_str(int n, const char **strp, int perm)
+sys_arg_str(int n, size_t max, int perm, char **strp)
 {
-  char *str = (char *) sys_get_arg(n);
+  uintptr_t va = sys_arch_get_arg(n);
+  void *pgtab = process_current()->vm->pgtab;
+  size_t len;
+  char *s;
   int r;
 
-  if ((r = vm_space_check_str(process_current()->vm, str, perm)) < 0)
+  if ((r = vm_check_str(pgtab, va, &len, perm)) < 0)
     return r;
 
-  *strp = str;
+  if (len >= max)
+    return -ENAMETOOLONG;
+
+  if (strp == NULL)
+    return 0;
+
+  if ((s = k_malloc(len + 1)) == NULL)
+    return -ENOMEM;
+
+  if ((vm_copy_in(pgtab, s, va, len + 1) != 0) || (s[len] != '\0')) {
+    k_free(s);
+    return -EFAULT;
+  }
+
+  *strp = s;
 
   return 0;
 }
@@ -283,7 +297,7 @@ sys_arg_args(int n, char ***store)
   char **args;
   int i;
 
-  args = (char **) sys_get_arg(n);
+  args = (char **) sys_arch_get_arg(n);
   
   for (i = 0; ; i++) {
     int r;
@@ -325,18 +339,23 @@ sys_fork(void)
 int32_t
 sys_exec(void)
 {
-  const char *path;
+  char *path;
   char **argv, **envp;
   int r;
 
-  if ((r = sys_arg_str(0, &path, PROT_READ)) < 0)
-    return r;
+  if ((r = sys_arg_str(0, PATH_MAX, PROT_READ, &path)) < 0)
+    goto out1;
   if ((r = sys_arg_args(1, &argv)) < 0)
-    return r;
+    goto out2;
   if ((r = sys_arg_args(2, &envp)) < 0)
-    return r;
+    goto out2;
 
-  return process_exec(path, argv, envp);
+  r = process_exec(path, argv, envp);
+
+out2:
+  k_free(path);
+out1:
+  return r;
 }
 
 int32_t
@@ -348,7 +367,7 @@ sys_wait(void)
   
   if ((r = sys_arg_int(0, &pid)) < 0)
     return r;
-  if ((r = sys_arg_buf(1, (void **) &stat_loc, sizeof(int), PROT_WRITE, 1)) < 0)
+  if ((r = sys_arg_buf(1, &stat_loc, sizeof(int), PROT_WRITE, 1)) < 0)
     return r;
   if ((r = sys_arg_int(2, &options)) < 0)
     return r;
@@ -421,33 +440,220 @@ sys_getppid(void)
 }
 
 int32_t
-sys_clock_time(void)
+sys_umask(void)
 {
-  clockid_t clock_id;
-  struct timespec *prev;
+  struct Process *proc = process_current();
+  mode_t cmask;
   int r;
-  
-  if ((r = sys_arg_long(0, (long *) &clock_id)) < 0)
-    return r;
-  
-  if ((r = sys_arg_buf(1, (void **) &prev, sizeof(*prev), PROT_WRITE, 1)) < 0)
+
+  if ((r = sys_arg_ulong(0, &cmask)) < 0)
     return r;
 
-  if (clock_id != CLOCK_REALTIME)
-    return -EINVAL;
+  r = proc->cmask & (S_IRWXU | S_IRWXG | S_IRWXO);
+  proc->cmask = cmask;
 
-  if (prev) {
-    struct timespec prev_value;
-    prev_value.tv_sec  = rtc_get_time();
-    prev_value.tv_nsec = 0;
-
-    if ((r = vm_copy_out(process_current()->vm->pgtab, &prev_value,
-                         (uintptr_t) prev, sizeof prev_value)) < 0)
-      return r;
-  }
-
-  return 0;
+  return r;
 }
+
+int32_t
+sys_times(void)
+{
+  uintptr_t times_addr;
+  struct tms times;
+  int r;
+
+  if ((r = sys_arg_buf(0, &times_addr, sizeof times, PROT_WRITE, 0)) < 0)
+    return r;
+
+  process_get_times(process_current(), &times);
+
+  return vm_copy_out(process_current()->vm->pgtab, &times, times_addr,
+                     sizeof times);
+}
+
+int32_t
+sys_nanosleep(void)
+{
+  struct timespec *rqtp, *rmtp;
+  int r;
+
+  if ((r = sys_arg_buf(0, (uintptr_t *) &rqtp, sizeof(*rqtp), PROT_READ, 0)) < 0)
+    return r;
+  if ((r = sys_arg_buf(1, (uintptr_t *) &rmtp, sizeof(*rmtp), PROT_WRITE, 1)) < 0)
+    return r;
+
+  return process_nanosleep(rqtp, rmtp);
+}
+
+/*
+ * ----------------------------------------------------------------------------
+ * Path name system calls
+ * ----------------------------------------------------------------------------
+ */
+
+int32_t
+sys_chdir(void)
+{
+  char *path;
+  int r;
+
+  if ((r = sys_arg_str(0, PATH_MAX, PROT_READ, &path)) < 0)
+    return r;
+
+  r = fs_chdir(path);
+
+  k_free(path);
+  return r;
+}
+
+int32_t
+sys_chmod(void)
+{
+  char *path;
+  mode_t mode;
+  int r;
+
+  if ((r = sys_arg_str(0, PATH_MAX, PROT_READ, &path)) < 0)
+    goto out1;
+  if ((r = sys_arg_ulong(1, &mode)) < 0)
+    goto out2;
+
+  r = fs_chmod(path, mode);
+
+out2:
+  k_free(path);
+out1:
+  return r;
+}
+
+int32_t
+sys_open(void)
+{
+  struct File *file;
+  char *path;
+  int oflag, r;
+  mode_t mode;
+
+  if ((r = sys_arg_str(0, PATH_MAX, PROT_READ, &path)) < 0)
+    goto out1;
+  if ((r = sys_arg_int(1, &oflag)) < 0)
+    goto out2;
+  if ((r = sys_arg_ulong(2, &mode)) < 0)
+    goto out2;
+
+  if ((r = fs_open(path, oflag, mode, &file)) < 0)
+    goto out2;
+
+  if ((r = fd_alloc(process_current(), file, 0)) < 0)
+    file_put(file);
+
+out2:
+  k_free(path);
+out1:
+  return r;
+}
+
+int32_t
+sys_link(void)
+{
+  char *path1, *path2;
+  int r;
+
+  if ((r = sys_arg_str(0, PATH_MAX, PROT_READ, &path1)) < 0)
+    goto out1;
+  if ((r = sys_arg_str(1, PATH_MAX, PROT_READ, &path2)) < 0)
+    goto out2;
+
+  r = fs_link(path1, path2);
+
+  k_free(path2);
+out2:
+  k_free(path1);
+out1:
+  return r;
+}
+
+int32_t
+sys_mknod(void)
+{
+  char *path;
+  mode_t mode;
+  dev_t dev;
+  int r;
+
+  if ((r = sys_arg_str(0, PATH_MAX, PROT_READ, &path)) < 0)
+    goto out1;
+  if ((r = sys_arg_ulong(1, &mode)) < 0)
+    goto out2;
+  if ((r = sys_arg_short(2, &dev)) < 0)
+    goto out2;
+  
+  r = fs_create(path, mode, dev, NULL);
+
+out2:
+  k_free(path);
+out1:
+  return r;
+}
+
+int32_t
+sys_unlink(void)
+{
+  char *path;
+  int r;
+
+  if ((r = sys_arg_str(0, PATH_MAX, PROT_READ, &path)) < 0)
+    return r;
+
+  r = fs_unlink(path);
+
+  k_free(path);
+  return r;
+}
+
+int32_t
+sys_rmdir(void)
+{
+  char *path;
+  int r;
+
+  if ((r = sys_arg_str(0, PATH_MAX, PROT_READ, &path)) < 0)
+    return r;
+
+  r = fs_rmdir(path);
+
+  k_free(path);
+  return r;
+}
+
+int32_t
+sys_readlink(void)
+{
+  void *buf;
+  size_t n;
+  int r;
+  char *path;
+
+  if ((r = sys_arg_str(0, PATH_MAX, PROT_READ, &path)) < 0)
+    goto out1;
+  if ((r = sys_arg_uint(2, &n)) < 0)
+    goto out2;
+  if ((r = sys_arg_buf(1, (uintptr_t *) &buf, n, PROT_WRITE, 0)) < 0)
+    goto out2;
+  
+  r = fs_readlink(path, buf, n);
+
+out2:
+  k_free(path);
+out1:
+  return r;
+}
+
+/*
+ * ----------------------------------------------------------------------------
+ * File descriptor system calls
+ * ----------------------------------------------------------------------------
+ */
 
 int32_t
 sys_getdents(void)
@@ -458,11 +664,11 @@ sys_getdents(void)
   struct File *file;
   int r;
 
-  if ((r = sys_arg_int(0, (int *) &fd)) < 0)
+  if ((r = sys_arg_int(0, &fd)) < 0)
     return r;
-  if ((r = sys_arg_int(2, (int *) &n)) < 0)
+  if ((r = sys_arg_uint(2, &n)) < 0)
     return r;
-  if ((r = sys_arg_buf(1, &buf, n, PROT_WRITE, 0)) < 0)
+  if ((r = sys_arg_buf(1, (uintptr_t *) &buf, n, PROT_WRITE, 0)) < 0)
     return r;
 
   if ((file = fd_lookup(process_current(), fd)) == NULL)
@@ -473,33 +679,6 @@ sys_getdents(void)
   file_put(file);
 
   return r;
-}
-
-int32_t
-sys_chdir(void)
-{
-  const char *path;
-  int r;
-
-  if ((r = sys_arg_str(0, &path, PROT_READ)) < 0)
-    return r;
-  
-  return fs_chdir(path);
-}
-
-int32_t
-sys_chmod(void)
-{
-  const char *path;
-  mode_t mode;
-  int r;
-
-  if ((r = sys_arg_str(0, &path, PROT_READ)) < 0)
-    return r;
-  if ((r = sys_arg_short(1, (short *) &mode)) < 0)
-    return r;
-
-  return fs_chmod(path, mode);
 }
 
 int32_t
@@ -522,102 +701,6 @@ sys_fchdir(void)
 }
 
 int32_t
-sys_open(void)
-{
-  struct File *file;
-  const char *path;
-  int oflag, r;
-  mode_t mode;
-
-  if ((r = sys_arg_str(0, &path, PROT_READ)) < 0)
-    return r;
-  if ((r = sys_arg_int(1, &oflag)) < 0)
-    return r;
-  if ((r = sys_arg_short(2, (short *) &mode)) < 0)
-    return r;
-
-  if ((r = fs_open(path, oflag, mode, &file)) < 0)
-    return r;
-
-  if ((r = fd_alloc(process_current(), file, 0)) < 0)
-    file_put(file);
-
-  return r;
-}
-
-int32_t
-sys_umask(void)
-{
-  struct Process *proc = process_current();
-  mode_t cmask;
-  int r;
-
-  if ((r = sys_arg_short(0, (short *) &cmask)) < 0)
-    return r;
-
-  r = proc->cmask & (S_IRWXU | S_IRWXG | S_IRWXO);
-  proc->cmask = cmask;
-
-  return r;
-}
-
-int32_t
-sys_link(void)
-{
-  const char *path1, *path2;
-  int r;
-
-  if ((r = sys_arg_str(0, &path1, PROT_READ)) < 0)
-    return r;
-  if ((r = sys_arg_str(1, &path2, PROT_READ)) < 0)
-    return r;
-
-  return fs_link((char *) path1, (char *) path2);
-}
-
-int32_t
-sys_mknod(void)
-{
-  const char *path;
-  mode_t mode;
-  dev_t dev;
-  int r;
-
-  if ((r = sys_arg_str(0, &path, PROT_READ)) < 0)
-    return r;
-  if ((r = sys_arg_short(1, (short *) &mode)) < 0)
-    return r;
-  if ((r = sys_arg_short(2, &dev)) < 0)
-    return r;
-
-  return fs_create(path, mode, dev, NULL);
-}
-
-int32_t
-sys_unlink(void)
-{
-  const char *path;
-  int r;
-
-  if ((r = sys_arg_str(0, &path, PROT_READ)) < 0)
-    return r;
-
-  return fs_unlink(path);
-}
-
-int32_t
-sys_rmdir(void)
-{
-  const char *path;
-  int r;
-
-  if ((r = sys_arg_str(0, &path, PROT_READ)) < 0)
-    return r;
-
-  return fs_rmdir(path);
-}
-
-int32_t
 sys_stat(void)
 {
   struct File *file;
@@ -626,7 +709,7 @@ sys_stat(void)
 
   if ((r = sys_arg_int(0, &fd)) < 0)
     return r;
-  if ((r = sys_arg_buf(1, (void **) &buf, sizeof(*buf), PROT_WRITE, 0)) < 0)
+  if ((r = sys_arg_buf(1, (uintptr_t *) &buf, sizeof(*buf), PROT_WRITE, 0)) < 0)
     return r;
 
   if ((file = fd_lookup(process_current(), fd)) == NULL)
@@ -660,9 +743,9 @@ sys_read(void)
 
   if ((r = sys_arg_int(0, &fd)) < 0)
     return r;
-  if ((r = sys_arg_int(2, (int *) &n)) < 0)
+  if ((r = sys_arg_uint(2, &n)) < 0)
     return r;
-  if ((r = sys_arg_buf(1, &buf, n, PROT_READ, 0)) < 0)
+  if ((r = sys_arg_buf(1, (uintptr_t *) &buf, n, PROT_READ, 0)) < 0)
     return r;
 
   if ((file = fd_lookup(process_current(), fd)) == NULL)
@@ -684,9 +767,9 @@ sys_seek(void)
 
   if ((r = sys_arg_int(0, &fd)) < 0)
     return r;
-  if ((r = sys_arg_long(1, (long *) &offset)) < 0)
+  if ((r = sys_arg_long(1, &offset)) < 0)
     return r;
-  if ((r = sys_arg_int(2, (int *) &whence)) < 0)
+  if ((r = sys_arg_int(2, &whence)) < 0)
     return r;
 
   if ((file = fd_lookup(process_current(), fd)) == NULL)
@@ -759,9 +842,9 @@ sys_write(void)
 
   if ((r = sys_arg_int(0, &fd)) < 0)
     return r;
-  if ((r = sys_arg_int(2, (int *) &n)) < 0)
+  if ((r = sys_arg_uint(2, &n)) < 0)
     return r;
-  if ((r = sys_arg_buf(1, &buf, n, PROT_WRITE, 0)) < 0)
+  if ((r = sys_arg_buf(1, (uintptr_t *) &buf, n, PROT_WRITE, 0)) < 0)
     return r;
 
   if ((file = fd_lookup(process_current(), fd)) == NULL)
@@ -774,178 +857,6 @@ sys_write(void)
 }
 
 int32_t
-sys_sbrk(void)
-{
-  ptrdiff_t n;
-  int r;
-
-  if ((r = sys_arg_int(0, &n)) < 0)
-    return r;
-
-  panic("deprecated!\n");
-  
-  return (int32_t) process_grow(n);
-}
-
-int32_t
-sys_uname(void)
-{
-  extern struct utsname utsname;  // defined in main.c
-
-  struct utsname *name;
-  int r;
-
-  if ((r = sys_arg_buf(0, (void **) &name, sizeof(*name), PROT_WRITE, 0)) < 0)
-    return r;
-  
-  memcpy(name, &utsname, sizeof (*name));
-
-  return 0;
-}
-
-int32_t
-sys_socket(void)
-{
-  int r;
-  int domain;
-  int type;
-  int protocol;
-  struct File *file;
-
-  if ((r = sys_arg_int(0, &domain)) < 0)
-    return r;
-  if ((r = sys_arg_int(1, &type)) < 0)
-    return r;
-  if ((r = sys_arg_int(2, &protocol)) < 0)
-    return r;
-
-  if ((r = net_socket(domain, type, protocol, &file)) != 0)
-    return r;
-
-  if ((r = fd_alloc(process_current(), file, 0)) < 0)
-    file_put(file);
-
-  return r;
-}
-
-int32_t
-sys_bind(void)
-{
-  struct File *file;
-  struct sockaddr *address;
-  socklen_t address_len;
-  int r, fd;
-
-  if ((r = sys_arg_int(0, &fd)) < 0)
-    return r;
-  if ((r = sys_arg_buf(1, (void **) &address, sizeof(*address), PROT_READ, 0)) < 0)
-    return r;
-  if ((r = sys_arg_long(2, (long *) &address_len)) < 0)
-    return r;
-  
-  if ((file = fd_lookup(process_current(), fd)) == NULL)
-    return -EBADF;
-
-  r = net_bind(file, address, address_len);
-
-  file_put(file);
-
-  return r;
-}
-
-int32_t
-sys_connect(void)
-{
-  struct File *file;
-  struct sockaddr *address;
-  socklen_t address_len;
-  int r, fd;
-
-  if ((r = sys_arg_int(0, &fd)) < 0)
-    return r;
-  if ((r = sys_arg_buf(1, (void **) &address, sizeof(*address), PROT_READ, 0)) < 0)
-    return r;
-  if ((r = sys_arg_long(2, (long *) &address_len)) < 0)
-    return r;
-
-  if ((file = fd_lookup(process_current(), fd)) == NULL)
-    return -EBADF;
-
-  r = net_connect(file, address, address_len);
-
-  file_put(file);
-
-  return r;
-}
-
-int32_t
-sys_listen(void)
-{
-  struct File *file;
-  int backlog, r, fd;
-
-  if ((r = sys_arg_int(0, &fd)) < 0)
-    return r;
-  if ((r = sys_arg_int(1, &backlog)) < 0)
-    return r;
-
-  if ((file = fd_lookup(process_current(), fd)) == NULL)
-    return -EBADF;
-
-  r = net_listen(file, backlog);
-
-  file_put(file);
-
-  return r;
-}
-
-int32_t
-sys_accept(void)
-{
-  struct File *sockf, *connf;
-  struct sockaddr *address;
-  socklen_t *address_len;
-  int r, fd;
-
-  if ((r = sys_arg_int(0, &fd)) < 0)
-    return r;
-  if ((r = sys_arg_buf(1, (void **) &address, sizeof(*address), PROT_WRITE, 1)) < 0)
-    return r;
-  if ((r = sys_arg_buf(2, (void **) &address_len, sizeof(socklen_t), PROT_WRITE, 1)) < 0)
-    return r;
-
-  if ((sockf = fd_lookup(process_current(), fd)) == NULL)
-    return -EBADF;
-
-  if ((r = net_accept(sockf, address, address_len, &connf)) < 0) {
-    file_put(sockf);
-    return r;
-  }
-
-  if ((r = fd_alloc(process_current(), connf, 0)) < 0)
-    file_put(connf);
-
-  file_put(sockf);
-
-  return r;
-}
-
-int32_t
-sys_test(void)
-{
-  int i, r;
-
-  for (i = 0; i < 6; i++) {
-    int arg;
-
-    if ((r = sys_arg_int(i, &arg)) < 0)
-      return r;
-    cprintf("[%d]: %d\n", i, arg);
-  }
-  return 0;
-}
-
-int32_t
 sys_fchmod(void)
 {
   struct File *file;
@@ -954,7 +865,7 @@ sys_fchmod(void)
 
   if ((r = sys_arg_int(0, &fd)) < 0)
     return r;
-  if ((r = sys_arg_short(1, (short *) &mode)) < 0)
+  if ((r = sys_arg_ulong(1, &mode)) < 0)
     return r;
 
   if ((file = fd_lookup(process_current(), fd)) == NULL)
@@ -977,9 +888,9 @@ sys_fchown(void)
 
   if ((r = sys_arg_int(0, &fd)) < 0)
     return r;
-  if ((r = sys_arg_short(1, (short *) &uid)) < 0)
+  if ((r = sys_arg_ushort(1, &uid)) < 0)
     return r;
-  if ((r = sys_arg_short(2, (short *) &gid)) < 0)
+  if ((r = sys_arg_ushort(2, &gid)) < 0)
     return r;
 
   if ((file = fd_lookup(process_current(), fd)) == NULL)
@@ -990,261 +901,6 @@ sys_fchown(void)
   file_put(file);
 
   return r;
-}
-
-int32_t
-sys_sigaction(void)
-{
-  int sig;
-  uintptr_t stub;
-  struct sigaction *act, *oact;
-  int r;
-
-  if ((r = sys_arg_int(0, &sig)) < 0)
-    return r;
-  if ((r = sys_arg_ptr(1, &stub, PROT_READ | PROT_EXEC, 1)) < 0)
-    return r;
-  if ((r = sys_arg_buf(2, (void **) &act, sizeof(*act), PROT_READ, 1)) < 0)
-    return r;
-  if ((r = sys_arg_buf(3, (void **) &oact, sizeof(*oact), PROT_WRITE, 1)) < 0)
-    return r;
-
-  return signal_action(sig, stub, act, oact);
-}
-
-int32_t
-sys_sigreturn(void)
-{
-  return signal_return();
-}
-
-int32_t
-sys_nanosleep(void)
-{
-  struct timespec *rqtp, *rmtp;
-  int r;
-
-  if ((r = sys_arg_buf(0, (void **) &rqtp, sizeof(*rqtp), PROT_READ, 0)) < 0)
-    return r;
-  if ((r = sys_arg_buf(1, (void **) &rmtp, sizeof(*rmtp), PROT_WRITE, 1)) < 0)
-    return r;
-
-  return process_nanosleep(rqtp, rmtp);
-}
-
-int32_t
-sys_recvfrom(void)
-{
-  struct File *file;
-  void *buffer;
-  size_t length;
-  int flags;
-  struct sockaddr *address;
-  socklen_t *address_len;
-  int r, fd;
-
-  if ((r = sys_arg_int(0, &fd)) < 0)
-    return r;
-  if ((r = sys_arg_int(2, (int *) &length)) < 0)
-    return r;
-  if ((r = sys_arg_buf(1, &buffer, length, PROT_WRITE, 0)) < 0)
-    return r;
-  if ((r = sys_arg_int(3, (int *) &flags)) < 0)
-    return r;
-  if ((r = sys_arg_buf(4, (void **) &address, sizeof(*address), PROT_WRITE, 1)) < 0)
-    return r;
-  if ((r = sys_arg_buf(5, (void **) &address_len, sizeof(*address_len), PROT_WRITE, 1)) < 0)
-    return r;
-
-  if ((file = fd_lookup(process_current(), fd)) == NULL)
-    return -EBADF;
-
-  r = net_recvfrom(file, buffer, length, flags, address, address_len);
-
-  file_put(file);
-
-  return r;
-}
-
-int32_t
-sys_sendto(void)
-{
-  struct File *file;
-  void *message;
-  size_t length;
-  int flags;
-  struct sockaddr *dest_addr;
-  socklen_t dest_len;
-  int r, fd;
-
-  if ((r = sys_arg_int(0, &fd)) < 0)
-    return r;
-  if ((r = sys_arg_int(2, (int *) &length)) < 0)
-    return r;
-  if ((r = sys_arg_buf(1, &message, length, PROT_READ, 0)) < 0)
-    return r;
-  if ((r = sys_arg_int(3, (int *) &flags)) < 0)
-    return r;
-  if ((r = sys_arg_buf(4, (void **) &dest_addr, sizeof(*dest_addr), PROT_READ, 1)) < 0)
-    return r;
-  if ((r = sys_arg_int(5, (int *) &dest_len)) < 0)
-    return r;
-
-  if ((file = fd_lookup(process_current(), fd)) == NULL)
-    return -EBADF;
-
-  r = net_sendto(file, message, length, flags, dest_addr, dest_len);
-
-  file_put(file);
-
-  return r;
-}
-
-int32_t
-sys_setsockopt(void)
-{
-  struct File *file;
-  int level;
-  int option_name;
-  void *option_value;
-  socklen_t option_len;
-  int r, fd;
-
-  if ((r = sys_arg_int(0, &fd)) < 0)
-    return r;
-  if ((r = sys_arg_int(1, (int *) &level)) < 0)
-    return r;
-  if ((r = sys_arg_int(2, (int *) &option_name)) < 0)
-    return r;
-  if ((r = sys_arg_int(4, (int *) &option_len)) < 0)
-    return r;
-  if ((r = sys_arg_buf(3, &option_value, option_len, PROT_READ, 0)) < 0)
-    return r;
-
-  if ((file = fd_lookup(process_current(), fd)) == NULL)
-    return -EBADF;
-
-  r = net_setsockopt(file, level, option_name, option_value, option_len);
-
-  file_put(file);
-
-  return r;
-}
-
-int32_t
-sys_getpgid(void)
-{
-  pid_t pid;
-  int r;
-  
-  if ((r = sys_arg_int(0, &pid)) < 0)
-    return r;
-
-  return process_get_gid(pid);
-}
-
-int32_t
-sys_setpgid(void)
-{
-  pid_t pid, pgid;
-  int r;
-  
-  if ((r = sys_arg_int(0, &pid)) < 0)
-    return r;
-  if ((r = sys_arg_int(1, &pgid)) < 0)
-    return r;
-
-  return process_set_gid(pid, pgid);
-}
-
-int32_t
-sys_access(void)
-{
-  const char *path;
-  int r, amode;
-
-  if ((r = sys_arg_str(0, &path, PROT_READ)) < 0)
-    return r;
-  if ((r = sys_arg_int(1, &amode)) < 0)
-    return r;
-  
-  return fs_access(path, amode);
-}
-
-int32_t
-sys_pipe(void)
-{
-  int r;
-  int *fildes;
-  struct File *read, *write;
-
-  if ((r = sys_arg_buf(0, (void **) &fildes, sizeof(int)*2, PROT_WRITE, 0)) < 0)
-    return r;
-
-  if ((r = pipe_open(&read, &write)) < 0)
-    return r;
-
-  if ((fildes[0] = r = fd_alloc(process_current(), read, 0)) < 0) {
-    file_put(read);
-    file_put(write);
-    return r;
-  }
-
-  if ((fildes[1] = r = fd_alloc(process_current(), write, 0)) < 0) {
-    file_put(read);
-    file_put(write);
-    return r;
-  }
-
-  return 0;
-}
-
-int32_t
-sys_ioctl(void)
-{
-  struct File *file;
-  int r, request, fd, arg;
-
-  if ((r = sys_arg_int(0, &fd)) < 0)
-    return r;
-  if ((r = sys_arg_int(1, &request)) < 0)
-    return r;
-  if ((r = sys_arg_int(2, &arg)) < 0)
-    return r;
-
-  if ((file = fd_lookup(process_current(), fd)) == NULL)
-    return -EBADF;
-
-  r = file_ioctl(file, request, arg);
-  
-  file_put(file);
-
-  return r;
-}
-
-int32_t
-sys_mmap(void)
-{
-  uintptr_t addr;
-  size_t n;
-  int prot;
-  int r;
-
-  if ((r = sys_arg_long(0, (long *) &addr)) < 0)
-    return r;
-  if ((r = sys_arg_long(1, (long *) &n)) < 0)
-    return r;
-  if ((r = sys_arg_int(2, &prot)) < 0)
-    return r;
-
-  // vm_print_areas(process_current()->vm);
-
-  uintptr_t aa = vmspace_map(process_current()->vm, addr, n, prot | _PROT_USER);
-  // cprintf("mmap(%p, %p, %d) -> %p\n", addr, n, prot, aa);
-
-  // vm_print_areas(process_current()->vm);
-
-  return (int32_t) aa;
 }
 
 int32_t
@@ -1292,57 +948,26 @@ sys_select(void)
 }
 
 int32_t
-sys_sigpending(void)
+sys_ioctl(void)
 {
-  sigset_t *set;
-  int r;
+  struct File *file;
+  int r, request, fd, arg;
 
-  if ((r = sys_arg_buf(0, (void **) &set, sizeof(*set), PROT_WRITE, 0)) < 0)
+  if ((r = sys_arg_int(0, &fd)) < 0)
+    return r;
+  if ((r = sys_arg_int(1, &request)) < 0)
+    return r;
+  if ((r = sys_arg_int(2, &arg)) < 0)
     return r;
 
-  return signal_pending(set);
-}
+  if ((file = fd_lookup(process_current(), fd)) == NULL)
+    return -EBADF;
 
-int32_t
-sys_sigprocmask(void)
-{
-  sigset_t *set, *oset;
-  int how, r;
+  r = file_ioctl(file, request, arg);
+  
+  file_put(file);
 
-  if ((r = sys_arg_int(0, &how)) < 0)
-    return r;
-  if ((r = sys_arg_buf(1, (void **) &set, sizeof(*set), PROT_READ, 1)) < 0)
-    return r;
-  if ((r = sys_arg_buf(2, (void **) &oset, sizeof(*oset), PROT_WRITE, 1)) < 0)
-    return r;
-
-  return signal_mask(how, set, oset);
-}
-
-int32_t
-sys_sigsuspend(void)
-{
-  sigset_t *mask;
-  int r;
-
-  if ((r = sys_arg_buf(0, (void **) &mask, sizeof(*mask), PROT_READ, 1)) < 0)
-    return r;
-
-  return signal_suspend(mask);
-}
-
-int32_t
-sys_kill(void)
-{
-  pid_t pid;
-  int sig, r;
-
-  if ((r = sys_arg_int(0, &pid)) < 0)
-    return r;
-  if ((r = sys_arg_int(1, &sig)) < 0)
-    return r;
-
-  return signal_generate(pid, sig, 0);
+  return r;
 }
 
 int32_t
@@ -1354,7 +979,7 @@ sys_ftruncate(void)
 
   if ((r = sys_arg_int(0, &fd)) < 0)
     return r;
-  if ((r = sys_arg_long(1, (long *) &length)) < 0)
+  if ((r = sys_arg_long(1, &length)) < 0)
     return r;
 
   if ((file = fd_lookup(process_current(), fd)) == NULL)
@@ -1386,37 +1011,496 @@ sys_fsync(void)
   return r;
 }
 
+/*
+ * ----------------------------------------------------------------------------
+ * Net system calls
+ * ----------------------------------------------------------------------------
+ */
+
 int32_t
-sys_readlink(void)
+sys_socket(void)
 {
-  void *buf;
-  size_t n;
   int r;
-  const char *path;
+  int domain;
+  int type;
+  int protocol;
+  struct File *file;
 
-  if ((r = sys_arg_str(0, &path, PROT_READ)) < 0)
+  if ((r = sys_arg_int(0, &domain)) < 0)
     return r;
-  if ((r = sys_arg_int(2, (int *) &n)) < 0)
+  if ((r = sys_arg_int(1, &type)) < 0)
     return r;
-  if ((r = sys_arg_buf(1, &buf, n, PROT_WRITE, 0)) < 0)
+  if ((r = sys_arg_int(2, &protocol)) < 0)
     return r;
 
-  return fs_readlink(path, buf, n);
+  if ((r = net_socket(domain, type, protocol, &file)) != 0)
+    return r;
+
+  if ((r = fd_alloc(process_current(), file, 0)) < 0)
+    file_put(file);
+
+  return r;
 }
 
 int32_t
-sys_times(void)
+sys_bind(void)
 {
-  uintptr_t times_addr;
-  struct tms times;
-  int r;
+  struct File *file;
+  struct sockaddr *address;
+  socklen_t address_len;
+  int r, fd;
 
-  if ((r = sys_arg_buf(0, (void **) &times_addr, sizeof times,
-                       PROT_WRITE, 0)) < 0)
+  if ((r = sys_arg_int(0, &fd)) < 0)
+    return r;
+  if ((r = sys_arg_buf(1, (uintptr_t *) &address, sizeof(*address), PROT_READ, 0)) < 0)
+    return r;
+  if ((r = sys_arg_ulong(2, &address_len)) < 0)
+    return r;
+  
+  if ((file = fd_lookup(process_current(), fd)) == NULL)
+    return -EBADF;
+
+  r = net_bind(file, address, address_len);
+
+  file_put(file);
+
+  return r;
+}
+
+int32_t
+sys_connect(void)
+{
+  struct File *file;
+  struct sockaddr *address;
+  socklen_t address_len;
+  int r, fd;
+
+  if ((r = sys_arg_int(0, &fd)) < 0)
+    return r;
+  if ((r = sys_arg_buf(1, (uintptr_t *) &address, sizeof(*address), PROT_READ, 0)) < 0)
+    return r;
+  if ((r = sys_arg_ulong(2, &address_len)) < 0)
     return r;
 
-  process_get_times(process_current(), &times);
+  if ((file = fd_lookup(process_current(), fd)) == NULL)
+    return -EBADF;
 
-  return vm_copy_out(process_current()->vm->pgtab, &times, times_addr,
-                     sizeof times);
+  r = net_connect(file, address, address_len);
+
+  file_put(file);
+
+  return r;
+}
+
+int32_t
+sys_listen(void)
+{
+  struct File *file;
+  int backlog, r, fd;
+
+  if ((r = sys_arg_int(0, &fd)) < 0)
+    return r;
+  if ((r = sys_arg_int(1, &backlog)) < 0)
+    return r;
+
+  if ((file = fd_lookup(process_current(), fd)) == NULL)
+    return -EBADF;
+
+  r = net_listen(file, backlog);
+
+  file_put(file);
+
+  return r;
+}
+
+int32_t
+sys_accept(void)
+{
+  struct File *sockf, *connf;
+  struct sockaddr *address;
+  socklen_t *address_len;
+  int r, fd;
+
+  if ((r = sys_arg_int(0, &fd)) < 0)
+    return r;
+  if ((r = sys_arg_buf(1, (uintptr_t *) &address, sizeof(*address), PROT_WRITE, 1)) < 0)
+    return r;
+  if ((r = sys_arg_buf(2, (uintptr_t *) &address_len, sizeof(socklen_t), PROT_WRITE, 1)) < 0)
+    return r;
+
+  if ((sockf = fd_lookup(process_current(), fd)) == NULL)
+    return -EBADF;
+
+  if ((r = net_accept(sockf, address, address_len, &connf)) < 0) {
+    file_put(sockf);
+    return r;
+  }
+
+  if ((r = fd_alloc(process_current(), connf, 0)) < 0)
+    file_put(connf);
+
+  file_put(sockf);
+
+  return r;
+}
+
+/*
+ * ----------------------------------------------------------------------------
+ * Signal system calls
+ * ----------------------------------------------------------------------------
+ */
+
+int32_t
+sys_sigaction(void)
+{
+  int sig;
+  uintptr_t stub;
+  struct sigaction *act, *oact;
+  int r;
+
+  if ((r = sys_arg_int(0, &sig)) < 0)
+    return r;
+  if ((r = sys_arg_ptr(1, &stub, PROT_READ | PROT_EXEC, 1)) < 0)
+    return r;
+  if ((r = sys_arg_buf(2, (uintptr_t *) &act, sizeof(*act), PROT_READ, 1)) < 0)
+    return r;
+  if ((r = sys_arg_buf(3, (uintptr_t *) &oact, sizeof(*oact), PROT_WRITE, 1)) < 0)
+    return r;
+
+  return signal_action(sig, stub, act, oact);
+}
+
+int32_t
+sys_sigreturn(void)
+{
+  return signal_return();
+}
+
+int32_t
+sys_recvfrom(void)
+{
+  struct File *file;
+  void *buffer;
+  size_t length;
+  int flags;
+  struct sockaddr *address;
+  socklen_t *address_len;
+  int r, fd;
+
+  if ((r = sys_arg_int(0, &fd)) < 0)
+    return r;
+  if ((r = sys_arg_uint(2, &length)) < 0)
+    return r;
+  if ((r = sys_arg_buf(1, (uintptr_t *) &buffer, length, PROT_WRITE, 0)) < 0)
+    return r;
+  if ((r = sys_arg_int(3, &flags)) < 0)
+    return r;
+  if ((r = sys_arg_buf(4, (uintptr_t *) &address, sizeof(*address), PROT_WRITE, 1)) < 0)
+    return r;
+  if ((r = sys_arg_buf(5, (uintptr_t *) &address_len, sizeof(*address_len), PROT_WRITE, 1)) < 0)
+    return r;
+
+  if ((file = fd_lookup(process_current(), fd)) == NULL)
+    return -EBADF;
+
+  r = net_recvfrom(file, buffer, length, flags, address, address_len);
+
+  file_put(file);
+
+  return r;
+}
+
+int32_t
+sys_sendto(void)
+{
+  struct File *file;
+  void *message;
+  size_t length;
+  int flags;
+  struct sockaddr *dest_addr;
+  socklen_t dest_len;
+  int r, fd;
+
+  if ((r = sys_arg_int(0, &fd)) < 0)
+    return r;
+  if ((r = sys_arg_uint(2, &length)) < 0)
+    return r;
+  if ((r = sys_arg_buf(1, (uintptr_t *) &message, length, PROT_READ, 0)) < 0)
+    return r;
+  if ((r = sys_arg_int(3, &flags)) < 0)
+    return r;
+  if ((r = sys_arg_buf(4, (uintptr_t *) &dest_addr, sizeof(*dest_addr), PROT_READ, 1)) < 0)
+    return r;
+  if ((r = sys_arg_ulong(5, &dest_len)) < 0)
+    return r;
+
+  if ((file = fd_lookup(process_current(), fd)) == NULL)
+    return -EBADF;
+
+  r = net_sendto(file, message, length, flags, dest_addr, dest_len);
+
+  file_put(file);
+
+  return r;
+}
+
+int32_t
+sys_setsockopt(void)
+{
+  struct File *file;
+  int level;
+  int option_name;
+  void *option_value;
+  socklen_t option_len;
+  int r, fd;
+
+  if ((r = sys_arg_int(0, &fd)) < 0)
+    return r;
+  if ((r = sys_arg_int(1, &level)) < 0)
+    return r;
+  if ((r = sys_arg_int(2, &option_name)) < 0)
+    return r;
+  if ((r = sys_arg_ulong(4, &option_len)) < 0)
+    return r;
+  if ((r = sys_arg_buf(3, (uintptr_t *) &option_value, option_len, PROT_READ, 0)) < 0)
+    return r;
+
+  if ((file = fd_lookup(process_current(), fd)) == NULL)
+    return -EBADF;
+
+  r = net_setsockopt(file, level, option_name, option_value, option_len);
+
+  file_put(file);
+
+  return r;
+}
+
+int32_t
+sys_getpgid(void)
+{
+  pid_t pid;
+  int r;
+  
+  if ((r = sys_arg_int(0, &pid)) < 0)
+    return r;
+
+  return process_get_gid(pid);
+}
+
+int32_t
+sys_setpgid(void)
+{
+  pid_t pid, pgid;
+  int r;
+  
+  if ((r = sys_arg_int(0, &pid)) < 0)
+    return r;
+  if ((r = sys_arg_int(1, &pgid)) < 0)
+    return r;
+
+  return process_set_gid(pid, pgid);
+}
+
+int32_t
+sys_access(void)
+{
+  char *path;
+  int r, amode;
+
+  if ((r = sys_arg_str(0, PATH_MAX, PROT_READ, &path)) < 0)
+    goto out1;
+  if ((r = sys_arg_int(1, &amode)) < 0)
+    goto out2;
+  
+  r = fs_access(path, amode);
+
+out2:
+  k_free(path);
+out1:
+  return r;
+}
+
+int32_t
+sys_pipe(void)
+{
+  int r;
+  int *fildes;
+  struct File *read, *write;
+
+  if ((r = sys_arg_buf(0, (uintptr_t *) &fildes, sizeof(int)*2, PROT_WRITE, 0)) < 0)
+    return r;
+
+  if ((r = pipe_open(&read, &write)) < 0)
+    return r;
+
+  if ((fildes[0] = r = fd_alloc(process_current(), read, 0)) < 0) {
+    file_put(read);
+    file_put(write);
+    return r;
+  }
+
+  if ((fildes[1] = r = fd_alloc(process_current(), write, 0)) < 0) {
+    file_put(read);
+    file_put(write);
+    return r;
+  }
+
+  return 0;
+}
+
+
+
+
+
+
+int32_t
+sys_sigpending(void)
+{
+  sigset_t *set;
+  int r;
+
+  if ((r = sys_arg_buf(0, (uintptr_t *) &set, sizeof(*set), PROT_WRITE, 0)) < 0)
+    return r;
+
+  return signal_pending(set);
+}
+
+int32_t
+sys_sigprocmask(void)
+{
+  sigset_t *set, *oset;
+  int how, r;
+
+  if ((r = sys_arg_int(0, &how)) < 0)
+    return r;
+  if ((r = sys_arg_buf(1, (uintptr_t *) &set, sizeof(*set), PROT_READ, 1)) < 0)
+    return r;
+  if ((r = sys_arg_buf(2, (uintptr_t *) &oset, sizeof(*oset), PROT_WRITE, 1)) < 0)
+    return r;
+
+  return signal_mask(how, set, oset);
+}
+
+int32_t
+sys_sigsuspend(void)
+{
+  sigset_t *mask;
+  int r;
+
+  if ((r = sys_arg_buf(0, (uintptr_t *) &mask, sizeof(*mask), PROT_READ, 1)) < 0)
+    return r;
+
+  return signal_suspend(mask);
+}
+
+int32_t
+sys_kill(void)
+{
+  pid_t pid;
+  int sig, r;
+
+  if ((r = sys_arg_int(0, &pid)) < 0)
+    return r;
+  if ((r = sys_arg_int(1, &sig)) < 0)
+    return r;
+
+  return signal_generate(pid, sig, 0);
+}
+
+/*
+ * ----------------------------------------------------------------------------
+ * Miscellaneous system calls
+ * ----------------------------------------------------------------------------
+ */
+
+int32_t
+sys_clock_time(void)
+{
+  clockid_t clock_id;
+  struct timespec *prev;
+  int r;
+  
+  if ((r = sys_arg_ulong(0, &clock_id)) < 0)
+    return r;
+  
+  if ((r = sys_arg_buf(1, (uintptr_t *) &prev, sizeof(*prev), PROT_WRITE, 1)) < 0)
+    return r;
+
+  if (clock_id != CLOCK_REALTIME)
+    return -EINVAL;
+
+  if (prev) {
+    struct timespec prev_value;
+    prev_value.tv_sec  = rtc_get_time();
+    prev_value.tv_nsec = 0;
+
+    if ((r = vm_copy_out(process_current()->vm->pgtab, &prev_value,
+                         (uintptr_t) prev, sizeof prev_value)) < 0)
+      return r;
+  }
+
+  return 0;
+}
+
+int32_t
+sys_sbrk(void)
+{
+  ptrdiff_t n;
+  int r;
+
+  if ((r = sys_arg_int(0, &n)) < 0)
+    return r;
+
+  panic("deprecated!\n");
+  
+  return (int32_t) process_grow(n);
+}
+
+int32_t
+sys_uname(void)
+{
+  extern struct utsname utsname;  // defined in main.c
+
+  struct utsname *name;
+  int r;
+
+  if ((r = sys_arg_buf(0, (uintptr_t *) &name, sizeof(*name), PROT_WRITE, 0)) < 0)
+    return r;
+  
+  memcpy(name, &utsname, sizeof (*name));
+
+  return 0;
+}
+
+int32_t
+sys_test(void)
+{
+  int i, r;
+
+  for (i = 0; i < 6; i++) {
+    int arg;
+
+    if ((r = sys_arg_int(i, &arg)) < 0)
+      return r;
+    cprintf("[%d]: %d\n", i, arg);
+  }
+  return 0;
+}
+
+int32_t
+sys_mmap(void)
+{
+  uintptr_t addr;
+  size_t n;
+  int prot;
+  int r;
+
+  if ((r = sys_arg_uint(0, &addr)) < 0)
+    return r;
+  if ((r = sys_arg_uint(1, &n)) < 0)
+    return r;
+  if ((r = sys_arg_int(2, &prot)) < 0)
+    return r;
+
+  return (int32_t) vmspace_map(process_current()->vm, addr, n, prot | _PROT_USER);
 }

@@ -36,4 +36,6 @@ int          vm_range_clone(void *, void *, uintptr_t, size_t, int);
 int          vm_copy_out(void *, const void *, uintptr_t, size_t);
 int          vm_copy_in(void *, void *, uintptr_t, size_t);
 
+int          vm_check_str(void *, uintptr_t, size_t *, int);
+
 #endif  // !__KERNEL_VM_H__
