@@ -5,6 +5,7 @@ sysroot/
 ports/*/*
 !ports/*/build.sh
 !ports/*/Makefile
+!ports/*/README.md
 !ports/*/*.patch
 
 tools/*/*

@@ -525,7 +525,7 @@ process_nanosleep(const struct timespec *rqtp, struct timespec *rmtp)
 
   k_semaphore_fini(&sem);
 
-  return r;
+  return r == -ETIMEDOUT ? 0 : r;
 }
 
 pid_t

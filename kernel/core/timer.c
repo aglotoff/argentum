@@ -19,8 +19,7 @@ k_timer_create(struct KTimer *timer,
   if (timer == NULL)
     panic("timer is NULL");
 
-  k_list_init(&timer->link);
-
+  k_list_null(&timer->link);
   timer->callback     = callback;
   timer->callback_arg = callback_arg;
   timer->remain       = delay;
