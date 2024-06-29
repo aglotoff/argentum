@@ -1,0 +1,24 @@
+diff -ruN old/build-aux/config.sub new/build-aux/config.sub
+--- old/build-aux/config.sub	2023-02-18 18:38:13.000000000 +0300
++++ new/build-aux/config.sub	2024-06-29 21:55:08.787803563 +0300
+@@ -1758,7 +1758,7 @@
+ 	     | onefs* | tirtos* | phoenix* | fuchsia* | redox* | bme* \
+ 	     | midnightbsd* | amdhsa* | unleashed* | emscripten* | wasi* \
+ 	     | nsk* | powerunix* | genode* | zvmoe* | qnx* | emx* | zephyr* \
+-	     | fiwix* | mlibc* )
++	     | fiwix* | mlibc* | argentum* )
+ 		;;
+ 	# This one is extra strict with allowed versions
+ 	sco3.2v2 | sco3.2v[4-9]* | sco5v6*)
+diff -ruN old/src/makeint.h new/src/makeint.h
+--- old/src/makeint.h	2023-02-19 16:51:55.000000000 +0300
++++ new/src/makeint.h	2024-06-29 21:55:46.257795986 +0300
+@@ -680,7 +680,7 @@
+ /* We omit these declarations on non-POSIX systems which define _POSIX_VERSION,
+    because such systems often declare them in header files anyway.  */
+ 
+-#if !defined (__GNU_LIBRARY__) && !defined (POSIX) && !defined (_POSIX_VERSION) && !defined(WINDOWS32)
++#if !defined (__GNU_LIBRARY__) && !defined (POSIX) && !defined (_POSIX_VERSION) && !defined(WINDOWS32) && !defined(__ARGENTUM__)
+ 
+ # ifndef VMS
+ long int lseek ();

@@ -368,7 +368,7 @@ vm_copy_in(void *vm, void *dst, uintptr_t src_va, size_t n)
 int
 vm_check_str(void *vm, uintptr_t va, size_t *len_ptr, int perm)
 {
-  const char *s = (const char *) va;
+  size_t len = 0;
 
   while (va < VIRT_KERNEL_BASE) {
     const char *p;
@@ -390,17 +390,19 @@ vm_check_str(void *vm, uintptr_t va, size_t *len_ptr, int perm)
     for (off = va % PAGE_SIZE; off < PAGE_SIZE; off++) {
       if (p[off] == '\0') {
         if (len_ptr)
-          *len_ptr = ROUND_DOWN(va, PAGE_SIZE) + off - (uintptr_t) s;
+          *len_ptr = len;
 
         vm_unlock();
 
         return 0;
       }
+
+      len++;
     }
 
     vm_unlock();
 
-    va += off;
+    va += PAGE_SIZE - (va % PAGE_SIZE);
   }
 
   return -EFAULT;

@@ -167,7 +167,7 @@ console_scroll_down(struct Console *console, unsigned n)
 static void
 console_insert_rows(struct Console *cons, unsigned rows)
 {
-  unsigned max_rows, start_pos, end_pos, n;
+  unsigned max_rows, start_pos, end_pos, n, i;
   
   max_rows  = cons->out.rows - cons->out.pos / cons->out.cols;
   rows      = MIN(max_rows, rows);
@@ -178,6 +178,12 @@ console_insert_rows(struct Console *cons, unsigned rows)
 
   if (cons == console_current)
     display_flush(cons);
+
+  for (i = 0; i < rows * cons->out.cols; i++) {
+    cons->out.buf[i + start_pos].ch = ' ';
+    cons->out.buf[i + start_pos].fg = COLOR_WHITE;
+    cons->out.buf[i + start_pos].bg = COLOR_BLACK;
+  }
 
   memmove(&cons->out.buf[end_pos], &cons->out.buf[start_pos],
           sizeof(cons->out.buf[0]) * n);

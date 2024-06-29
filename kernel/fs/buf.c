@@ -11,7 +11,7 @@
 struct KObjectPool *buf_desc_cache;
 
 // Maximum size of the buffer cache
-#define BUF_CACHE_MAX_SIZE   512
+#define BUF_CACHE_MAX_SIZE   1024
 
 static struct {
   size_t          size;

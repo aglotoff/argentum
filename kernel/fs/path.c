@@ -81,8 +81,6 @@ fs_path_remove(struct PathNode *path)
   k_list_remove(&path->siblings);
   path->ref_count--;
 
-  cprintf("removed\n");
-
   k_spinlock_release(&path_lock);
 }
 
