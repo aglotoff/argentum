@@ -333,21 +333,22 @@ fs_inode_stat(struct Inode *ip, struct stat *buf)
 
   // TODO: check permissions
 
-  buf->st_mode  = ip->mode;
-  buf->st_ino   = ip->ino;
-  buf->st_dev   = ip->dev;
-  buf->st_nlink = ip->nlink;
-  buf->st_uid   = ip->uid;
-  buf->st_gid   = ip->gid;
-  buf->st_size  = ip->size;
-  buf->st_rdev  = ip->rdev;
-
+  buf->st_dev          = ip->dev;
+  buf->st_ino          = ip->ino;
+  buf->st_mode         = ip->mode;
+  buf->st_nlink        = ip->nlink;
+  buf->st_uid          = ip->uid;
+  buf->st_gid          = ip->gid;
+  buf->st_rdev         = ip->rdev;
+  buf->st_size         = ip->size;
   buf->st_atim.tv_sec  = ip->atime;
   buf->st_atim.tv_nsec = 0;
   buf->st_mtim.tv_sec  = ip->mtime;
   buf->st_mtim.tv_nsec = 0;
   buf->st_ctim.tv_sec  = ip->ctime;
   buf->st_ctim.tv_nsec = 0;
+  buf->st_blocks       = ip->size / S_BLKSIZE;
+  buf->st_blksize      = S_BLKSIZE;
 
   return 0;
 }

@@ -15,3 +15,6 @@ Problems:
 
 * Skip `sort` (requires `pthreads`)
 * Skip `stty` (requires network support)
+* `shuf` fails (`getrandom` not implemented)
+* `pinky` hangs forever
+* `users` hangs forever

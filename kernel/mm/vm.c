@@ -197,8 +197,10 @@ vm_range_clone(void *src, void *dst, uintptr_t va, size_t n, int share)
 
         if (src_page->ref_count == 1) {
           if ((r = vm_page_insert(src, src_page, va, perm)) < 0) {
-            page_free_one(dst_page);
             vm_unlock();
+
+            page_free_one(dst_page);
+
             return r;
           }
         } else {
@@ -242,8 +244,9 @@ vm_range_clone(void *src, void *dst, uintptr_t va, size_t n, int share)
       }
 
       if ((r = vm_page_insert(dst, dst_page, (uintptr_t) va, perm)) < 0) {
-        page_free_one(dst_page);
         vm_unlock();
+
+        page_free_one(dst_page);
         return r;
       }
 
@@ -308,8 +311,9 @@ vm_copy_out(void *pgtab, const void *src, uintptr_t dst_va, size_t n)
         memmove(page2kva(page_copy), page2kva(page), PAGE_SIZE);
 
         if ((r = vm_page_insert(pgtab, page_copy, dst_va, prot)) < 0) {
-          page_free_one(page_copy);
           vm_unlock();
+
+          page_free_one(page_copy);
           return r;
         }
       }
@@ -394,10 +398,10 @@ vm_check_str(void *vm, uintptr_t va, size_t *len_ptr, int perm)
       }
     }
 
+    vm_unlock();
+
     va += off;
   }
-
-  vm_unlock();
 
   return -EFAULT;
 }

@@ -44,11 +44,11 @@ main(void)
       mknod(df->name, df->mode, df->dev);
 
   open("/etc/passwd", O_WRONLY | O_CREAT | O_TRUNC, 0777);
-  write(0, "root:x:0:0:root:/root:/bin/sh\n", 37);
+  write(0, "root:x:0:0:root:/root:/bin/sh\n", 30);
   close(0);
 
   open("/home/root/run", O_WRONLY | O_CREAT | O_TRUNC, 0777);
-  write(0, "while :; do ls /usr -al | wc | wc ; date ; done", 48);
+  write(0, "while :; do ls /usr -al | wc | wc ; date ; done\n", 48);
   close(0);
 
   // Spawn the shells
