@@ -12,6 +12,7 @@
  */
 
 #include <stddef.h>
+#include <kernel/assert.h>
 
 struct KListLink {
   struct KListLink *next;
@@ -36,6 +37,7 @@ k_list_empty(struct KListLink *head)
 static inline void
 k_list_add_front(struct KListLink *head, struct KListLink *link)
 {
+  assert (link->prev == NULL && link->next == NULL);
   link->next = head->next;
   head->next->prev = link;
   head->next = link;
@@ -45,6 +47,7 @@ k_list_add_front(struct KListLink *head, struct KListLink *link)
 static inline void
 k_list_add_back(struct KListLink *head, struct KListLink *link)
 {
+  assert (link->prev == NULL && link->next == NULL);
   link->prev = head->prev;
   head->prev->next = link;
   head->prev = link;

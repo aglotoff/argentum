@@ -432,6 +432,8 @@ k_object_pool_slab_create(struct KObjectPool *pool)
   slab->pool       = pool;
   slab->used_count = 0;
   slab->free       = NULL;
+  slab->link.prev  = NULL;
+  slab->link.next  = NULL;
 
   // Initialize all objects in the slab
   p = data;

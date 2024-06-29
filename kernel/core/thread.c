@@ -162,7 +162,7 @@ k_thread_create(struct Process *process, void (*entry)(void *), void *arg,
 
   memmove(thread->type, "THRD", 4);
 
-  k_list_init(&thread->mutex_list);
+  // k_list_init(&thread->mutex_list);
   thread->flags          = 0;
   thread->saved_priority = priority;
   thread->priority       = priority;
@@ -171,9 +171,11 @@ k_thread_create(struct Process *process, void (*entry)(void *), void *arg,
   thread->arg            = arg;
   thread->err            = 0;
   thread->process        = process;
-  thread->wait_mutex     = NULL;
+  // thread->wait_mutex     = NULL;
   thread->kstack         = stack;
   thread->tf             = NULL;
+  thread->link.prev      = NULL;
+  thread->link.next      = NULL;
 
   k_timer_create(&thread->timer, k_thread_timeout_callback, thread, 0, 0, 0);
 

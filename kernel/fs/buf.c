@@ -105,6 +105,10 @@ buf_alloc(size_t block_size)
   buf->flags      = 0;
   buf->ref_count  = 0;
   buf->block_size = block_size;
+  buf->cache_link.prev = NULL;
+  buf->cache_link.next = NULL;
+  buf->queue_link.prev = NULL;
+  buf->queue_link.next = NULL;
 
   k_list_add_front(&buf_cache.head, &buf->cache_link);
   buf_cache.size++;

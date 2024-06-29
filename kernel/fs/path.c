@@ -35,7 +35,8 @@ fs_path_create(const char *name, struct Inode *inode, struct PathNode *parent)
   path->parent = NULL;
   path->mounted = NULL;
   k_list_init(&path->children);
-  k_list_init(&path->siblings);
+  path->siblings.prev = NULL;
+  path->siblings.next = NULL;
   k_mutex_init(&path->mutex, "path");
 
   if (parent) {

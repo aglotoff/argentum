@@ -135,7 +135,7 @@ void main(void)
   // Initialize the device drivers
   rtc_init(); // Real-time clock
   sd_init();  // MultiMedia Card
-  eth_init(); // Ethernet
+  // eth_init(); // Ethernet
 
   // Initialize the remaining kernel services
   buf_init();     // Buffer cache

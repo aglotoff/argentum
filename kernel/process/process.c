@@ -94,7 +94,10 @@ process_alloc(void)
 
   signal_init(process);
 
-  k_list_init(&process->link);
+  k_list_init(&process->children);
+
+  process->link.prev = NULL;
+  process->link.next = NULL;
 
   process->parent = NULL;
   process->zombie = 0;
@@ -413,6 +416,7 @@ process_wait(pid_t pid, int *stat_loc, int options)
 
       if (process->zombie) {
         k_list_remove(&process->sibling_link);
+        k_list_remove(&process->link);
 
         // Include the times of the terminated child process in the parent's
         // times structure. Thus, only the times of children for which wait

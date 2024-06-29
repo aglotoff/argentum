@@ -49,6 +49,9 @@ _k_sched_enqueue(struct KThread *th)
   if (!k_spinlock_holding(&_k_sched_spinlock))
     panic("scheduler not locked");
 
+  if (memcmp(th, "THRD", 4))
+    panic("not a thread");
+
   th->state = THREAD_STATE_READY;
   k_list_add_back(&sched_queue[th->priority], &th->link);
 }
@@ -86,6 +89,8 @@ k_sched_switch(struct KThread *thread)
     vm_arch_load(thread->process->vm->pgtab);
   }
 
+
+
   thread->state = THREAD_STATE_RUNNING;
 
   thread->cpu = my_cpu;
@@ -112,6 +117,10 @@ k_sched_idle(void)
     struct Page *kstack_page;
     
     thread = KLIST_CONTAINER(threads_to_destroy.next, struct KThread, link);
+
+    if (memcmp(thread, "THRD", 4))
+      panic("not a thread");
+
     k_list_remove(&thread->link);
 
     _k_sched_unlock();
@@ -175,14 +184,11 @@ _k_sched_add(struct KListLink *queue, struct KThread *thread)
   struct KListLink *l;
   struct KThread *other_thread;
 
-  for (l = queue->next; l != queue; l++) {
+  for (l = queue->next; l != queue; l = l->next) {
     other_thread = KLIST_CONTAINER(l, struct KThread, link);
     if (_k_sched_priority_cmp(thread, other_thread) > 0)
       break;
   }
-
-  if (l != queue)
-    cprintf("%p, %p, %.4s\n", l, other_thread, other_thread->type);
 
   k_list_add_back(l, &thread->link);
 }
@@ -258,7 +264,7 @@ _k_sched_set_priority(struct KThread *thread, int priority)
     break;
   case THREAD_STATE_MUTEX:
     // Update mutex priority and its owner priority
-    
+    panic("todo");
   default:
     break;
   }
@@ -270,6 +276,8 @@ _k_sched_resume(struct KThread *thread, int result)
   if (!k_spinlock_holding(&_k_sched_spinlock))
     panic("sched not locked");
 
+
+
   switch (thread->state) {
   case THREAD_STATE_SEMAPHORE:
     k_list_remove(&thread->link);
@@ -278,14 +286,14 @@ _k_sched_resume(struct KThread *thread, int result)
     k_list_remove(&thread->link);
     break;
   case THREAD_STATE_MUTEX:
-    assert(thread->wait_mutex != NULL);
-    assert(thread->wait_mutex->owner != NULL);
+    // assert(thread->wait_mutex != NULL);
+    // assert(thread->wait_mutex->owner != NULL);
 
     k_list_remove(&thread->link);
-    _k_mutex_recalc_priority(thread->wait_mutex);
+    // _k_mutex_recalc_priority(thread->wait_mutex);
 
     //_k_sched_calc_priority(thread->wait_mutex->owner);
-    thread->wait_mutex = NULL;
+    // thread->wait_mutex = NULL;
 
     // TODO: update the owner's priority (probably triggering entire chain of
     // priority updates)
@@ -315,6 +323,9 @@ _k_sched_wakeup_all_locked(struct KListLink *queue, int result)
     struct KListLink *link = queue->next;
     struct KThread *thread = KLIST_CONTAINER(link, struct KThread, link);
 
+    if (memcmp(thread, "THRD", 4))
+      panic("not a thread");
+
     _k_sched_resume(thread, result);
   }
 }
@@ -333,6 +344,9 @@ _k_sched_wakeup_one_locked(struct KListLink *queue, int result)
     return NULL;
 
   thread = KLIST_CONTAINER(queue->next, struct KThread, link);
+
+
+
   _k_sched_resume(thread, result);
 
   return thread;
@@ -348,6 +362,8 @@ _k_sched_may_yield(struct KThread *thread)
 
   if (!k_spinlock_holding(&_k_sched_spinlock))
     panic("scheduler not locked");
+
+
 
   my_cpu = _k_cpu();
   my_thread = my_cpu->thread;

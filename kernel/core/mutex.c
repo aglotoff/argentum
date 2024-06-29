@@ -63,6 +63,7 @@ void
 k_mutex_destroy(struct KMutex *mutex)
 {
   k_mutex_fini(mutex);
+  assert(k_list_empty(&mutex->queue));
   k_object_pool_put(k_mutex_pool, mutex);
 }
 
@@ -86,15 +87,15 @@ k_mutex_lock(struct KMutex *mutex)
       return -EDEADLK;
     }
 
-    if (mutex->priority > my_task->priority) {
-      mutex->priority = my_task->priority;
+    // if (mutex->priority > my_task->priority) {
+    //   mutex->priority = my_task->priority;
       
-      // Temporarily raise the owner's priority
-      if (my_task->priority < mutex->owner->priority)
-        _k_sched_set_priority(mutex->owner, my_task->priority);
-    }
+    //   // Temporarily raise the owner's priority
+    //   if (my_task->priority < mutex->owner->priority)
+    //     _k_sched_set_priority(mutex->owner, my_task->priority);
+    // }
 
-    my_task->wait_mutex = mutex;
+    // my_task->wait_mutex = mutex;
     r = _k_sched_sleep(&mutex->queue, THREAD_STATE_MUTEX, 0, NULL);
 
     if (r < 0) {
@@ -106,10 +107,10 @@ k_mutex_lock(struct KMutex *mutex)
   mutex->owner = my_task;
 
   // The highest-priority thread always locks the mutex first
-  assert(my_task->priority < mutex->priority);
+  // assert(my_task->priority < mutex->priority);
 
-  k_list_remove(&mutex->link);
-  k_list_add_front(&my_task->mutex_list, &mutex->link);
+  // k_list_remove(&mutex->link);
+  // k_list_add_front(&my_task->mutex_list, &mutex->link);
 
   _k_sched_unlock();
 
@@ -162,12 +163,12 @@ k_mutex_unlock(struct KMutex *mutex)
 
   _k_sched_lock();
 
-  k_list_remove(&mutex->link);
+  // k_list_remove(&mutex->link);
 
   _k_sched_wakeup_one_locked(&mutex->queue, 0);
-  _k_mutex_recalc_priority(mutex);
+  // _k_mutex_recalc_priority(mutex);
 
-  _k_sched_calc_priority(k_thread_current());
+  // _k_sched_calc_priority(k_thread_current());
 
   mutex->owner = NULL;
 
@@ -209,7 +210,7 @@ k_mutex_dtor(void *p, size_t n)
   struct KMutex *mutex = (struct KMutex *) p;
   (void) n;
 
-  assert(!k_list_empty(&mutex->queue));
+  assert(k_list_empty(&mutex->queue));
 }
 
 static void
