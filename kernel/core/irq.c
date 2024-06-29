@@ -46,9 +46,9 @@ k_irq_restore(void)
 void
 k_irq_begin(void)
 {
-  _k_sched_lock();
-  _k_cpu()->lock_count++;
-  _k_sched_unlock();
+  k_irq_save();
+  ++_k_cpu()->lock_count;
+  k_irq_restore();
 }
 
 /**

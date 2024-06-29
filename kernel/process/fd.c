@@ -78,7 +78,7 @@ fd_alloc(struct Process *process, struct File *f, int start)
 
   for (i = start; i < OPEN_MAX; i++) {
     if (process->fd[i].file == NULL) {
-      process->fd[i].file  = f;
+      process->fd[i].file  = file_dup(f);
       process->fd[i].flags = 0;
 
       k_spinlock_release(&process->fd_lock);

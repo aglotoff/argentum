@@ -80,6 +80,8 @@ fs_path_remove(struct PathNode *path)
   k_list_remove(&path->siblings);
   path->ref_count--;
 
+  cprintf("removed\n");
+
   k_spinlock_release(&path_lock);
 }
 
@@ -89,6 +91,9 @@ fs_path_put(struct PathNode *path)
   k_spinlock_acquire(&path_lock);
 
   path->ref_count--;
+
+  if ((path->ref_count == 0) && (path->parent != NULL))
+    panic("path in bad state");
 
   // cprintf("[put %s]\n", path->name);
 
@@ -104,10 +109,11 @@ fs_path_put(struct PathNode *path)
       break;
 
     if (parent) {
+      if (path->ref_count != 1)
+        cprintf("bad path %d %s\n", path->ref_count, path->name);
       assert(path->ref_count == 1);
 
       k_list_remove(&path->siblings);
-      parent->ref_count--;
     }
 
     k_spinlock_release(&path_lock);
@@ -120,6 +126,9 @@ fs_path_put(struct PathNode *path)
     k_object_pool_put(path_pool, path);
     
     k_spinlock_acquire(&path_lock);
+
+    if (parent)
+      parent->ref_count--;
 
     path = parent;
   }

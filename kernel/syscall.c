@@ -544,9 +544,9 @@ sys_open(void)
   if ((r = fs_open(path, oflag, mode, &file)) < 0)
     goto out2;
 
-  if ((r = fd_alloc(process_current(), file, 0)) < 0)
-    file_put(file);
+  r = fd_alloc(process_current(), file, 0);
 
+  file_put(file);
 out2:
   k_free(path);
 out1:
@@ -800,7 +800,8 @@ sys_fcntl(void)
 
   switch (cmd) {
   case F_DUPFD:
-    return fd_alloc(process_current(), file, arg);
+    r = fd_alloc(process_current(), file, arg);
+    break;
   case F_GETFL:
     r = file_get_flags(file);
     break;
@@ -1036,9 +1037,9 @@ sys_socket(void)
   if ((r = net_socket(domain, type, protocol, &file)) != 0)
     return r;
 
-  if ((r = fd_alloc(process_current(), file, 0)) < 0)
-    file_put(file);
+  r = fd_alloc(process_current(), file, 0);
 
+  file_put(file);
   return r;
 }
 
@@ -1122,25 +1123,26 @@ sys_accept(void)
   int r, fd;
 
   if ((r = sys_arg_int(0, &fd)) < 0)
-    return r;
+    goto out1;
   if ((r = sys_arg_buf(1, (uintptr_t *) &address, sizeof(*address), PROT_WRITE, 1)) < 0)
-    return r;
+    goto out1;
   if ((r = sys_arg_buf(2, (uintptr_t *) &address_len, sizeof(socklen_t), PROT_WRITE, 1)) < 0)
-    return r;
+    goto out1;
 
-  if ((sockf = fd_lookup(process_current(), fd)) == NULL)
-    return -EBADF;
-
-  if ((r = net_accept(sockf, address, address_len, &connf)) < 0) {
-    file_put(sockf);
-    return r;
+  if ((sockf = fd_lookup(process_current(), fd)) == NULL) {
+    r = -EBADF;
+    goto out1;
   }
 
-  if ((r = fd_alloc(process_current(), connf, 0)) < 0)
-    file_put(connf);
+  if ((r = net_accept(sockf, address, address_len, &connf)) < 0)
+    goto out2;
 
+  r = fd_alloc(process_current(), connf, 0);
+
+  file_put(connf);
+out2:
   file_put(sockf);
-
+out1:
   return r;
 }
 
@@ -1320,38 +1322,11 @@ out1:
   return r;
 }
 
-int32_t
-sys_pipe(void)
-{
-  int r;
-  int *fildes;
-  struct File *read, *write;
-
-  if ((r = sys_arg_buf(0, (uintptr_t *) &fildes, sizeof(int)*2, PROT_WRITE, 0)) < 0)
-    return r;
-
-  if ((r = pipe_open(&read, &write)) < 0)
-    return r;
-
-  if ((fildes[0] = r = fd_alloc(process_current(), read, 0)) < 0) {
-    file_put(read);
-    file_put(write);
-    return r;
-  }
-
-  if ((fildes[1] = r = fd_alloc(process_current(), write, 0)) < 0) {
-    file_put(read);
-    file_put(write);
-    return r;
-  }
-
-  return 0;
-}
-
-
-
-
-
+/*
+ * ----------------------------------------------------------------------------
+ * Signal system calls
+ * ----------------------------------------------------------------------------
+ */
 
 int32_t
 sys_sigpending(void)
@@ -1503,4 +1478,31 @@ sys_mmap(void)
     return r;
 
   return (int32_t) vmspace_map(process_current()->vm, addr, n, prot | _PROT_USER);
+}
+
+int32_t
+sys_pipe(void)
+{
+  int r;
+  int *fildes;
+  struct File *read_file, *write_file;
+
+  if ((r = sys_arg_buf(0, (uintptr_t *) &fildes, sizeof(int)*2, PROT_WRITE, 0)) < 0)
+    goto out1;
+
+  if ((r = pipe_open(&read_file, &write_file)) < 0)
+    goto out1;
+
+  if ((fildes[0] = r = fd_alloc(process_current(), read_file, 0)) < 0)
+    goto out2;
+  if ((fildes[1] = r = fd_alloc(process_current(), write_file, 0)) < 0)
+    goto out2;
+
+  r = 0;
+
+out2:
+  file_put(read_file);
+  file_put(write_file);
+out1:
+  return r;
 }

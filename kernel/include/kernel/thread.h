@@ -57,6 +57,7 @@ struct KMutex;
  * Scheduler task state.
  */
 struct KThread {
+  char              type[4];
   /** Link into the list containing this task */
   struct KListLink  link;
   /** Current task state */

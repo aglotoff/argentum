@@ -46,6 +46,10 @@ main(void)
   write(0, "root:x:0:0:root:/root:/bin/sh\n", 37);
   close(0);
 
+  // open("/home/root/run", O_WRONLY | O_CREAT | O_TRUNC, 0777);
+  // write(0, "while :; do ls /usr -al | wc ; done", 36);
+  // close(0);
+
   // Spawn the shells
   for (i = 0; i < 1; i++) {
     if (fork() == 0) {

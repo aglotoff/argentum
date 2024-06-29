@@ -25,7 +25,8 @@ trap(struct TrapFrame *tf)
 {
   extern char *panicstr;
 
-  struct Process *my_process = process_current();
+  struct KThread *my_thread = k_thread_current();
+  struct Process *my_process = my_thread ? my_thread->process : NULL;
 
   // Halt if some other CPU already has called panic().
   if (panicstr) {
@@ -33,6 +34,9 @@ trap(struct TrapFrame *tf)
       asm volatile("wfi");
     }
   }
+
+  if (my_thread && (uintptr_t) (my_thread->kstack) >= (uintptr_t) tf)
+    panic("stack underflow %p %p", my_thread->kstack, tf);
 
   // User-mode trap frame address should never change, there's logic in the
   // kernel that relies on this!
@@ -243,17 +247,17 @@ irq_dispatch(void)
 {
   int irq = irq_id();
 
+  k_irq_begin();
+
   irq_mask(irq);
   irq_eoi(irq);
 
-  k_irq_begin();
-
-  // Enable nested interrupts
   k_irq_enable();
 
+  // Enable nested interrupts
   k_irq_dispatch(irq & 0xFFFFFF);
 
-  k_irq_end();
-
   irq_unmask(irq);
+
+  k_irq_end();
 }

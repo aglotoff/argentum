@@ -160,6 +160,8 @@ k_thread_create(struct Process *process, void (*entry)(void *), void *arg,
   stack = (uint8_t *) page2kva(stack_page);
   stack_page->ref_count++;
 
+  memmove(thread->type, "THRD", 4);
+
   k_list_init(&thread->mutex_list);
   thread->flags          = 0;
   thread->saved_priority = priority;
@@ -197,9 +199,12 @@ k_thread_exit(void)
   _k_sched_lock();
 
   thread->state = THREAD_STATE_DESTROYED;
+
   k_list_add_back(&threads_to_destroy, &thread->link);
 
   _k_sched_yield_locked();
+
+  _k_sched_unlock();
 
   panic("should not return");
 }

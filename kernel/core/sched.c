@@ -80,8 +80,11 @@ k_sched_switch(struct KThread *thread)
 {
   struct KCpu *my_cpu = _k_cpu();
 
-  if (thread->process != NULL)
+  if (thread->process != NULL) {
+    if (thread->process->vm->pgtab == (void *) 0x50)
+      panic("old");
     vm_arch_load(thread->process->vm->pgtab);
+  }
 
   thread->state = THREAD_STATE_RUNNING;
 
@@ -89,6 +92,9 @@ k_sched_switch(struct KThread *thread)
   my_cpu->thread = thread;
 
   k_arch_switch(&my_cpu->sched_context, thread->context);
+
+  if ((intptr_t) thread->context - (intptr_t) thread->kstack < 64)
+    panic("stack underflow %p %p", thread->context, thread->kstack);
 
   my_cpu->thread = NULL;
   thread->cpu = NULL;
@@ -167,12 +173,16 @@ void
 _k_sched_add(struct KListLink *queue, struct KThread *thread)
 {
   struct KListLink *l;
+  struct KThread *other_thread;
 
   for (l = queue->next; l != queue; l++) {
-    struct KThread *other_thread = KLIST_CONTAINER(l, struct KThread, link);
+    other_thread = KLIST_CONTAINER(l, struct KThread, link);
     if (_k_sched_priority_cmp(thread, other_thread) > 0)
       break;
   }
+
+  if (l != queue)
+    cprintf("%p, %p, %.4s\n", l, other_thread, other_thread->type);
 
   k_list_add_back(l, &thread->link);
 }
@@ -284,6 +294,8 @@ _k_sched_resume(struct KThread *thread, int result)
   default:
     return;
   }
+
+  k_list_remove(&thread->link);
 
   thread->sleep_result = result;
 

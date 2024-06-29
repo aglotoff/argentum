@@ -141,7 +141,7 @@ void main(void)
   buf_init();     // Buffer cache
   file_init();    // File table
   
-  net_init();     // Network
+  // net_init();     // Network
   pipe_init();    // Pipes subsystem
   process_init(); // Process table
   signal_init_system();

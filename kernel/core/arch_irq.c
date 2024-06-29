@@ -1,5 +1,8 @@
 #include <kernel/armv7/regs.h>
 #include <kernel/irq.h>
+#include <kernel/assert.h>
+
+#include "core_private.h"
 
 // Disable both regular and fast IRQs
 #define PSR_IRQ_MASK  (PSR_I | PSR_F)
@@ -13,6 +16,13 @@ k_arch_irq_is_enabled(void)
 void
 k_arch_irq_enable(void)
 {
+  // k_irq_save();
+
+  // if (_k_cpu()->irq_save_count > 1)
+  //   panic("should have uses k_irq_restore()");
+
+  // k_irq_restore();
+
   cpsr_set(cpsr_get() & ~PSR_IRQ_MASK);
 }
 

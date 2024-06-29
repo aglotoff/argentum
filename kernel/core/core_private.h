@@ -3,6 +3,8 @@
 
 #include <kernel/spinlock.h>
 #include <kernel/thread.h>
+#include <kernel/cprintf.h>
+#include <kernel/cpu.h>
 
 struct Context;
 struct KListLink;
@@ -36,11 +38,13 @@ static inline void
 _k_sched_lock(void)
 {
   k_spinlock_acquire(&_k_sched_spinlock);
+  // cprintf("+ %d\n", k_cpu_id());
 }
 
 static inline void
 _k_sched_unlock(void)
 {
+  // cprintf("- %d\n", k_cpu_id());
   k_spinlock_release(&_k_sched_spinlock);
 }
 
