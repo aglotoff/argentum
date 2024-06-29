@@ -153,7 +153,7 @@ void main(void)
   // test3 = k_thread_create(NULL, test_func3, NULL, 3);
 
   // k_thread_resume(test1);
-  // 
+  
   // k_thread_resume(test3);
 
   // Unblock other CPUs

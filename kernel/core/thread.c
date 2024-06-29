@@ -108,7 +108,6 @@ k_thread_timeout_callback(void *arg)
     // TODO
     // fall through
   case THREAD_STATE_SLEEP:
-  case THREAD_STATE_SEMAPHORE:
     _k_sched_resume(thread, -ETIMEDOUT);
     break;
   }
@@ -160,9 +159,10 @@ k_thread_create(struct Process *process, void (*entry)(void *), void *arg,
   stack = (uint8_t *) page2kva(stack_page);
   stack_page->ref_count++;
 
-  memmove(thread->type, "THRD", 4);
+  k_list_init(&thread->mutex_list);
+  k_list_null(&thread->link);
+  thread->wait_mutex     = NULL;
 
-  // k_list_init(&thread->mutex_list);
   thread->flags          = 0;
   thread->saved_priority = priority;
   thread->priority       = priority;
@@ -171,11 +171,9 @@ k_thread_create(struct Process *process, void (*entry)(void *), void *arg,
   thread->arg            = arg;
   thread->err            = 0;
   thread->process        = process;
-  // thread->wait_mutex     = NULL;
+  
   thread->kstack         = stack;
   thread->tf             = NULL;
-  thread->link.prev      = NULL;
-  thread->link.next      = NULL;
 
   k_timer_create(&thread->timer, k_thread_timeout_callback, thread, 0, 0, 0);
 

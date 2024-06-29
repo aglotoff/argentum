@@ -114,7 +114,7 @@ k_timer_tick(void)
 
   k_spinlock_acquire(&k_timer_queue_lock);
 
-  if (k_list_empty(&k_timer_queue)) {
+  if (k_list_is_empty(&k_timer_queue)) {
     k_spinlock_release(&k_timer_queue_lock);
     return;
   }
@@ -146,7 +146,7 @@ k_timer_tick(void)
       }
     }
 
-    if (k_list_empty(&k_timer_queue))
+    if (k_list_is_empty(&k_timer_queue))
       break;
 
     link  = k_timer_queue.next;

@@ -169,7 +169,7 @@ vm_space_destroy(struct VMSpace *vm)
   // vm_range_free(vm->pgtab, 0, ROUND_UP(vm->heap, PAGE_SIZE));
   // vm_range_free(vm->pgtab, vm->stack, USTACK_SIZE);
   
-  while (!k_list_empty(&vm->areas)) {
+  while (!k_list_is_empty(&vm->areas)) {
     area = KLIST_CONTAINER(vm->areas.next, struct VMSpaceMapEntry, link);
     vm_range_free(vm->pgtab, area->start, area->length);
 

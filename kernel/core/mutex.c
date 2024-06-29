@@ -42,7 +42,12 @@ void
 k_mutex_fini(struct KMutex *mutex)
 {
   _k_sched_lock();
+
+  if (mutex->owner != NULL)
+    panic("mutex is locked");
+
   _k_sched_wakeup_all_locked(&mutex->queue, -EINVAL);
+
   _k_sched_unlock();
 }
 
@@ -63,8 +68,21 @@ void
 k_mutex_destroy(struct KMutex *mutex)
 {
   k_mutex_fini(mutex);
-  assert(k_list_empty(&mutex->queue));
   k_object_pool_put(k_mutex_pool, mutex);
+}
+
+void
+_k_mutex_may_raise_priority(struct KMutex *mutex, int priority)
+{
+  if (mutex->priority > priority) {
+    mutex->priority = priority;
+    
+    // Temporarily raise the owner's priority
+    // If the owner is waiting for another mutex, this may lead to
+    // priority recalculation for other mutexes and threads
+    if (mutex->owner->priority > priority)
+      _k_sched_raise_priority(mutex->owner, priority);
+  }
 }
 
 /**
@@ -87,16 +105,11 @@ k_mutex_lock(struct KMutex *mutex)
       return -EDEADLK;
     }
 
-    // if (mutex->priority > my_task->priority) {
-    //   mutex->priority = my_task->priority;
-      
-    //   // Temporarily raise the owner's priority
-    //   if (my_task->priority < mutex->owner->priority)
-    //     _k_sched_set_priority(mutex->owner, my_task->priority);
-    // }
+    _k_mutex_may_raise_priority(mutex, my_task->priority);
 
-    // my_task->wait_mutex = mutex;
+    my_task->wait_mutex = mutex;
     r = _k_sched_sleep(&mutex->queue, THREAD_STATE_MUTEX, 0, NULL);
+    my_task->wait_mutex = NULL;
 
     if (r < 0) {
       _k_sched_unlock();
@@ -107,10 +120,9 @@ k_mutex_lock(struct KMutex *mutex)
   mutex->owner = my_task;
 
   // The highest-priority thread always locks the mutex first
-  // assert(my_task->priority < mutex->priority);
+  assert(my_task->priority < mutex->priority);
 
-  // k_list_remove(&mutex->link);
-  // k_list_add_front(&my_task->mutex_list, &mutex->link);
+  k_list_add_front(&my_task->mutex_list, &mutex->link);
 
   _k_sched_unlock();
 
@@ -118,12 +130,16 @@ k_mutex_lock(struct KMutex *mutex)
 }
 
 void
-_k_sched_calc_priority(struct KThread *thread)
+_k_sched_recalc_current_priority(void)
 {
+  struct KThread *thread = k_thread_current();
   struct KListLink *l;
   int priority;
-  
+
+  // Begin with the original priority
   priority = thread->saved_priority;
+
+  // Check whether some owned mutex has a higher priority
   KLIST_FOREACH(&thread->mutex_list, l) {
     struct KMutex *mutex = KLIST_CONTAINER(l, struct KMutex, link);
 
@@ -133,14 +149,14 @@ _k_sched_calc_priority(struct KThread *thread)
 
   assert(priority >= thread->priority);
 
-  if (priority > thread->priority)
-    _k_sched_set_priority(thread, priority);
+  if (priority != thread->priority)
+    thread->priority = priority;
 }
 
 void
 _k_mutex_recalc_priority(struct KMutex *mutex)
 {
-  if (k_list_empty(&mutex->queue)) {
+  if (k_list_is_empty(&mutex->queue)) {
     mutex->priority = THREAD_MAX_PRIORITIES;
   } else {
     struct KThread *thread;
@@ -163,15 +179,16 @@ k_mutex_unlock(struct KMutex *mutex)
 
   _k_sched_lock();
 
-  // k_list_remove(&mutex->link);
-
-  _k_sched_wakeup_one_locked(&mutex->queue, 0);
-  // _k_mutex_recalc_priority(mutex);
-
-  // _k_sched_calc_priority(k_thread_current());
-
+  k_list_remove(&mutex->link);
   mutex->owner = NULL;
+  
+  _k_sched_wakeup_one_locked(&mutex->queue, 0);
 
+  _k_mutex_recalc_priority(mutex);
+  _k_sched_recalc_current_priority();
+
+  // TODO: my_thread's priority needs to be recalculated as well
+  
   _k_sched_unlock();
 
   return 0;
@@ -202,6 +219,8 @@ k_mutex_ctor(void *p, size_t n)
   (void) n;
 
   k_list_init(&mutex->queue);
+  k_list_null(&mutex->link);
+  mutex->owner = NULL;
 }
 
 static void
@@ -210,13 +229,14 @@ k_mutex_dtor(void *p, size_t n)
   struct KMutex *mutex = (struct KMutex *) p;
   (void) n;
 
-  assert(k_list_empty(&mutex->queue));
+  assert(k_list_is_empty(&mutex->queue));
+  assert(k_list_is_null(&mutex->link));
+  assert(mutex->owner == NULL);
 }
 
 static void
 k_mutex_init_common(struct KMutex *mutex, const char *name)
 {
-  mutex->owner    = NULL;
   mutex->name     = name;
   mutex->priority = THREAD_MAX_PRIORITIES;
 }

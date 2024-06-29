@@ -169,7 +169,7 @@ page_alloc_block(unsigned order, int flags)
   k_spinlock_acquire(&page_lock);
 
   for (o = order; o <= PAGE_ORDER_MAX; o++)
-    if (!k_list_empty(&page_free_list[o].link))
+    if (!k_list_is_empty(&page_free_list[o].link))
       break;
 
   if (o > PAGE_ORDER_MAX) {

@@ -295,7 +295,7 @@ process_destroy(int status)
 
   // Move children to the init process
   has_zombies = 0;
-  while (!k_list_empty(&current->children)) {
+  while (!k_list_is_empty(&current->children)) {
     l = current->children.next;
     k_list_remove(l);
 

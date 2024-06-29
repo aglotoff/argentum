@@ -74,7 +74,7 @@ k_semaphore_timed_get(struct KSemaphore *sem, unsigned long timeout)
   k_spinlock_acquire(&sem->lock);
 
   while (sem->count == 0) {
-    if ((r = _k_sched_sleep(&sem->queue, THREAD_STATE_SEMAPHORE, timeout, &sem->lock)) < 0) {
+    if ((r = _k_sched_sleep(&sem->queue, THREAD_STATE_SLEEP, timeout, &sem->lock)) < 0) {
       k_spinlock_release(&sem->lock);
       return r;
     }
@@ -117,5 +117,5 @@ k_semaphore_dtor(void *p, size_t n)
   struct KSemaphore *sem = (struct KSemaphore *) p;
   (void) n;
 
-  assert(!k_list_empty(&sem->queue));
+  assert(!k_list_is_empty(&sem->queue));
 }

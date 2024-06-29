@@ -117,13 +117,13 @@ k_object_pool_destroy(struct KObjectPool *pool)
 
   k_spinlock_acquire(&pool->lock);
 
-  if (!k_list_empty(&pool->slabs_empty) || !k_list_empty(&pool->slabs_partial)) {
+  if (!k_list_is_empty(&pool->slabs_empty) || !k_list_is_empty(&pool->slabs_partial)) {
     k_spinlock_release(&pool->lock);
     return -EBUSY;
   }
 
   // Destroy all slabs
-  while (!k_list_empty(&pool->slabs_full)) {
+  while (!k_list_is_empty(&pool->slabs_full)) {
     struct KObjectSlab *slab;
 
     slab = KLIST_CONTAINER(pool->slabs_full.next, struct KObjectSlab, link);
@@ -158,11 +158,11 @@ k_object_pool_get(struct KObjectPool *pool)
   k_spinlock_acquire(&pool->lock);
 
   // First, try to use partially full slabs
-  if (!k_list_empty(&pool->slabs_partial)) {
+  if (!k_list_is_empty(&pool->slabs_partial)) {
     slab = KLIST_CONTAINER(pool->slabs_partial.next, struct KObjectSlab, link);
   } else {
     // Then full slabs
-    if (!k_list_empty(&pool->slabs_full)) {
+    if (!k_list_is_empty(&pool->slabs_full)) {
       slab = KLIST_CONTAINER(pool->slabs_full.next, struct KObjectSlab, link);
     // Then try to allocate a new slab
     } else if ((slab = k_object_pool_slab_create(pool)) == NULL) {

@@ -204,7 +204,7 @@ sd_irq(void)
     pl180_send_cmd(&mmci, CMD_STOP_TRANSMISSION, 0, SD_RESPONSE_R1B, NULL);
 
   // Begin processing the next buffer in the queue.
-  if (!k_list_empty(&sd_queue.head)) {
+  if (!k_list_is_empty(&sd_queue.head)) {
     next_buf = KLIST_CONTAINER(sd_queue.head.next, struct Buf, queue_link);
     sd_start_transfer(next_buf);
   }

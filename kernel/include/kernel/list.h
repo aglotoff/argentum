@@ -28,16 +28,29 @@ k_list_init(struct KListLink *head)
   head->prev = head->next = head;
 }
 
+static inline void
+k_list_null(struct KListLink *link)
+{
+  link->prev = link->next = NULL;
+}
+
 static inline int
-k_list_empty(struct KListLink *head)
+k_list_is_empty(struct KListLink *head)
 {
   return head->next == head;
+}
+
+static inline int
+k_list_is_null(struct KListLink *link)
+{
+  return (link->next == NULL) && (link->prev == NULL);
 }
 
 static inline void
 k_list_add_front(struct KListLink *head, struct KListLink *link)
 {
-  assert (link->prev == NULL && link->next == NULL);
+  assert(k_list_is_null(link));
+
   link->next = head->next;
   head->next->prev = link;
   head->next = link;
@@ -47,7 +60,8 @@ k_list_add_front(struct KListLink *head, struct KListLink *link)
 static inline void
 k_list_add_back(struct KListLink *head, struct KListLink *link)
 {
-  assert (link->prev == NULL && link->next == NULL);
+  assert(k_list_is_null(link));
+
   link->prev = head->prev;
   head->prev->next = link;
   head->prev = link;

@@ -187,8 +187,8 @@ k_mailbox_dtor(void *p, size_t n)
   (void) n;
 
   assert(!k_spinlock_holding(&mbox->lock));
-  assert(k_list_empty(&mbox->receive_list));
-  assert(k_list_empty(&mbox->send_list));
+  assert(k_list_is_empty(&mbox->receive_list));
+  assert(k_list_is_empty(&mbox->send_list));
 }
 
 static void

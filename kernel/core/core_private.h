@@ -17,10 +17,10 @@ void            _k_sched_enqueue(struct KThread *);
 void            _k_sched_wakeup_all_locked(struct KListLink *, int);
 struct KThread *_k_sched_wakeup_one_locked(struct KListLink *, int);
 int             _k_sched_sleep(struct KListLink *, int, unsigned long, struct KSpinLock *);
-void            _k_sched_set_priority(struct KThread *, int);
+void            _k_sched_raise_priority(struct KThread *, int);
 void            _k_sched_recalc_priority(struct KThread *);
 
-void            _k_mutex_recalc_priority(struct KMutex *);
+void            _k_mutex_may_raise_priority(struct KMutex *, int);
 
 extern struct KSpinLock _k_sched_spinlock;
 
