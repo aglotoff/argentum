@@ -93,6 +93,9 @@ struct FS {
 #define FS_PERM_WRITE   (1 << 1)
 #define FS_PERM_READ    (1 << 2)
 
+#define FS_LOOKUP_REAL          (1 << 0)
+#define FS_LOOKUP_FOLLOW_LINKS  (1 << 1)
+
 extern struct PathNode *fs_root;
 
 void          fs_init(void);
@@ -107,7 +110,7 @@ struct Inode *fs_inode_duplicate(struct Inode *);
 void          fs_inode_lock(struct Inode *);
 int           fs_inode_access(struct Inode *, int);
 void          fs_inode_unlock(struct Inode *);
-int           fs_inode_lookup(struct Inode *, const char *, int, struct Inode **);
+int           fs_inode_lookup_locked(struct Inode *, const char *, int, struct Inode **);
 
 ssize_t       fs_inode_read(struct Inode *, void *, size_t, off_t *);
 ssize_t       fs_inode_read_dir(struct Inode *, void *, size_t, off_t *);
@@ -158,5 +161,8 @@ void             fs_path_lock(struct PathNode *);
 void             fs_path_unlock(struct PathNode *);
 void             fs_path_lock_two(struct PathNode *, struct PathNode *);
 void             fs_path_unlock_two(struct PathNode *, struct PathNode *);
+int              fs_path_mount(struct PathNode *, struct Inode *);
+int              fs_mount(const char *, const char *);
+struct Inode    *fs_path_inode(struct PathNode *);
 
 #endif  // !__KERNEL_INCLUDE_KERNEL_FS_FS_H__

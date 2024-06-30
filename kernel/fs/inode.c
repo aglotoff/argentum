@@ -48,6 +48,8 @@ fs_inode_get(ino_t ino, dev_t dev)
     ip = KLIST_CONTAINER(l, struct Inode, cache_link);
     if ((ip->ino == ino) && (ip->dev == dev)) {
       ip->ref_count++;
+      // cprintf("[got %d, %d]\n", ino, ip->ref_count);
+
       k_spinlock_release(&inode_cache.lock);
 
       return ip;
@@ -62,6 +64,8 @@ fs_inode_get(ino_t ino, dev_t dev)
     empty->ino       = ino;
     empty->dev       = dev;
     empty->flags     = 0;
+
+    // cprintf("[create %d]\n", ino);
 
     k_spinlock_release(&inode_cache.lock);
 
@@ -124,6 +128,7 @@ fs_inode_put(struct Inode *inode)
   // Return the inode to the cache
   k_spinlock_acquire(&inode_cache.lock);
   if (--inode->ref_count == 0) {
+    // cprintf("[drop %d]\n", inode->ino);
     k_list_remove(&inode->cache_link);
     k_list_add_front(&inode_cache.head, &inode->cache_link);
   }
@@ -380,6 +385,8 @@ int
 fs_inode_create(struct Inode *dir, char *name, mode_t mode, dev_t dev,
                 struct Inode **istore)
 {
+  struct Inode *inode;
+
   if (!fs_inode_holding(dir))
     panic("directory not locked");
   
@@ -388,8 +395,13 @@ fs_inode_create(struct Inode *dir, char *name, mode_t mode, dev_t dev,
   if (!fs_permission(dir, FS_PERM_WRITE, 0))
     return -EPERM;
 
-  if (dir->fs->ops->lookup(dir, name) != NULL)
+  if ((inode = dir->fs->ops->lookup(dir, name)) != NULL) {
+    fs_inode_put(inode);
     return -EEXIST;
+  }
+
+  // TODO: looks like files are created even if they do exist!!!
+  // check ref_count for inode after mkdir with existing path name!
 
   switch (mode & S_IFMT) {
   case S_IFDIR:
@@ -427,31 +439,24 @@ fs_inode_link(struct Inode *inode, struct Inode *dir, char *name)
 }
 
 int
-fs_inode_lookup(struct Inode *dir, const char *name, int real,
-                struct Inode **istore)
+fs_inode_lookup_locked(struct Inode *dir_inode, const char *name, int flags,
+                struct Inode **inode_store)
 {
   struct Inode *inode;
 
-  fs_inode_lock(dir);
-  
-  if (!S_ISDIR(dir->mode)) {
-    fs_inode_unlock(dir);
+  if (!S_ISDIR(dir_inode->mode))
     return -ENOTDIR;
-  }
 
-  if (!fs_permission(dir, FS_PERM_READ, real)) {
-    fs_inode_unlock(dir);
+  if (!fs_permission(dir_inode, FS_PERM_READ, flags & FS_LOOKUP_REAL))
     return -EPERM;
-  }
 
-  inode = dir->fs->ops->lookup(dir, name);
+  // (ref_count): +1
+  inode = dir_inode->fs->ops->lookup(dir_inode, name);
 
-  if (istore != NULL)
-    *istore = inode;
-  else if (inode == NULL)
+  if (inode_store != NULL)  // (ref_count): pass to the caller
+    *inode_store = inode;
+  else if (inode != NULL)   // (ref_count): -1
     fs_inode_put(inode);
-
-  fs_inode_unlock(dir);
 
   return 0;
 }
@@ -501,37 +506,42 @@ int
 fs_create(const char *path, mode_t mode, dev_t dev, struct PathNode **istore)
 {
   struct PathNode *dir;
-  struct Inode *inode;
+  struct Inode *inode, *dir_inode;
   char name[NAME_MAX + 1];
   int r;
 
+  // (dir->ref_count): +1
   if ((r = fs_path_lookup(path, name, 0, NULL, &dir)) < 0)
     return r;
 
   mode &= ~process_current()->cmask;
 
-  fs_inode_lock(dir->inode);
+  dir_inode = fs_path_inode(dir);
 
-  if ((r = fs_inode_create(dir->inode, name, mode, dev, &inode)) == 0) {
+  fs_inode_lock(dir_inode);
+
+  // (inode->ref_count): +1
+  if ((r = fs_inode_create(dir_inode, name, mode, dev, &inode)) == 0) {
     if (istore != NULL) {
       struct PathNode *pp;
       
       if ((pp = fs_path_create(name, inode, dir)) == NULL) {
         fs_inode_unlock(inode);
-        fs_inode_put(inode);
+        fs_inode_put(inode);  // (inode->ref_count): -1
         r = -ENOMEM;
       } else {
         *istore = pp;
       }
     } else {
       fs_inode_unlock(inode);
-      fs_inode_put(inode);
+      fs_inode_put(inode);  // (inode->ref_count): -1
     }
   }
 
-  fs_inode_unlock(dir->inode);
+  fs_inode_unlock(dir_inode);
+  fs_inode_put(dir_inode);
 
-  fs_path_put(dir);
+  fs_path_put(dir); // (dir->ref_count): -1
 
   return r;
 }
@@ -564,6 +574,7 @@ int
 fs_link(char *path1, char *path2)
 {
   struct PathNode *dirp, *pp;
+  struct Inode *inode, *parent_inode;
   char name[NAME_MAX + 1];
   int r;
 
@@ -578,12 +589,18 @@ fs_link(char *path1, char *path2)
   // TODO: check for the same node?
   // TODO: lock the namespace manager?
 
+  parent_inode = fs_path_inode(dirp);
+  inode = fs_path_inode(pp);
+
   // Always lock inodes in a specific order to avoid deadlocks
-  fs_inode_lock_two(dirp->inode, pp->inode);
+  fs_inode_lock_two(parent_inode, inode);
 
-  r = fs_inode_link(pp->inode, dirp->inode, name);
+  r = fs_inode_link(inode, parent_inode, name);
 
-  fs_inode_unlock_two(dirp->inode, pp->inode);
+  fs_inode_unlock_two(parent_inode, inode);
+
+  fs_inode_put(inode);
+  fs_inode_put(parent_inode);
 
   fs_path_put(dirp);
 out1:
@@ -595,6 +612,7 @@ int
 fs_unlink(const char *path)
 {
   struct PathNode *dir, *pp;
+  struct Inode *inode, *parent_inode;
   char name[NAME_MAX + 1];
   int r;
 
@@ -606,15 +624,21 @@ fs_unlink(const char *path)
     return -ENOENT;
   }
 
+  parent_inode = fs_path_inode(dir);
+  inode = fs_path_inode(pp);
+
   // TODO: lock the namespace manager?
 
-  fs_inode_lock_two(dir->inode, pp->inode);
+  fs_inode_lock_two(parent_inode, inode);
   
-  if ((r = fs_inode_unlink(dir->inode, pp->inode)) == 0) {
+  if ((r = fs_inode_unlink(parent_inode, inode)) == 0) {
     fs_path_remove(pp);
   }
 
-  fs_inode_unlock_two(dir->inode, pp->inode);
+  fs_inode_unlock_two(parent_inode, inode);
+
+  fs_inode_put(inode);
+  fs_inode_put(parent_inode);
 
   fs_path_put(dir);
   fs_path_put(pp);
@@ -626,6 +650,7 @@ int
 fs_rmdir(const char *path)
 {
   struct PathNode *dir, *pp;
+  struct Inode *inode, *parent_inode;
   char name[NAME_MAX + 1];
   int r;
 
@@ -639,13 +664,19 @@ fs_rmdir(const char *path)
 
   // TODO: lock the namespace manager?
 
-  fs_inode_lock_two(dir->inode, pp->inode);
+  parent_inode = fs_path_inode(dir);
+  inode = fs_path_inode(pp);
 
-  if ((r = fs_inode_rmdir(dir->inode, pp->inode)) == 0) {
+  fs_inode_lock_two(parent_inode, inode);
+
+  if ((r = fs_inode_rmdir(parent_inode, inode)) == 0) {
     fs_path_remove(pp);
   }
 
-  fs_inode_unlock_two(dir->inode, pp->inode);
+  fs_inode_unlock_two(parent_inode, inode);
+
+  fs_inode_put(inode);
+  fs_inode_put(parent_inode);
 
   fs_path_put(dir);
   fs_path_put(pp);
@@ -657,19 +688,24 @@ int
 fs_set_pwd(struct PathNode *node)
 {
   struct Process *current = process_current();
+  struct Inode *inode = fs_path_inode(node);
 
-  fs_inode_lock(node->inode);
+  fs_inode_lock(inode);
 
-  if (!S_ISDIR(node->inode->mode)) {
-    fs_inode_unlock(node->inode);
+  if (!S_ISDIR(inode->mode)) {
+    fs_inode_unlock(inode);
+    fs_inode_put(inode);
     return -ENOTDIR;
   }
-  if (!fs_permission(node->inode, FS_PERM_EXEC, 0)) {
-    fs_inode_unlock(node->inode);
+
+  if (!fs_permission(inode, FS_PERM_EXEC, 0)) {
+    fs_inode_unlock(inode);
+    fs_inode_put(inode);
     return -EPERM;
   }
 
-  fs_inode_unlock(node->inode);
+  fs_inode_unlock(inode);
+  fs_inode_put(inode);
 
   fs_path_put(current->cwd);
 
@@ -728,6 +764,8 @@ fs_permission(struct Inode *inode, mode_t mode, int real)
     return (mode & FS_PERM_EXEC)
       ? ((inode->mode & (S_IXUSR | S_IXGRP | S_IXOTH)) != 0)
       : 1;
+
+  // TODO: support S_ISVTX
 
   if (uid == inode->uid)
     mode <<= 6;

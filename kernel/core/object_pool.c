@@ -167,6 +167,7 @@ k_object_pool_get(struct KObjectPool *pool)
     // Then try to allocate a new slab
     } else if ((slab = k_object_pool_slab_create(pool)) == NULL) {
       k_spinlock_release(&pool->lock);
+      panic("%s: out of memory\n", pool->name);
       return NULL;
     }
 

@@ -14,6 +14,7 @@ fs_open(const char *path, int oflag, mode_t mode, struct File **fstore)
 {
   struct File *f;
   struct PathNode *pp;
+  struct Inode *inode;
   int r;
 
   // TODO: ENFILE
@@ -39,8 +40,10 @@ fs_open(const char *path, int oflag, mode_t mode, struct File **fstore)
 
     if ((r = fs_create(path, S_IFREG | mode, 0, &pp)) < 0)
       goto out1;
+    inode = fs_path_inode(pp);
   } else {
-    fs_inode_lock(pp->inode);
+    inode = fs_path_inode(pp);
+    fs_inode_lock(inode);
 
     if ((oflag & O_CREAT) && (oflag & O_EXCL)) {
       r = -EEXIST;
@@ -48,7 +51,7 @@ fs_open(const char *path, int oflag, mode_t mode, struct File **fstore)
     }
   }
 
-  if (S_ISDIR(pp->inode->mode) && (oflag & O_WRONLY)) {
+  if (S_ISDIR(inode->mode) && (oflag & O_WRONLY)) {
     r = -ENOTDIR;
     goto out2;
   }
@@ -59,7 +62,7 @@ fs_open(const char *path, int oflag, mode_t mode, struct File **fstore)
   // TODO: EROFS
 
   if ((oflag & O_WRONLY) && (oflag & O_TRUNC)) {
-    if ((r = fs_inode_truncate(pp->inode, 0)) < 0)
+    if ((r = fs_inode_truncate(inode, 0)) < 0)
       goto out2;
   }
 
@@ -67,7 +70,7 @@ fs_open(const char *path, int oflag, mode_t mode, struct File **fstore)
 
   if (oflag & O_RDONLY) {
     // TODO: check group and other permissions
-    if (!(f->node->inode->mode & S_IRUSR)) {
+    if (!(inode->mode & S_IRUSR)) {
       r = -EPERM;
       goto out2;
     }
@@ -75,23 +78,25 @@ fs_open(const char *path, int oflag, mode_t mode, struct File **fstore)
 
   if (oflag & O_WRONLY) {
     // TODO: check group and other permissions
-    if (!(f->node->inode->mode & S_IWUSR)) {
+    if (!(inode->mode & S_IWUSR)) {
       r = -EPERM;
       goto out2;
     }
   }
 
   if (oflag & O_APPEND)
-    f->offset = pp->inode->size;
+    f->offset = inode->size;
 
-  fs_inode_unlock(pp->inode);
+  fs_inode_unlock(inode);
+  fs_inode_put(inode);
 
   *fstore = f;
 
   return 0;
 
 out2:
-  fs_inode_unlock(pp->inode);
+  fs_inode_unlock(inode);
+  fs_inode_put(inode);
   fs_path_put(pp);
 out1:
   file_put(f);
@@ -113,6 +118,7 @@ fs_close(struct File *file)
 off_t
 fs_seek(struct File *file, off_t offset, int whence)
 {
+  struct Inode *inode;
   off_t new_offset;
 
   if (file->type != FD_INODE)
@@ -126,9 +132,11 @@ fs_seek(struct File *file, off_t offset, int whence)
     new_offset = file->offset + offset;
     break;
   case SEEK_END:
-    fs_inode_lock(file->node->inode);
-    new_offset = file->node->inode->size + offset;
-    fs_inode_unlock(file->node->inode);
+    inode = fs_path_inode(file->node);
+    fs_inode_lock(inode);
+    new_offset = inode->size + offset;
+    fs_inode_unlock(inode);
+    fs_inode_put(inode);
     break;
   default:
     return -EINVAL;
@@ -145,24 +153,29 @@ fs_seek(struct File *file, off_t offset, int whence)
 ssize_t
 fs_read(struct File *file, void *buf, size_t nbytes)
 {
+  struct Inode *inode;
   ssize_t r;
 
   if (file->type != FD_INODE)
     return -EBADF;
 
-  fs_inode_lock(file->node->inode);
+  inode = fs_path_inode(file->node);
+
+  fs_inode_lock(inode);
 
   // TODO: check group and other permissions
   // TODO: what if permissions change?
 
-  if (!(file->node->inode->mode & S_IRUSR)) {
-    fs_inode_unlock(file->node->inode);
+  if (!(inode->mode & S_IRUSR)) {
+    fs_inode_unlock(inode);
+    fs_inode_put(inode);
     return -EPERM;
   }
 
-  r = fs_inode_read(file->node->inode, buf, nbytes, &file->offset);
+  r = fs_inode_read(inode, buf, nbytes, &file->offset);
 
-  fs_inode_unlock(file->node->inode);
+  fs_inode_unlock(inode);
+  fs_inode_put(inode);
 
   return r;
 }
@@ -170,26 +183,31 @@ fs_read(struct File *file, void *buf, size_t nbytes)
 ssize_t
 fs_write(struct File *file, const void *buf, size_t nbytes)
 {
+  struct Inode *inode;
   ssize_t r;
 
   if (file->type != FD_INODE)
     return -EBADF;
 
-  fs_inode_lock(file->node->inode);
+  inode = fs_path_inode(file->node);
+
+  fs_inode_lock(inode);
 
   // TODO: check group and other permissions
   // TODO: what if permissions change?
-  if (!(file->node->inode->mode & S_IWUSR)) {
-    fs_inode_unlock(file->node->inode);
+  if (!(inode->mode & S_IWUSR)) {
+    fs_inode_unlock(inode);
+    fs_inode_put(inode);
     return -EPERM;
   }
 
   if (file->flags & O_APPEND)
-    file->offset = file->node->inode->size;
+    file->offset = inode->size;
 
-  r = fs_inode_write(file->node->inode, buf, nbytes, &file->offset);
+  r = fs_inode_write(inode, buf, nbytes, &file->offset);
 
-  fs_inode_unlock(file->node->inode);
+  fs_inode_unlock(inode);
+  fs_inode_put(inode);
 
   return r;
 }
@@ -197,6 +215,7 @@ fs_write(struct File *file, const void *buf, size_t nbytes)
 ssize_t
 fs_getdents(struct File *file, void *buf, size_t nbytes)
 {
+  struct Inode *inode;
   ssize_t r;
 
   if (file->type != FD_INODE)
@@ -205,24 +224,29 @@ fs_getdents(struct File *file, void *buf, size_t nbytes)
   if ((file->flags & O_ACCMODE) == O_WRONLY)
     return -EBADF;
 
-  fs_inode_lock(file->node->inode);
+  inode = fs_path_inode(file->node);
 
-  if (!S_ISDIR(file->node->inode->mode)) {
-    fs_inode_unlock(file->node->inode);
+  fs_inode_lock(inode);
+
+  if (!S_ISDIR(inode->mode)) {
+    fs_inode_unlock(inode);
+    fs_inode_put(inode);
     return -ENOTDIR;
   }
 
   // TODO: check group and other permissions
   // TODO: what if permissions change?
 
-  if (!(file->node->inode->mode & S_IRUSR)) {
-    fs_inode_unlock(file->node->inode);
+  if (!(inode->mode & S_IRUSR)) {
+    fs_inode_unlock(inode);
+    fs_inode_put(inode);
     return -EPERM;
   }
 
-  r = fs_inode_read_dir(file->node->inode, buf, nbytes, &file->offset);
+  r = fs_inode_read_dir(inode, buf, nbytes, &file->offset);
 
-  fs_inode_unlock(file->node->inode);
+  fs_inode_unlock(inode);
+  fs_inode_put(inode);
 
   return r;
 }
@@ -230,14 +254,19 @@ fs_getdents(struct File *file, void *buf, size_t nbytes)
 int
 fs_fstat(struct File *file, struct stat *buf)
 {
+  struct Inode *inode;
   int r;
   
   if (file->type != FD_INODE) 
     return -EBADF;
 
-  fs_inode_lock(file->node->inode);
-  r = fs_inode_stat(file->node->inode, buf);
-  fs_inode_unlock(file->node->inode);
+  inode = fs_path_inode(file->node);
+
+  fs_inode_lock(inode);
+  r = fs_inode_stat(inode, buf);
+  fs_inode_unlock(inode);
+
+  fs_inode_put(inode);
 
   return r;
 }
@@ -260,16 +289,20 @@ int
 fs_chmod(const char *path, mode_t mode)
 {
   struct PathNode *node;
+  struct Inode *inode;
   int r;
 
   if ((r = fs_lookup(path, 0, &node)) < 0)
     return r;
 
-  fs_inode_lock(node->inode);
-  r = fs_inode_chmod(node->inode, mode);
-  fs_inode_unlock(node->inode);
-
+  inode = fs_path_inode(node);
   fs_path_put(node);
+
+  fs_inode_lock(inode);
+  r = fs_inode_chmod(inode, mode);
+  fs_inode_unlock(inode);
+
+  fs_inode_put(inode);
 
   return r;
 }
@@ -277,14 +310,19 @@ fs_chmod(const char *path, mode_t mode)
 int
 fs_fchmod(struct File *file, mode_t mode)
 {
+  struct Inode *inode;
   int r;
 
   if (file->type != FD_INODE) 
     return -EBADF;
 
-  fs_inode_lock(file->node->inode);
-  r = fs_inode_chmod(file->node->inode, mode);
-  fs_inode_unlock(file->node->inode);
+  inode = fs_path_inode(file->node);
+
+  fs_inode_lock(inode);
+  r = fs_inode_chmod(inode, mode);
+  fs_inode_unlock(inode);
+
+  fs_inode_put(inode);
 
   return r;
 }
@@ -292,14 +330,19 @@ fs_fchmod(struct File *file, mode_t mode)
 int
 fs_fchown(struct File *file, uid_t uid, gid_t gid)
 {
+  struct Inode *inode;
   int r;
 
   if (file->type != FD_INODE) 
     return -EBADF;
 
-  fs_inode_lock(file->node->inode);
-  r = fs_inode_chown(file->node->inode, uid, gid);
-  fs_inode_unlock(file->node->inode);
+  inode = fs_path_inode(file->node);
+
+  fs_inode_lock(inode);
+  r = fs_inode_chown(inode, uid, gid);
+  fs_inode_unlock(inode);
+
+  fs_inode_put(inode);
 
   return r;
 }
@@ -307,14 +350,19 @@ fs_fchown(struct File *file, uid_t uid, gid_t gid)
 int
 fs_ioctl(struct File *file, int request, int arg)
 {
+  struct Inode *inode;
   int r;
   
   if (file->type != FD_INODE) 
     return -EBADF;
+
+  inode = fs_path_inode(file->node);
   
-  fs_inode_lock(file->node->inode);
-  r = fs_inode_ioctl(file->node->inode, request, arg);
-  fs_inode_unlock(file->node->inode);
+  fs_inode_lock(inode);
+  r = fs_inode_ioctl(inode, request, arg);
+  fs_inode_unlock(inode);
+
+  fs_inode_put(inode);
 
   return r;
 }
@@ -322,14 +370,19 @@ fs_ioctl(struct File *file, int request, int arg)
 int
 fs_select(struct File *file)
 {
+  struct Inode *inode;
   int r;
   
   if (file->type != FD_INODE) 
     return -EBADF;
+
+  inode = fs_path_inode(file->node);
   
-  fs_inode_lock(file->node->inode);
-  r = fs_inode_select(file->node->inode);
-  fs_inode_unlock(file->node->inode);
+  fs_inode_lock(inode);
+  r = fs_inode_select(inode);
+  fs_inode_unlock(inode);
+
+  fs_inode_put(inode);
 
   return r;
 }
@@ -337,14 +390,19 @@ fs_select(struct File *file)
 int
 fs_ftruncate(struct File *file, off_t length)
 {
+  struct Inode *inode;
   int r;
   
   if (file->type != FD_INODE) 
     return -EBADF;
 
-  fs_inode_lock(file->node->inode);
-  r = fs_inode_truncate(file->node->inode, length);
-  fs_inode_unlock(file->node->inode);
+  inode = fs_path_inode(file->node);
+
+  fs_inode_lock(inode);
+  r = fs_inode_truncate(inode, length);
+  fs_inode_unlock(inode);
+
+  fs_inode_put(inode);
 
   return r;
 }
@@ -352,14 +410,19 @@ fs_ftruncate(struct File *file, off_t length)
 int
 fs_fsync(struct File *file)
 {
+  struct Inode *inode;
   int r;
   
   if (file->type != FD_INODE) 
     return -EBADF;
 
-  fs_inode_lock(file->node->inode);
-  r = fs_inode_sync(file->node->inode);
-  fs_inode_unlock(file->node->inode);
+  inode = fs_path_inode(file->node);
+
+  fs_inode_lock(inode);
+  r = fs_inode_sync(inode);
+  fs_inode_unlock(inode);
+
+  fs_inode_put(inode);
 
   return r;
 }

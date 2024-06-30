@@ -58,6 +58,7 @@ process_exec(const char *path, char *const argv[], char *const envp[])
 {
   struct Process *proc;
   struct PathNode *pp;
+  struct Inode *inode;
   Elf32_Ehdr elf;
   Elf32_Phdr ph;
   off_t off;
@@ -73,14 +74,17 @@ process_exec(const char *path, char *const argv[], char *const envp[])
   if (pp == NULL)
     return -ENOENT;
 
-  fs_inode_lock(pp->inode);
+  inode = fs_path_inode(pp);
+  fs_path_put(pp);
 
-  if (!S_ISREG(pp->inode->mode)) {
+  fs_inode_lock(inode);
+
+  if (!S_ISREG(inode->mode)) {
     r = -ENOENT;
     goto out1;
   }
 
-  if (!fs_permission(pp->inode, FS_PERM_EXEC, 0)) {
+  if (!fs_permission(inode, FS_PERM_EXEC, 0)) {
     r = -EPERM;
     goto out1;
   }
@@ -88,7 +92,7 @@ process_exec(const char *path, char *const argv[], char *const envp[])
   vm = vm_space_create();
 
   off = 0;
-  if ((r = fs_inode_read(pp->inode, &elf, sizeof(elf), &off)) != sizeof(elf))
+  if ((r = fs_inode_read(inode, &elf, sizeof(elf), &off)) != sizeof(elf))
     goto out2;
   
   if (memcmp(elf.ident, "\x7f""ELF", 4) != 0) {
@@ -101,7 +105,7 @@ process_exec(const char *path, char *const argv[], char *const envp[])
 
   off = elf.phoff;
   while ((size_t) off < elf.phoff + elf.phnum * sizeof(ph)) {
-    if ((r = fs_inode_read(pp->inode, &ph, sizeof(ph), &off)) != sizeof(ph))
+    if ((r = fs_inode_read(inode, &ph, sizeof(ph), &off)) != sizeof(ph))
       goto out2;
 
     if (ph.type != PT_LOAD)
@@ -123,7 +127,7 @@ process_exec(const char *path, char *const argv[], char *const envp[])
       goto out2;
     }
 
-    if ((r = vm_space_load_inode(vm, (void *) ph.vaddr, pp->inode, ph.filesz, ph.offset)) < 0)
+    if ((r = vm_space_load_inode(vm, (void *) ph.vaddr, inode, ph.filesz, ph.offset)) < 0)
       goto out2;
   }
 
@@ -146,8 +150,8 @@ process_exec(const char *path, char *const argv[], char *const envp[])
 
   uenvp = usp;
 
-  fs_inode_unlock(pp->inode);
-  fs_path_put(pp);
+  fs_inode_unlock(inode);
+  fs_inode_put(inode);
 
   proc = process_current();
 
@@ -173,8 +177,8 @@ process_exec(const char *path, char *const argv[], char *const envp[])
 out2:
   vm_space_destroy(vm);
 out1:
-  fs_inode_unlock(pp->inode);
-  fs_path_put(pp);
+  fs_inode_unlock(inode);
+  fs_inode_put(inode);
 
   return r;
 }

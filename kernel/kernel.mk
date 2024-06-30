@@ -50,6 +50,7 @@ KERNEL_SRCFILES :=	\
 	kernel/fs/ext2_inode_alloc.c \
 	kernel/fs/ext2_inode.c \
 	kernel/fs/ext2.c \
+	kernel/fs/dev.c \
 	kernel/fs/buf.c \
 	kernel/fs/file.c \
 	kernel/fs/inode.c \

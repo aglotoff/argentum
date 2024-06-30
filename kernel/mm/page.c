@@ -175,6 +175,7 @@ page_alloc_block(unsigned order, int flags)
   if (o > PAGE_ORDER_MAX) {
     // TODO: try to reclaim pages from the slab allocator
     k_spinlock_release(&page_lock);
+    panic("out of memory\n");
     return NULL;
   }
 

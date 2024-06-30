@@ -12,6 +12,7 @@
 #include <kernel/process.h>
 #include <kernel/types.h>
 
+#include "dev.h"
 #include "ext2.h"
 
 struct PathNode *fs_root;
@@ -51,7 +52,7 @@ fs_path_create(const char *name, struct Inode *inode, struct PathNode *parent)
     k_spinlock_release(&path_lock);
   }
 
-  // cprintf("[create %s]\n", name);
+  // cprintf("[create %s]\n", name, inode->ino);
 
   return path;
 }
@@ -66,6 +67,19 @@ fs_path_duplicate(struct PathNode *path)
   // cprintf("[dup %s]\n", path->name);
 
   return path;
+}
+
+int
+fs_path_mount(struct PathNode *path, struct Inode *inode)
+{
+  if (path->mounted)
+    panic("already mounted");
+
+  path->mounted = inode;
+
+  // TODO: remove all cached entries???
+
+  return 0;
 }
 
 void
@@ -100,6 +114,7 @@ fs_path_put(struct PathNode *path)
   // in one of two cases:
   // a) the reference count is 0
   // b) the reference count is 1, and it's referenced only by the parent node
+  // TODO: parent of unmounted entry??
   while ((path != NULL) && (path->ref_count < 2)) {
     struct PathNode *parent = path->parent;
 
@@ -117,7 +132,10 @@ fs_path_put(struct PathNode *path)
 
     k_spinlock_release(&path_lock);
 
-    // cprintf("[drop %s %p]\n", path->name, path->inode);
+    // cprintf("[drop %s %d]\n", path->name, path->inode->ino);
+
+    if (path->mounted != NULL)
+      panic("TODO: drop mountpoint");
 
     if (path->inode != NULL)
       fs_inode_put(path->inode);
@@ -133,6 +151,18 @@ fs_path_put(struct PathNode *path)
   }
 
   k_spinlock_release(&path_lock);
+}
+
+struct Inode *
+fs_path_inode(struct PathNode *node)
+{
+  struct Inode *inode;
+
+  k_spinlock_acquire(&path_lock);
+  inode = node->mounted ? node->mounted : node->inode;
+  k_spinlock_release(&path_lock);
+
+  return fs_inode_duplicate(inode);
 }
 
 void
@@ -188,6 +218,10 @@ fs_path_lookup_cached(struct PathNode *parent, const char *name)
 {
   struct KListLink *l;
 
+  // TODO: this is a bottleneck! 
+  // if there are many child nodes, comparing all names may take too long, and
+  // we're blocking the entire system. Could we use a per-node mutex instead?
+
   k_spinlock_acquire(&path_lock);
 
   KLIST_FOREACH(&parent->children, l) {
@@ -205,8 +239,12 @@ fs_path_lookup_cached(struct PathNode *parent, const char *name)
 }
 
 int
-fs_path_lookup_at(struct PathNode *start, const char *path, char *name_buf,
-                  int real, struct PathNode **istore, struct PathNode **pstore)
+fs_path_lookup_at(struct PathNode *start,
+                  const char *path,
+                  char *name_buf,
+                  int flags,
+                  struct PathNode **store,
+                  struct PathNode **parent_store)
 {
   struct PathNode *parent, *current;
   int r;
@@ -220,7 +258,7 @@ fs_path_lookup_at(struct PathNode *start, const char *path, char *name_buf,
   parent  = NULL;
 
   while ((r = fs_path_next(path, name_buf, (char **) &path)) > 0) {
-    struct Inode *inode;
+    struct Inode *inode, *parent_inode;
 
     // Stay in the current directory
     if (strcmp(name_buf, ".") == 0)
@@ -254,13 +292,20 @@ fs_path_lookup_at(struct PathNode *start, const char *path, char *name_buf,
       continue;
     }
 
-    r = fs_inode_lookup(parent->inode, name_buf, real, &inode);
+    parent_inode = fs_path_inode(parent);
+    fs_inode_lock(parent_inode);
+    
+    r = fs_inode_lookup_locked(parent_inode, name_buf, flags, &inode);
+    
+    fs_inode_unlock(parent_inode);
+    fs_inode_put(parent_inode);
 
     if (r == 0 && inode != NULL) {
       if ((current = fs_path_create(name_buf, inode, parent)) == NULL) {
         fs_inode_put(inode);
         r = -ENOMEM;
       }
+      // cprintf("[created %s]\n", name_buf);
     } else {
       current = NULL;
     }
@@ -279,13 +324,13 @@ fs_path_lookup_at(struct PathNode *start, const char *path, char *name_buf,
     }
   }
 
-  if ((r == 0) && (pstore != NULL))
-    *pstore = parent;
+  if ((r == 0) && (parent_store != NULL))
+    *parent_store = parent;
   else if (parent != NULL)
     fs_path_put(parent);
   
-  if ((r == 0) && (istore != NULL))
-    *istore = current;
+  if ((r == 0) && (store != NULL))
+    *store = current;
   else if (current != NULL)
     fs_path_put(current);
 
@@ -293,15 +338,15 @@ fs_path_lookup_at(struct PathNode *start, const char *path, char *name_buf,
 }
 
 int
-fs_path_lookup(const char *path, char *name_buf, int real, 
-               struct PathNode **istore, struct PathNode **pstore)
+fs_path_lookup(const char *path, char *name_buf, int flags, 
+               struct PathNode **store, struct PathNode **parent_store)
 {
-  return fs_path_lookup_at(process_current()->cwd, path, name_buf, real,
-                           istore, pstore);
+  return fs_path_lookup_at(process_current()->cwd, path, name_buf, flags,
+                           store, parent_store);
 }
 
 int
-fs_lookup(const char *path, int real, struct PathNode **pp)
+fs_lookup(const char *path, int flags, struct PathNode **pp)
 {
   char name_buf[NAME_MAX + 1];
 
@@ -310,10 +355,11 @@ fs_lookup(const char *path, int real, struct PathNode **pp)
     return 0;
   }
 
-  return fs_path_lookup(path, name_buf, real, pp, NULL);
+  return fs_path_lookup(path, name_buf, flags, pp, NULL);
 }
 
 #define FS_ROOT_DEV 0
+#define FS_DEV_DEV  1
 
 void
 fs_init(void)
@@ -332,6 +378,27 @@ fs_init(void)
 }
 
 int
+fs_mount(const char *type, const char *path)
+{
+  struct PathNode *node;
+  struct Inode *root;
+
+  if ((fs_lookup(path, 0, &node) != 0) || (node == NULL))
+    return -ENOENT;
+
+  if (!strcmp(type, "devfs")) {
+    root = dev_mount(FS_DEV_DEV);
+  } else {
+    fs_path_put(node);
+    return -EINVAL;
+  }
+
+  // TODO: add to the list of mount points
+
+  return fs_path_mount(node, root);
+}
+
+int
 fs_access(const char *path, int amode)
 {
   struct PathNode *pp;
@@ -343,7 +410,15 @@ fs_access(const char *path, int amode)
   if (pp == NULL)
     return -ENOENT;
 
-  r = amode != F_OK ? fs_inode_access(pp->inode, amode) : 0;
+  if (amode == F_OK) {
+    r = 0;
+  } else {
+    struct Inode *inode = fs_path_inode(pp);
+  
+    r = fs_inode_access(inode, amode);
+
+    fs_inode_put(inode);
+  }
 
   fs_path_put(pp);
 
@@ -354,6 +429,7 @@ ssize_t
 fs_readlink(const char *path, char *buf, size_t bufsize)
 {
   struct PathNode *pp;
+  struct Inode *inode;
   int r;
 
   if ((r = fs_lookup(path, 0, &pp)) < 0)
@@ -362,7 +438,9 @@ fs_readlink(const char *path, char *buf, size_t bufsize)
   if (pp == NULL)
     return -ENOENT;
 
-  r = fs_inode_readlink(pp->inode, buf, bufsize);
+  inode = fs_path_inode(pp);
+  r = fs_inode_readlink(inode, buf, bufsize);
+  fs_inode_put(inode);
 
   fs_path_put(pp);
 

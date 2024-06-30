@@ -37,6 +37,7 @@ libc_a_SOURCES += \
   %D%/sys/mman/mmap.c \
   %D%/sys/mman/mprotect.c \
   %D%/sys/mman/munmap.c \
+  %D%/sys/mount/mount.c \
   %D%/sys/resource/getrlimit.c \
   %D%/sys/resource/setrlimit.c \
   %D%/sys/socket/accept.c \

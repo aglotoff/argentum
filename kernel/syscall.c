@@ -88,6 +88,7 @@ static int32_t (*syscalls[])(void) = {
   [__SYS_FCHOWN]      = sys_fchown,
   [__SYS_READLINK]    = sys_readlink,
   [__SYS_TIMES]       = sys_times,
+  [__SYS_MOUNT]       = sys_mount,
 };
 
 int32_t
@@ -490,6 +491,26 @@ sys_nanosleep(void)
  * Path name system calls
  * ----------------------------------------------------------------------------
  */
+
+int32_t
+sys_mount(void)
+{
+  char *type, *path;
+  int r;
+
+  if ((r = sys_arg_str(0, PATH_MAX, PROT_READ, &type)) < 0)
+    goto out1;
+  if ((r = sys_arg_str(1, PATH_MAX, PROT_READ, &path)) < 0)
+    goto out2;
+
+  r = fs_mount(type, path);
+
+  k_free(path);
+out2:
+  k_free(type);
+out1:
+  return r;
+}
 
 int32_t
 sys_chdir(void)

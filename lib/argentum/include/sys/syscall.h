@@ -69,6 +69,7 @@
 #define __SYS_FCHOWN        63
 #define __SYS_READLINK      64
 #define __SYS_TIMES         65
+#define __SYS_MOUNT         66
 
 #ifndef __ASSEMBLER__
 

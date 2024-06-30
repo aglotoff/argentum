@@ -27,6 +27,7 @@ LIB_SRCFILES := \
 	lib/argentum/include/sys/dirent.h \
 	lib/argentum/include/sys/ioctl.h \
 	lib/argentum/include/sys/mman.h \
+	lib/argentum/include/sys/mount.h \
 	lib/argentum/include/sys/resource.h \
 	lib/argentum/include/sys/socket.h \
 	lib/argentum/include/sys/syscall.h \
@@ -67,6 +68,7 @@ LIB_SRCFILES := \
 	lib/argentum/sys/mman/mmap.c \
 	lib/argentum/sys/mman/mprotect.c \
 	lib/argentum/sys/mman/munmap.c \
+	lib/argentum/sys/mount/mount.c \
 	lib/argentum/sys/resource/getrlimit.c \
 	lib/argentum/sys/resource/setrlimit.c \
 	lib/argentum/sys/socket/accept.c \
@@ -157,7 +159,7 @@ LIB_SRCFILES := \
 	lib/argentum/unistd/write.c \
 	lib/argentum/utime/utime.c \
 	lib/argentum/crt0.S \
-	lib/argentum/progname.c \
+	lib/argentum/progname.c
 
 LIB_SRCFILES := $(patsubst lib/%, $(NEWLIB)/newlib/libc/sys/%, $(LIB_SRCFILES))
 

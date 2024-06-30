@@ -90,7 +90,7 @@ qemu-gdb: $(OBJ)/fs.img $(KERNEL)
 	$(QEMU) $(QEMUOPTS) -s -S
 
 $(SYSROOT):
-	@mkdir -p $@{,/usr{,/lib,/include}}
+	@mkdir -p $@{,/dev,/usr{,/lib,/include}}
 
 clean:
 	rm -rf $(OBJ) $(SYSROOT)

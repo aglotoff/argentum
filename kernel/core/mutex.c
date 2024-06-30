@@ -120,7 +120,7 @@ k_mutex_lock(struct KMutex *mutex)
   mutex->owner = my_task;
 
   // The highest-priority thread always locks the mutex first
-  assert(my_task->priority < mutex->priority);
+  assert(my_task->priority <= mutex->priority);
 
   k_list_add_front(&my_task->mutex_list, &mutex->link);
 

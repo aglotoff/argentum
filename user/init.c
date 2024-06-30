@@ -2,6 +2,7 @@
 #include <fcntl.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <sys/mount.h>
 #include <sys/stat.h>
 #include <sys/wait.h>
 #include <unistd.h>
@@ -18,7 +19,6 @@ struct DevFile {
   { "/dev/tty3", S_IFCHR | 0666, 0x0103 },
   { "/dev/tty4", S_IFCHR | 0666, 0x0104 },
   { "/dev/tty5", S_IFCHR | 0666, 0x0105 },
-  { "/dev/zero", S_IFCHR | 0666, 0x0202 },
 };
 
 #define NDEV  (sizeof(dev_files) / sizeof(dev_files[0]))
@@ -26,22 +26,20 @@ struct DevFile {
 int
 main(void)
 {
-  struct DevFile *df;
+  // struct DevFile *df;
   int status;
-  struct stat st;
+  // struct stat st;
   int i;
 
   // char *const argv[] = { "/bin/sh", "./run", NULL };
   char *const argv[] = { "/bin/sh", "-l", NULL };
 
   // Create the directory for special device files.
-  mkdir("/dev", 0755);
   mkdir("/etc", 0755);
 
-  // Create missing device files.
-  for (df = dev_files; df < &dev_files[NDEV]; df++)
-    if ((stat(df->name, &st) < 0) && (errno == ENOENT))
-      mknod(df->name, df->mode, df->dev);
+  // Mount devfs
+  mkdir("/dev", 0755);
+  mount("devfs", "/dev");
 
   open("/etc/passwd", O_WRONLY | O_CREAT | O_TRUNC, 0777);
   write(0, "root:x:0:0:root:/root:/bin/sh\n", 30);
