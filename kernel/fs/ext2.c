@@ -204,17 +204,17 @@ ext2_lookup(struct Inode *dirp, const char *name)
 }
 
 int
-ext2_link(struct Inode *dir, char *name, struct Inode *ip)
+ext2_link(struct Inode *dir, char *name, struct Inode *inode)
 {
-  struct Inode *ip2;
+  struct Inode *existing_inode;
   struct Ext2DirEntry de, new_de;
   off_t off;
   ssize_t name_len, de_len, new_len;
   uint8_t file_type;
   struct Ext2SuperblockData *sb = (struct Ext2SuperblockData *) (dir->fs->extra);
 
-  if ((ip2 = ext2_lookup(dir, name)) != NULL) {
-    fs_inode_put(ip2);
+  if ((existing_inode = ext2_lookup(dir, name)) != NULL) {
+    fs_inode_put(existing_inode);
     return -EEXIST;
   }
 
@@ -222,7 +222,7 @@ ext2_link(struct Inode *dir, char *name, struct Inode *ip)
   if (name_len > NAME_MAX)
     return -ENAMETOOLONG;
 
-  switch (ip->mode & S_IFMT) {
+  switch (inode->mode & S_IFMT) {
   case S_IFREG:
     file_type = EXT2_FT_REG_FILE; break;
   case S_IFSOCK:
@@ -243,7 +243,7 @@ ext2_link(struct Inode *dir, char *name, struct Inode *ip)
 
   new_len = ROUND_UP(DE_NAME_OFFSET + name_len, sizeof(uint32_t));
 
-  new_de.inode     = ip->ino;
+  new_de.inode     = inode->ino;
   new_de.name_len  = name_len;
   new_de.file_type = file_type;
   strncpy(new_de.name, name, ROUND_UP(name_len, sizeof(uint32_t)));
@@ -258,9 +258,9 @@ ext2_link(struct Inode *dir, char *name, struct Inode *ip)
       // Reuse an empty entry
       new_de.rec_len = de.rec_len;
 
-      ip->ctime = rtc_get_time();
-      ip->nlink++;
-      ip->flags |= FS_INODE_DIRTY;
+      inode->ctime = rtc_get_time();
+      inode->nlink++;
+      inode->flags |= FS_INODE_DIRTY;
 
       return ext2_dirent_write(dir, &new_de, off);
     }
@@ -272,9 +272,9 @@ ext2_link(struct Inode *dir, char *name, struct Inode *ip)
       new_de.rec_len = de.rec_len - de_len;
       de.rec_len = de_len;
 
-      ip->ctime = rtc_get_time();
-      ip->nlink++;
-      ip->flags |= FS_INODE_DIRTY;
+      inode->ctime = rtc_get_time();
+      inode->nlink++;
+      inode->flags |= FS_INODE_DIRTY;
 
       ext2_dirent_write(dir, &de, off);
       ext2_dirent_write(dir, &new_de, off + de_len);
@@ -288,15 +288,17 @@ ext2_link(struct Inode *dir, char *name, struct Inode *ip)
   new_de.rec_len = sb->block_size;
   dir->size = off + sb->block_size;
 
-  ip->ctime = rtc_get_time();
-  ip->nlink++;
-  ip->flags |= FS_INODE_DIRTY;
+  inode->ctime = rtc_get_time();
+  inode->nlink++;
+  inode->flags |= FS_INODE_DIRTY;
 
   ext2_dirent_write(dir, &new_de, off);
 
   return 0;
 }
 
+// A directory is considered empty only if it only consists of unused entries
+// and a self and a parent entry
 static int
 ext2_dir_empty(struct Inode *dir)
 {
@@ -308,7 +310,6 @@ ext2_dir_empty(struct Inode *dir)
 
     if (de.inode == 0)
       continue;
-
     if ((de.name_len == 1) && (strncmp(de.name, ".", de.name_len) == 0))
       continue;
     if ((de.name_len == 2) && (strncmp(de.name, "..", de.name_len) == 0))

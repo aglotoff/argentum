@@ -70,6 +70,8 @@ trap(struct TrapFrame *tf)
 
   if ((tf->psr & PSR_M_MASK) == PSR_M_USR)
     signal_deliver_pending();
+  else if (tf->pc < VIRT_KERNEL_BASE)
+    panic("bad PC");
 }
 
 // Handle data or prefetch abort
@@ -87,6 +89,7 @@ trap_handle_abort(struct TrapFrame *tf)
   // If abort happened in kernel mode, print the trap frame and panic
   if ((tf->psr & PSR_M_MASK) != PSR_M_USR) {
     print_trapframe(tf);
+    cprintf("%d\n", page_free_count);
     panic("kernel fault va %p status %#x", address, status);
   }
 

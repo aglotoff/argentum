@@ -127,12 +127,14 @@ vm_space_load_inode(struct VMSpace *vm, void *va, struct Inode *ip, size_t n, of
       return -EFAULT;
     }
 
+    assert(page->ref_count == 1);
+
     kva = (uint8_t *) page2kva(page);
 
     offset = (uintptr_t) dst % PAGE_SIZE;
     ncopy  = MIN(PAGE_SIZE - offset, n);
 
-    if ((r = fs_inode_read(ip, kva + offset, ncopy, &off)) != ncopy)
+    if ((r = fs_inode_read_locked(ip, kva + offset, ncopy, &off)) != ncopy)
       return r;
 
     dst += ncopy;

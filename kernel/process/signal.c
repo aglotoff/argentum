@@ -337,7 +337,7 @@ signal_arch_return(struct Process *process)
 
   // Make sure we're returning to user mode
   if ((ctx->psr & PSR_M_MASK) != PSR_M_USR)
-    return -EINVAL;
+    panic("bad PSR");
 
   // No need to check SP, LR, and PC - bad values will lead to page faults
 

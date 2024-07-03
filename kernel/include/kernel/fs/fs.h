@@ -101,6 +101,7 @@ extern struct PathNode *fs_root;
 void          fs_init(void);
 
 int           fs_lookup(const char *, int, struct PathNode **);
+int           fs_lookup_inode(const char *, int, struct Inode **);
 int           fs_path_lookup(const char *, char *, int, struct PathNode **, struct PathNode **);
 int           fs_set_pwd(struct PathNode *);
 
@@ -112,19 +113,19 @@ int           fs_inode_access(struct Inode *, int);
 void          fs_inode_unlock(struct Inode *);
 int           fs_inode_lookup_locked(struct Inode *, const char *, int, struct Inode **);
 
-ssize_t       fs_inode_read(struct Inode *, void *, size_t, off_t *);
-ssize_t       fs_inode_read_dir(struct Inode *, void *, size_t, off_t *);
-ssize_t       fs_inode_write(struct Inode *, const void *, size_t, off_t *);
+ssize_t       fs_inode_read_locked(struct Inode *, void *, size_t, off_t *);
+ssize_t       fs_inode_read_dir_locked(struct Inode *, void *, size_t, off_t *);
+ssize_t       fs_inode_write_locked(struct Inode *, const void *, size_t, off_t *);
 ssize_t       fs_inode_getdents(struct Inode *, void *, size_t, off_t *);
-int           fs_inode_stat(struct Inode *, struct stat *);
+int           fs_inode_stat_locked(struct Inode *, struct stat *);
 int           fs_create(const char *, mode_t, dev_t, struct PathNode **);
 void          fs_inode_cache_init(void);
-int           fs_inode_truncate(struct Inode *, off_t length);
-int           fs_inode_chmod(struct Inode *, mode_t);
-int           fs_inode_ioctl(struct Inode *, int, int);
-int           fs_inode_select(struct Inode *);
-int           fs_inode_sync(struct Inode *);
-int           fs_inode_chown(struct Inode *, uid_t, gid_t);
+int           fs_inode_truncate_locked(struct Inode *, off_t length);
+int           fs_inode_chmod_locked(struct Inode *, mode_t);
+int           fs_inode_ioctl_locked(struct Inode *, int, int);
+int           fs_inode_select_locked(struct Inode *);
+int           fs_inode_sync_locked(struct Inode *);
+int           fs_inode_chown_locked(struct Inode *, uid_t, gid_t);
 ssize_t       fs_inode_readlink(struct Inode *, char *, size_t);
 int           fs_permission(struct Inode *, mode_t, int);
 
@@ -153,12 +154,12 @@ int              fs_select(struct File *);
 int              fs_ftruncate(struct File *, off_t);
 int              fs_fsync(struct File *);
 
-struct PathNode *fs_path_create(const char *, struct Inode *, struct PathNode *);
+struct PathNode *fs_path_node_create(const char *, struct Inode *, struct PathNode *);
 struct PathNode *fs_path_duplicate(struct PathNode *);
 void             fs_path_remove(struct PathNode *);
 void             fs_path_put(struct PathNode *);
-void             fs_path_lock(struct PathNode *);
-void             fs_path_unlock(struct PathNode *);
+void             fs_path_node_lock(struct PathNode *);
+void             fs_path_node_unlock(struct PathNode *);
 void             fs_path_lock_two(struct PathNode *, struct PathNode *);
 void             fs_path_unlock_two(struct PathNode *, struct PathNode *);
 int              fs_path_mount(struct PathNode *, struct Inode *);

@@ -88,6 +88,9 @@ k_sched_switch(struct KThread *thread)
   thread->cpu = my_cpu;
   my_cpu->thread = thread;
 
+  if (thread->context->lr < VIRT_KERNEL_BASE)
+    panic("bad PC");
+
   k_arch_switch(&my_cpu->sched_context, thread->context);
 
   if ((intptr_t) thread->context - (intptr_t) thread->kstack < 64)
@@ -117,6 +120,7 @@ k_sched_idle(void)
     // Free the thread kernel stack
     kstack_page = kva2page(thread->kstack);
     kstack_page->ref_count--;
+    assert(kstack_page->ref_count == 0)
     page_free_one(kstack_page);
 
     // Free the thread object

@@ -81,6 +81,7 @@ buf_free_data(void *data, size_t block_size)
   page = kva2page(data);
 
   page->ref_count--;
+  assert(page->free_count == 0);
   page_free_block(page, page_order);
 }
 

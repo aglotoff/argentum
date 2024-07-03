@@ -177,7 +177,7 @@ fs_inode_unlock(struct Inode *ip)
 }
 
 ssize_t
-fs_inode_read(struct Inode *ip, void *buf, size_t nbyte, off_t *off)
+fs_inode_read_locked(struct Inode *ip, void *buf, size_t nbyte, off_t *off)
 {
   ssize_t ret;
   
@@ -224,7 +224,7 @@ fs_inode_read(struct Inode *ip, void *buf, size_t nbyte, off_t *off)
 }
 
 ssize_t
-fs_inode_write(struct Inode *ip, const void *buf, size_t nbyte, off_t *off)
+fs_inode_write_locked(struct Inode *ip, const void *buf, size_t nbyte, off_t *off)
 {
   ssize_t total;
 
@@ -286,7 +286,7 @@ fs_filldir(void *buf, ino_t ino, const char *name, size_t name_len)
 }
 
 ssize_t
-fs_inode_read_dir(struct Inode *ip, void *buf, size_t nbyte, off_t *off)
+fs_inode_read_dir_locked(struct Inode *ip, void *buf, size_t nbyte, off_t *off)
 {
   char *dst = (char *) buf;
   ssize_t total = 0;
@@ -298,6 +298,9 @@ fs_inode_read_dir(struct Inode *ip, void *buf, size_t nbyte, off_t *off)
 
   if (!fs_inode_holding(ip))
     panic("not locked");
+
+  if (!S_ISDIR(ip->mode))
+    return -ENOTDIR;
 
   if (!fs_permission(ip, FS_PERM_READ, 0))
     return -EPERM;
@@ -331,7 +334,7 @@ fs_inode_read_dir(struct Inode *ip, void *buf, size_t nbyte, off_t *off)
 }
 
 int
-fs_inode_stat(struct Inode *ip, struct stat *buf)
+fs_inode_stat_locked(struct Inode *ip, struct stat *buf)
 {
   if (!fs_inode_holding(ip))
     panic("not locked");
@@ -359,7 +362,7 @@ fs_inode_stat(struct Inode *ip, struct stat *buf)
 }
 
 int
-fs_inode_truncate(struct Inode *inode, off_t length)
+fs_inode_truncate_locked(struct Inode *inode, off_t length)
 {
   if (!fs_inode_holding(inode))
     panic("not locked");
@@ -525,7 +528,7 @@ fs_create(const char *path, mode_t mode, dev_t dev, struct PathNode **istore)
     if (istore != NULL) {
       struct PathNode *pp;
       
-      if ((pp = fs_path_create(name, inode, dir)) == NULL) {
+      if ((pp = fs_path_node_create(name, inode, dir)) == NULL) {
         fs_inode_unlock(inode);
         fs_inode_put(inode);  // (inode->ref_count): -1
         r = -ENOMEM;
@@ -735,7 +738,7 @@ fs_chdir(const char *path)
 #define CHMOD_MASK  (S_IRWXU | S_IRWXG | S_IRWXO | S_ISUID | S_ISGID)
 
 int
-fs_inode_chmod(struct Inode *inode, mode_t mode)
+fs_inode_chmod_locked(struct Inode *inode, mode_t mode)
 {
   struct Process *current = process_current();
 
@@ -795,7 +798,7 @@ fs_inode_access(struct Inode *inode, int amode)
 }
 
 int
-fs_inode_ioctl(struct Inode *inode, int request, int arg)
+fs_inode_ioctl_locked(struct Inode *inode, int request, int arg)
 {
   int ret;
 
@@ -820,7 +823,7 @@ fs_inode_ioctl(struct Inode *inode, int request, int arg)
 }
 
 int
-fs_inode_select(struct Inode *inode)
+fs_inode_select_locked(struct Inode *inode)
 {
   int ret;
 
@@ -845,7 +848,7 @@ fs_inode_select(struct Inode *inode)
 }
 
 int
-fs_inode_sync(struct Inode *inode)
+fs_inode_sync_locked(struct Inode *inode)
 {
   if (!fs_inode_holding(inode))
     panic("not locked");
@@ -856,7 +859,7 @@ fs_inode_sync(struct Inode *inode)
 }
 
 int
-fs_inode_chown(struct Inode *inode, uid_t uid, gid_t gid)
+fs_inode_chown_locked(struct Inode *inode, uid_t uid, gid_t gid)
 {
   struct Process *current = process_current();
 

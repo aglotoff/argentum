@@ -113,7 +113,7 @@ pipe_close(struct File *file)
 
   page = kva2page(pipe->data);
   page->ref_count--;
-  page_free_one(page);
+  // page_free_one(page);
 
   k_object_pool_put(pipe_cache, pipe);
 

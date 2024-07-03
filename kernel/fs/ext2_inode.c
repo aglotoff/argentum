@@ -84,6 +84,8 @@ ext2_inode_read(struct Inode *inode)
   inode->mtime = raw->mtime;
   inode->ctime = raw->ctime;
 
+  // cprintf("%p\n", raw->flags);
+
   extra = (struct Ext2InodeExtra *) inode->extra;
 
   // Read ext2-specific fields

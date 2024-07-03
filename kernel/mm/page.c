@@ -53,6 +53,7 @@ static struct {
 static struct KSpinLock page_lock;
 /** Whether the allocator is ready to be used */
 static int page_initialized = 0;
+// static int high = 0;
 
 #define BITS_PER_BYTE     8
 #define BITS_PER_WORD     (sizeof(unsigned long) * BITS_PER_BYTE)
@@ -107,6 +108,7 @@ page_init_high(void)
 {
   // TODO: detect the actual amount of physical memory!
   page_free_region(PHYS_ENTRY_LIMIT, PHYS_LIMIT);
+  // high = 1;
 }
 
 /**
@@ -194,6 +196,9 @@ page_alloc_block(unsigned order, int flags)
   assert(page->ref_count == 0);
   assert(!page_list_contains(page, order));
 
+  // if (high)
+  //   cprintf(" %d\n", page_free_count);
+
   k_spinlock_release(&page_lock);
 
   if (flags & PAGE_ALLOC_ZERO)
@@ -212,25 +217,26 @@ void
 page_free_block(struct Page *page, unsigned order)
 {
   struct Page *buddy;
+  unsigned o;
 
   if (page->ref_count != 0)
     panic("page->ref_count != 0 (%u)", page->ref_count);
 
   k_spinlock_acquire(&page_lock);
 
-  for ( ; order < PAGE_ORDER_MAX; order++) {
-    buddy = page_buddy(page, order);
+  for (o = order ; o < PAGE_ORDER_MAX; o++) {
+    buddy = page_buddy(page, o);
 
-    if (!page_list_contains(buddy, order))
+    if (!page_list_contains(buddy, o))
       break;
 
     // Combine with buddy
-    page_k_list_remove(buddy, order);
+    page_k_list_remove(buddy, o);
     if (buddy < page)
       page = buddy;
   }
 
-  page_list_add(page, order);
+  page_list_add(page, o);
   page_free_count += 1U << order;
 
   k_spinlock_release(&page_lock);
