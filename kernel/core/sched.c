@@ -120,7 +120,7 @@ k_sched_idle(void)
     // Free the thread kernel stack
     kstack_page = kva2page(thread->kstack);
     kstack_page->ref_count--;
-    assert(kstack_page->ref_count == 0)
+    assert(kstack_page->ref_count == 0);
     page_free_one(kstack_page);
 
     // Free the thread object
