@@ -50,7 +50,9 @@ trap(struct TrapFrame *tf)
     trap_handle_abort(tf);
     break;
   case T_SWI:
+    k_irq_enable();
     tf->r0 = sys_dispatch();
+    k_irq_disable();
     break;
   case T_IRQ:
     irq_dispatch();
@@ -84,12 +86,11 @@ trap_handle_abort(struct TrapFrame *tf)
   // Read the contents of the corresponsing Fault Address Register (FAR) and 
   // the Fault Status Register (FSR).
   address = tf->trapno == T_DABT ? cp15_dfar_get() : cp15_ifar_get();
-  status  = tf->trapno == T_DABT ? cp15_ifsr_get() : cp15_ifsr_get();
+  status  = tf->trapno == T_DABT ? cp15_dfsr_get() : cp15_ifsr_get();
 
   // If abort happened in kernel mode, print the trap frame and panic
   if ((tf->psr & PSR_M_MASK) != PSR_M_USR) {
     print_trapframe(tf);
-    cprintf("%d\n", page_free_count);
     panic("kernel fault va %p status %#x", address, status);
   }
 
@@ -103,9 +104,6 @@ trap_handle_abort(struct TrapFrame *tf)
   // If unsuccessfull, kill the process
   // print_trapframe(tf);
   cprintf("[%d]: user fault va %p status %#x\n", process->pid, address, status);
-
-  k_irq_disable();
-  // monitor(tf);
 
   // TODO: SEGV_MAPERR or SEGV_ACCERR
   if (signal_generate(process->pid, SIGSEGV, 0) != 0)
@@ -255,7 +253,7 @@ irq_dispatch(void)
   irq_mask(irq);
   irq_eoi(irq);
 
-  k_irq_enable();
+  // k_irq_enable();
 
   // Enable nested interrupts
   k_irq_dispatch(irq & 0xFFFFFF);

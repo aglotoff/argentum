@@ -23,6 +23,7 @@
 #include <kernel/trap.h>
 #include <kernel/tick.h>
 #include <kernel/semaphore.h>
+#include <kernel/irq.h>
 
 struct KObjectPool *process_cache;
 struct KObjectPool *thread_cache;
@@ -476,6 +477,8 @@ process_run(void *arg)
     if ((process->cwd == NULL) && (fs_lookup("/", 0, &process->cwd) < 0))
       panic("root not found");
   }
+
+  k_irq_disable();
 
   // "Return" to the user space.
   arch_trap_frame_pop(process->thread->tf);
