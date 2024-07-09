@@ -13,6 +13,7 @@
 #include <kernel/process.h>
 #include <kernel/vmspace.h>
 #include <kernel/types.h>
+#include <kernel/irq.h>
 
 static int
 copy_args(struct VMSpace *vm, char *const args[], uintptr_t limit, char **sp)
@@ -62,8 +63,7 @@ process_exec(const char *path, char *const argv[], char *const envp[])
   Elf32_Ehdr elf;
   Elf32_Phdr ph;
   off_t off;
-  struct VMSpace *vm;
-  // uintptr_t heap, ustack;
+  struct VMSpace *vm, *old_vm;
   uintptr_t ustack;
   char *usp, *uargv, *uenvp;
   int r, argc;
@@ -88,6 +88,8 @@ process_exec(const char *path, char *const argv[], char *const envp[])
     r = -EPERM;
     goto out1;
   }
+
+  
 
   vm = vm_space_create();
 
@@ -127,8 +129,10 @@ process_exec(const char *path, char *const argv[], char *const envp[])
       goto out2;
     }
 
-    if ((r = vm_space_load_inode(vm, (void *) ph.vaddr, inode, ph.filesz, ph.offset)) < 0)
+
+    if ((r = vm_space_load_inode(vm, (void *) ph.vaddr, inode, ph.filesz, ph.offset)) < 0) {
       goto out2;
+    }
   }
 
   a = vmspace_map(vm, ustack, USTACK_SIZE, PROT_READ | PROT_WRITE | _PROT_USER);
@@ -159,9 +163,11 @@ process_exec(const char *path, char *const argv[], char *const envp[])
   // vm->stack = ustack;
 
   vm_arch_load(vm->pgtab);
-  vm_space_destroy(proc->vm);
 
+  old_vm = proc->vm;
   proc->vm = vm;
+
+  vm_space_destroy(old_vm);
 
   fd_close_on_exec(proc);
 

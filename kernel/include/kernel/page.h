@@ -31,6 +31,23 @@ struct Page {
   };
   /** Reference counter */
   int ref_count;
+  /** Page type tag (for debugging purposes) */
+  int debug_tag;
+};
+
+enum {
+  PAGE_TAG_MAILBOX = 0xABCD0001,
+  PAGE_TAG_SLAB,
+  PAGE_TAG_KSTACK,
+  PAGE_TAG_FB,
+  PAGE_TAG_ETH_RX,
+  PAGE_TAG_BUF,
+  PAGE_TAG_ANON,
+  PAGE_TAG_PGTAB,
+  PAGE_TAG_VM,
+  PAGE_TAG_KERNEL_VM,
+  PAGE_TAG_ETH_TX,
+  PAGE_TAG_PIPE,
 };
 
 extern struct Page *pages;
@@ -99,7 +116,7 @@ kva2page(void *va)
 
 void         page_init_low(void);
 void         page_init_high(void);
-struct Page *page_alloc_block(unsigned, int);
+struct Page *page_alloc_block(unsigned, int, int);
 void         page_free_block(struct Page *, unsigned);
 void         page_free_region(physaddr_t, physaddr_t);
 
@@ -111,9 +128,9 @@ void         page_free_region(physaddr_t, physaddr_t);
  * @return Address of a page info structure or NULL if out of memory.
  */
 static inline struct Page *
-page_alloc_one(int flags)
+page_alloc_one(int flags, int debug_tag)
 {
-  return page_alloc_block(0, flags);
+  return page_alloc_block(0, flags, debug_tag);
 }
 
 /**

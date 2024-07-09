@@ -397,7 +397,7 @@ k_object_pool_slab_create(struct KObjectPool *pool)
 
   assert(k_spinlock_holding(&pool->lock));
 
-  if ((page = page_alloc_block(pool->slab_page_order, 0)) == NULL)
+  if ((page = page_alloc_block(pool->slab_page_order, 0, PAGE_TAG_SLAB)) == NULL)
     return NULL;
 
   data = (uint8_t *) page2kva(page);

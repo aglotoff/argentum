@@ -40,7 +40,7 @@ k_mailbox_create(size_t msg_size, size_t size)
   if ((size * msg_size) > PAGE_SIZE)
     panic("size too large");
   
-  if ((page = page_alloc_one(0)) == NULL) {
+  if ((page = page_alloc_one(0, PAGE_TAG_MAILBOX)) == NULL) {
     k_object_pool_put(k_mailbox_pool, mbox);
     return NULL;
   }

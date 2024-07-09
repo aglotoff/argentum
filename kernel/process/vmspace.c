@@ -61,7 +61,7 @@ vm_space_check_buf(struct VMSpace *vm, const void *va, size_t n, unsigned perm)
       if ((curr_perm & perm) != perm)
         return -EFAULT;
 
-      if ((new_page = page_alloc_one(0)) == NULL)
+      if ((new_page = page_alloc_one(0, PAGE_TAG_ANON)) == NULL)
         return -EFAULT;
 
       memcpy(page2kva(new_page), page2kva(page), PAGE_SIZE);
@@ -240,7 +240,7 @@ vm_handle_fault(struct VMSpace *vm, uintptr_t va)
   if (fault_page == NULL)
     return -EFAULT;
 
-  if ((flags & _PROT_COW) && ((page = page_alloc_one(0)) != NULL)) {
+  if ((flags & _PROT_COW) && ((page = page_alloc_one(0, PAGE_TAG_ANON)) != NULL)) {
     memcpy(page2kva(page), page2kva(fault_page), PAGE_SIZE);
 
     if (vm_page_insert(vm->pgtab, page, va, (flags & ~_PROT_COW) | PROT_WRITE) == 0)

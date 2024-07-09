@@ -163,7 +163,7 @@ boot_alloc(size_t n)
  * @return Pointer to a page structure or NULL if out of memory.
  */
 struct Page *
-page_alloc_block(unsigned order, int flags)
+page_alloc_block(unsigned order, int flags, int debug_tag)
 {
   struct Page *page;
   unsigned o;
@@ -204,6 +204,8 @@ page_alloc_block(unsigned order, int flags)
   if (flags & PAGE_ALLOC_ZERO)
     memset(page2kva(page), 0, PAGE_SIZE << order);
 
+  page->debug_tag = debug_tag;
+
   return page;
 }
 
@@ -221,6 +223,8 @@ page_free_block(struct Page *page, unsigned order)
 
   if (page->ref_count != 0)
     panic("page->ref_count != 0 (%u)", page->ref_count);
+
+  page->debug_tag = 0;
 
   k_spinlock_acquire(&page_lock);
 

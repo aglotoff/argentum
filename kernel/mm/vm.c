@@ -129,7 +129,7 @@ vm_range_alloc(void *vm, uintptr_t va, size_t n, int prot)
   for (a = start; a < end; a += PAGE_SIZE) {
     vm_lock();
 
-    if ((page = page_alloc_one(PAGE_ALLOC_ZERO)) == NULL) {
+    if ((page = page_alloc_one(PAGE_ALLOC_ZERO, PAGE_TAG_ANON)) == NULL) {
       vm_unlock();
 
       vm_range_free(vm, (uintptr_t) start, a - start);
@@ -196,7 +196,7 @@ vm_range_clone(void *src, void *dst, uintptr_t va, size_t n, int share)
         perm &= ~_PROT_COW;
 
         if (src_page->ref_count == 1) {
-          if ((r = vm_page_insert(src, src_page, va, perm)) < 0) {
+          if ((r = vm_page_insert(src, src_page, (uintptr_t) a, perm)) < 0) {
             vm_unlock();
 
             page_free_one(dst_page);
@@ -204,12 +204,12 @@ vm_range_clone(void *src, void *dst, uintptr_t va, size_t n, int share)
             return r;
           }
         } else {
-          if ((dst_page = page_alloc_one(0)) == NULL) {
+          if ((dst_page = page_alloc_one(0, PAGE_TAG_ANON)) == NULL) {
             vm_unlock();
             return -ENOMEM;
           }
 
-          if ((r = vm_page_insert(src, dst_page, va, perm)) < 0) {
+          if ((r = vm_page_insert(src, dst_page, (uintptr_t) a, perm)) < 0) {
             page_free_one(dst_page);
             vm_unlock();
             return r;
@@ -220,7 +220,7 @@ vm_range_clone(void *src, void *dst, uintptr_t va, size_t n, int share)
         }
       }
 
-      if ((r = vm_page_insert(dst, src_page, va, perm)) < 0) {
+      if ((r = vm_page_insert(dst, src_page, (uintptr_t) a, perm)) < 0) {
         vm_unlock();
         return r;
       }
@@ -238,12 +238,12 @@ vm_range_clone(void *src, void *dst, uintptr_t va, size_t n, int share)
         return r;
       }
     } else {
-      if ((dst_page = page_alloc_one(0)) == NULL) {
+      if ((dst_page = page_alloc_one(0, PAGE_TAG_ANON)) == NULL) {
         vm_unlock();
         return -ENOMEM;
       }
 
-      if ((r = vm_page_insert(dst, dst_page, (uintptr_t) va, perm)) < 0) {
+      if ((r = vm_page_insert(dst, dst_page, (uintptr_t) a, perm)) < 0) {
         vm_unlock();
 
         page_free_one(dst_page);
@@ -303,7 +303,7 @@ vm_copy_out(void *pgtab, const void *src, uintptr_t dst_va, size_t n)
         // Copy the page contents and insert with new permissions
         struct Page *page_copy;
 
-        if ((page_copy = page_alloc_one(0)) == NULL) {
+        if ((page_copy = page_alloc_one(0, PAGE_TAG_ANON)) == NULL) {
           vm_unlock();
           return -ENOMEM;
         }

@@ -33,7 +33,7 @@ eth_netif_output(struct netif *netif, struct pbuf *p)
 {
   (void) netif;
 
-  struct Page *page = page_alloc_one(0);
+  struct Page *page = page_alloc_one(0, PAGE_TAG_ETH_TX);
 
   pbuf_copy_partial(p, page2kva(page), p->tot_len, 0);
   eth_write(page2kva(page), p->tot_len);

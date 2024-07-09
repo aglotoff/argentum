@@ -218,7 +218,7 @@ vm_arch_lookup(void *pgtab, uintptr_t va, int alloc)
     struct Page *page;
     physaddr_t pa;
 
-    if (!alloc || (page = page_alloc_one(PAGE_ALLOC_ZERO)) == NULL)
+    if (!alloc || (page = page_alloc_one(PAGE_ALLOC_ZERO, PAGE_TAG_PGTAB)) == NULL)
       return NULL;
   
     page->ref_count++;
@@ -318,7 +318,7 @@ vm_arch_init(void)
   struct Page *page;
 
   // Allocate the master translation table
-  if ((page = page_alloc_block(2, PAGE_ALLOC_ZERO)) == NULL)
+  if ((page = page_alloc_block(2, PAGE_ALLOC_ZERO, PAGE_TAG_KERNEL_VM)) == NULL)
     panic("cannot allocate kernel page table");
 
   kernel_pgtab = page2kva(page);
@@ -369,7 +369,7 @@ vm_arch_create(void)
 {
   struct Page *page;
 
-  if ((page = page_alloc_block(PGTAB_ORDER, PAGE_ALLOC_ZERO)) == NULL)
+  if ((page = page_alloc_block(PGTAB_ORDER, PAGE_ALLOC_ZERO, PAGE_TAG_VM)) == NULL)
     return NULL;
 
   page->ref_count++;

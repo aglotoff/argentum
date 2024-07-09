@@ -268,7 +268,7 @@ eth_rx(void)
       uint32_t *data;
       uint8_t *packet;
   
-      p = page_alloc_one(PAGE_ALLOC_ZERO);
+      p = page_alloc_one(PAGE_ALLOC_ZERO, PAGE_TAG_ETH_RX);
       packet = (uint8_t *) page2kva(p);
       data = (uint32_t *) page2kva(p);
 

@@ -23,6 +23,7 @@
 #include <kernel/sys.h>
 #include <kernel/types.h>
 #include <kernel/object_pool.h>
+#include <kernel/irq.h>
 
 #include <lwip/sockets.h>
 
@@ -100,7 +101,9 @@ sys_dispatch(void)
     return num;
 
   if ((num < (int) ARRAY_SIZE(syscalls)) && syscalls[num]) {
+
     int r = syscalls[num]();
+
     // if (r < 0)
     //   cprintf("syscall(%d) -> %d\n", num, r);
     return r;

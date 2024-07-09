@@ -151,7 +151,7 @@ k_thread_create(struct Process *process, void (*entry)(void *), void *arg,
   if ((thread = (struct KThread *) k_object_pool_get(thread_cache)) == NULL)
     return NULL;
 
-  if ((stack_page = page_alloc_one(0)) == NULL) {
+  if ((stack_page = page_alloc_one(0, PAGE_TAG_KSTACK)) == NULL) {
     k_object_pool_put(thread_cache, thread);
     return NULL;
   }

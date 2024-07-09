@@ -31,7 +31,7 @@ pipe_open(struct File **read_store, struct File **write_store)
     goto fail1;
   }
 
-  if ((page = page_alloc_one(0)) == NULL) {
+  if ((page = page_alloc_one(0, PAGE_TAG_PIPE)) == NULL) {
     r = -ENOMEM;
     goto fail2;
   }
@@ -113,7 +113,7 @@ pipe_close(struct File *file)
 
   page = kva2page(pipe->data);
   page->ref_count--;
-  // page_free_one(page);
+  page_free_one(page);
 
   k_object_pool_put(pipe_cache, pipe);
 

@@ -74,7 +74,7 @@ display_init(void)
   font.glyph_height = psf->charsize;
 
   // Allocate the frame buffer.
-  if ((page = page_alloc_block(8, PAGE_ALLOC_ZERO)) == NULL)
+  if ((page = page_alloc_block(8, PAGE_ALLOC_ZERO, PAGE_TAG_FB)) == NULL)
     return -ENOMEM;
 
   fb_width  = DEFAULT_FB_WIDTH;

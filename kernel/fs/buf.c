@@ -57,7 +57,7 @@ buf_alloc_data(size_t block_size)
   for (page_order = 0; (PAGE_SIZE << page_order) < block_size; page_order++)
     ;
 
-  if ((page = page_alloc_block(page_order, 0)) == NULL)
+  if ((page = page_alloc_block(page_order, 0, PAGE_TAG_BUF)) == NULL)
     return NULL;
 
   page->ref_count++;
