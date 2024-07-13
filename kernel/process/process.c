@@ -167,7 +167,7 @@ process_load_binary(struct Process *proc, const void *binary)
     if (ph->filesz > ph->memsz)
       return -EINVAL;
 
-    addr = vmspace_map(proc->vm, ph->vaddr, ph->memsz, PROT_READ | PROT_WRITE | PROT_EXEC | _PROT_USER);
+    addr = vmspace_map(proc->vm, ph->vaddr, ph->memsz, PROT_READ | PROT_WRITE | PROT_EXEC | VM_USER);
     if (addr != ph->vaddr)
       return (int) addr;
 
@@ -179,7 +179,7 @@ process_load_binary(struct Process *proc, const void *binary)
   }
 
   addr = vmspace_map(proc->vm, (VIRT_USTACK_TOP - USTACK_SIZE), USTACK_SIZE,
-                        PROT_READ | PROT_WRITE | _PROT_USER);
+                        PROT_READ | PROT_WRITE | VM_USER);
   if (addr != (VIRT_USTACK_TOP - USTACK_SIZE))
     return (int) addr;
 

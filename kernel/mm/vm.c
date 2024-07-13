@@ -6,20 +6,9 @@
 #include <kernel/spinlock.h>
 #include <string.h>
 #include <sys/mman.h>
+#include <kernel/fs/fs.h>
 
-static struct KSpinLock vm_spin = K_SPINLOCK_INITIALIZER("vm_spin");
-
-static inline void
-vm_lock(void)
-{
-  k_spinlock_acquire(&vm_spin);
-}
-
-static inline void
-vm_unlock(void)
-{
-  k_spinlock_release(&vm_spin);
-}
+static struct KSpinLock vm_lock = K_SPINLOCK_INITIALIZER("vm_lock");
 
 /**
  * Find a physical page mapped at the given virtual address.
@@ -36,10 +25,12 @@ vm_page_lookup(void *pgtab, uintptr_t va, int *flags_store)
 {
   void *pte;
 
+  assert(k_spinlock_holding(&vm_lock));
+
   if ((pte = vm_arch_lookup(pgtab, va, 0)) == NULL)
     return NULL;
 
-  if (!vm_arch_pte_valid(pte) || !(vm_arch_pte_flags(pte) & _PROT_PAGE))
+  if (!vm_arch_pte_valid(pte) || !(vm_arch_pte_flags(pte) & VM_PAGE))
     return NULL;
 
   if (flags_store)
@@ -65,10 +56,12 @@ vm_page_insert(void *pgtab, struct Page *page, uintptr_t va, int flags)
 {
   void *pte;
 
+  assert(k_spinlock_holding(&vm_lock));
+
   if ((pte = vm_arch_lookup(pgtab, va, 1)) == NULL)
     return -ENOMEM;
 
-  // Incrementing the reference count before calling vm_page_remove() allows
+  // Incrementing the reference counter before calling vm_page_remove() allows
   // us to elegantly handle the situation when the same page is re-inserted at
   // the same virtual address, but with different permissions
   page->ref_count++;
@@ -76,7 +69,7 @@ vm_page_insert(void *pgtab, struct Page *page, uintptr_t va, int flags)
   // If present, remove the previous mapping
   vm_page_remove(pgtab, (uintptr_t) va);
 
-  vm_arch_pte_set(pte, page2pa(page), flags | _PROT_PAGE);
+  vm_arch_pte_set(pte, page2pa(page), flags | VM_PAGE);
 
   return 0;
 }
@@ -96,10 +89,12 @@ vm_page_remove(void *pgtab, uintptr_t va)
   struct Page *page;
   void *pte;
 
+  assert(k_spinlock_holding(&vm_lock));
+
   if ((pte = vm_arch_lookup(pgtab, va, 0)) == NULL)
     return 0;
 
-  if (!vm_arch_pte_valid(pte) || !(vm_arch_pte_flags(pte) & _PROT_PAGE))
+  if (!vm_arch_pte_valid(pte) || !(vm_arch_pte_flags(pte) & VM_PAGE))
     return 0;
 
   page = pa2page(vm_arch_pte_addr(pte));
@@ -113,216 +108,104 @@ vm_page_remove(void *pgtab, uintptr_t va)
   return 0;
 }
 
+static struct Page *
+vm_page_cow(void *pgtab, uintptr_t va, struct Page *page, int flags)
+{
+  struct Page *page_copy;
+
+  assert(flags & VM_COW);
+
+  flags &= ~VM_COW;
+  flags |= VM_WRITE;
+
+  // If this is the only one occurence of the page, simply re-insert it with
+  // new permissions
+  if (page->ref_count == 1) {
+    if (vm_page_insert(pgtab, page, va, flags) < 0)
+      return NULL;
+    return page;
+  }
+
+  // Otherwise, insert a copy of the entire page in its place
+  if ((page_copy = page_alloc_one(PAGE_ALLOC_ZERO, PAGE_TAG_ANON)) == NULL)
+    return NULL;
+
+  memmove(page2kva(page_copy), page2kva(page), PAGE_SIZE);
+
+  if (vm_page_insert(pgtab, page_copy, va, flags) < 0) {
+    page_free_one(page_copy);
+    return NULL;
+  }
+
+  return page_copy;
+}
+
 int
-vm_range_alloc(void *vm, uintptr_t va, size_t n, int prot)
+vm_page_lookup_cow(void *pgtab, uintptr_t va, struct Page **page_store,
+                   int *flags_store)
 {
   struct Page *page;
-  uint8_t *a, *start, *end;
-  int r;
+  int flags;
 
-  start = ROUND_DOWN((uint8_t *) va, PAGE_SIZE);
-  end   = ROUND_UP((uint8_t *) va + n, PAGE_SIZE);
-
-  if ((start > end) || (end > (uint8_t *) VIRT_KERNEL_BASE))
-    return -EINVAL;
-
-  for (a = start; a < end; a += PAGE_SIZE) {
-    vm_lock();
-
-    if ((page = page_alloc_one(PAGE_ALLOC_ZERO, PAGE_TAG_ANON)) == NULL) {
-      vm_unlock();
-
-      vm_range_free(vm, (uintptr_t) start, a - start);
-      
+  if ((page = vm_page_lookup(pgtab, va, &flags)) == NULL)
+    return -EFAULT;
+  
+  if (flags & VM_COW) {
+    if ((page = vm_page_cow(pgtab, va, page, flags)) == NULL)
       return -ENOMEM;
-    }
-
-    if ((r = (vm_page_insert(vm, page, (uintptr_t) a, prot)) != 0)) {
-      page_free_one(page);
-      vm_unlock();
-
-      vm_range_free(vm, (uintptr_t) start, a - start);
-
-      return r;
-    }
-
-    vm_unlock();
   }
+  
+  if (page_store != NULL)
+    *page_store = page;
+  if (flags_store != NULL)
+    *flags_store = flags;
 
   return 0;
 }
 
-void
-vm_range_free(void *vm, uintptr_t va, size_t n)
+static void
+vm_user_assert(uintptr_t start_va, uintptr_t end_va)
 {
-  uint8_t *a, *end;
-
-  a   = ROUND_DOWN((uint8_t *) va, PAGE_SIZE);
-  end = ROUND_UP((uint8_t *) va + n, PAGE_SIZE);
-
-  if ((a > end) || (end > (uint8_t *) VIRT_KERNEL_BASE))
-    panic("invalid range [%p,%p)", a, end);
-
-  for ( ; a < end; a += PAGE_SIZE) {
-    vm_lock();
-    vm_page_remove(vm, (uintptr_t) a);
-    vm_unlock();
-  }
+  if ((start_va >= VIRT_KERNEL_BASE) || (end_va < start_va))
+    panic("invalid va range: [%p,%p)", start_va, end_va);
 }
 
-int
-vm_range_clone(void *src, void *dst, uintptr_t va, size_t n, int share)
+static void
+vm_user_assert_pages(uintptr_t start_va, uintptr_t end_va)
 {
-  struct Page *src_page, *dst_page;
-  uint8_t *a, *end;
-  int r;
-
-  a   = ROUND_DOWN((uint8_t *) va, PAGE_SIZE);
-  end = ROUND_UP((uint8_t *) va + n, PAGE_SIZE);
-
-  for ( ; a < end; a += PAGE_SIZE) {
-    int perm;
-
-    vm_lock();
-
-    if ((src_page = vm_page_lookup(src, (uintptr_t) a, &perm)) == NULL) {
-      vm_unlock();
-      continue;
-    }
-
-    if (share) {
-      if (perm & _PROT_COW) {
-        perm |= PROT_WRITE;
-        perm &= ~_PROT_COW;
-
-        if (src_page->ref_count == 1) {
-          if ((r = vm_page_insert(src, src_page, (uintptr_t) a, perm)) < 0) {
-            vm_unlock();
-
-            page_free_one(dst_page);
-
-            return r;
-          }
-        } else {
-          if ((dst_page = page_alloc_one(0, PAGE_TAG_ANON)) == NULL) {
-            vm_unlock();
-            return -ENOMEM;
-          }
-
-          if ((r = vm_page_insert(src, dst_page, (uintptr_t) a, perm)) < 0) {
-            page_free_one(dst_page);
-            vm_unlock();
-            return r;
-          }
-
-          memmove(page2kva(dst_page), page2kva(src_page), PAGE_SIZE);
-          src_page = dst_page;
-        }
-      }
-
-      if ((r = vm_page_insert(dst, src_page, (uintptr_t) a, perm)) < 0) {
-        vm_unlock();
-        return r;
-      }
-    } else if ((perm & PROT_WRITE) || (perm & _PROT_COW)) {
-      perm &= ~PROT_WRITE;
-      perm |= _PROT_COW;
-
-      if ((r = vm_page_insert(src, src_page, (uintptr_t) a, perm)) < 0) {
-        vm_unlock();
-        return r;
-      }
-
-      if ((r = vm_page_insert(dst, src_page, (uintptr_t) a, perm)) < 0) {
-        vm_unlock();
-        return r;
-      }
-    } else {
-      if ((dst_page = page_alloc_one(0, PAGE_TAG_ANON)) == NULL) {
-        vm_unlock();
-        return -ENOMEM;
-      }
-
-      if ((r = vm_page_insert(dst, dst_page, (uintptr_t) a, perm)) < 0) {
-        vm_unlock();
-
-        page_free_one(dst_page);
-        return r;
-      }
-
-      memcpy(page2kva(dst_page), page2kva(src_page), PAGE_SIZE);
-    }
-
-    vm_unlock();
-  }
-
-  return 0;
+  if ((start_va % PAGE_SIZE) != 0)
+    panic("va not page-aligned %p", start_va);
+  if ((start_va >= VIRT_KERNEL_BASE) || (end_va < start_va))
+    panic("invalid va range: [%p,%p)", start_va, end_va);
 }
-
-/*
- * ----------------------------------------------------------------------------
- * Copying Data Between Address Spaces
- * ----------------------------------------------------------------------------
- */
 
 int
 vm_copy_out(void *pgtab, const void *src, uintptr_t dst_va, size_t n)
 {
   uint8_t *p = (uint8_t *) src;
 
+  vm_user_assert(dst_va, dst_va + n);
+
   while (n != 0) {
     struct Page *page;
     uint8_t *kva;
     size_t offset, ncopy;
-    int prot;
+    int r;
 
     offset = dst_va % PAGE_SIZE;
-    ncopy  = MIN(PAGE_SIZE - offset, n);
+    ncopy = MIN(PAGE_SIZE - offset, n);
 
-    vm_lock();
+    k_spinlock_acquire(&vm_lock);
 
-    if ((page = vm_page_lookup(pgtab, dst_va, &prot)) == NULL) {
-      vm_unlock();
-      return -EFAULT;
+    if ((r = vm_page_lookup_cow(pgtab, dst_va, &page, NULL)) < 0) {
+      k_spinlock_release(&vm_lock);
+      return r;
     }
 
-    // Do copy-on-write
-    if (prot & _PROT_COW) {
-      int r;
-
-      prot &= ~_PROT_COW;
-      prot |= PROT_WRITE;
-
-      if (page->ref_count == 1) {
-        // The page has only one reference, just update permission bits
-        if ((r = vm_page_insert(pgtab, page, dst_va, prot)) < 0) {
-          vm_unlock();
-          return r;
-        }
-      } else {
-        // Copy the page contents and insert with new permissions
-        struct Page *page_copy;
-
-        if ((page_copy = page_alloc_one(0, PAGE_TAG_ANON)) == NULL) {
-          vm_unlock();
-          return -ENOMEM;
-        }
-        
-        memmove(page2kva(page_copy), page2kva(page), PAGE_SIZE);
-
-        if ((r = vm_page_insert(pgtab, page_copy, dst_va, prot)) < 0) {
-          vm_unlock();
-
-          page_free_one(page_copy);
-          return r;
-        }
-      }
-    }
-    
     kva = (uint8_t *) page2kva(page);
     memmove(kva + offset, p, ncopy);
 
-    vm_unlock();
+    k_spinlock_release(&vm_lock);
 
     p      += ncopy;
     dst_va += ncopy;
@@ -337,6 +220,8 @@ vm_copy_in(void *vm, void *dst, uintptr_t src_va, size_t n)
 {
   uint8_t *p = (uint8_t *) dst;
 
+  vm_user_assert(src_va, src_va + n);
+
   while (n != 0) {
     struct Page *page;
     uint8_t *kva;
@@ -345,17 +230,17 @@ vm_copy_in(void *vm, void *dst, uintptr_t src_va, size_t n)
     offset = src_va % PAGE_SIZE;
     ncopy  = MIN(PAGE_SIZE - offset, n);
 
-    vm_lock();
+    k_spinlock_acquire(&vm_lock);
 
     if ((page = vm_page_lookup(vm, src_va, NULL)) == NULL) {
-      vm_unlock();
+      k_spinlock_release(&vm_lock);
       return -EFAULT;
     }
 
     kva = (uint8_t *) page2kva(page);
     memmove(p, kva + offset, ncopy);
 
-    vm_unlock();
+    k_spinlock_release(&vm_lock);
 
     src_va += ncopy;
     p      += ncopy;
@@ -366,7 +251,140 @@ vm_copy_in(void *vm, void *dst, uintptr_t src_va, size_t n)
 }
 
 int
-vm_check_str(void *vm, uintptr_t va, size_t *len_ptr, int perm)
+vm_user_alloc(void *vm, uintptr_t start_va, size_t n, int flags)
+{
+  struct Page *page;
+  uintptr_t va, end_va;
+  int r;
+
+  end_va = ROUND_UP(start_va + n, PAGE_SIZE);
+  vm_user_assert_pages(start_va, end_va);
+
+  for (va = start_va; va < end_va; va += PAGE_SIZE) {
+    k_spinlock_acquire(&vm_lock);
+
+    if ((page = page_alloc_one(PAGE_ALLOC_ZERO, PAGE_TAG_ANON)) == NULL) {
+      k_spinlock_release(&vm_lock);
+
+      vm_user_free(vm, start_va, va - start_va);
+      
+      return -ENOMEM;
+    }
+
+    if ((r = (vm_page_insert(vm, page, va, flags)) != 0)) {
+      page_free_one(page);
+      k_spinlock_release(&vm_lock);
+
+      vm_user_free(vm, start_va, va - start_va);
+
+      return r;
+    }
+
+    k_spinlock_release(&vm_lock);
+  }
+
+  return 0;
+}
+
+void
+vm_user_free(void *vm, uintptr_t start_va, size_t n)
+{
+  uintptr_t va, end_va;
+
+  end_va = ROUND_UP(start_va + n, PAGE_SIZE);
+  vm_user_assert_pages(start_va, end_va);
+
+  for (va = start_va; va < end_va; va += PAGE_SIZE) {
+    k_spinlock_acquire(&vm_lock);
+    vm_page_remove(vm, va);
+    k_spinlock_release(&vm_lock);
+  }
+}
+
+int
+vm_user_clone(void *src, void *dst, uintptr_t start_va, size_t n, int share)
+{
+  uintptr_t va, end_va;
+
+  end_va = ROUND_UP(start_va + n, PAGE_SIZE);
+  vm_user_assert_pages(start_va, end_va);
+ 
+  for (va = start_va ; va < end_va; va += PAGE_SIZE) {
+    struct Page *page;
+    int flags, r;
+
+    k_spinlock_acquire(&vm_lock);
+
+    if (share) {
+      // When creating a shared region, remove the copy-on-write bit
+      if ((r = vm_page_lookup_cow(src, va, &page, &flags)) < 0) {
+        k_spinlock_release(&vm_lock);
+        return r;
+      }
+    } else {
+      if ((page = vm_page_lookup(src, va, &flags)) == NULL) {
+        k_spinlock_release(&vm_lock);
+        return -EFAULT;
+      }
+
+      if (flags & VM_WRITE) {
+        flags &= ~VM_WRITE;
+        flags |= VM_COW;
+
+        if ((r = vm_page_insert(src, page, va, flags)) < 0) {
+          k_spinlock_release(&vm_lock);
+          return r;
+        }
+      }
+    }
+
+    if ((r = vm_page_insert(dst, page, va, flags)) < 0) {
+      k_spinlock_release(&vm_lock);
+      return r;
+    }
+
+    k_spinlock_release(&vm_lock);
+  }
+
+  return 0;
+}
+
+static int
+vm_flags_check(int curr_flags, int flags)
+{
+  if (curr_flags & VM_COW) {
+    curr_flags &= ~VM_COW;
+    curr_flags |= VM_WRITE;
+  }
+
+  return (curr_flags & flags) == flags;
+}
+
+int
+vm_user_check_ptr(void *pgtab, uintptr_t va, int flags)
+{
+  int curr_flags;
+
+  if (va >= VIRT_KERNEL_BASE)
+    return -EFAULT;
+
+  k_spinlock_acquire(&vm_lock);
+
+  if (vm_page_lookup(pgtab, va, &curr_flags) == NULL) {
+    k_spinlock_release(&vm_lock);
+    return -EFAULT;
+  }
+
+  k_spinlock_release(&vm_lock);
+
+  if (!vm_flags_check(curr_flags, flags))
+    return -EFAULT;
+
+  return 0;
+}
+
+int
+vm_user_check_str(void *vm, uintptr_t va, size_t *len_ptr, int flags)
 {
   size_t len = 0;
 
@@ -374,14 +392,14 @@ vm_check_str(void *vm, uintptr_t va, size_t *len_ptr, int perm)
     const char *p;
     struct Page *page;
     unsigned off;
-    int flags;
+    int curr_flags;
 
-    vm_lock();
+    k_spinlock_acquire(&vm_lock);
 
-    page = vm_page_lookup(vm, va, &flags);
+    page = vm_page_lookup(vm, va, &curr_flags);
 
-    if ((page == NULL) || ((flags & perm) != perm)) {
-      vm_unlock();
+    if ((page == NULL) || !vm_flags_check(curr_flags, flags)) {
+      k_spinlock_release(&vm_lock);
       return -EFAULT;
     }
 
@@ -392,18 +410,159 @@ vm_check_str(void *vm, uintptr_t va, size_t *len_ptr, int perm)
         if (len_ptr)
           *len_ptr = len;
 
-        vm_unlock();
+        k_spinlock_release(&vm_lock);
 
         return 0;
       }
 
       len++;
+      va++;
     }
 
-    vm_unlock();
-
-    va += PAGE_SIZE - (va % PAGE_SIZE);
+    k_spinlock_release(&vm_lock);
   }
 
   return -EFAULT;
+}
+
+int
+vm_user_check_args(void *vm, uintptr_t va, size_t *len_ptr, int flags)
+{
+  size_t len = 0;
+
+  if (va % sizeof(char *) != 0)
+    return -EFAULT;
+
+  while (va < VIRT_KERNEL_BASE) {
+    const char **p;
+    struct Page *page;
+    unsigned off;
+    int curr_flags;
+
+    k_spinlock_acquire(&vm_lock);
+
+    page = vm_page_lookup(vm, va, &curr_flags);
+
+    if ((page == NULL) || !vm_flags_check(curr_flags, flags)) {
+      k_spinlock_release(&vm_lock);
+      return -EFAULT;
+    }
+
+    p = (const char **) page2kva(page);
+
+    for (off = (va % PAGE_SIZE) / sizeof *p; off < PAGE_SIZE / sizeof *p; off++) {
+      if (p[off] == NULL) {
+        if (len_ptr)
+          *len_ptr = len;
+
+        k_spinlock_release(&vm_lock);
+
+        return 0;
+      }
+
+      len++;
+      va += sizeof *p;
+    }
+
+    k_spinlock_release(&vm_lock);
+  }
+
+  return -EFAULT;
+}
+
+int
+vm_user_check_buf(void *pgtab, uintptr_t start_va, size_t n, int flags)
+{
+  struct Page *page;
+  uintptr_t va, end_va;
+
+  end_va = ROUND_UP(start_va + n, PAGE_SIZE);
+  if ((start_va >= VIRT_KERNEL_BASE) || (end_va < start_va))
+    return -EFAULT;
+
+  for (va = start_va; va < end_va; va += PAGE_SIZE) {
+    int r, curr_flags;
+
+    k_spinlock_acquire(&vm_lock);
+
+    // TODO: do not do copy-on-write before actual memory access!
+    if ((r = vm_page_lookup_cow(pgtab, va, &page, &curr_flags)) < 0) {
+      k_spinlock_release(&vm_lock);
+      return r;
+    }
+
+    if (!vm_flags_check(curr_flags, flags)) {
+      k_spinlock_release(&vm_lock);
+      return -EFAULT;
+    }
+
+    k_spinlock_release(&vm_lock);
+  }
+
+  return 0;
+}
+
+int
+vm_handle_fault(void *pgtab, uintptr_t va)
+{
+  struct Page *fault_page;
+  int flags;
+
+  if ((va < PAGE_SIZE) || (va >= VIRT_KERNEL_BASE))
+    return -EFAULT;
+
+  k_spinlock_acquire(&vm_lock);
+
+  fault_page = vm_page_lookup(pgtab, va, &flags);
+
+  if ((fault_page == NULL) || !(flags & VM_COW)) {
+    k_spinlock_release(&vm_lock);
+    return -EFAULT;
+  }
+
+  if (vm_page_cow(pgtab, va, fault_page, flags) == NULL) {
+    k_spinlock_release(&vm_lock);
+    return -ENOMEM;
+  }
+
+  k_spinlock_release(&vm_lock);
+  
+  return 0;
+}
+
+int
+vm_space_load_inode(void *pgtab, void *va, struct Inode *ip, size_t n, off_t off)
+{
+  struct Page *page;
+  uint8_t *dst, *kva;
+  int ncopy, offset;
+  int r;
+
+  dst = (uint8_t *) va;
+
+  while (n != 0) {
+    k_spinlock_acquire(&vm_lock);
+
+    page = vm_page_lookup(pgtab, (uintptr_t) dst, NULL);
+    if (page == NULL) {
+      return -EFAULT;
+    }
+
+    // TODO: unsafe?
+
+    k_spinlock_release(&vm_lock);
+
+    kva = (uint8_t *) page2kva(page);
+
+    offset = (uintptr_t) dst % PAGE_SIZE;
+    ncopy  = MIN(PAGE_SIZE - offset, n);
+
+    if ((r = fs_inode_read_locked(ip, kva + offset, ncopy, &off)) != ncopy)
+      return r;
+
+    dst += ncopy;
+    n   -= ncopy;
+  }
+
+  return 0;
 }

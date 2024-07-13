@@ -65,14 +65,16 @@ fs_inode_get(ino_t ino, dev_t dev)
     empty->dev       = dev;
     empty->flags     = 0;
 
-    // cprintf("[create %d]\n", ino);
+    cprintf("[inode create %d]\n", ino);
 
     k_spinlock_release(&inode_cache.lock);
 
     return empty;
   }
 
-  k_spinlock_release(&inode_cache.lock);
+  // k_spinlock_release(&inode_cache.lock);
+
+  panic("out of inodes\n");
 
   return NULL;
 }
@@ -128,7 +130,8 @@ fs_inode_put(struct Inode *inode)
   // Return the inode to the cache
   k_spinlock_acquire(&inode_cache.lock);
   if (--inode->ref_count == 0) {
-    // cprintf("[drop %d]\n", inode->ino);
+    cprintf("[inode drop %d]\n", inode->ino);
+
     k_list_remove(&inode->cache_link);
     k_list_add_front(&inode_cache.head, &inode->cache_link);
   }

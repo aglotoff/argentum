@@ -138,9 +138,9 @@ static int prot_to_ap[] = {
   [PROT_READ]                           = AP_PRIV_RO, 
   [PROT_WRITE]                          = AP_PRIV_RW, 
   [PROT_READ  | PROT_WRITE]             = AP_PRIV_RW, 
-  [_PROT_USER | PROT_READ ]             = AP_USER_RO, 
-  [_PROT_USER | PROT_WRITE]             = AP_BOTH_RW, 
-  [_PROT_USER | PROT_READ | PROT_WRITE] = AP_BOTH_RW, 
+  [VM_USER | PROT_READ ]             = AP_USER_RO, 
+  [VM_USER | PROT_WRITE]             = AP_BOTH_RW, 
+  [VM_USER | PROT_READ | PROT_WRITE] = AP_BOTH_RW, 
 };
 
 /**
@@ -155,8 +155,8 @@ vm_arch_pte_set(void *pte, physaddr_t pa, int flags)
 {
   int bits;
 
-  bits = L2_DESC_AP(prot_to_ap[flags & (PROT_WRITE | PROT_READ | _PROT_USER)]);
-  if ((flags & _PROT_USER) && !(flags & PROT_EXEC))
+  bits = L2_DESC_AP(prot_to_ap[flags & (PROT_WRITE | PROT_READ | VM_USER)]);
+  if ((flags & VM_USER) && !(flags & PROT_EXEC))
     bits |= L2_DESC_SM_XN;
   if (!(flags & PROT_NOCACHE))
     bits |= (L2_DESC_B | L2_DESC_C);
@@ -249,8 +249,8 @@ init_section_desc(l1_desc_t *tte, physaddr_t pa, int flags)
 {
   int bits;
 
-  bits = L1_DESC_SECT_AP(prot_to_ap[flags & (PROT_WRITE | PROT_READ | _PROT_USER)]);
-  if ((flags & _PROT_USER) && !(flags & PROT_EXEC))
+  bits = L1_DESC_SECT_AP(prot_to_ap[flags & (PROT_WRITE | PROT_READ | VM_USER)]);
+  if ((flags & VM_USER) && !(flags & PROT_EXEC))
     bits |= L1_DESC_SECT_XN;
   if (!(flags & PROT_NOCACHE))
     bits |= (L1_DESC_SECT_B | L1_DESC_SECT_C);

@@ -315,7 +315,7 @@ fs_path_lookup_at(struct PathNode *start,
     fs_inode_lock(parent_inode);
     
     r = fs_inode_lookup_locked(parent_inode, name_buf, flags, &inode);
-    
+
     fs_inode_unlock(parent_inode);
     fs_inode_put(parent_inode);
 
@@ -324,7 +324,6 @@ fs_path_lookup_at(struct PathNode *start,
         fs_inode_put(inode);
         r = -ENOMEM;
       }
-      // cprintf("[created %s]\n", name_buf);
     } else {
       current = NULL;
     }

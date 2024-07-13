@@ -162,7 +162,7 @@ signal_action(int no, uintptr_t stub, struct sigaction *action,
   if (!signal_valid_no(no, action && (action->_u._sa_handler != SIG_DFL)))
     return -EINVAL;
 
-  if (stub && vm_space_check_ptr(current->vm, stub, PROT_READ | PROT_EXEC))
+  if (stub && vm_user_check_ptr(current->vm->pgtab, stub, PROT_READ | PROT_EXEC))
     return -EFAULT;
 
   process_lock();
@@ -173,7 +173,7 @@ signal_action(int no, uintptr_t stub, struct sigaction *action,
   if (action != NULL) {
     if ((action->_u._sa_handler != SIG_IGN) &&
         (action->_u._sa_handler != SIG_DFL) &&
-        vm_space_check_ptr(current->vm, (uintptr_t) action->_u._sa_handler,
+        vm_user_check_ptr(current->vm->pgtab, (uintptr_t) action->_u._sa_handler,
                            PROT_READ | PROT_EXEC)) {
       process_unlock();
       return -EFAULT;
@@ -299,7 +299,7 @@ signal_arch_prepare(struct Process *process, struct Signal *signal)
 
   ctx = ((struct SignalFrame *) process->thread->tf->sp) - 1;
 
-  if ((vm_space_check_buf(process->vm, ctx, sizeof(*ctx), PROT_WRITE)) != 0)
+  if ((vm_user_check_buf(process->vm->pgtab, (uintptr_t) ctx, sizeof(*ctx), PROT_WRITE)) != 0)
     return SIGKILL;
 
   ctx->r0     = process->thread->tf->r0;
@@ -328,7 +328,7 @@ signal_arch_return(struct Process *process)
   struct SignalFrame *ctx;
 
   ctx = (struct SignalFrame *) process->thread->tf->sp;
-  if ((vm_space_check_buf(process->vm, ctx, sizeof(*ctx), PROT_WRITE)) != 0)
+  if ((vm_user_check_buf(process->vm->pgtab, (uintptr_t) ctx, sizeof(*ctx), PROT_WRITE)) != 0)
     return -EFAULT;
 
   // Check the signal mask

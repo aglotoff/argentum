@@ -98,7 +98,7 @@ trap_handle_abort(struct TrapFrame *tf)
   assert(process != NULL);
 
   // Try to handle VM fault first (it may be caused by copy-on-write pages)
-  if (vm_handle_fault(process->vm, address) == 0)
+  if (vm_handle_fault(process->vm->pgtab, address) == 0)
     return;
 
   // If unsuccessfull, kill the process

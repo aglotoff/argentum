@@ -123,19 +123,19 @@ process_exec(const char *path, char *const argv[], char *const envp[])
       goto out2;
     }
 
-    a = vmspace_map(vm, ph.vaddr, ph.memsz, PROT_READ | PROT_WRITE | PROT_EXEC | _PROT_USER);
+    a = vmspace_map(vm, ph.vaddr, ph.memsz, PROT_READ | PROT_WRITE | PROT_EXEC | VM_USER);
     if (a != ph.vaddr) {
       r = (int) a;
       goto out2;
     }
 
 
-    if ((r = vm_space_load_inode(vm, (void *) ph.vaddr, inode, ph.filesz, ph.offset)) < 0) {
+    if ((r = vm_space_load_inode(vm->pgtab, (void *) ph.vaddr, inode, ph.filesz, ph.offset)) < 0) {
       goto out2;
     }
   }
 
-  a = vmspace_map(vm, ustack, USTACK_SIZE, PROT_READ | PROT_WRITE | _PROT_USER);
+  a = vmspace_map(vm, ustack, USTACK_SIZE, PROT_READ | PROT_WRITE | VM_USER);
   if (a != ustack) {
     r = (int) a;
     goto out2;
