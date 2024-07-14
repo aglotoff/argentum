@@ -89,8 +89,6 @@ process_exec(const char *path, char *const argv[], char *const envp[])
     goto out1;
   }
 
-  
-
   vm = vm_space_create();
 
   off = 0;

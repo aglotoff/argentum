@@ -96,14 +96,12 @@ process_alloc(void)
   signal_init(process);
 
   k_list_init(&process->children);
-
-  process->link.prev = NULL;
-  process->link.next = NULL;
+  k_list_null(&process->pid_link);
+  k_list_null(&process->link);
+  k_list_null(&process->sibling_link);
 
   process->parent = NULL;
   process->zombie = 0;
-  process->sibling_link.next = NULL;
-  process->sibling_link.prev = NULL;
 
   process->times.tms_utime  = 0;
   process->times.tms_stime  = 0;
