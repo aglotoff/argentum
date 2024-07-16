@@ -19,7 +19,7 @@ struct Pipe {
 void    pipe_init(void);
 int     pipe_open(struct File **, struct File **);
 int     pipe_close(struct File *);
-ssize_t pipe_read(struct File *, void *, size_t);
-ssize_t pipe_write(struct File *, const void *, size_t);
+ssize_t pipe_read(struct File *, uintptr_t, size_t);
+ssize_t pipe_write(struct File *, uintptr_t, size_t);
 
 #endif  // !__KERNEL_INCLUDE_KERNEL_PIPE_H__

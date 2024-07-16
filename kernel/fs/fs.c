@@ -209,7 +209,7 @@ fs_seek(struct File *file, off_t offset, int whence)
 }
 
 ssize_t
-fs_read(struct File *file, void *buf, size_t nbytes)
+fs_read(struct File *file, uintptr_t va, size_t nbytes)
 {
   struct Inode *inode;
   ssize_t r;
@@ -223,7 +223,7 @@ fs_read(struct File *file, void *buf, size_t nbytes)
   inode = fs_path_inode(file->node);
   fs_inode_lock(inode);
 
-  r = fs_inode_read_locked(inode, buf, nbytes, &file->offset);
+  r = fs_inode_read_locked(inode, va, nbytes, &file->offset);
 
   fs_inode_unlock(inode);
   fs_inode_put(inode);
@@ -232,7 +232,7 @@ fs_read(struct File *file, void *buf, size_t nbytes)
 }
 
 ssize_t
-fs_write(struct File *file, const void *buf, size_t nbytes)
+fs_write(struct File *file, uintptr_t va, size_t nbytes)
 {
   struct Inode *inode;
   ssize_t r;
@@ -249,7 +249,7 @@ fs_write(struct File *file, const void *buf, size_t nbytes)
   inode = fs_path_inode(file->node);
   fs_inode_lock(inode);
 
-  r = fs_inode_write_locked(inode, buf, nbytes, &file->offset);
+  r = fs_inode_write_locked(inode, va, nbytes, &file->offset);
 
   fs_inode_unlock(inode);
   fs_inode_put(inode);
@@ -258,7 +258,7 @@ fs_write(struct File *file, const void *buf, size_t nbytes)
 }
 
 ssize_t
-fs_getdents(struct File *file, void *buf, size_t nbytes)
+fs_getdents(struct File *file, uintptr_t va, size_t nbytes)
 {
   struct Inode *inode;
   ssize_t r;
@@ -272,7 +272,7 @@ fs_getdents(struct File *file, void *buf, size_t nbytes)
   inode = fs_path_inode(file->node);
   fs_inode_lock(inode);
 
-  r = fs_inode_read_dir_locked(inode, buf, nbytes, &file->offset);
+  r = fs_inode_read_dir_locked(inode, va, nbytes, &file->offset);
 
   fs_inode_unlock(inode);
   fs_inode_put(inode);

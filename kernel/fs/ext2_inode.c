@@ -8,6 +8,8 @@
 #include <kernel/fs/buf.h>
 #include <kernel/fs/fs.h>
 #include <kernel/types.h>
+#include <kernel/vmspace.h>
+#include <kernel/process.h>
 
 #include "ext2.h"
 
@@ -93,7 +95,7 @@ ext2_inode_read(struct Inode *inode)
   memmove(extra->block, raw->block, sizeof(extra->block));
 
   if (S_ISCHR(inode->mode) || S_ISBLK(inode->mode)) {
-    ext2_read(inode, &inode->rdev, sizeof(inode->rdev), 0);
+    ext2_read(inode, (uintptr_t) &inode->rdev, sizeof(inode->rdev), 0);
   }
 
   buf_release(buf);
@@ -308,34 +310,35 @@ ext2_trunc(struct Inode *inode, off_t length)
 }
 
 ssize_t
-ext2_read(struct Inode *inode, void *buf, size_t nbyte, off_t off)
+ext2_read(struct Inode *inode, uintptr_t va, size_t nbyte, off_t off)
 {
   size_t total, n;
-  uint8_t *dst;
   struct Ext2SuperblockData *sb = (struct Ext2SuperblockData *) (inode->fs->extra);
 
-  dst = (uint8_t *) buf;
-  for (total = 0; total < nbyte; total += n, off += n, dst += n) {
+  for (total = 0; total < nbyte; total += n, off += n, va += n) {
     uint32_t block_id = ext2_inode_get_block(inode, off / sb->block_size, 0);
+    int r;
   
     n = MIN(nbyte - total, sb->block_size - off % sb->block_size);
   
     if (block_id == 0) {
       // Zero block in a sparse file - fill with zeros
       // TODO: could be an error
-      memset(dst, 0, n);
+      if ((r = vm_space_clear(va, n)) < 0)
+        return r;
     } else {
       // Read the block contents
       struct Buf *buf;
-
-      // cprintf("Read block %d\n", block_id);
 
       if ((buf = buf_read(block_id, sb->block_size, inode->dev)) == NULL) {
         buf_release(buf);
         return -EIO;
       }
 
-      memmove(dst, &buf->data[off % sb->block_size], n);
+      if ((r = vm_space_copy_out(&buf->data[off % sb->block_size], va, n)) < 0) {
+        buf_release(buf);
+        return r;
+      }
 
       buf_release(buf);
     }
@@ -345,14 +348,12 @@ ext2_read(struct Inode *inode, void *buf, size_t nbyte, off_t off)
 }
 
 ssize_t
-ext2_write(struct Inode *inode, const void *buf, size_t nbyte, off_t off)
+ext2_write(struct Inode *inode, uintptr_t va, size_t nbyte, off_t off)
 {
-  size_t total, n;
-  const uint8_t *src;
   struct Ext2SuperblockData *sb = (struct Ext2SuperblockData *) (inode->fs->extra);
+  size_t total, n;
 
-  src = (const uint8_t *) buf;
-  for (total = 0; total < nbyte; total += n, off += n, src += n) {
+  for (total = 0; total < nbyte; total += n, off += n, va += n) {
     uint32_t block_id = ext2_inode_get_block(inode, off / sb->block_size, 1);
     struct Buf *buf;
 
@@ -366,7 +367,7 @@ ext2_write(struct Inode *inode, const void *buf, size_t nbyte, off_t off)
       return -EIO;
     }
 
-    memmove(&buf->data[off % sb->block_size], src, n);
+    vm_space_copy_in(&buf->data[off % sb->block_size], va, n);
     buf->flags |= BUF_DIRTY;
 
     buf_release(buf);

@@ -92,7 +92,7 @@ process_exec(const char *path, char *const argv[], char *const envp[])
   vm = vm_space_create();
 
   off = 0;
-  if ((r = fs_inode_read_locked(inode, &elf, sizeof(elf), &off)) != sizeof(elf))
+  if ((r = fs_inode_read_locked(inode, (uintptr_t) &elf, sizeof(elf), &off)) != sizeof(elf))
     goto out2;
   
   if (memcmp(elf.ident, "\x7f""ELF", 4) != 0) {
@@ -105,7 +105,7 @@ process_exec(const char *path, char *const argv[], char *const envp[])
 
   off = elf.phoff;
   while ((size_t) off < elf.phoff + elf.phnum * sizeof(ph)) {
-    if ((r = fs_inode_read_locked(inode, &ph, sizeof(ph), &off)) != sizeof(ph))
+    if ((r = fs_inode_read_locked(inode, (uintptr_t) &ph, sizeof(ph), &off)) != sizeof(ph))
       goto out2;
 
     if (ph.type != PT_LOAD)

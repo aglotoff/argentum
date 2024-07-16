@@ -180,6 +180,39 @@ vm_user_assert_pages(uintptr_t start_va, uintptr_t end_va)
 }
 
 int
+vm_clear(void *pgtab, uintptr_t dst_va, size_t n)
+{
+  vm_user_assert(dst_va, dst_va + n);
+
+  while (n != 0) {
+    struct Page *page;
+    uint8_t *kva;
+    size_t offset, ncopy;
+    int r;
+
+    offset = dst_va % PAGE_SIZE;
+    ncopy = MIN(PAGE_SIZE - offset, n);
+
+    k_spinlock_acquire(&vm_lock);
+
+    if ((r = vm_page_lookup_cow(pgtab, dst_va, &page, NULL)) < 0) {
+      k_spinlock_release(&vm_lock);
+      return r;
+    }
+
+    kva = (uint8_t *) page2kva(page);
+    memset(kva + offset, 0, ncopy);
+
+    k_spinlock_release(&vm_lock);
+
+    dst_va += ncopy;
+    n      -= ncopy;
+  }
+
+  return 0;
+}
+
+int
 vm_copy_out(void *pgtab, const void *src, uintptr_t dst_va, size_t n)
 {
   uint8_t *p = (uint8_t *) src;
@@ -557,7 +590,7 @@ vm_space_load_inode(void *pgtab, void *va, struct Inode *ip, size_t n, off_t off
     offset = (uintptr_t) dst % PAGE_SIZE;
     ncopy  = MIN(PAGE_SIZE - offset, n);
 
-    if ((r = fs_inode_read_locked(ip, kva + offset, ncopy, &off)) != ncopy)
+    if ((r = fs_inode_read_locked(ip, (uintptr_t) kva + offset, ncopy, &off)) != ncopy)
       return r;
 
     dst += ncopy;

@@ -199,3 +199,45 @@ vm_print_areas(struct VMSpace *vm)
     cprintf("  [%x-%x)\n", area->start, area->start + area->length);
   }
 }
+
+int
+vm_space_copy_out(const void *src, uintptr_t dst_va, size_t n)
+{
+  if ((dst_va + n) < dst_va)
+    return -EFAULT;
+
+  if (dst_va > VIRT_KERNEL_BASE) {
+    memmove((void *) dst_va, src, n);
+    return 0;
+  }
+
+  return vm_copy_out(process_current()->vm->pgtab, src, dst_va, n);
+}
+
+int
+vm_space_copy_in(void *dst, uintptr_t src_va, size_t n)
+{
+  if ((src_va + n) < src_va)
+    return -EFAULT;
+
+  if (src_va > VIRT_KERNEL_BASE) {
+    memmove((void *) src_va, dst, n);
+    return 0;
+  }
+
+  return vm_copy_in(process_current()->vm->pgtab, dst, src_va, n);
+}
+
+int
+vm_space_clear(uintptr_t va, size_t n)
+{
+  if ((va + n) < va)
+    return -EFAULT;
+
+  if (va > VIRT_KERNEL_BASE) {
+    memset((void *) va, 0, n);
+    return 0;
+  }
+
+  return vm_clear(process_current()->vm->pgtab, va, n);
+}

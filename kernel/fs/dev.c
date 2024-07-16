@@ -76,20 +76,20 @@ dev_inode_delete(struct Inode *inode)
 }
 
 ssize_t
-dev_read(struct Inode *inode, void *buf, size_t n, off_t offset)
+dev_read(struct Inode *inode, uintptr_t va, size_t n, off_t offset)
 {
   (void) inode;
-  (void) buf;
+  (void) va;
   (void) n;
   (void) offset;
   return -ENOSYS;
 }
 
 ssize_t
-dev_write(struct Inode *inode, const void *buf, size_t n, off_t offset)
+dev_write(struct Inode *inode, uintptr_t va, size_t n, off_t offset)
 {
   (void) inode;
-  (void) buf;
+  (void) va;
   (void) n;
   (void) offset;
   return -ENOSYS;

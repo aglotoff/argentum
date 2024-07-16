@@ -16,10 +16,10 @@ int     net_close(struct File *);
 int     net_bind(struct File *, const struct sockaddr *, socklen_t);
 int     net_listen(struct File *, int);
 int     net_connect(struct File *, const struct sockaddr *, socklen_t);
-ssize_t net_recvfrom(struct File *, void *, size_t, int, struct sockaddr *, socklen_t *);
-ssize_t net_sendto(struct File *, const void *, size_t, int, const struct sockaddr *, socklen_t );
+ssize_t net_recvfrom(struct File *, uintptr_t, size_t, int, struct sockaddr *, socklen_t *);
+ssize_t net_sendto(struct File *, uintptr_t, size_t, int, const struct sockaddr *, socklen_t );
 int     net_setsockopt(struct File *, int, int, const void *, socklen_t);
-ssize_t net_read(struct File *, void *, size_t);
-ssize_t net_write(struct File *, const void *, size_t);
+ssize_t net_read(struct File *, uintptr_t, size_t);
+ssize_t net_write(struct File *, uintptr_t, size_t);
 
 #endif  // !__KERNEL_INCLUDE_KERNEL_NET_H__

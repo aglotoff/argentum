@@ -149,11 +149,11 @@ ext2_dirent_read(struct Inode *dir, struct Ext2DirEntry *de, off_t off)
 {
   ssize_t ret;
 
-  ret = ext2_read(dir, de, DE_NAME_OFFSET, off);
+  ret = ext2_read(dir, (uintptr_t) de, DE_NAME_OFFSET, off);
   if (ret != DE_NAME_OFFSET)
     panic("Cannot read directory");
 
-  ret = ext2_read(dir, de->name, de->name_len, off + ret);
+  ret = ext2_read(dir, (uintptr_t) de->name, de->name_len, off + ret);
   if (ret != de->name_len)
     panic("Cannot read directory");
 
@@ -168,7 +168,7 @@ ext2_dirent_write(struct Inode *dir, struct Ext2DirEntry *de, off_t off)
 {
   size_t ret;
 
-  ret = ext2_write(dir, de, DE_NAME_OFFSET + de->name_len, off);
+  ret = ext2_write(dir, (uintptr_t) de, DE_NAME_OFFSET + de->name_len, off);
   if (ret != (DE_NAME_OFFSET + de->name_len))
     panic("Cannot read directory");
 
@@ -527,5 +527,5 @@ ext2_readlink(struct Inode *inode, char *buf, size_t n)
     return nread;
   }
 
-  return ext2_read(inode, buf, n, 0);
+  return ext2_read(inode, (uintptr_t) buf, n, 0);
 }

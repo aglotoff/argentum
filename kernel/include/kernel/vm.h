@@ -46,6 +46,7 @@ int          vm_user_clone(void *, void *, uintptr_t, size_t, int);
 
 int          vm_copy_out(void *, const void *, uintptr_t, size_t);
 int          vm_copy_in(void *, void *, uintptr_t, size_t);
+int          vm_clear(void *, uintptr_t, size_t);
 
 int          vm_user_check_str(void *, uintptr_t, size_t *, int);
 int          vm_user_check_ptr(void *, uintptr_t, int);

@@ -133,18 +133,18 @@ file_seek(struct File *file, off_t offset, int whence)
 }
 
 ssize_t
-file_read(struct File *file, void *buf, size_t nbytes)
+file_read(struct File *file, uintptr_t va, size_t nbytes)
 {
   if ((file->flags & O_ACCMODE) == O_WRONLY)
     return -EBADF;
   
   switch (file->type) {
   case FD_INODE:
-    return fs_read(file, buf, nbytes);
+    return fs_read(file, va, nbytes);
   case FD_SOCKET:
-    return net_read(file, buf, nbytes);
+    return net_read(file, va, nbytes);
   case FD_PIPE:
-    return pipe_read(file, buf, nbytes);
+    return pipe_read(file, va, nbytes);
   default:
     panic("bad file type");
     return -EBADF;
@@ -152,18 +152,18 @@ file_read(struct File *file, void *buf, size_t nbytes)
 }
 
 ssize_t
-file_write(struct File *file, const void *buf, size_t nbytes)
+file_write(struct File *file, uintptr_t va, size_t nbytes)
 {
   if ((file->flags & O_ACCMODE) == O_RDONLY)
     return -EBADF;
 
   switch (file->type) {
   case FD_INODE:
-    return fs_write(file, buf, nbytes);
+    return fs_write(file, va, nbytes);
   case FD_SOCKET:
-    return net_write(file, buf, nbytes);
+    return net_write(file, va, nbytes);
   case FD_PIPE:
-    return pipe_write(file, buf, nbytes);
+    return pipe_write(file, va, nbytes);
   default:
     panic("bad file type");
     return -EBADF;
@@ -171,14 +171,14 @@ file_write(struct File *file, const void *buf, size_t nbytes)
 }
 
 ssize_t
-file_getdents(struct File *file, void *buf, size_t nbytes)
+file_getdents(struct File *file, uintptr_t va, size_t nbytes)
 {
   if ((file->flags & O_ACCMODE) == O_WRONLY)
     return -EBADF;
 
   switch (file->type) {
   case FD_INODE:
-    return fs_getdents(file, buf, nbytes);
+    return fs_getdents(file, va, nbytes);
   case FD_SOCKET:
   case FD_PIPE:
     return -ENOTDIR;

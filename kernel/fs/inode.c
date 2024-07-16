@@ -12,6 +12,7 @@
 #include <kernel/fs/buf.h>
 #include <kernel/fs/fs.h>
 #include <kernel/process.h>
+#include <kernel/vmspace.h>
 
 #include "ext2.h"
 
@@ -180,7 +181,7 @@ fs_inode_unlock(struct Inode *ip)
 }
 
 ssize_t
-fs_inode_read_locked(struct Inode *ip, void *buf, size_t nbyte, off_t *off)
+fs_inode_read_locked(struct Inode *ip, uintptr_t va, size_t nbyte, off_t *off)
 {
   ssize_t ret;
   
@@ -198,7 +199,7 @@ fs_inode_read_locked(struct Inode *ip, void *buf, size_t nbyte, off_t *off)
       fs_inode_unlock(ip);
 
       // TODO: support other devices
-      ret = console_read(ip, (uintptr_t) buf, nbyte);
+      ret = console_read(ip, va, nbyte);
 
       fs_inode_lock(ip);
       return ret;
@@ -215,7 +216,7 @@ fs_inode_read_locked(struct Inode *ip, void *buf, size_t nbyte, off_t *off)
   if (nbyte == 0)
     return 0;
 
-  if ((ret = ip->fs->ops->read(ip, buf, nbyte, *off)) < 0)
+  if ((ret = ip->fs->ops->read(ip, va, nbyte, *off)) < 0)
     return ret;
 
   ip->atime  = rtc_get_time();
@@ -227,7 +228,7 @@ fs_inode_read_locked(struct Inode *ip, void *buf, size_t nbyte, off_t *off)
 }
 
 ssize_t
-fs_inode_write_locked(struct Inode *ip, const void *buf, size_t nbyte, off_t *off)
+fs_inode_write_locked(struct Inode *ip, uintptr_t va, size_t nbyte, off_t *off)
 {
   ssize_t total;
 
@@ -245,7 +246,7 @@ fs_inode_write_locked(struct Inode *ip, const void *buf, size_t nbyte, off_t *of
       fs_inode_unlock(ip);
 
       // TODO: support other devices
-      total = console_write(ip, buf, nbyte);
+      total = console_write(ip, (void *) va, nbyte);
 
       fs_inode_lock(ip);
       return total;
@@ -260,7 +261,7 @@ fs_inode_write_locked(struct Inode *ip, const void *buf, size_t nbyte, off_t *of
   if (nbyte == 0)
     return 0;
 
-  total = ip->fs->ops->write(ip, buf, nbyte, *off);
+  total = ip->fs->ops->write(ip, va, nbyte, *off);
 
   if (total > 0) {
     *off += total;
@@ -289,9 +290,8 @@ fs_filldir(void *buf, ino_t ino, const char *name, size_t name_len)
 }
 
 ssize_t
-fs_inode_read_dir_locked(struct Inode *ip, void *buf, size_t nbyte, off_t *off)
+fs_inode_read_dir_locked(struct Inode *ip, uintptr_t va, size_t nbyte, off_t *off)
 {
-  char *dst = (char *) buf;
   ssize_t total = 0;
 
   struct {
@@ -310,6 +310,7 @@ fs_inode_read_dir_locked(struct Inode *ip, void *buf, size_t nbyte, off_t *off)
 
   while (nbyte > 0) {
     ssize_t nread;
+    int r;
 
     if ((nread = ip->fs->ops->readdir(ip, &de, fs_filldir, *off)) < 0)
       return nread;
@@ -326,9 +327,10 @@ fs_inode_read_dir_locked(struct Inode *ip, void *buf, size_t nbyte, off_t *off)
 
     *off += nread;
 
-    memmove(dst, &de, de.de.d_reclen);
+    if ((r = vm_space_copy_out(&de, va, de.de.d_reclen)) < 0)
+      return r;
 
-    dst   += de.de.d_reclen;
+    va    += de.de.d_reclen;
     total += de.de.d_reclen;
     nbyte -= de.de.d_reclen;
   }

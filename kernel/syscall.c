@@ -392,6 +392,12 @@ sys_arg_args(int n, char ***store, size_t *len_store)
   return 0;
 }
 
+static int
+sys_copy_out(const void *src, uintptr_t va, size_t n)
+{
+  return vm_copy_out(process_current()->vm->pgtab, src, va, n);
+}
+
 /*
  * ----------------------------------------------------------------------------
  * Process system calls
@@ -463,8 +469,7 @@ sys_wait(void)
 
   pid = r;
 
-  r = vm_copy_out(process_current()->vm->pgtab, &stat, stat_va, sizeof stat);
-  if (r < 0)
+  if ((r = sys_copy_out(&stat, stat_va, sizeof stat)) < 0)
     return r;
 
   return pid;
@@ -550,8 +555,7 @@ sys_times(void)
 
   process_get_times(process_current(), &times);
 
-  return vm_copy_out(process_current()->vm->pgtab, &times, times_va,
-                     sizeof times);
+  return sys_copy_out(&times, times_va, sizeof times);
 }
 
 int32_t
@@ -566,10 +570,11 @@ sys_nanosleep(void)
   if ((r = sys_arg_va(1, &rmt_va, sizeof rmt, VM_WRITE, 1)) < 0)
     goto out2;
 
-  r = process_nanosleep(rqtp, &rmt);
+  if ((r = process_nanosleep(rqtp, &rmt)) < 0)
+    goto out2;
 
-  if (rmt_va)
-    r = vm_copy_out(process_current()->vm->pgtab, &rmt, rmt_va, sizeof rmt);
+  if (rmt_va && ((r = sys_copy_out(&rmt, rmt_va, sizeof rmt)) < 0))
+    goto out2;
 
 out2:
   if (rqtp != NULL)
@@ -764,7 +769,7 @@ sys_readlink(void)
 
   buf_size = MIN(buf_size, (size_t) r);
 
-  if ((r = vm_copy_out(process_current()->vm->pgtab, buf, buf_va, buf_size)) < 0)
+  if ((r = sys_copy_out(buf, buf_va, buf_size)) < 0)
     goto out3;
 
   r = buf_size;
@@ -786,23 +791,23 @@ out1:
 int32_t
 sys_getdents(void)
 {
-  void *buf;
   size_t n;
   int fd;
   struct File *file;
+  uintptr_t va;
   int r;
 
   if ((r = sys_arg_int(0, &fd)) < 0)
     return r;
   if ((r = sys_arg_uint(2, &n)) < 0)
     return r;
-  if ((r = sys_arg_va(1, (uintptr_t *) &buf, n, VM_WRITE, 0)) < 0)
+  if ((r = sys_arg_va(1, &va, n, VM_WRITE, 0)) < 0)
     return r;
 
   if ((file = fd_lookup(process_current(), fd)) == NULL)
     return -EBADF;
 
-  r = file_getdents(file, buf, n);
+  r = file_getdents(file, va, n);
 
   file_put(file);
 
@@ -832,21 +837,28 @@ int32_t
 sys_stat(void)
 {
   struct File *file;
-  struct stat *buf;
+  uintptr_t buf_va;
+  struct stat buf;
   int r, fd;
 
   if ((r = sys_arg_int(0, &fd)) < 0)
-    return r;
-  if ((r = sys_arg_va(1, (uintptr_t *) &buf, sizeof(*buf), VM_WRITE, 0)) < 0)
-    return r;
+    goto out1;
+  if ((r = sys_arg_va(1, &buf_va, sizeof buf, VM_WRITE, 0)) < 0)
+    goto out1;
 
-  if ((file = fd_lookup(process_current(), fd)) == NULL)
-    return -EBADF;
+  if ((file = fd_lookup(process_current(), fd)) == NULL) {
+    r = -EBADF;
+    goto out2;
+  }
 
-  r = file_stat(file, buf);
+  if ((r = file_stat(file, &buf)) < 0)
+    goto out2;
 
+  r = sys_copy_out(&buf, buf_va, sizeof buf);
+
+out2:
   file_put(file);
-
+out1:
   return r;
 }
 
@@ -864,7 +876,7 @@ sys_close(void)
 int32_t
 sys_read(void)
 {
-  void *buf;
+  uintptr_t va;
   size_t n;
   struct File *file;
   int r, fd;
@@ -873,13 +885,13 @@ sys_read(void)
     return r;
   if ((r = sys_arg_uint(2, &n)) < 0)
     return r;
-  if ((r = sys_arg_va(1, (uintptr_t *) &buf, n, VM_READ, 0)) < 0)
+  if ((r = sys_arg_va(1, &va, n, VM_READ, 0)) < 0)
     return r;
 
   if ((file = fd_lookup(process_current(), fd)) == NULL)
     return -EBADF;
 
-  r = file_read(file, buf, n);
+  r = file_read(file, va, n);
 
   file_put(file);
 
@@ -964,7 +976,7 @@ sys_fcntl(void)
 int32_t
 sys_write(void)
 {
-  void *buf;
+  uintptr_t va;
   size_t n;
   struct File *file;
   int r, fd;
@@ -973,15 +985,16 @@ sys_write(void)
     return r;
   if ((r = sys_arg_uint(2, &n)) < 0)
     return r;
-  if ((r = sys_arg_va(1, (uintptr_t *) &buf, n, VM_WRITE, 0)) < 0)
+  if ((r = sys_arg_va(1, &va, n, VM_WRITE, 0)) < 0)
     return r;
 
   if ((file = fd_lookup(process_current(), fd)) == NULL)
     return -EBADF;
 
-  r = file_write(file, buf, n);
+  r = file_write(file, va, n);
 
   file_put(file);
+
   return r;
 }
 
@@ -1333,7 +1346,7 @@ sys_recvfrom(void)
   if ((file = fd_lookup(process_current(), fd)) == NULL)
     return -EBADF;
 
-  r = net_recvfrom(file, buffer, length, flags, address, address_len);
+  r = net_recvfrom(file, (uintptr_t) buffer, length, flags, address, address_len);
 
   file_put(file);
 
@@ -1367,7 +1380,7 @@ sys_sendto(void)
   if ((file = fd_lookup(process_current(), fd)) == NULL)
     return -EBADF;
 
-  r = net_sendto(file, message, length, flags, dest_addr, dest_len);
+  r = net_sendto(file, (uintptr_t) message, length, flags, dest_addr, dest_len);
 
   file_put(file);
 

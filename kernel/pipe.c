@@ -7,6 +7,8 @@
 #include <kernel/page.h>
 #include <kernel/pipe.h>
 #include <kernel/waitqueue.h>
+#include <kernel/process.h>
+#include <kernel/vmspace.h>
 
 static struct KObjectPool *pipe_cache;
 
@@ -121,9 +123,8 @@ pipe_close(struct File *file)
 }
 
 ssize_t
-pipe_read(struct File *file, void *buf, size_t n)
+pipe_read(struct File *file, uintptr_t va, size_t n)
 {
-  char *dst = (char *) buf;
   size_t i;
   struct Pipe *pipe = file->pipe;
 
@@ -140,12 +141,22 @@ pipe_read(struct File *file, void *buf, size_t n)
       return r;
     }
   }
+  
+  // TODO: could copy all available data in one or two steps
 
   for (i = 0; (i < n) && (pipe->size > 0); i++, pipe->size--) {
-    dst[i] = pipe->data[pipe->read_pos++];
-    
+    int r;
+
+    r = vm_space_copy_out(&pipe->data[pipe->read_pos++], va + i, 1);
+
     if (pipe->read_pos == PAGE_SIZE)
       pipe->read_pos = 0;
+
+    if (r < 0) {
+      k_waitqueue_wakeup_all(&pipe->write_queue);
+      k_spinlock_release(&pipe->lock);
+      return r;
+    }
   }
 
   k_waitqueue_wakeup_all(&pipe->write_queue);
@@ -156,9 +167,8 @@ pipe_read(struct File *file, void *buf, size_t n)
 }
 
 ssize_t
-pipe_write(struct File *file, const void *buf, size_t n)
+pipe_write(struct File *file, uintptr_t va, size_t n)
 {
-  const char *src = (const char *) buf;
   size_t i;
   struct Pipe *pipe = file->pipe;
 
@@ -167,23 +177,30 @@ pipe_write(struct File *file, const void *buf, size_t n)
   
   k_spinlock_acquire(&pipe->lock);
 
-  for (i = 0; i < n; i++) {
-    while (pipe->read_open && (pipe->size == PAGE_SIZE)) {
-      int r;
+  // TODO: could copy all available data in one or two steps
 
+  for (i = 0; i < n; i++) {
+    int r;
+
+    while (pipe->read_open && (pipe->size == PAGE_SIZE)) {
       if ((r = k_waitqueue_sleep(&pipe->write_queue, &pipe->lock)) < 0) {
         k_spinlock_release(&pipe->lock);
         return r;
       }
     }
 
-    pipe->data[pipe->write_pos++] = src[i];
-
+    r = vm_space_copy_in(&pipe->data[pipe->write_pos++], va + i, 1);
+  
     if (pipe->write_pos == PAGE_SIZE)
       pipe->write_pos = 0;
 
     if (pipe->size++ == 0)
       k_waitqueue_wakeup_all(&pipe->read_queue);
+
+    if (r < 0) {
+      k_spinlock_release(&pipe->lock);
+      return r;
+    }
   }
 
   k_spinlock_release(&pipe->lock);

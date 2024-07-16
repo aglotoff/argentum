@@ -66,8 +66,8 @@ struct FSOps {
   int             (*inode_read)(struct Inode *);
   int             (*inode_write)(struct Inode *);
   void            (*inode_delete)(struct Inode *);
-  ssize_t         (*read)(struct Inode *, void *, size_t, off_t);
-  ssize_t         (*write)(struct Inode *, const void *, size_t, off_t);
+  ssize_t         (*read)(struct Inode *, uintptr_t, size_t, off_t);
+  ssize_t         (*write)(struct Inode *, uintptr_t, size_t, off_t);
   int             (*rmdir)(struct Inode *, struct Inode *);
   ssize_t         (*readdir)(struct Inode *, void *, FillDirFunc, off_t);
   ssize_t         (*readlink)(struct Inode *, char *, size_t);
@@ -113,9 +113,9 @@ int           fs_inode_access(struct Inode *, int);
 void          fs_inode_unlock(struct Inode *);
 int           fs_inode_lookup_locked(struct Inode *, const char *, int, struct Inode **);
 
-ssize_t       fs_inode_read_locked(struct Inode *, void *, size_t, off_t *);
-ssize_t       fs_inode_read_dir_locked(struct Inode *, void *, size_t, off_t *);
-ssize_t       fs_inode_write_locked(struct Inode *, const void *, size_t, off_t *);
+ssize_t       fs_inode_read_locked(struct Inode *, uintptr_t, size_t, off_t *);
+ssize_t       fs_inode_read_dir_locked(struct Inode *, uintptr_t, size_t, off_t *);
+ssize_t       fs_inode_write_locked(struct Inode *, uintptr_t, size_t, off_t *);
 ssize_t       fs_inode_getdents(struct Inode *, void *, size_t, off_t *);
 int           fs_inode_stat_locked(struct Inode *, struct stat *);
 int           fs_create(const char *, mode_t, dev_t, struct PathNode **);
@@ -142,9 +142,9 @@ ssize_t          fs_readlink(const char *, char *, size_t);
 // File operations
 int              fs_close(struct File *);
 off_t            fs_seek(struct File *, off_t, int);
-ssize_t          fs_read(struct File *, void *, size_t);
-ssize_t          fs_write(struct File *, const void *, size_t);
-ssize_t          fs_getdents(struct File *, void *, size_t);
+ssize_t          fs_read(struct File *, uintptr_t, size_t);
+ssize_t          fs_write(struct File *, uintptr_t, size_t);
+ssize_t          fs_getdents(struct File *, uintptr_t, size_t);
 int              fs_fstat(struct File *, struct stat *);
 int              fs_fchdir(struct File *);
 int              fs_fchmod(struct File *, mode_t);

@@ -184,8 +184,8 @@ int           ext2_mkdir(struct Inode *, char *, mode_t, struct Inode **);
 int           ext2_rmdir(struct Inode *, struct Inode *);
 int           ext2_mknod(struct Inode *, char *, mode_t, dev_t, struct Inode **);
 void          ext2_trunc(struct Inode *, off_t);
-ssize_t       ext2_read(struct Inode *, void *, size_t, off_t);
-ssize_t       ext2_write(struct Inode *, const void *, size_t, off_t);
+ssize_t       ext2_read(struct Inode *, uintptr_t, size_t, off_t);
+ssize_t       ext2_write(struct Inode *, uintptr_t, size_t, off_t);
 
 ssize_t       ext2_readdir(struct Inode *, void *, FillDirFunc, off_t);
 ssize_t       ext2_readlink(struct Inode *, char *, size_t);

@@ -4,6 +4,8 @@
 #include <kernel/page.h>
 #include <kernel/net.h>
 #include <kernel/thread.h>
+#include <kernel/object_pool.h>
+#include <kernel/vmspace.h>
 
 #include <lwip/api.h>
 #include <lwip/dhcp.h>
@@ -198,45 +200,109 @@ net_close(struct File *file)
 }
 
 ssize_t
-net_recvfrom(struct File *file, void *buf, size_t nbytes, int flags,
+net_recvfrom(struct File *file, uintptr_t va, size_t nbytes, int flags,
              struct sockaddr *address, socklen_t *address_len)
 {
-  ssize_t r;
+  ssize_t total, r;
+  char *p;
 
   if (file->type != FD_SOCKET)
     return -EBADF;
 
-  if ((r = lwip_recvfrom(file->socket, buf, nbytes, flags, address, address_len)) < 0)
-    return -errno;
+  // TODO: looks like a triple copy!
+  if ((p = k_malloc(PAGE_SIZE)) == NULL)
+    return -ENOMEM;
 
-  return r;
+  total = 0;
+  while (nbytes) {
+    ssize_t nread = MIN(nbytes, PAGE_SIZE);
+
+    r = lwip_recvfrom(file->socket, p, nread, flags, address, address_len);
+
+    if (r == 0)
+      break;
+
+    if (r < 0) {
+      total = -errno;
+      break;
+    }
+
+    if ((r = vm_space_copy_out(p, va, nread)) < 0) {
+      total = -errno;
+      break;
+    }
+    
+    total += r;
+
+    if (r < nread)
+      break;
+
+    va     += nread;
+    nbytes -= nread;
+  }
+
+  k_free(p);
+
+  return total;
 }
 
 ssize_t
-net_read(struct File *file, void *buf, size_t nbytes)
+net_read(struct File *file, uintptr_t buf, size_t nbytes)
 {
   return net_recvfrom(file, buf, nbytes, 0, NULL, NULL);
 }
 
 ssize_t
-net_sendto(struct File *file, const void *buf, size_t nbytes, int flags,
+net_sendto(struct File *file, uintptr_t va, size_t nbytes, int flags,
            const struct sockaddr *dest_addr, socklen_t dest_len)
 {
-  ssize_t r;
+  ssize_t total, r;
+  char *p;
 
   if (file->type != FD_SOCKET)
     return -EBADF;
 
-  if ((r = lwip_sendto(file->socket, buf, nbytes, flags, dest_addr, dest_len)) < 0)
-    return -errno;
+  // TODO: looks like a triple copy!
+  if ((p = k_malloc(PAGE_SIZE)) == NULL)
+    return -ENOMEM;
 
-  return r;
+  total = 0;
+  while (nbytes) {
+    ssize_t nwrite = MIN(nbytes, PAGE_SIZE);
+
+    r = lwip_sendto(file->socket, p, nwrite, flags, dest_addr, dest_len);
+
+    if (r == 0)
+      break;
+
+    if (r < 0) {
+      total = -errno;
+      break;
+    }
+
+    if ((r = vm_space_copy_out(p, va, nwrite)) < 0) {
+      total = -errno;
+      break;
+    }
+    
+    total += r;
+
+    if (r < nwrite)
+      break;
+
+    va     += nwrite;
+    nbytes -= nwrite;
+  }
+
+  k_free(p);
+
+  return total;
 }
 
 ssize_t
-net_write(struct File *file, const void *buf, size_t nbytes)
+net_write(struct File *file, uintptr_t va, size_t nbytes)
 {
-  return net_sendto(file, buf, nbytes, 0, NULL, 0);
+  return net_sendto(file, va, nbytes, 0, NULL, 0);
 }
 
 int
