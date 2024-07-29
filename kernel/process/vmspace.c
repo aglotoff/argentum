@@ -221,7 +221,7 @@ vm_space_copy_in(void *dst, uintptr_t src_va, size_t n)
     return -EFAULT;
 
   if (src_va > VIRT_KERNEL_BASE) {
-    memmove((void *) src_va, dst, n);
+    memmove(dst, (void *) src_va, n);
     return 0;
   }
 
