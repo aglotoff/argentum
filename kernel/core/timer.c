@@ -10,33 +10,46 @@ static void k_timer_dequeue(struct KTimer *);
 
 static KLIST_DECLARE(k_timer_queue);
 static struct KSpinLock k_timer_queue_lock = K_SPINLOCK_INITIALIZER("timer");
+static struct KTimer *k_timer_current;
 
 int
-k_timer_create(struct KTimer *timer,
-              void (*callback)(void *), void *callback_arg,
-              unsigned long delay, unsigned long period, int autostart)
+k_timer_init(struct KTimer *timer,
+             void (*callback)(void *), void *callback_arg,
+             unsigned long delay, unsigned long period,
+             int autostart)
 {
   if (timer == NULL)
     panic("timer is NULL");
 
   k_list_null(&timer->link);
-  timer->callback     = callback;
+  timer->callback = callback;
   timer->callback_arg = callback_arg;
-  timer->remain       = delay;
-  timer->period       = period;
+  timer->remain = 0;
+  timer->delay  = delay;
+  timer->period = period;
+  timer->state = K_TIMER_STATE_INACTIVE;
 
-  k_spinlock_acquire(&k_timer_queue_lock);
+  // TODO: validate delay and period!
 
   if (autostart) {
-    timer->state = K_TIMER_STATE_ACTIVE;
+    k_spinlock_acquire(&k_timer_queue_lock);
+    timer->remain = delay;
     k_timer_enqueue(timer);
-  } else {
-    timer->state = K_TIMER_STATE_INACTIVE;
+    k_spinlock_release(&k_timer_queue_lock);
   }
 
-  k_spinlock_release(&k_timer_queue_lock);
-
   return 0;
+}
+
+void
+_k_timer_start(struct KTimer *timer, unsigned long remain)
+{
+  k_spinlock_acquire(&k_timer_queue_lock);
+
+  timer->remain = remain;
+  k_timer_enqueue(timer);
+
+  k_spinlock_release(&k_timer_queue_lock);
 }
 
 int
@@ -52,7 +65,7 @@ k_timer_start(struct KTimer *timer)
     return -EINVAL;
   }
 
-  timer->state = K_TIMER_STATE_ACTIVE;
+  timer->remain = timer->delay;
   k_timer_enqueue(timer);
 
   k_spinlock_release(&k_timer_queue_lock);
@@ -68,12 +81,17 @@ k_timer_stop(struct KTimer *timer)
 
   k_spinlock_acquire(&k_timer_queue_lock);
 
-  if (timer->state != K_TIMER_STATE_ACTIVE) {
+  if (timer->state == K_TIMER_STATE_RUNNING) {
+    assert(k_timer_current == timer);
+    k_timer_current = NULL;
+  } else if (timer->state == K_TIMER_STATE_ACTIVE) {
+    k_timer_dequeue(timer);
+  } else {
+    // Invalid state
     k_spinlock_release(&k_timer_queue_lock);
     return -EINVAL;
   }
 
-  k_timer_dequeue(timer);
   timer->state = K_TIMER_STATE_INACTIVE;
 
   k_spinlock_release(&k_timer_queue_lock);
@@ -82,21 +100,27 @@ k_timer_stop(struct KTimer *timer)
 }
 
 int
-k_timer_destroy(struct KTimer *timer)
+k_timer_fini(struct KTimer *timer)
 {
   if (timer == NULL)
     panic("timer is NULL");
 
   k_spinlock_acquire(&k_timer_queue_lock);
 
-  // Already destroyed
-  if (timer->state == K_TIMER_STATE_NONE) {
+  switch (timer->state) {  
+  case K_TIMER_STATE_ACTIVE:
+    k_timer_dequeue(timer);
+    break;
+  case K_TIMER_STATE_INACTIVE:
+    break;
+  case K_TIMER_STATE_RUNNING:
+    assert(k_timer_current == timer);
+    k_timer_current = NULL;
+    break;
+  default:
     k_spinlock_release(&k_timer_queue_lock);
     return -EINVAL;
   }
-
-  if (timer->state == K_TIMER_STATE_ACTIVE)
-    k_timer_dequeue(timer);
 
   timer->state = K_TIMER_STATE_NONE;
 
@@ -121,28 +145,39 @@ k_timer_tick(void)
   link  = k_timer_queue.next;
   timer = KLIST_CONTAINER(link, struct KTimer, link);
 
-  assert(timer->state == K_TIMER_STATE_ACTIVE);
+  assert(timer->remain != 0);
 
   timer->remain--;
 
   while (timer->remain == 0) {
+    void (*callback)(void *) = timer->callback;
+    void *callback_arg = timer->callback_arg;
+
+    assert(timer->state == K_TIMER_STATE_ACTIVE);
+
     k_list_remove(link);
+
+    k_timer_current = timer;
+    timer->state = K_TIMER_STATE_RUNNING;
 
     k_spinlock_release(&k_timer_queue_lock);
 
-    // TODO: race condition! timer can be destroyed and its memory freed!!!
-
-    timer->callback(timer->callback_arg);
+    callback(callback_arg);
 
     k_spinlock_acquire(&k_timer_queue_lock);
 
-    if (timer->state == K_TIMER_STATE_ACTIVE) {
+    if (k_timer_current != NULL) {
+      assert(k_timer_current == timer);
+      assert(timer->state == K_TIMER_STATE_RUNNING);
+
       if (timer->period != 0) {
         timer->remain = timer->period;
         k_timer_enqueue(timer);
       } else {
         timer->state = K_TIMER_STATE_INACTIVE;
       }
+
+      k_timer_current = NULL;
     }
 
     if (k_list_is_empty(&k_timer_queue))
@@ -150,8 +185,6 @@ k_timer_tick(void)
 
     link  = k_timer_queue.next;
     timer = KLIST_CONTAINER(link, struct KTimer, link);
-
-    assert(timer->state == K_TIMER_STATE_ACTIVE);
   }
 
   k_spinlock_release(&k_timer_queue_lock);
@@ -163,6 +196,8 @@ k_timer_enqueue(struct KTimer *timer)
   struct KListLink *link;
 
   assert(k_spinlock_holding(&k_timer_queue_lock));
+
+  assert(timer->remain != 0);
 
   KLIST_FOREACH(&k_timer_queue, link) {
     struct KTimer *other = KLIST_CONTAINER(link, struct KTimer, link);
@@ -176,6 +211,7 @@ k_timer_enqueue(struct KTimer *timer)
   }
 
   k_list_add_back(link, &timer->link);
+  timer->state = K_TIMER_STATE_ACTIVE;
 }
 
 static void

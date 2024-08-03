@@ -216,10 +216,8 @@ _k_sched_sleep(struct KListLink *queue, int state, unsigned long timeout,
   if (my_cpu->thread == NULL)
     panic("called not by a thread");
 
-  if (timeout != 0) {
-    my_thread->timer.remain = timeout;
-    k_timer_start(&my_thread->timer);
-  }
+  if (timeout != 0)
+    _k_timer_start(&my_thread->timer, timeout);
 
   my_thread->state = state;
 

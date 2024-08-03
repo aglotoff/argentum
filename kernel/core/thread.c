@@ -112,6 +112,8 @@ k_thread_timeout_callback(void *arg)
     break;
   }
 
+  // TODO: possible race condition if thread is destroyed!!!
+
   _k_sched_unlock();
 }
 
@@ -175,7 +177,7 @@ k_thread_create(struct Process *process, void (*entry)(void *), void *arg,
   thread->kstack         = stack;
   thread->tf             = NULL;
 
-  k_timer_create(&thread->timer, k_thread_timeout_callback, thread, 0, 0, 0);
+  k_timer_init(&thread->timer, k_thread_timeout_callback, thread, 0, 0, 0);
 
   arch_thread_init_stack(thread);
 
@@ -194,7 +196,7 @@ k_thread_exit(void)
   if (thread == NULL)
     panic("no current thread");
 
-  k_timer_destroy(&thread->timer);
+  k_timer_fini(&thread->timer);
 
   _k_sched_lock();
 

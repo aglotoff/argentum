@@ -383,15 +383,15 @@ ext2_rmdir(struct Inode *dir, struct Inode *ip)
 }
 
 void
-ext2_inode_delete(struct Inode *ip)
+ext2_inode_delete(struct Inode *inode)
 {
-  ext2_trunc(ip, 0);
+  ext2_trunc(inode, 0);
 
-  ip->mode = 0;
-  ip->size = 0;
-  ext2_inode_write(ip);
+  inode->mode = 0;
+  inode->size = 0;
+  ext2_inode_write(inode);
 
-  ext2_inode_free((struct Ext2SuperblockData *) (ip->fs->extra), ip->dev, ip->ino);
+  ext2_inode_free((struct Ext2SuperblockData *) (inode->fs->extra), inode->dev, inode->ino);
 }
 
 /*
@@ -426,6 +426,43 @@ ext2_sb_sync(struct Ext2SuperblockData *sb, dev_t dev)
   buf_release(buf);
 
   k_mutex_unlock(&sb->mutex);
+}
+
+ssize_t
+ext2_readdir(struct Inode *dir, void *buf, FillDirFunc filldir, off_t off)
+{
+  struct Ext2DirEntry de;
+  ssize_t nread;
+
+  assert(S_ISDIR(dir->mode));
+
+  if (off >= dir->size)
+    return 0;
+
+  if ((nread = ext2_dirent_read(dir, &de, off)) < 0)
+    return nread;
+
+  filldir(buf, de.inode, de.name, de.name_len);
+
+  return de.rec_len;
+}
+
+#define MAX_FAST_SYMLINK_NAMELEN  60
+
+ssize_t
+ext2_readlink(struct Inode *inode, char *buf, size_t n)
+{
+  struct Ext2InodeExtra *extra = (struct Ext2InodeExtra *) inode->extra;
+
+  assert(S_ISLNK(inode->mode));
+
+  if ((inode->size <= MAX_FAST_SYMLINK_NAMELEN) && (extra->blocks == 0)) {
+    ssize_t nread = MIN((size_t) inode->size, n);
+    memmove(buf, extra->block, nread);
+    return nread;
+  }
+
+  return ext2_read(inode, (uintptr_t) buf, n, 0);
 }
 
 struct FSOps ext2fs_ops = {
@@ -491,41 +528,4 @@ ext2_mount(dev_t dev)
   ext2fs->ops   = &ext2fs_ops;
 
   return ext2_inode_get(ext2fs, 2);
-}
-
-ssize_t
-ext2_readdir(struct Inode *dir, void *buf, FillDirFunc filldir, off_t off)
-{
-  struct Ext2DirEntry de;
-  ssize_t nread;
-
-  assert(S_ISDIR(dir->mode));
-
-  if (off >= dir->size)
-    return 0;
-
-  if ((nread = ext2_dirent_read(dir, &de, off)) < 0)
-    return nread;
-
-  filldir(buf, de.inode, de.name, de.name_len);
-
-  return de.rec_len;
-}
-
-#define MAX_FAST_SYMLINK_NAMELEN  60
-
-ssize_t
-ext2_readlink(struct Inode *inode, char *buf, size_t n)
-{
-  struct Ext2InodeExtra *extra = (struct Ext2InodeExtra *) inode->extra;
-
-  assert(S_ISLNK(inode->mode));
-
-  if ((inode->size <= MAX_FAST_SYMLINK_NAMELEN) && (extra->blocks == 0)) {
-    ssize_t nread = MIN((size_t) inode->size, n);
-    memmove(buf, extra->block, nread);
-    return nread;
-  }
-
-  return ext2_read(inode, (uintptr_t) buf, n, 0);
 }

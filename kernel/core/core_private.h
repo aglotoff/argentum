@@ -9,6 +9,7 @@
 struct Context;
 struct KListLink;
 struct KMutex;
+struct KTimer;
 
 void            _k_sched_resume(struct KThread *, int);
 void            _k_sched_may_yield(struct KThread *);
@@ -21,6 +22,8 @@ void            _k_sched_raise_priority(struct KThread *, int);
 void            _k_sched_recalc_priority(struct KThread *);
 
 void            _k_mutex_may_raise_priority(struct KMutex *, int);
+
+void            _k_timer_start(struct KTimer *, unsigned long);
 
 extern struct KSpinLock _k_sched_spinlock;
 
