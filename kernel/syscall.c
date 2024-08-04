@@ -448,6 +448,32 @@ out1:
 }
 
 int32_t
+sys_getpgid(void)
+{
+  pid_t pid;
+  int r;
+  
+  if ((r = sys_arg_int(0, &pid)) < 0)
+    return r;
+
+  return process_get_gid(pid);
+}
+
+int32_t
+sys_setpgid(void)
+{
+  pid_t pid, pgid;
+  int r;
+  
+  if ((r = sys_arg_int(0, &pid)) < 0)
+    return r;
+  if ((r = sys_arg_int(1, &pgid)) < 0)
+    return r;
+
+  return process_set_gid(pid, pgid);
+}
+
+int32_t
 sys_wait(void)
 {
   pid_t pid;
@@ -782,6 +808,25 @@ out1:
   return r;
 }
 
+int32_t
+sys_access(void)
+{
+  char *path;
+  int r, amode;
+
+  if ((r = sys_arg_str(0, PATH_MAX, VM_READ, &path)) < 0)
+    goto out1;
+  if ((r = sys_arg_int(1, &amode)) < 0)
+    goto out2;
+
+  r = fs_access(path, amode);
+
+out2:
+  k_free(path);
+out1:
+  return r;
+}
+
 /*
  * ----------------------------------------------------------------------------
  * File descriptor system calls
@@ -1053,39 +1098,48 @@ sys_select(void)
   struct timeval *timeout;
 
   if ((r = sys_arg_int(0, &nfds)) < 0)
-    return r;
-  if ((r = sys_arg_va(1, (void *) &readfds, sizeof(fd_set), VM_READ, 1)) < 0)
-    return r;
-  if ((r = sys_arg_va(2, (void *) &writefds, sizeof(fd_set), VM_READ, 1)) < 0)
-    return r;
-  if ((r = sys_arg_va(3, (void *) &errorfds, sizeof(fd_set), VM_READ, 1)) < 0)
-    return r;
-  if ((r = sys_arg_va(4, (void *) &timeout, sizeof(struct timeval), VM_READ, 1)) < 0)
-    return r;
+    goto out1;
+  if ((r = sys_arg_buf(1, (void *) &readfds, sizeof(*readfds), VM_READ)) < 0)
+    goto out1;
+  if ((r = sys_arg_buf(2, (void *) &writefds, sizeof(*writefds), VM_READ)) < 0)
+    goto out2;
+  if ((r = sys_arg_buf(3, (void *) &errorfds, sizeof(*errorfds), VM_READ)) < 0)
+    goto out3;
+  if ((r = sys_arg_buf(4, (void *) &timeout, sizeof(*timeout), VM_READ)) < 0)
+    goto out4;
 
-  // TODO: writefds
-  // TODO: errorfds
-  // TODO: timeout
-
-  if (readfds == NULL)
-    return 0;
-  
   r = 0;
 
   for (fd = 0; fd < FD_SETSIZE; fd++) {
     struct File *file;
 
-    if (!FD_ISSET(fd, readfds))
+    // TODO: writefds
+    // TODO: errorfds
+    // TODO: timeout
+
+    if ((readfds == NULL) || !FD_ISSET(fd, readfds))
       continue;
 
-    if ((file = fd_lookup(process_current(), fd)) == NULL)
-      return -EBADF;
+    if ((file = fd_lookup(process_current(), fd)) == NULL) {
+      r = -EBADF;
+      break;
+    }
 
     r += file_select(file);
 
     file_put(file);
   }
 
+out4:
+  if (errorfds != NULL)
+    k_free(errorfds);
+out3:
+  if (writefds != NULL)
+    k_free(writefds);
+out2:
+  if (readfds != NULL)  
+    k_free(readfds);
+out1:
   return r;
 }
 
@@ -1218,19 +1272,29 @@ sys_connect(void)
   int r, fd;
 
   if ((r = sys_arg_int(0, &fd)) < 0)
-    return r;
-  if ((r = sys_arg_va(1, (uintptr_t *) &address, sizeof(*address), VM_READ, 0)) < 0)
-    return r;
+    goto out1;
+  if ((r = sys_arg_buf(1, (void *) &address, sizeof(*address), VM_READ)) < 0)
+    goto out1;
+  if (address == NULL) {
+    r = -EFAULT;
+    goto out1;
+  }
   if ((r = sys_arg_ulong(2, &address_len)) < 0)
-    return r;
+    goto out2;
 
-  if ((file = fd_lookup(process_current(), fd)) == NULL)
-    return -EBADF;
+  if ((file = fd_lookup(process_current(), fd)) == NULL) {
+    r = -EBADF;
+    goto out2;
+  }
 
   r = net_connect(file, address, address_len);
 
   file_put(file);
 
+out2:
+  if (address != NULL)
+    k_free(address);
+out1:
   return r;
 }
 
@@ -1259,15 +1323,16 @@ int32_t
 sys_accept(void)
 {
   struct File *sockf, *connf;
-  struct sockaddr *address;
-  socklen_t *address_len;
-  int r, fd;
+  uintptr_t address_va, address_len_va;
+  struct sockaddr address;
+  socklen_t address_len;
+  int r, fd, conn_fd;
 
   if ((r = sys_arg_int(0, &fd)) < 0)
     goto out1;
-  if ((r = sys_arg_va(1, (uintptr_t *) &address, sizeof(*address), VM_WRITE, 1)) < 0)
+  if ((r = sys_arg_va(1, &address_va, sizeof(address), VM_WRITE, 1)) < 0)
     goto out1;
-  if ((r = sys_arg_va(2, (uintptr_t *) &address_len, sizeof(socklen_t), VM_WRITE, 1)) < 0)
+  if ((r = sys_arg_va(2, &address_len_va, sizeof(address_len), VM_WRITE, 1)) < 0)
     goto out1;
 
   if ((sockf = fd_lookup(process_current(), fd)) == NULL) {
@@ -1275,14 +1340,146 @@ sys_accept(void)
     goto out1;
   }
 
-  if ((r = net_accept(sockf, address, address_len, &connf)) < 0)
+  if ((conn_fd = r = net_accept(sockf, &address, &address_len, &connf)) < 0)
     goto out2;
 
-  r = fd_alloc(process_current(), connf, 0);
+  if ((r = fd_alloc(process_current(), connf, 0)) < 0)
+    goto out3;
 
+  if (address_va && (r = sys_copy_out(&address, address_va,
+                                      sizeof(address))) < 0)
+    goto out3;
+  if (address_len_va && (r = sys_copy_out(&address_len, address_len_va,
+                                          sizeof(address_len))) < 0)
+    goto out3;
+
+  r = conn_fd;
+
+out3:
   file_put(connf);
 out2:
   file_put(sockf);
+out1:
+  return r;
+}
+
+int32_t
+sys_recvfrom(void)
+{
+  struct File *file;
+  uintptr_t buffer_va;
+  size_t length;
+  int flags;
+  struct sockaddr address;
+  socklen_t address_len;
+  uintptr_t address_va, address_len_va;
+  int r, fd;
+  ssize_t nread;
+
+  if ((r = sys_arg_int(0, &fd)) < 0)
+    return r;
+  if ((r = sys_arg_uint(2, &length)) < 0)
+    return r;
+  if ((r = sys_arg_va(1, &buffer_va, length, VM_WRITE, 0)) < 0)
+    return r;
+  if ((r = sys_arg_int(3, &flags)) < 0)
+    return r;
+  if ((r = sys_arg_va(4, &address_va, sizeof address, VM_WRITE, 1)) < 0)
+    return r;
+  if ((r = sys_arg_va(5, &address_len_va, sizeof address_len, VM_WRITE, 1)) < 0)
+    return r;
+
+  if ((file = fd_lookup(process_current(), fd)) == NULL)
+    return -EBADF;
+
+  if ((nread = r = net_recvfrom(file, buffer_va, length, flags, &address, &address_len)) < 0)
+    return r;
+
+  file_put(file);
+
+  if (address_va && (r = sys_copy_out(&address, address_va,
+                                      sizeof(address))) < 0)
+    return r;
+  if (address_len_va && (r = sys_copy_out(&address_len, address_len_va,
+                                          sizeof(address_len))) < 0)
+    return r;
+
+  return nread;
+}
+
+int32_t
+sys_sendto(void)
+{
+  struct File *file;
+  uintptr_t message_va;
+  size_t length;
+  int flags;
+  struct sockaddr *dest_addr;
+  socklen_t dest_len;
+  int r, fd;
+
+  if ((r = sys_arg_int(0, &fd)) < 0)
+    goto out1;
+  if ((r = sys_arg_uint(2, &length)) < 0)
+    goto out1;
+  if ((r = sys_arg_va(1, &message_va, length, VM_READ, 0)) < 0)
+    goto out1;
+  if ((r = sys_arg_int(3, &flags)) < 0)
+    goto out1;
+  if ((r = sys_arg_buf(4, (void **) &dest_addr, sizeof dest_addr, VM_READ)) < 0)
+    goto out1;
+  if ((r = sys_arg_ulong(5, &dest_len)) < 0)
+    goto out2;
+
+  if ((file = fd_lookup(process_current(), fd)) == NULL) {
+    r = -EBADF;
+    goto out2;
+  }
+
+  r = net_sendto(file, message_va, length, flags, dest_addr, dest_len);
+
+  file_put(file);
+
+out2:
+  if (dest_addr != NULL)
+    k_free(dest_addr);
+out1:
+  return r;
+}
+
+int32_t
+sys_setsockopt(void)
+{
+  struct File *file;
+  int level;
+  int option_name;
+  void *option_value;
+  socklen_t option_len;
+  int r, fd;
+
+  if ((r = sys_arg_int(0, &fd)) < 0)
+    goto out1;
+  if ((r = sys_arg_int(1, &level)) < 0)
+    goto out1;
+  if ((r = sys_arg_int(2, &option_name)) < 0)
+    goto out1;
+  if ((r = sys_arg_ulong(4, &option_len)) < 0)
+    goto out1;
+  if ((r = sys_arg_buf(3, (void **) &option_value, option_len, VM_READ)) < 0)
+    goto out1;
+
+  if ((file = fd_lookup(process_current(), fd)) == NULL) {
+    r = -EBADF;
+    goto out2;
+  }
+
+  r = net_setsockopt(file, level, option_name, option_value, option_len);
+
+  file_put(file);
+
+out2:
+  if (option_value != NULL)
+    k_free(option_value);
 out1:
   return r;
 }
@@ -1298,19 +1495,30 @@ sys_sigaction(void)
 {
   int sig;
   uintptr_t stub;
-  struct sigaction *act, *oact;
+  struct sigaction *act, oact;
+  uintptr_t oact_va;
   int r;
 
   if ((r = sys_arg_int(0, &sig)) < 0)
-    return r;
+    goto out1;
   if ((r = sys_arg_ptr(1, &stub, VM_READ | VM_EXEC, 1)) < 0)
-    return r;
-  if ((r = sys_arg_va(2, (uintptr_t *) &act, sizeof(*act), VM_READ, 1)) < 0)
-    return r;
-  if ((r = sys_arg_va(3, (uintptr_t *) &oact, sizeof(*oact), VM_WRITE, 1)) < 0)
-    return r;
+    goto out1;
+  if ((r = sys_arg_buf(2, (void *) &act, sizeof *act, VM_READ)) < 0)
+    goto out1;
+  if ((r = sys_arg_va(3, &oact_va, sizeof oact, VM_WRITE, 1)) < 0)
+    goto out2;
 
-  return signal_action(sig, stub, act, oact);
+  if ((r = signal_action(sig, stub, act, &oact)) < 0)
+    goto out2;
+
+  if (oact_va)
+    r = sys_copy_out(&oact, oact_va, sizeof oact);
+
+out2:
+  if (act != NULL)
+    k_free(act);
+out1:
+  return r;
 }
 
 int32_t
@@ -1320,181 +1528,51 @@ sys_sigreturn(void)
 }
 
 int32_t
-sys_recvfrom(void)
-{
-  struct File *file;
-  void *buffer;
-  size_t length;
-  int flags;
-  struct sockaddr *address;
-  socklen_t *address_len;
-  int r, fd;
-
-  if ((r = sys_arg_int(0, &fd)) < 0)
-    return r;
-  if ((r = sys_arg_uint(2, &length)) < 0)
-    return r;
-  if ((r = sys_arg_va(1, (uintptr_t *) &buffer, length, VM_WRITE, 0)) < 0)
-    return r;
-  if ((r = sys_arg_int(3, &flags)) < 0)
-    return r;
-  if ((r = sys_arg_va(4, (uintptr_t *) &address, sizeof(*address), VM_WRITE, 1)) < 0)
-    return r;
-  if ((r = sys_arg_va(5, (uintptr_t *) &address_len, sizeof(*address_len), VM_WRITE, 1)) < 0)
-    return r;
-
-  if ((file = fd_lookup(process_current(), fd)) == NULL)
-    return -EBADF;
-
-  r = net_recvfrom(file, (uintptr_t) buffer, length, flags, address, address_len);
-
-  file_put(file);
-
-  return r;
-}
-
-int32_t
-sys_sendto(void)
-{
-  struct File *file;
-  void *message;
-  size_t length;
-  int flags;
-  struct sockaddr *dest_addr;
-  socklen_t dest_len;
-  int r, fd;
-
-  if ((r = sys_arg_int(0, &fd)) < 0)
-    return r;
-  if ((r = sys_arg_uint(2, &length)) < 0)
-    return r;
-  if ((r = sys_arg_va(1, (uintptr_t *) &message, length, VM_READ, 0)) < 0)
-    return r;
-  if ((r = sys_arg_int(3, &flags)) < 0)
-    return r;
-  if ((r = sys_arg_va(4, (uintptr_t *) &dest_addr, sizeof(*dest_addr), VM_READ, 1)) < 0)
-    return r;
-  if ((r = sys_arg_ulong(5, &dest_len)) < 0)
-    return r;
-
-  if ((file = fd_lookup(process_current(), fd)) == NULL)
-    return -EBADF;
-
-  r = net_sendto(file, (uintptr_t) message, length, flags, dest_addr, dest_len);
-
-  file_put(file);
-
-  return r;
-}
-
-int32_t
-sys_setsockopt(void)
-{
-  struct File *file;
-  int level;
-  int option_name;
-  void *option_value;
-  socklen_t option_len;
-  int r, fd;
-
-  if ((r = sys_arg_int(0, &fd)) < 0)
-    return r;
-  if ((r = sys_arg_int(1, &level)) < 0)
-    return r;
-  if ((r = sys_arg_int(2, &option_name)) < 0)
-    return r;
-  if ((r = sys_arg_ulong(4, &option_len)) < 0)
-    return r;
-  if ((r = sys_arg_va(3, (uintptr_t *) &option_value, option_len, VM_READ, 0)) < 0)
-    return r;
-
-  if ((file = fd_lookup(process_current(), fd)) == NULL)
-    return -EBADF;
-
-  r = net_setsockopt(file, level, option_name, option_value, option_len);
-
-  file_put(file);
-
-  return r;
-}
-
-int32_t
-sys_getpgid(void)
-{
-  pid_t pid;
-  int r;
-  
-  if ((r = sys_arg_int(0, &pid)) < 0)
-    return r;
-
-  return process_get_gid(pid);
-}
-
-int32_t
-sys_setpgid(void)
-{
-  pid_t pid, pgid;
-  int r;
-  
-  if ((r = sys_arg_int(0, &pid)) < 0)
-    return r;
-  if ((r = sys_arg_int(1, &pgid)) < 0)
-    return r;
-
-  return process_set_gid(pid, pgid);
-}
-
-int32_t
-sys_access(void)
-{
-  char *path;
-  int r, amode;
-
-  if ((r = sys_arg_str(0, PATH_MAX, VM_READ, &path)) < 0)
-    goto out1;
-  if ((r = sys_arg_int(1, &amode)) < 0)
-    goto out2;
-  
-  r = fs_access(path, amode);
-
-out2:
-  k_free(path);
-out1:
-  return r;
-}
-
-/*
- * ----------------------------------------------------------------------------
- * Signal system calls
- * ----------------------------------------------------------------------------
- */
-
-int32_t
 sys_sigpending(void)
 {
-  sigset_t *set;
+  uintptr_t set_va;
+  sigset_t set;
   int r;
 
-  if ((r = sys_arg_va(0, (uintptr_t *) &set, sizeof(*set), VM_WRITE, 0)) < 0)
+  if ((r = sys_arg_va(0, &set_va, sizeof set, VM_WRITE, 0)) < 0)
     return r;
 
-  return signal_pending(set);
+  if ((r = signal_pending(&set)) < 0)
+    return r;
+
+  if (set_va && ((r = sys_copy_out(&set, set_va, sizeof set)) < 0))
+    return r;
+  
+  return 0;
 }
 
 int32_t
 sys_sigprocmask(void)
 {
-  sigset_t *set, *oset;
+  sigset_t *set, oset;
+  uintptr_t oset_va;
   int how, r;
 
   if ((r = sys_arg_int(0, &how)) < 0)
-    return r;
-  if ((r = sys_arg_va(1, (uintptr_t *) &set, sizeof(*set), VM_READ, 1)) < 0)
-    return r;
-  if ((r = sys_arg_va(2, (uintptr_t *) &oset, sizeof(*oset), VM_WRITE, 1)) < 0)
-    return r;
+    goto out1;
+  if ((r = sys_arg_buf(1, (void **) &set, sizeof *set, VM_READ)) < 0)
+    goto out1;
+  if ((r = sys_arg_va(2, &oset_va, sizeof oset, VM_WRITE, 1)) < 0)
+    goto out2;
 
-  return signal_mask(how, set, oset);
+  if ((r = signal_mask(how, set, &oset)) < 0)
+    goto out2;
+
+  if ((oset_va && ((r = sys_copy_out(&oset, oset_va, sizeof oset)) < 0)))
+    goto out2;
+
+  r = 0;
+
+out2:
+  if (set != NULL)
+    k_free(set);
+out1:
+  return r;
 }
 
 int32_t
@@ -1503,12 +1581,16 @@ sys_sigsuspend(void)
   sigset_t *mask;
   int r;
 
-  
-
-  if ((r = sys_arg_va(0, (uintptr_t *) &mask, sizeof(*mask), VM_READ, 1)) < 0)
+  if ((r = sys_arg_buf(0, (void **) &mask, sizeof *mask, VM_READ)) < 0)
     return r;
+  if (mask == NULL)
+    return -EFAULT;
 
-  return signal_suspend(mask);
+  r = signal_suspend(mask);
+
+  k_free(mask);
+
+  return r;
 }
 
 int32_t
@@ -1535,24 +1617,23 @@ int32_t
 sys_clock_time(void)
 {
   clockid_t clock_id;
-  uintptr_t prev;
+  uintptr_t prev_va;
   int r;
   
   if ((r = sys_arg_ulong(0, &clock_id)) < 0)
     return r;
-  if ((r = sys_arg_va(1, &prev, sizeof(struct timespec), VM_WRITE, 1)) < 0)
+  if ((r = sys_arg_va(1, &prev_va, sizeof(struct timespec), VM_WRITE, 1)) < 0)
     return r;
 
   if (clock_id != CLOCK_REALTIME)
     return -EINVAL;
 
-  if (prev) {
+  if (prev_va) {
     struct timespec prev_value;
     prev_value.tv_sec  = rtc_get_time();
     prev_value.tv_nsec = 0;
 
-    if ((r = vm_copy_out(process_current()->vm->pgtab, &prev_value,
-                         prev, sizeof prev_value)) < 0)
+    if ((r = sys_copy_out(&prev_value, prev_va, sizeof(struct timespec))) < 0)
       return r;
   }
 
@@ -1577,10 +1658,7 @@ sys_uname(void)
   if ((r = sys_arg_va(0, &va, sizeof utsname, VM_WRITE, 0)) < 0)
     return r;
 
-  if ((r = vm_copy_out(process_current()->vm->pgtab, &utsname, va, sizeof utsname)) < 0)
-    return r;
-
-  return 0;
+  return sys_copy_out(&utsname, va, sizeof utsname);
 }
 
 int32_t
@@ -1636,7 +1714,7 @@ sys_pipe(void)
   if ((fd[1] = r = fd_alloc(my_process, write_file, 0)) < 0)
     goto out2;
 
-  if ((r = vm_copy_out(my_process->vm->pgtab, fd, fd_va, sizeof fd)) < 0)
+  if ((r = sys_copy_out(fd, fd_va, sizeof fd)) < 0)
     goto out2;
 
   r = 0;
