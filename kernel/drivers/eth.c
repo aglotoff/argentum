@@ -103,7 +103,7 @@ static volatile uint32_t *eth;
 #define MAC_MII_DATA        7
 #define MAC_FLOW            8
 
-static void eth_irq(void);
+static int eth_irq(void *);
 
 // Read from a MAC register
 uint32_t
@@ -239,7 +239,7 @@ eth_init(void)
   // Enable interrupts
   eth[INT_EN] |= RSFL_INT;
 
-  k_irq_attach(IRQ_ETH, eth_irq);
+  k_irq_attach(IRQ_ETH, eth_irq, NULL);
 }
 
 static void
@@ -284,8 +284,8 @@ eth_rx(void)
   }
 }
 
-static void
-eth_irq(void)
+static int
+eth_irq(void *)
 {
   uint32_t status;
 
@@ -309,6 +309,8 @@ eth_irq(void)
     panic("Unexpected interupt %x", status & ~(RSFL_INT));
 
   k_irq_restore();
+
+  return 1;
 }
 
 void

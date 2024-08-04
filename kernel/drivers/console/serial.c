@@ -12,7 +12,9 @@
 // Use UART0 as serial debug console.
 static struct Pl011 uart0;
 
-static void serial_irq(void);
+static struct ISRThread serial_isr;
+
+static void serial_irq_thread(void);
 
 /**
  * Initialize the serial console driver.
@@ -21,7 +23,7 @@ void
 serial_init(void)
 {
   pl011_init(&uart0, PA2KVA(PHYS_UART0), UART_CLOCK, UART_BAUD_RATE);
-  k_irq_attach(IRQ_UART0, serial_irq);
+  interrupt_attach_thread(&serial_isr, IRQ_UART0, serial_irq_thread);
 }
 
 /**
@@ -49,7 +51,7 @@ serial_getc(void)
  * Handle interrupt from the serial console.
  */
 static void
-serial_irq(void)
+serial_irq_thread(void)
 {
   char buf[2];
   int c;
@@ -61,6 +63,8 @@ serial_irq(void)
       console_interrupt(console_system, buf);
     }
   }
+
+  irq_unmask_bsp(IRQ_UART0);
 }
 
 /**

@@ -10,6 +10,7 @@
 #include <kernel/types.h>
 #include <kernel/irq.h>
 #include <kernel/monitor.h>
+#include <kernel/semaphore.h>
 
 #include "gic.h"
 #include "ptimer.h"
@@ -170,8 +171,8 @@ print_trapframe(struct TrapFrame *tf)
 static struct Gic gic;
 static struct PTimer ptimer;
 
-static void
-ptimer_irq(void)
+static int
+ptimer_irq(void *)
 {
   struct Process *my_process = process_current();
 
@@ -185,12 +186,14 @@ ptimer_irq(void)
 
   ptimer_eoi(&ptimer);
   tick();
+
+  return 1;
 }
 
-static void
-ipi_irq(void)
+static int
+ipi_irq(void *)
 {
-  return;
+  return 1;
 }
 
 void
@@ -218,13 +221,19 @@ irq_unmask(int irq)
 }
 
 void
+irq_unmask_bsp(int irq)
+{
+  gic_enable(&gic, irq, 0);
+}
+
+void
 interrupt_init(void)
 {
   gic_init(&gic, PA2KVA(PHYS_GICC), PA2KVA(PHYS_GICD));
   ptimer_init(&ptimer, PA2KVA(PHYS_PTIMER));
 
-  k_irq_attach(IRQ_PTIMER, ptimer_irq);
-  k_irq_attach(0, ipi_irq);
+  k_irq_attach(IRQ_PTIMER, ptimer_irq, NULL);
+  k_irq_attach(0, ipi_irq, NULL);
 }
 
 void
@@ -256,9 +265,46 @@ irq_dispatch(void)
   // k_irq_enable();
 
   // Enable nested interrupts
-  k_irq_dispatch(irq & 0xFFFFFF);
-
-  irq_unmask(irq);
+  if (k_irq_dispatch(irq & 0xFFFFFF))
+    irq_unmask(irq);
 
   k_irq_end();
+}
+
+static int
+interrupt_common(void *arg)
+{
+  struct ISRThread *isr = (struct ISRThread *) arg;
+
+  k_semaphore_put(&isr->semaphore);
+  return 0;
+}
+
+static void
+interrupt_thread(void *arg)
+{
+  struct ISRThread *isr = (struct ISRThread *) arg;
+
+  for (;;) {
+    if (k_semaphore_get(&isr->semaphore) < 0)
+      panic("k_semaphore_get");
+
+    isr->handler();
+  }
+}
+
+void
+interrupt_attach_thread(struct ISRThread *isr, int irq, void (*handler)(void))
+{
+  struct KThread *thread;
+
+  if ((thread = k_thread_create(NULL, interrupt_thread, isr, 0)) == NULL)
+    panic("Cannot create IRQ thread");
+
+  k_semaphore_init(&isr->semaphore, 0);
+  isr->handler = handler;
+
+  k_irq_attach(irq, interrupt_common, isr);
+
+  k_thread_resume(thread);
 }

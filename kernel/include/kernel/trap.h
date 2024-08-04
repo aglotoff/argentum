@@ -28,6 +28,10 @@
 
 #include <stdint.h>
 
+#include <kernel/semaphore.h>
+
+struct KThread;
+
 /** Generic Trap Frame */
 struct TrapFrame {
   uint32_t  psr;              ///< Saved PSR
@@ -63,6 +67,14 @@ void irq_dispatch(void);
 void irq_ipi(void);
 void irq_mask(int);
 void irq_unmask(int);
+void irq_unmask_bsp(int);
+
+struct ISRThread {
+  struct KSemaphore semaphore;
+  void (*handler)(void);
+};
+
+void interrupt_attach_thread(struct ISRThread *, int, void (*)(void));
 
 #endif  // !__ASSEMBLER__
 

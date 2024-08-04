@@ -55,8 +55,10 @@ static struct {
   struct KSpinLock lock;
 } sd_queue;
 
-static void sd_irq(void);
+static void sd_irq_thread(void);
 static void sd_start_transfer(struct Buf *);
+
+struct ISRThread sd_isr;
 
 /**
  * Initialize the SD card driver.
@@ -68,39 +70,39 @@ sd_init(void)
 {
   uint32_t resp[4], rca;
 
-  // Power on.
+  // Power on
   pl180_init(&mmci, PA2KVA(PHYS_MMCI));
 
-  // Put each card into Idle State.
+  // Put each card into Idle State
   pl180_send_cmd(&mmci, CMD_GO_IDLE_STATE, 0, 0, NULL);
 
-  // Request the card to send its valid operation conditions.
+  // Request the card to send its valid operation conditions
   do {
     pl180_send_cmd(&mmci, CMD_APP, 0, SD_RESPONSE_R1, NULL) ;
     pl180_send_cmd(&mmci, CM_SD_SEND_OP_COND, OCR_VDD_MASK, SD_RESPONSE_R3,
                    resp);
   } while (!(resp[0] & OCR_BUSY));
 
-  // Get the unique card identification (CID) number.
+  // Get the unique card identification (CID) number
   pl180_send_cmd(&mmci, CMD_ALL_SEND_CID, 0, SD_RESPONSE_R2, NULL);
 
   // Ask the card to publish a new relative card address (RCA), which
-  // will be used to address the card later.
+  // will be used to address the card later
   pl180_send_cmd(&mmci, CMD_SEND_RELATIVE_ADDR, 0, SD_RESPONSE_R6, &rca);
 
-  // Select the card and put it into the Transfer State.
+  // Select the card and put it into the Transfer State
   pl180_send_cmd(&mmci, CMD_SELECT_CARD, rca & 0xFFFF0000, SD_RESPONSE_R1B, NULL);
 
-  // Set the block length (512 bytes) for all I/O operations.
+  // Set the block length (512 bytes) for all I/O operations
   pl180_send_cmd(&mmci, CMD_SET_BLOCKLEN, SD_BLOCKLEN, SD_RESPONSE_R1, NULL);
 
-  // Initialize the buffer queue.
+  // Initialize the buffer queue
   k_list_init(&sd_queue.head);
   k_spinlock_init(&sd_queue.lock, "sd_queue");
 
-  // Enable interrupts.
+  // Enable interrupts
   pl180_k_irq_enable(&mmci);
-  k_irq_attach(IRQ_MCIA, sd_irq);
+  interrupt_attach_thread(&sd_isr, IRQ_MCIA, sd_irq_thread);
 
   return 0;
 }
@@ -168,15 +170,18 @@ sd_start_transfer(struct Buf *buf)
     panic("error sending cmd %d, arg %d", cmd, arg);
 }
 
-// Handle the SD card interrupt. Complete the current data transfer operation
+// Handle the SD card interrupts. Complete the current data transfer operation
 // and wake up the corresponding task.
 static void
-sd_irq(void)
+sd_irq_thread(void)
 {
   struct KListLink *link;
   struct Buf *buf, *next_buf;
 
   k_spinlock_acquire(&sd_queue.lock);
+
+  if (k_list_is_empty(&sd_queue.head))
+    panic("queue is empty");
 
   // Grab the first buffer in the queue to find out whether a read or write
   // operation is happening
@@ -209,8 +214,10 @@ sd_irq(void)
     sd_start_transfer(next_buf);
   }
 
-  k_spinlock_release(&sd_queue.lock);
-
   // Resume the task waiting for the buf data.
   k_waitqueue_wakeup_all(&buf->wait_queue);
+
+  k_spinlock_release(&sd_queue.lock);
+
+  irq_unmask_bsp(IRQ_MCIA);
 }

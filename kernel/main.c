@@ -117,8 +117,7 @@ void main(void)
   vm_arch_init();       // Memory management unit and kernel mappings
 
   // Now we can initialize the console to print messages during initialization
-  interrupt_init();     // Interrupt controller
-  console_init(); // Console driver
+  
 
   // Complete the memory manager initialization
   page_init_high(); // Physical page allocator (higher memory)
@@ -132,7 +131,11 @@ void main(void)
 
   vm_space_init();  // Virtual memory manager
 
+  interrupt_init();     // Interrupt controller
+
   // Initialize the device drivers
+
+  console_init(); // Console driver
   rtc_init(); // Real-time clock
   sd_init();  // MultiMedia Card
   // eth_init(); // Ethernet

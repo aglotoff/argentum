@@ -13,7 +13,9 @@
 // mouse.
 static struct Pl050 kmi0;    
 
-static void kbd_irq(void);
+static void kbd_irq_thread(void);
+
+static struct ISRThread kbd_isr;
 
 /**
  * Initialize the keyboard driver.
@@ -27,7 +29,7 @@ kbd_init(void)
   pl050_putc(&kmi0, 0xF0);
   pl050_putc(&kmi0, 1);
 
-  k_irq_attach(IRQ_KMI0, kbd_irq);
+  interrupt_attach_thread(&kbd_isr, IRQ_KMI0, kbd_irq_thread);
 }
 
 #define KEY_MAX             512
@@ -61,7 +63,7 @@ static char *key_sequences[KEY_MAX] = {
  * Get data and store it into the console buffer.
  */
 static void
-kbd_irq(void)
+kbd_irq_thread(void)
 {
   char buf[2];
   int c;
@@ -78,6 +80,8 @@ kbd_irq(void)
       console_interrupt(console_current, buf);
     }
   }
+
+  irq_unmask_bsp(IRQ_KMI0);
 }
 
 // Keymap column indicies for different states

@@ -23,8 +23,8 @@
 static struct KSpinLock console_lock;
 static struct Console consoles[NCONSOLES];
 
-struct Console *console_current = &consoles[0];
-struct Console *console_system  = &consoles[0];
+struct Console *console_current;
+struct Console *console_system;
 
 #define IN_EOF  (1 << 0)
 #define IN_EOL  (1 << 1)
@@ -89,9 +89,12 @@ console_init(void)
     console->termios.c_ospeed = B9600;
   }
 
-  serial_init();
   kbd_init();
+  serial_init();
   display_init();
+
+  console_current = &consoles[0];
+  console_system  = &consoles[0];
 
   display_update(console_current);
 }
@@ -542,7 +545,8 @@ console_echo(struct Console *console, char c)
 void
 console_putc(char c)
 {
-  console_echo(console_system, c);
+  if (console_system != NULL)
+    console_echo(console_system, c);
 }
 
 ssize_t

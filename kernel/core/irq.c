@@ -82,25 +82,26 @@ k_irq_end(void)
   _k_sched_unlock();
 }
 
-static k_irq_handler_t irq_handlers[IRQ_MAX];
-
-k_irq_handler_t
-k_irq_attach(int irq, k_irq_handler_t handler)
-{
-  k_irq_handler_t old_handler;
-
-  old_handler = irq_handlers[irq];
-  irq_handlers[irq] = handler;
-  irq_unmask(irq);
-
-  return old_handler;
-}
+static struct {
+  k_irq_handler_t handler;
+  void *arg;
+} irq_handlers[IRQ_MAX];
 
 void
+k_irq_attach(int irq, k_irq_handler_t handler, void *arg)
+{
+  irq_handlers[irq].handler = handler;
+  irq_handlers[irq].arg = arg;
+
+  irq_unmask(irq);
+}
+
+int
 k_irq_dispatch(int irq)
 {
-  if (irq_handlers[irq])
-    irq_handlers[irq]();
-  else 
-    cprintf("Unexpected IRQ %d from CPU %d\n", irq, k_cpu_id());
+  if (irq_handlers[irq].handler)
+    return irq_handlers[irq].handler(irq_handlers[irq].arg);
+ 
+  cprintf("Unexpected IRQ %d from CPU %d\n", irq, k_cpu_id());
+  return 1;
 }
