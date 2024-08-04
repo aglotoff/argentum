@@ -219,5 +219,5 @@ sd_irq_thread(void)
 
   k_spinlock_release(&sd_queue.lock);
 
-  irq_unmask_bsp(IRQ_MCIA);
+  interrupt_unmask(IRQ_MCIA);
 }

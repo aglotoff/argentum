@@ -63,11 +63,11 @@ void print_trapframe(struct TrapFrame *tf);
 
 void interrupt_init(void);
 void interrupt_init_percpu(void);
-void irq_dispatch(void);
-void irq_ipi(void);
-void irq_mask(int);
-void irq_unmask(int);
-void irq_unmask_bsp(int);
+void interrupt_dispatch(void);
+void interrupt_ipi(void);
+void interrupt_mask(int);
+void interrupt_unmask(int);
+void interrupt_enable(int, int);
 
 struct ISRThread {
   struct KSemaphore semaphore;

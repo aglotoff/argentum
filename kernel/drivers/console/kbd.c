@@ -81,7 +81,7 @@ kbd_irq_thread(void)
     }
   }
 
-  irq_unmask_bsp(IRQ_KMI0);
+  interrupt_unmask(IRQ_KMI0);
 }
 
 // Keymap column indicies for different states

@@ -55,16 +55,19 @@ gic_init_percpu(struct Gic *gic)
 }
 
 void
-gic_enable(struct Gic *gic, unsigned irq, unsigned cpu)
+gic_setup(struct Gic *gic, unsigned irq, unsigned cpu)
 {
-  // Enable the interrupt
-  gic->icd[ICDISER0 + (irq >> 5)] = (1U << (irq & 0x1F));
-
   // Set priority to 128 for all interrupts
   gic->icd[ICDIPR0  + (irq >> 2)] = (0x80 << ((irq & 0x3) << 3));
 
   // Set target CPU
   gic->icd[ICDIPTR0 + (irq >> 2)] = ((1U << cpu) << ((irq & 0x3) << 3));
+}
+
+void
+gic_enable(struct Gic *gic, unsigned irq)
+{
+  gic->icd[ICDISER0 + (irq >> 5)] = (1U << (irq & 0x1F));
 }
 
 void

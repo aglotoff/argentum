@@ -64,7 +64,7 @@ serial_irq_thread(void)
     }
   }
 
-  irq_unmask_bsp(IRQ_UART0);
+  interrupt_unmask(IRQ_UART0);
 }
 
 /**

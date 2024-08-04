@@ -93,7 +93,8 @@ k_irq_attach(int irq, k_irq_handler_t handler, void *arg)
   irq_handlers[irq].handler = handler;
   irq_handlers[irq].arg = arg;
 
-  irq_unmask(irq);
+  interrupt_enable(irq, k_cpu_id());
+  interrupt_unmask(irq);
 }
 
 int

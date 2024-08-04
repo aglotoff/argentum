@@ -56,7 +56,7 @@ trap(struct TrapFrame *tf)
     k_irq_disable();
     break;
   case T_IRQ:
-    irq_dispatch();
+    interrupt_dispatch();
     break;
   case T_UNDEF:
     if ((tf->psr & PSR_M_MASK) == PSR_M_USR) {
@@ -197,7 +197,7 @@ ipi_irq(void *)
 }
 
 void
-irq_ipi(void)
+interrupt_ipi(void)
 {
   gic_sgi(&gic, 0);
 }
@@ -209,21 +209,21 @@ irq_id(void)
 }
 
 void
-irq_mask(int irq)
+interrupt_enable(int irq, int cpu)
+{
+  gic_setup(&gic, irq, cpu);
+}
+
+void
+interrupt_mask(int irq)
 {
   gic_disable(&gic, irq);
 }
 
 void
-irq_unmask(int irq)
+interrupt_unmask(int irq)
 {
-  gic_enable(&gic, irq, k_cpu_id());
-}
-
-void
-irq_unmask_bsp(int irq)
-{
-  gic_enable(&gic, irq, 0);
+  gic_enable(&gic, irq);
 }
 
 void
@@ -242,8 +242,8 @@ interrupt_init_percpu(void)
   gic_init_percpu(&gic);
   ptimer_init_percpu(&ptimer);
 
-  irq_unmask(IRQ_PTIMER);
-  irq_unmask(0);
+  interrupt_unmask(IRQ_PTIMER);
+  interrupt_unmask(0);
 }
 
 static void
@@ -253,20 +253,20 @@ irq_eoi(int irq)
 }
 
 void
-irq_dispatch(void)
+interrupt_dispatch(void)
 {
   int irq = irq_id();
 
   k_irq_begin();
 
-  irq_mask(irq);
+  interrupt_mask(irq);
   irq_eoi(irq);
 
   // k_irq_enable();
 
   // Enable nested interrupts
   if (k_irq_dispatch(irq & 0xFFFFFF))
-    irq_unmask(irq);
+    interrupt_unmask(irq);
 
   k_irq_end();
 }
