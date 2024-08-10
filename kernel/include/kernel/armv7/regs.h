@@ -50,7 +50,7 @@
 #define CP15_DFSR(x)    p15, 0, x, c5, c0, 0  ///< Data Fault Status
 #define CP15_IFSR(x)    p15, 0, x, c5, c0, 1  ///< Instruction Fault Status
 #define CP15_DFAR(x)    p15, 0, x, c6, c0, 0  ///< Data Fault Address
-#define CP15_IFAR(x)    p15, 0, x, c6, c0, 1  ///< Instruction Fault Address
+#define CP15_IFAR(x)    p15, 0, x, c6, c0, 2  ///< Instruction Fault Address
 #define CP15_DACR(x)    p15, 0, x, c3, c0, 0  ///< Domain Access Control
 /** @} */
 

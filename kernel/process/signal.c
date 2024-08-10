@@ -124,6 +124,8 @@ signal_deliver_pending(void)
 
   if (action->sa_handler == SIG_DFL) {
     exit_code = signal_default_action(process, signal);
+  } else if (action->sa_handler == SIG_IGN) {
+    exit_code = 0;
   } else if ((exit_code = signal_arch_prepare(process, signal)) == 0) {
     process->signal_mask |= action->sa_mask;
   }
@@ -132,8 +134,9 @@ signal_deliver_pending(void)
 
   process_unlock();
 
-  if (exit_code != 0)
+  if (exit_code != 0) {
     process_destroy(exit_code);
+  }
 }
 
 int
@@ -170,22 +173,8 @@ signal_action(int no, uintptr_t stub, struct sigaction *action,
   if (old_action != NULL) 
     *old_action = current->signal_actions[no - 1];
 
-  if (action != NULL) {
-    if ((action->_u._sa_handler != SIG_IGN) &&
-        (action->_u._sa_handler != SIG_DFL) &&
-        vm_user_check_ptr(current->vm->pgtab, (uintptr_t) action->_u._sa_handler,
-                           PROT_READ | PROT_EXEC)) {
-      process_unlock();
-      return -EFAULT;
-    }
-
-    if (!signal_valid_mask(&action->sa_mask)) {
-      process_unlock();
-      return -EINVAL;
-    }
-
+  if (action != NULL)
     current->signal_actions[no - 1] = *action;
-  }
 
   if (stub)
     current->signal_stub = stub;
@@ -354,9 +343,7 @@ signal_arch_return(struct Process *process)
 
 static int
 signal_default_action(struct Process *current, struct Signal *signal)
-{
-  (void) current;
-  
+{ 
   switch (signal->info.si_signo) {
   case SIGABRT:
   case SIGBUS:
@@ -392,12 +379,16 @@ signal_default_action(struct Process *current, struct Signal *signal)
   case SIGTTIN:
   case SIGTTOU:
     // Stop
-    panic("not implemented %d", signal->info.si_signo);
+    cprintf("[k] stop due to %d\n", signal->info.si_signo);
+    current->state = PROCESS_STATE_STOPPED;
+    current->exit_code = signal->info.si_signo;
     break;
 
   case SIGCONT:
     // Continue
-    panic("not implemented %d", signal->info.si_signo);
+    cprintf("[k] continue due to %d\n", signal->info.si_signo);
+    if (current->state == PROCESS_STATE_STOPPED)
+      current->state = PROCESS_STATE_ACTIVE;
     break;
   }
 

@@ -8,7 +8,7 @@
 #include <sys/mman.h>
 #include <kernel/fs/fs.h>
 
-static struct KSpinLock vm_lock = K_SPINLOCK_INITIALIZER("vm_lock");
+struct KSpinLock vm_lock = K_SPINLOCK_INITIALIZER("vm_lock");
 
 /**
  * Find a physical page mapped at the given virtual address.
@@ -33,8 +33,15 @@ vm_page_lookup(void *pgtab, uintptr_t va, int *flags_store)
   if (!vm_arch_pte_valid(pte) || !(vm_arch_pte_flags(pte) & VM_PAGE))
     return NULL;
 
-  if (flags_store)
-    *flags_store = vm_arch_pte_flags(pte);
+  if (flags_store) {
+    if (va == 0x8cb8) {
+      *flags_store = *(int *) pte;
+    } else {
+      *flags_store = vm_arch_pte_flags(pte);
+    }
+
+    
+  }
 
   return pa2page(vm_arch_pte_addr(pte));
 }

@@ -98,6 +98,7 @@ struct KThread *k_thread_current(void);
 struct KThread *k_thread_create(struct Process *, void (*)(void *), void *, int);
 void            k_thread_exit(void);
 int             k_thread_resume(struct KThread *);
+void            k_thread_suspend(void);
 void            k_thread_yield(void);
 void            thread_cleanup(struct KThread *);
 void            k_thread_interrupt(struct KThread *);

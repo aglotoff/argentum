@@ -211,6 +211,19 @@ k_thread_exit(void)
   panic("should not return");
 }
 
+void
+k_thread_suspend(void)
+{
+  struct KThread *thread = k_thread_current();
+
+  _k_sched_lock();
+  
+  thread->state = THREAD_STATE_SUSPENDED;
+  _k_sched_yield_locked();
+
+  _k_sched_unlock();
+}
+
 /**
  * Get the currently executing thread.
  * 

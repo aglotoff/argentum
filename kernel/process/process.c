@@ -101,7 +101,8 @@ process_alloc(void)
   k_list_null(&process->sibling_link);
 
   process->parent = NULL;
-  process->zombie = 0;
+  process->state = PROCESS_STATE_ACTIVE;
+  memset(process->name, 0, 64);
 
   process->times.tms_utime  = 0;
   process->times.tms_stime  = 0;
@@ -303,7 +304,7 @@ process_destroy(int status)
     k_list_add_back(&init_process->children, l);
 
     // Check whether there is a child available to be cleaned up
-    if (child->zombie)
+    if (child->state == PROCESS_STATE_ZOMBIE)
       has_zombies = 1;
   }
 
@@ -311,7 +312,7 @@ process_destroy(int status)
   if (has_zombies)
     k_waitqueue_wakeup_all(&init_process->wait_queue);
 
-  current->zombie = 1;
+  current->state = PROCESS_STATE_ZOMBIE;
   current->exit_code = status;
 
   // Wakeup the parent process
@@ -357,6 +358,8 @@ process_copy(int share_vm)
   k_list_add_back(&current->children, &child->sibling_link);
 
   process_unlock();
+
+  // cprintf("[k] process #%x created\n", child->pid);
 
   k_thread_resume(child->thread);
 
@@ -413,7 +416,7 @@ process_wait(pid_t pid, int *stat_loc, int options)
 
       // TODO: WUNTRACED
 
-      if (process->zombie) {
+      if (process->state == PROCESS_STATE_ZOMBIE) {
         k_list_remove(&process->sibling_link);
         k_list_remove(&process->link);
 

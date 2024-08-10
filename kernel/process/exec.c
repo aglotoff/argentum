@@ -157,13 +157,12 @@ process_exec(const char *path, char *const argv[], char *const envp[])
 
   proc = process_current();
 
-  // vm->heap  = heap;
-  // vm->stack = ustack;
-
-  vm_arch_load(vm->pgtab);
+  strncpy(proc->name, path, 63);
 
   old_vm = proc->vm;
   proc->vm = vm;
+
+  vm_arch_load(vm->pgtab);
 
   vm_space_destroy(old_vm);
 

@@ -71,10 +71,14 @@ trap(struct TrapFrame *tf)
     panic("unhandled trap in kernel");
   }
 
-  if ((tf->psr & PSR_M_MASK) == PSR_M_USR)
+  if ((tf->psr & PSR_M_MASK) == PSR_M_USR) {
     signal_deliver_pending();
-  else if (tf->pc < VIRT_KERNEL_BASE)
-    panic("bad PC");
+
+    while (my_process->state != PROCESS_STATE_ACTIVE) {
+      k_thread_suspend();
+      signal_deliver_pending();
+    }
+  }
 }
 
 // Handle data or prefetch abort
@@ -99,12 +103,13 @@ trap_handle_abort(struct TrapFrame *tf)
   assert(process != NULL);
 
   // Try to handle VM fault first (it may be caused by copy-on-write pages)
-  if (vm_handle_fault(process->vm->pgtab, address) == 0)
+  if (((status & 0xF) == 0xF) && vm_handle_fault(process->vm->pgtab, address) == 0) {
     return;
+  }
 
   // If unsuccessfull, kill the process
-  // print_trapframe(tf);
-  cprintf("[%d]: user fault va %p status %#x\n", process->pid, address, status);
+  print_trapframe(tf);
+  panic("[%d %s]: user fault va %p status %#x\n", process->pid, process->name, address, status);
 
   // TODO: SEGV_MAPERR or SEGV_ACCERR
   if (signal_generate(process->pid, SIGSEGV, 0) != 0)

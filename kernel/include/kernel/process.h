@@ -36,7 +36,7 @@ struct FileDesc {
 struct Process {
   struct KListLink       link;
   /** The process' address space */
-  struct VMSpace       *vm;
+  struct VMSpace        *vm;
 
   /** Main process thread */
   struct KThread        *thread;
@@ -44,7 +44,7 @@ struct Process {
   /** Unique thread identifier */
   pid_t                 pid;
   /** Link into the PID hash table */
-  struct KListLink       pid_link;
+  struct KListLink      pid_link;
   /** Process group ID */
   pid_t                 pgid;
 
@@ -55,11 +55,12 @@ struct Process {
   /** Link into the siblings list */
   struct KListLink      sibling_link;
   struct tms            times;
+  char                  name[64];
 
   /** Queue to sleep waiting for children */
   struct KWaitQueue     wait_queue;
   /** Whether the process is a zombie */
-  int                   zombie;
+  int                   state;
   /** Exit code */
   int                   exit_code;
 
@@ -87,6 +88,13 @@ struct Process {
   struct FileDesc       fd[OPEN_MAX];
   /** Lock protecting the file descriptors */
   struct KSpinLock      fd_lock;
+};
+
+enum {
+  PROCESS_STATE_NONE = 0,
+  PROCESS_STATE_ACTIVE = 1,
+  PROCESS_STATE_ZOMBIE = 2,
+  PROCESS_STATE_STOPPED = 3,
 };
 
 extern struct KSpinLock __process_lock;

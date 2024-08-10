@@ -32,7 +32,7 @@ main(void)
   int i;
 
   // char *const argv[] = { "/bin/sh", "./run", NULL };
-  char *const argv[] = { "/bin/sh", "-l", NULL };
+  char *const argv[] = { "/bin/sh", NULL };
 
   // Create the directory for special device files.
   mkdir("/etc", 0755);
