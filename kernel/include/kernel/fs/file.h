@@ -40,7 +40,7 @@ int          file_set_flags(struct File *, int);
 int          file_chmod(struct File *, mode_t);
 int          file_chown(struct File *, uid_t, gid_t);
 int          file_ioctl(struct File *, int, int);
-int          file_select(struct File *);
+int          file_select(struct File *, struct timeval *);
 int          file_sync(struct File *);
 int          file_truncate(struct File *, off_t);
 

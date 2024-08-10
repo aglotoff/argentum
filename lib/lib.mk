@@ -89,6 +89,7 @@ LIB_SRCFILES := \
 	lib/argentum/sys/stat/fstat.c \
 	lib/argentum/sys/stat/lstat.c \
 	lib/argentum/sys/stat/mkdir.c \
+	lib/argentum/sys/stat/mkfifo.c \
 	lib/argentum/sys/stat/mknod.c \
 	lib/argentum/sys/stat/stat.c \
 	lib/argentum/sys/stat/umask.c \
@@ -128,6 +129,7 @@ LIB_SRCFILES := \
 	lib/argentum/unistd/geteuid.c \
 	lib/argentum/unistd/getgid.c \
 	lib/argentum/unistd/getgroups.c \
+	lib/argentum/unistd/gethostname.c \
 	lib/argentum/unistd/getpgid.c \
 	lib/argentum/unistd/getpgrp.c \
 	lib/argentum/unistd/getpid.c \
@@ -195,7 +197,8 @@ $(OBJ)/lib/Makefile: $(NEWLIB)/newlib/Makefile.in
 		--with-newlib \
 		--disable-multilib \
 		--disable-newlib-nano-formatted-io \
-		--enable-newlib-io-c99-formats
+		--enable-newlib-io-c99-formats \
+		--enable-shared
 
 $(SYSROOT)/usr/lib/libc.a: $(OBJ)/lib/Makefile $(LIB_SRCFILES)
 	$(V)cp -ar lib/argentum $(NEWLIB)/newlib/libc/sys/

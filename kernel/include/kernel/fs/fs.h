@@ -123,7 +123,7 @@ void          fs_inode_cache_init(void);
 int           fs_inode_truncate_locked(struct Inode *, off_t length);
 int           fs_inode_chmod_locked(struct Inode *, mode_t);
 int           fs_inode_ioctl_locked(struct Inode *, int, int);
-int           fs_inode_select_locked(struct Inode *);
+int           fs_inode_select_locked(struct Inode *, struct timeval *);
 int           fs_inode_sync_locked(struct Inode *);
 int           fs_inode_chown_locked(struct Inode *, uid_t, gid_t);
 ssize_t       fs_inode_readlink(struct Inode *, char *, size_t);
@@ -150,7 +150,7 @@ int              fs_fchdir(struct File *);
 int              fs_fchmod(struct File *, mode_t);
 int              fs_fchown(struct File *, uid_t, gid_t);
 int              fs_ioctl(struct File *, int, int);
-int              fs_select(struct File *);
+int              fs_select(struct File *, struct timeval *);
 int              fs_ftruncate(struct File *, off_t);
 int              fs_fsync(struct File *);
 

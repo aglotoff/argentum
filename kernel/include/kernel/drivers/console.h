@@ -72,7 +72,7 @@ int     console_getc(void);
 ssize_t console_read(struct Inode *, uintptr_t, size_t);
 ssize_t console_write(struct Inode *, const void *, size_t);
 int     console_ioctl(struct Inode *, int, int);
-int     console_select(struct Inode *);
+int     console_select(struct Inode *, struct timeval *);
 void    console_switch(int);
 
 // ANSI color codes

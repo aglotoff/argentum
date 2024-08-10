@@ -1,9 +1,11 @@
 #include <stdio.h>
+#include <setjmp.h>
 
 int
 main(void) {
-  for (;;) {
-    printf("A");
-  };
+  sigjmp_buf env;
+  
+  sigsetjmp(env, 0);
+
   return 0;
 }

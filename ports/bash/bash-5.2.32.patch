@@ -1,0 +1,93 @@
+diff -ruN old/config-bot.h new/config-bot.h
+--- old/config-bot.h	2021-11-05 16:11:04.000000000 +0300
++++ new/config-bot.h	2024-08-10 20:19:21.123647598 +0300
+@@ -74,7 +74,7 @@
+    #undef HAVE_GETCWD so the replacement in getcwd.c will be built.  We do
+    not do this on Solaris, because their implementation of loopback mounts
+    breaks the traditional file system assumptions that getcwd uses. */
+-#if defined (HAVE_GETCWD) && defined (GETCWD_BROKEN) && !defined (SOLARIS)
++#if defined (HAVE_GETCWD) && defined (GETCWD_BROKEN) && !defined (SOLARIS) && !defined (__ARGENTUM__)
+ #  undef HAVE_GETCWD
+ #endif
+ 
+diff -ruN old/include/posixwait.h new/include/posixwait.h
+--- old/include/posixwait.h	2019-03-29 20:25:52.000000000 +0300
++++ new/include/posixwait.h	2024-08-10 20:18:05.043702727 +0300
+@@ -34,7 +34,7 @@
+ 
+ /* How to get the status of a job.  For Posix, this is just an
+    int, but for other systems we have to crack the union wait. */
+-#if !defined (_POSIX_VERSION)
++#if !defined (_POSIX_VERSION) && !defined (__ARGENTUM__)
+ typedef union wait WAIT;
+ #  define WSTATUS(t)  (t.w_status)
+ #else /* _POSIX_VERSION */
+@@ -50,7 +50,7 @@
+ 
+ /* More Posix P1003.1 definitions.  In the POSIX versions, the parameter is
+    passed as an `int', in the non-POSIX version, as `union wait'. */
+-#if defined (_POSIX_VERSION)
++#if defined (_POSIX_VERSION) || defined (__ARGENTUM__)
+ 
+ #  if !defined (WSTOPSIG)
+ #    define WSTOPSIG(s)       ((s) >> 8)
+diff -ruN old/include/shtty.h new/include/shtty.h
+--- old/include/shtty.h	2020-06-05 20:53:58.000000000 +0300
++++ new/include/shtty.h	2024-08-10 20:18:26.483672856 +0300
+@@ -26,7 +26,7 @@
+ 
+ #include "stdc.h"
+ 
+-#if defined (_POSIX_VERSION) && defined (HAVE_TERMIOS_H) && defined (HAVE_TCGETATTR) && !defined (TERMIOS_MISSING)
++#if (defined (_POSIX_VERSION) || defined (__ARGENTUM__)) && defined (HAVE_TERMIOS_H) && defined (HAVE_TCGETATTR) && !defined (TERMIOS_MISSING)
+ #  define TERMIOS_TTY_DRIVER
+ #else
+ #  if defined (HAVE_TERMIO_H)
+diff -ruN old/jobs.c new/jobs.c
+--- old/jobs.c	2024-07-31 18:19:34.000000000 +0300
++++ new/jobs.c	2024-08-10 20:19:11.053654802 +0300
+@@ -347,7 +347,7 @@
+ 
+ static char retcode_name_buffer[64];
+ 
+-#if !defined (_POSIX_VERSION)
++#if !defined (_POSIX_VERSION) && !defined (__ARGENTUM__)
+ 
+ /* These are definitions to map POSIX 1003.1 functions onto existing BSD
+    library functions and system calls. */
+diff -ruN old/lib/readline/input.c new/lib/readline/input.c
+--- old/lib/readline/input.c	2022-04-08 22:43:24.000000000 +0300
++++ new/lib/readline/input.c	2024-08-10 20:18:59.883663412 +0300
+@@ -805,7 +805,7 @@
+   int result;
+   unsigned char c;
+   int fd;
+-#if defined (HAVE_PSELECT)
++#if defined (HAVE_PSELECT) || defined (HAVE_SELECT)
+   sigset_t empty_set;
+   fd_set readfds;
+ #endif
+diff -ruN old/lib/readline/rldefs.h new/lib/readline/rldefs.h
+--- old/lib/readline/rldefs.h	2021-01-22 18:06:31.000000000 +0300
++++ new/lib/readline/rldefs.h	2024-08-10 20:18:46.063675056 +0300
+@@ -34,7 +34,7 @@
+ #  undef HAVE_STRCOLL
+ #endif
+ 
+-#if defined (_POSIX_VERSION) && !defined (TERMIOS_MISSING)
++#if (defined (_POSIX_VERSION) || defined (__ARGENTUM__)) && !defined (TERMIOS_MISSING)
+ #  define TERMIOS_TTY_DRIVER
+ #else
+ #  if defined (HAVE_TERMIO_H)
+diff -ruN old/support/config.sub new/support/config.sub
+--- old/support/config.sub	2022-01-11 22:38:29.000000000 +0300
++++ new/support/config.sub	2024-08-10 20:19:35.803640096 +0300
+@@ -1754,7 +1754,7 @@
+ 	     | onefs* | tirtos* | phoenix* | fuchsia* | redox* | bme* \
+ 	     | midnightbsd* | amdhsa* | unleashed* | emscripten* | wasi* \
+ 	     | nsk* | powerunix* | genode* | zvmoe* | qnx* | emx* | zephyr* \
+-	     | fiwix* )
++	     | fiwix* | argentum* )
+ 		;;
+ 	# This one is extra strict with allowed versions
+ 	sco3.2v2 | sco3.2v[4-9]* | sco5v6*)

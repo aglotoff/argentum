@@ -5,6 +5,8 @@
 #define TICKS_PER_SECOND    100
 /** The number of milliseconds in one tick */
 #define MS_PER_TICK         10
+/** The number of microseconds in one tick */
+#define US_PER_TICK         10000
 /** The number of nanoseconds in one tick */
 #define NS_PER_TICK         10000000
 

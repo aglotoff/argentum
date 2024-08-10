@@ -828,7 +828,7 @@ fs_inode_ioctl_locked(struct Inode *inode, int request, int arg)
 }
 
 int
-fs_inode_select_locked(struct Inode *inode)
+fs_inode_select_locked(struct Inode *inode, struct timeval *timeout)
 {
   int ret;
 
@@ -842,7 +842,7 @@ fs_inode_select_locked(struct Inode *inode)
       fs_inode_unlock(inode);
 
       // TODO: support other devices
-      ret = console_select(inode);
+      ret = console_select(inode, timeout);
 
       fs_inode_lock(inode);
       return ret;

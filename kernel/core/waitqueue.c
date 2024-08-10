@@ -28,6 +28,12 @@ k_waitqueue_sleep(struct KWaitQueue *chan, struct KSpinLock *lock)
   return _k_sched_sleep(&chan->head, THREAD_STATE_SLEEP, 0, lock);
 }
 
+int
+k_waitqueue_timed_sleep(struct KWaitQueue *chan, struct KSpinLock *lock, unsigned long timeout)
+{
+  return _k_sched_sleep(&chan->head, THREAD_STATE_SLEEP, timeout, lock);
+}
+
 /**
  * Wakeup the highest-priority task sleeling on the wait channel.
  * 

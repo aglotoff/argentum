@@ -58,6 +58,7 @@ libc_a_SOURCES += \
   %D%/sys/stat/fstat.c \
   %D%/sys/stat/lstat.c \
   %D%/sys/stat/mkdir.c \
+  %D%/sys/stat/mkfifo.c \
   %D%/sys/stat/mknod.c \
   %D%/sys/stat/stat.c \
   %D%/sys/stat/umask.c \
@@ -98,6 +99,7 @@ libc_a_SOURCES += \
   %D%/unistd/geteuid.c \
   %D%/unistd/getgid.c \
   %D%/unistd/getgroups.c \
+  %D%/unistd/gethostname.c \
   %D%/unistd/getpgid.c \
   %D%/unistd/getpgrp.c \
   %D%/unistd/getpid.c \

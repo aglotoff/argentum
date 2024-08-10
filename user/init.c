@@ -32,7 +32,7 @@ main(void)
   int i;
 
   // char *const argv[] = { "/bin/sh", "./run", NULL };
-  char *const argv[] = { "/bin/sh", NULL };
+  char *const argv[] = { "/bin/sh", "--login", NULL };
 
   // Create the directory for special device files.
   mkdir("/etc", 0755);
@@ -68,7 +68,7 @@ main(void)
 
       for (;;) {
         if (fork() == 0) {
-          execv("/usr/bin/dash", argv);
+          execv("/usr/bin/bash", argv);
           execv("/bin/sh", argv);
         } else {
           wait(NULL);

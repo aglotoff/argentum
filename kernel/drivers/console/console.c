@@ -13,6 +13,7 @@
 #include <kernel/vmspace.h>
 #include <kernel/fs/fs.h>
 #include <kernel/cprintf.h>
+#include <kernel/tick.h>
 
 #include "kbd.h"
 #include "display.h"
@@ -36,8 +37,12 @@ console_notify(struct Console *console, int signo)
   if (console->pgrp <= 1)
     return;
 
+  k_spinlock_release(&console->in.lock);
+
   if (signal_generate(-console->pgrp, signo, 0) != 0)
     panic("cannot generate signal");
+
+  k_spinlock_acquire(&console->in.lock);
 }
 
 /**
@@ -445,9 +450,12 @@ console_handle_esc(struct Console *console, char c)
       console_print_char(console, console->out.buf[console->out.pos - 1].ch);
     break;
 
+  // TODO
   case 'n':
   case '%':
   case 'r':
+  case 'h':
+  case 'l':
     break;
 
   // TODO: handle other control sequences here
@@ -609,21 +617,24 @@ console_ioctl(struct Inode *inode, int request, int arg)
     ws.ws_xpixel = DEFAULT_FB_WIDTH;
     ws.ws_ypixel = DEFAULT_FB_HEIGHT;
     return vm_copy_out(process_current()->vm->pgtab, &ws, arg, sizeof ws);
-
+  case TIOCSWINSZ:
+    // cprintf("set winsize\n");
+    if (vm_copy_in(process_current()->vm->pgtab, &ws, arg, sizeof ws) < 0)
+      return -EFAULT;
+    // cprintf("ws_col = %d\n", ws.ws_col);
+    // cprintf("ws_row = %d\n", ws.ws_row);
+    // cprintf("ws_xpixel = %d\n", ws.ws_xpixel);
+    // cprintf("ws_ypixel = %d\n", ws.ws_ypixel);
+    return 0;
   default:
-    panic("TODO: %d %c %d\n", request & 0xFF, (request >> 8) & 0xF, (request >> 16) & 0x1FFF);
+    panic("TODO: %p - %d %c %d\n", request, request & 0xFF, (request >> 8) & 0xF, (request >> 16) & 0x1FFF);
     return -EINVAL;
   }
 }
 
-int
-console_select(struct Inode *inode)
+static int
+console_try_select(struct Console *console)
 {
-  struct Console *console = console_from_inode(inode);
-
-  if (console == NULL)
-    return -EBADF;
-
   if (console->in.size > 0) {
     if (!(console->termios.c_lflag & ICANON)) {
       return 1;
@@ -633,6 +644,37 @@ console_select(struct Inode *inode)
     }
   }
   return 0;
+}
+
+int
+console_select(struct Inode *inode, struct timeval *timeout)
+{
+  struct Console *console = console_from_inode(inode);
+  int r;
+
+  if (console == NULL)
+    return -EBADF;
+
+  k_spinlock_acquire(&console->in.lock);
+
+  while ((r = console_try_select(console)) == 0) {
+    unsigned long t = 0;
+
+    if (timeout != NULL) {
+      t = timeout->tv_sec * TICKS_PER_SECOND + timeout->tv_usec / US_PER_TICK;
+      k_spinlock_release(&console->in.lock);
+      return 0;
+    }
+
+    if ((r = k_waitqueue_timed_sleep(&console->in.queue, &console->in.lock, t)) < 0) {
+      k_spinlock_release(&console->in.lock);
+      return r;
+    }
+  }
+
+  k_spinlock_release(&console->in.lock);
+
+  return r;
 }
 
 static int

@@ -264,11 +264,11 @@ file_ioctl(struct File *file, int request, int arg)
 }
 
 int
-file_select(struct File *file)
+file_select(struct File *file, struct timeval *timeout)
 {
   switch (file->type) {
   case FD_INODE:
-    return fs_select(file);
+    return fs_select(file, timeout);
   case FD_SOCKET:
   case FD_PIPE:
     return -EBADF;

@@ -375,7 +375,7 @@ fs_ioctl(struct File *file, int request, int arg)
 }
 
 int
-fs_select(struct File *file)
+fs_select(struct File *file, struct timeval *timeout)
 {
   struct Inode *inode;
   int r;
@@ -386,7 +386,7 @@ fs_select(struct File *file)
   inode = fs_path_inode(file->node);
   fs_inode_lock(inode);
 
-  r = fs_inode_select_locked(inode);
+  r = fs_inode_select_locked(inode, timeout);
 
   fs_inode_unlock(inode);
   fs_inode_put(inode);

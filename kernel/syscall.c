@@ -1108,6 +1108,8 @@ sys_select(void)
   if ((r = sys_arg_buf(4, (void *) &timeout, sizeof(*timeout), VM_READ)) < 0)
     goto out4;
 
+  //cprintf("[k] --select %p %p\n", sys_arch_get_arg(4), timeout);
+ 
   r = 0;
 
   for (fd = 0; fd < FD_SETSIZE; fd++) {
@@ -1125,7 +1127,7 @@ sys_select(void)
       break;
     }
 
-    r += file_select(file);
+    r += file_select(file, timeout);
 
     file_put(file);
   }
