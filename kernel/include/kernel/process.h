@@ -24,6 +24,7 @@ struct KSpinLock;
 struct Inode;
 struct Process;
 struct PathNode;
+struct Signal;
 
 struct FileDesc {
   struct File *file;
@@ -62,13 +63,14 @@ struct Process {
   /** Whether the process is a zombie */
   int                   state;
   /** Exit code */
-  int                   exit_code;
+  int                   status;
+  int                   flags;
 
   uintptr_t             signal_stub;
   struct sigaction      signal_actions[NSIG];
+  struct Signal        *signal_pending[NSIG];
   struct KListLink      signal_queue;
   sigset_t              signal_mask;
-  sigset_t              signal_pending;
 
   /** Real user ID */
   uid_t                 ruid;
@@ -97,42 +99,16 @@ enum {
   PROCESS_STATE_STOPPED = 3,
 };
 
+enum {
+  PROCESS_STATUS_AVAILABLE = (1 << 0),
+};
+
 extern struct KSpinLock __process_lock;
 extern struct KListLink __process_list;
 
 struct Signal {
   struct KListLink link;
-  siginfo_t       info;
-};
-
-struct SignalFrame {
-  // Saved by user:
-  uint32_t s[32];
-  uint32_t fpscr;
-  uint32_t r1;
-  uint32_t r2;
-  uint32_t r3;
-  uint32_t r4;
-  uint32_t r5;
-  uint32_t r6;
-  uint32_t r7;
-  uint32_t r8;
-  uint32_t r9;
-  uint32_t r10;
-  uint32_t r11;
-  uint32_t r12;
-
-  // Saved by kernel:
-  uint32_t signo;
-  uint32_t handler;
-
-  uint32_t r0;
-  uint32_t sp;
-  uint32_t lr;
-  uint32_t pc;
-  uint32_t psr;
-  uint32_t trapno;
-  sigset_t mask;
+  siginfo_t        info;
 };
 
 static inline struct Process *

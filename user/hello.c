@@ -3,9 +3,7 @@
 
 int
 main(void) {
-  sigjmp_buf env;
-  
-  sigsetjmp(env, 0);
+  for (;;);
 
   return 0;
 }

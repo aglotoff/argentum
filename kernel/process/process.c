@@ -92,9 +92,6 @@ process_alloc(void)
     k_object_pool_put(process_cache, process);
     return NULL;
   }
-
-  signal_init(process);
-
   k_list_init(&process->children);
   k_list_null(&process->pid_link);
   k_list_null(&process->link);
@@ -102,6 +99,8 @@ process_alloc(void)
 
   process->parent = NULL;
   process->state = PROCESS_STATE_ACTIVE;
+  process->flags = 0;
+
   memset(process->name, 0, 64);
 
   process->times.tms_utime  = 0;
@@ -313,7 +312,8 @@ process_destroy(int status)
     k_waitqueue_wakeup_all(&init_process->wait_queue);
 
   current->state = PROCESS_STATE_ZOMBIE;
-  current->exit_code = status;
+  current->flags |= PROCESS_STATUS_AVAILABLE;
+  current->status = status;
 
   // Wakeup the parent process
   if (current->parent)
@@ -414,23 +414,33 @@ process_wait(pid_t pid, int *stat_loc, int options)
       // Rememeber that we have at least one match
       match = process->pid;
 
-      // TODO: WUNTRACED
+      if (process->flags & PROCESS_STATUS_AVAILABLE) {
+        if ((process->state == PROCESS_STATE_STOPPED) && !(options & WUNTRACED))
+          continue;
 
-      if (process->state == PROCESS_STATE_ZOMBIE) {
-        k_list_remove(&process->sibling_link);
-        k_list_remove(&process->link);
+        // TODO: WCONTINUED
+        if (process->state == PROCESS_STATE_ACTIVE)
+          continue;
 
-        // Include the times of the terminated child process in the parent's
-        // times structure. Thus, only the times of children for which wait
-        // successfully returns will be included.
-        current->times.tms_cutime += process->times.tms_utime;
-        current->times.tms_cstime += process->times.tms_stime;
+        process->flags &= ~PROCESS_STATUS_AVAILABLE;
+        *stat_loc = process->status;
 
-        process_unlock();
+        if (process->state == PROCESS_STATE_ZOMBIE) {
+          k_list_remove(&process->sibling_link);
+          k_list_remove(&process->link);
 
-        *stat_loc = process->exit_code;
+          // Include the times of the terminated child process in the parent's
+          // times structure. Thus, only the times of children for which wait
+          // successfully returns will be included.
+          current->times.tms_cutime += process->times.tms_utime;
+          current->times.tms_cstime += process->times.tms_stime;
 
-        process_free(process);
+          process_unlock();
+
+          process_free(process);
+        } else {
+          process_unlock();
+        }
 
         return match;
       }
