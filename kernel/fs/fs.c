@@ -243,11 +243,11 @@ fs_write(struct File *file, uintptr_t va, size_t nbytes)
   if ((file->flags & O_ACCMODE) == O_RDONLY)
     return -EBADF;
 
-  if (file->flags & O_APPEND)
-    file->offset = inode->size;
-
   inode = fs_path_inode(file->node);
   fs_inode_lock(inode);
+
+  if (file->flags & O_APPEND)
+    file->offset = inode->size;
 
   r = fs_inode_write_locked(inode, va, nbytes, &file->offset);
 
