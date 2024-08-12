@@ -35,6 +35,7 @@ for Cortex-A9.
    make ports-coreutils
    make ports-dash
    make ports-diffutils
+   make ports-file
    make ports-gcc (requires binutils)
    make ports-gzip
    make ports-less
