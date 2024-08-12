@@ -28,16 +28,21 @@ for Cortex-A9.
    ```
    make all
    ```
-6. Build the ported packages (optional)
+6. Build desired ported packages (optional)
    ```
+   make ports-bash (requires ncurses)
+   make ports-binutils
    make ports-coreutils
    make ports-dash
-   make ports-binutils
-   make ports-gcc
+   make ports-diffutils
+   make ports-gcc (requires binutils)
    make ports-gzip
-   make ports-sed
-   make ports-ncurses
    make ports-less
+   make ports-m4
+   make ports-make
+   make ports-ncurses
+   make ports-sed
+   make ports-vim (requires ncurses)
    ```
 7. Run the kernel in the emulator (you'll need `qemu-system-arm`):
    ```
