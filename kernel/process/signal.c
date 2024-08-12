@@ -226,6 +226,8 @@ signal_deliver_pending(void)
     panic("ignored signals should not be delivered");
   } else if ((exit_code = signal_arch_prepare(process, signal)) == 0) {
     process->signal_mask |= action->sa_mask;
+    if (action->sa_flags & SA_RESETHAND)
+      action->sa_handler = SIG_DFL;
   }
 
   signal_free(signal);

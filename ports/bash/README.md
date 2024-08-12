@@ -2,7 +2,7 @@
 
 Changes:
 
-* Add `argentum` to the OS list in `build-aux/config.sub`
+* Add `argentum` to the OS list in `support/config.sub`
 * Do not build the `getcwd` replacement (do not undef `HAVE_GETCWD` in
   `config-bot.h`)
 * Since we don't have `_POSIX_VERSION` defined, add explicit checks for
@@ -12,4 +12,3 @@ Changes:
 
 Configuration:
 * Do not use Bash's `malloc` (which is known to have bugs)
-
