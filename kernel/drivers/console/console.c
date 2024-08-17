@@ -231,6 +231,8 @@ console_print_char(struct Console *console, char c)
 
   case '\b':
     if (console->out.pos > 0) {
+      console_out_flush(console);
+
       console->out.pos--;
       if (console == console_current)
         display_update_cursor(console);
