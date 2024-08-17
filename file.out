@@ -1,21 +1,0 @@
-rm -rf obj/fs.img
-+ GEN obj/fs.img
-Creating regular file obj/fs.img
-Creating filesystem with 131072 4k blocks and 32768 inodes
-Filesystem UUID: 101cf1c7-1459-445c-ac39-0f087541ad47
-Superblock backups stored on blocks: 
-	32768, 98304
-
-Allocating group tables: 0/4   done                            
-Writing inode tables: 0/4   done                            
-Copying files into the device: done
-Writing superblocks and filesystem accounting information: 0/4   done
-
-qemu-system-arm -M realview-pbx-a9 -m 256 -smp 2 -kernel obj/kernel/kernel -drive if=sd,format=raw,file=obj/fs.img -nic user,hostfwd=tcp::8080-:80 -serial mon:stdio
-Starting CPU 0
-Starting CPU 1
-Filesystem size = 512M, inodes_count = 32768, block_count = 131072
-[1;32m[ [m~[1;32m ]$ [m/hello
-[0;10m[H[JType any character to see it in bold[BThe pressed key is [0;10;1m^[ 33[0;10m[30;1H[1;32m[ [m~[1;32m ]$ [mC: No such file or directory
-[k] process #5 destroyed with code 0x100
-[1;32m[ [m~[1;32m ]$ [m
