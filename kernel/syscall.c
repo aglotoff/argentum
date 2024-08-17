@@ -1428,10 +1428,10 @@ sys_sendto(void)
     goto out1;
   if ((r = sys_arg_int(3, &flags)) < 0)
     goto out1;
-  if ((r = sys_arg_buf(4, (void **) &dest_addr, sizeof dest_addr, VM_READ)) < 0)
-    goto out1;
   if ((r = sys_arg_ulong(5, &dest_len)) < 0)
     goto out2;
+  if ((r = sys_arg_buf(4, (void **) &dest_addr, dest_len, VM_READ)) < 0)
+    goto out1;
 
   if ((file = fd_lookup(process_current(), fd)) == NULL) {
     r = -EBADF;

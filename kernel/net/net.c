@@ -10,6 +10,7 @@
 #include <lwip/api.h>
 #include <lwip/dhcp.h>
 #include <lwip/etharp.h>
+#include <lwip/inet.h>
 #include <lwip/sockets.h>
 #include <lwip/tcpip.h>
 #include <lwip/icmp.h>
@@ -88,8 +89,6 @@ net_init_done(void *arg)
   netif_set_up(&eth_netif);
 
   dhcp_start(&eth_netif);
-
-  //sys_thread_new("ping_thread", ping_thread, NULL, DEFAULT_THREAD_STACKSIZE, DEFAULT_THREAD_PRIO);
 }
 
 void
@@ -221,6 +220,8 @@ net_recvfrom(struct File *file, uintptr_t va, size_t nbytes, int flags,
 
     if (r == 0)
       break;
+      
+    total += r;
 
     if (r < 0) {
       total = -errno;
@@ -232,8 +233,6 @@ net_recvfrom(struct File *file, uintptr_t va, size_t nbytes, int flags,
       break;
     }
     
-    total += r;
-
     if (r < nread)
       break;
 
@@ -269,8 +268,13 @@ net_sendto(struct File *file, uintptr_t va, size_t nbytes, int flags,
   total = 0;
   while (nbytes) {
     ssize_t nwrite = MIN(nbytes, PAGE_SIZE);
+    
+    if ((r = vm_space_copy_in(p, va, nwrite)) < 0) {
+      total = -errno;
+      break;
+    }
 
-    r = lwip_sendto(file->socket, p, nwrite, flags, dest_addr, dest_len);
+    r = lwip_sendto(file->socket, p, nwrite, flags, (struct sockaddr *) dest_addr, dest_len);
 
     if (r == 0)
       break;
@@ -280,11 +284,6 @@ net_sendto(struct File *file, uintptr_t va, size_t nbytes, int flags,
       break;
     }
 
-    if ((r = vm_space_copy_out(p, va, nwrite)) < 0) {
-      total = -errno;
-      break;
-    }
-    
     total += r;
 
     if (r < nwrite)

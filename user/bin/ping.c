@@ -92,12 +92,14 @@ main(int argc, char **argv)
 	addr.sin_family = AF_INET;
 	addr.sin_port = htons(80);
 
-  if (inet_pton(AF_INET, argv[1], &addr.sin_addr) != 1) {
+  fprintf(stderr, "%s\n", argv[1]);
+
+  if (inet_pton(AF_INET, argv[1], &addr.sin_addr.s_addr) != 1) {
 		perror("inet_pton");
 		exit(1);
 	}
 
-  timeout.tv_sec  = 60;
+  timeout.tv_sec  = 1000;
   timeout.tv_usec = 0;
 
   if (setsockopt(sockfd, SOL_SOCKET, SO_RCVTIMEO, &timeout, sizeof(timeout)) != 0) {

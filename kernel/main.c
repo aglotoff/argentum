@@ -138,16 +138,16 @@ void main(void)
   console_init(); // Console driver
   rtc_init(); // Real-time clock
   sd_init();  // MultiMedia Card
-  // eth_init(); // Ethernet
+  eth_init(); // Ethernet
 
   // Initialize the remaining kernel services
   buf_init();     // Buffer cache
   file_init();    // File table
   
-  // net_init();     // Network
   pipe_init();    // Pipes subsystem
   process_init(); // Process table
-  signal_init_system();
+  signal_init_system(); // Signals
+  net_init();     // Network
 
   // test_mux = k_mutex_create("test");
 
