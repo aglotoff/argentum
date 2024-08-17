@@ -207,3 +207,36 @@ pipe_write(struct File *file, uintptr_t va, size_t n)
 
   return i;
 }
+
+int
+pipe_stat(struct File *file, struct stat *buf)
+{
+  struct Pipe *pipe = file->pipe;
+
+  if (file->type != FD_PIPE)
+    return -EBADF;
+  
+  k_spinlock_acquire(&pipe->lock);
+
+  // TODO: use meaningful values
+  buf->st_dev          = 255;
+  buf->st_ino          = 0;
+  buf->st_mode         = _IFIFO;
+  buf->st_nlink        = 0;
+  buf->st_uid          = 0;
+  buf->st_gid          = 0;
+  buf->st_rdev         = 0;
+  buf->st_size         = 0;
+  buf->st_atim.tv_sec  = 0;
+  buf->st_atim.tv_nsec = 0;
+  buf->st_mtim.tv_sec  = 0;
+  buf->st_mtim.tv_nsec = 0;
+  buf->st_ctim.tv_sec  = 0;
+  buf->st_ctim.tv_nsec = 0;
+  buf->st_blocks       = 0;
+  buf->st_blksize      = 0;
+
+  k_spinlock_release(&pipe->lock);
+
+  return 0;
+}

@@ -101,11 +101,11 @@ sys_dispatch(void)
     return num;
 
   if ((num < (int) ARRAY_SIZE(syscalls)) && syscalls[num]) {
-
     int r = syscalls[num]();
 
     // if (r < 0)
     //   cprintf("syscall(%d) -> %d\n", num, r);
+
     return r;
   }
 

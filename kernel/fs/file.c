@@ -194,8 +194,9 @@ file_stat(struct File *file, struct stat *buf)
   switch (file->type) {
   case FD_INODE:
     return fs_fstat(file, buf);
-  case FD_SOCKET:
   case FD_PIPE:
+    return pipe_stat(file, buf);
+  case FD_SOCKET:
     return -EBADF;
   default:
     panic("bad file type");

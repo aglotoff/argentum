@@ -21,5 +21,6 @@ int     pipe_open(struct File **, struct File **);
 int     pipe_close(struct File *);
 ssize_t pipe_read(struct File *, uintptr_t, size_t);
 ssize_t pipe_write(struct File *, uintptr_t, size_t);
+int     pipe_stat(struct File *, struct stat *);
 
 #endif  // !__KERNEL_INCLUDE_KERNEL_PIPE_H__
