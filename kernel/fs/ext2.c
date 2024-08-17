@@ -523,6 +523,7 @@ ext2_mount(dev_t dev)
 
   // TODO: update mtime, mnt_count, state, last_mounted
 
+  ext2fs->name  = "ext2";
   ext2fs->dev   = dev;
   ext2fs->extra = sb;
   ext2fs->ops   = &ext2fs_ops;

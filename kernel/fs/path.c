@@ -313,7 +313,7 @@ fs_path_lookup_at(struct PathNode *start,
 
     parent_inode = fs_path_inode(parent);
     fs_inode_lock(parent_inode);
-    
+
     r = fs_inode_lookup_locked(parent_inode, name_buf, flags, &inode);
 
     fs_inode_unlock(parent_inode);

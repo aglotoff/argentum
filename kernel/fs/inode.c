@@ -47,7 +47,7 @@ fs_inode_get(ino_t ino, dev_t dev)
   empty = NULL;
   KLIST_FOREACH(&inode_cache.head, l) {
     ip = KLIST_CONTAINER(l, struct Inode, cache_link);
-    if ((ip->ino == ino) && (ip->dev == dev)) {
+    if ((ip->ino == ino) && (ip->dev == dev) && (ip->ref_count > 0)) {
       ip->ref_count++;
       // cprintf("[got %d, %d]\n", ino, ip->ref_count);
 
@@ -64,6 +64,7 @@ fs_inode_get(ino_t ino, dev_t dev)
     empty->ref_count = 1;
     empty->ino       = ino;
     empty->dev       = dev;
+    empty->fs        = NULL;
     empty->flags     = 0;
 
     // cprintf("[inode create %d]\n", ino);
@@ -132,7 +133,7 @@ fs_inode_put(struct Inode *inode)
   k_spinlock_acquire(&inode_cache.lock);
   if (--inode->ref_count == 0) {
     // cprintf("[inode drop %d]\n", inode->ino);
-    
+
     k_list_remove(&inode->cache_link);
     k_list_add_front(&inode_cache.head, &inode->cache_link);
   }

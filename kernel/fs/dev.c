@@ -228,6 +228,7 @@ dev_mount(dev_t dev)
   if ((devfs = (struct FS *) k_malloc(sizeof(struct FS))) == NULL)
     panic("cannot allocate FS");
   
+  devfs->name  = "devfs";
   devfs->dev   = dev;
   devfs->extra = NULL;
   devfs->ops   = &devfs_ops;

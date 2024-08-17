@@ -63,6 +63,7 @@ struct PathNode {
 typedef int (*FillDirFunc)(void *, ino_t, const char *, size_t);
 
 struct FSOps {
+  char             *name;
   int             (*inode_read)(struct Inode *);
   int             (*inode_write)(struct Inode *);
   void            (*inode_delete)(struct Inode *);
@@ -84,6 +85,7 @@ struct FS {
   dev_t         dev;
   void         *extra;
   struct FSOps *ops;
+  char         *name;
 };
 
 #define FS_INODE_VALID  (1 << 0)

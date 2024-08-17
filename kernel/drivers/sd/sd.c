@@ -121,7 +121,7 @@ sd_request(struct Buf *buf)
   if ((buf->flags & (BUF_DIRTY | BUF_VALID)) == BUF_VALID)
     panic("nothing to do");
   if (buf->dev != 0)
-    panic("dev must be 0");
+    panic("dev must be 0, %d given", buf->dev);
   if (buf->block_size % SD_BLOCKLEN != 0)
     panic("block size must be a multiple of %u", SD_BLOCKLEN);
 
