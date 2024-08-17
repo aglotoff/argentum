@@ -145,6 +145,7 @@ LIB_SRCFILES := \
 	lib/argentum/unistd/readlink.c \
 	lib/argentum/unistd/rmdir.c \
 	lib/argentum/unistd/sbrk.c \
+	lib/argentum/unistd/setgid.c \
 	lib/argentum/unistd/sethostname.c \
 	lib/argentum/unistd/setpgid.c \
 	lib/argentum/unistd/setregid.c \

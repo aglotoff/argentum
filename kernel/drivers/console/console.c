@@ -230,8 +230,11 @@ console_print_char(struct Console *console, char c)
     break;
 
   case '\b':
-    if (console->out.pos > 0)
-      console_set_char(console, --console->out.pos, ' ');
+    if (console->out.pos > 0) {
+      console->out.pos--;
+      if (console == console_current)
+        display_update_cursor(console);
+    }
     break;
 
   case '\t':
@@ -683,8 +686,15 @@ console_back(struct Console *cons)
   if (cons->in.size == 0)
     return 0;
 
-  if (cons->termios.c_lflag & ECHOE)
-    console_echo(cons, '\b');
+  if (cons->termios.c_lflag & ECHOE) {
+    k_spinlock_acquire(&cons->out.lock);
+    if (cons->out.pos > 0) {
+      console_set_char(cons, --cons->out.pos, ' ');
+      console_echo(cons, '\b');
+      console_out_flush(cons);
+    }
+    k_spinlock_release(&cons->out.lock);
+  }
 
   cons->in.size--;
   if (cons->in.write_pos == 0) {

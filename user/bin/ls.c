@@ -51,7 +51,8 @@ main(int argc, char **argv)
       color = "";
     }
 
-    printf("%c%c%c%c%c%c%c%c%c%c ",
+    printf("%02x %c%c%c%c%c%c%c%c%c%c ",
+            st.st_dev,
             st.st_mode & S_IFDIR ? 'd' : '-',
             st.st_mode & S_IRUSR ? 'r' : '-',
             st.st_mode & S_IWUSR ? 'w' : '-',

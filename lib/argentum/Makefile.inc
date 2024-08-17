@@ -115,6 +115,7 @@ libc_a_SOURCES += \
   %D%/unistd/readlink.c \
   %D%/unistd/rmdir.c \
   %D%/unistd/sbrk.c \
+  %D%/unistd/setgid.c \
   %D%/unistd/sethostname.c \
   %D%/unistd/setpgid.c \
   %D%/unistd/setregid.c \

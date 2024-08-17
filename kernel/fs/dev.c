@@ -46,6 +46,8 @@ dev_inode_read(struct Inode *inode)
   if ((inode->ino >= 2) && (inode->ino <= NDEV)) {
     struct Dev *device = &devices[inode->ino - 1];
 
+    assert(inode->dev == 1);
+
     inode->mode  = device->mode;
     inode->nlink = 1;
     inode->rdev  = device->dev;
@@ -65,20 +67,20 @@ dev_inode_read(struct Inode *inode)
 int
 dev_inode_write(struct Inode *inode)
 {
-  (void) inode;
+  assert(inode->dev == 1);
   return -ENOSYS;
 }
 
 void
 dev_inode_delete(struct Inode *inode)
 {
-  (void) inode;
+  assert(inode->dev == 1);
 }
 
 ssize_t
 dev_read(struct Inode *inode, uintptr_t va, size_t n, off_t offset)
 {
-  (void) inode;
+  assert(inode->dev == 1);
   (void) va;
   (void) n;
   (void) offset;
@@ -98,7 +100,7 @@ dev_write(struct Inode *inode, uintptr_t va, size_t n, off_t offset)
 int
 dev_rmdir(struct Inode *parent, struct Inode *inode)
 {
-  (void) inode;
+  assert(inode->dev == 1);
   (void) parent;
   return -EROFS;
 }
@@ -107,6 +109,8 @@ ssize_t
 dev_readdir(struct Inode *inode, void *buf, FillDirFunc filldir, off_t offset)
 {
   struct Dev *device = &devices[offset];
+
+  assert(inode->dev == 1);
 
   if (inode->ino != 2)
     return -ENOTDIR;
@@ -122,7 +126,7 @@ dev_readdir(struct Inode *inode, void *buf, FillDirFunc filldir, off_t offset)
 ssize_t
 dev_readlink(struct Inode *inode, char *buf, size_t n)
 {
-  (void) inode;
+  assert(inode->dev == 1);
   (void) buf;
   (void) n;
   return -ENOSYS;
@@ -131,7 +135,7 @@ dev_readlink(struct Inode *inode, char *buf, size_t n)
 int
 dev_create(struct Inode *inode, char *name, mode_t mode, struct Inode **store)
 {
-  (void) inode;
+  assert(inode->dev == 1);
   (void) name;
   (void) mode;
   (void) store;
@@ -141,7 +145,7 @@ dev_create(struct Inode *inode, char *name, mode_t mode, struct Inode **store)
 int
 dev_mkdir(struct Inode *inode, char *name, mode_t mode, struct Inode **store)
 {
-  (void) inode;
+  assert(inode->dev == 1);
   (void) name;
   (void) mode;
   (void) store;
@@ -151,7 +155,7 @@ dev_mkdir(struct Inode *inode, char *name, mode_t mode, struct Inode **store)
 int
 dev_mknod(struct Inode *inode, char *name, mode_t mode, dev_t dev, struct Inode **store)
 {
-  (void) inode;
+  assert(inode->dev == 1);
   (void) name;
   (void) mode;
   (void) dev;
@@ -162,7 +166,7 @@ dev_mknod(struct Inode *inode, char *name, mode_t mode, dev_t dev, struct Inode 
 int
 dev_link(struct Inode *parent, char *name, struct Inode *inode)
 {
-  (void) inode;
+  assert(inode->dev == 1);
   (void) name;
   (void) parent;
   return -EROFS;
@@ -171,7 +175,7 @@ dev_link(struct Inode *parent, char *name, struct Inode *inode)
 int
 dev_unlink(struct Inode *parent, struct Inode *inode)
 {
-  (void) inode;
+  assert(inode->dev == 1);
   (void) parent;
   return -EROFS;
 }

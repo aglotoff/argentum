@@ -137,6 +137,9 @@
 #define _POSIX2_RE_DUP_MAX              255
 #endif /* _POSIX2_RE_DUP_MAX  */
 
+#define _POSIX_ARG_MAX      4096
+#define _POSIX_OPEN_MAX     16
+
 #ifndef ARG_MAX
 #define ARG_MAX		4096
 #endif
