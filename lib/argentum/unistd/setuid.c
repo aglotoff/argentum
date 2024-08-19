@@ -5,5 +5,5 @@ int
 setuid(uid_t uid)
 {
   fprintf(stderr, "TODO: setuid(%d)\n", uid);
-  return -1;
+  return uid == 0 ? 0 : -1;
 }

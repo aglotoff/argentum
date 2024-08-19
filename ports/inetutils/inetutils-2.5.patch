@@ -1,0 +1,35 @@
+diff -ruN old/build-aux/config.sub new/build-aux/config.sub
+--- old/build-aux/config.sub	2023-12-29 20:17:49.000000000 +0300
++++ new/build-aux/config.sub	2024-08-19 14:35:47.381363045 +0300
+@@ -1766,7 +1766,7 @@
+ 	     | onefs* | tirtos* | phoenix* | fuchsia* | redox* | bme* \
+ 	     | midnightbsd* | amdhsa* | unleashed* | emscripten* | wasi* \
+ 	     | nsk* | powerunix* | genode* | zvmoe* | qnx* | emx* | zephyr* \
+-	     | fiwix* | mlibc* | cos* | mbr* )
++	     | fiwix* | mlibc* | cos* | mbr* | argentum* )
+ 		;;
+ 	# This one is extra strict with allowed versions
+ 	sco3.2v2 | sco3.2v[4-9]* | sco5v6*)
+diff -ruN old/man/Makefile.in new/man/Makefile.in
+--- old/man/Makefile.in	2023-12-29 21:05:44.000000000 +0300
++++ new/man/Makefile.in	2024-08-19 15:00:09.391119463 +0300
+@@ -2272,7 +2272,7 @@
+ 
+ tftpd.8: tftpd.h2m $(top_srcdir)/src/tftpd.c $(top_srcdir)/.version
+ 
+-traceroute.1: traceroute.h2m $(top_srcdir)/src/traceroute.c $(top_srcdir)/.version
++# traceroute.1: traceroute.h2m $(top_srcdir)/src/traceroute.c $(top_srcdir)/.version
+ 
+ uucpd.8: uucpd.h2m $(top_srcdir)/src/uucpd.c $(top_srcdir)/.version
+ 
+diff -ruN old/src/traceroute.c new/src/traceroute.c
+--- old/src/traceroute.c	2023-12-29 20:34:46.000000000 +0300
++++ new/src/traceroute.c	2024-08-19 14:37:00.381359215 +0300
+@@ -297,6 +297,7 @@
+   memset (&hints, 0, sizeof (hints));
+   hints.ai_family = AF_INET;
+   hints.ai_flags = AI_CANONNAME;
++  hints.ai_socktype = SOCK_DGRAM;
+ #ifdef AI_IDN
+   hints.ai_flags |= AI_IDN;
+ # ifdef AI_CANONIDN

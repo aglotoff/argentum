@@ -2,7 +2,6 @@
 # define _NETDB_H
 
 #include <sys/cdefs.h>
-#include <netinet/in.h>
 
 __BEGIN_DECLS
 
@@ -35,12 +34,28 @@ struct protoent {
 #define	NI_DGRAM	      0x00000010
 #define	NI_NUMERICSCOPE	0x00000020
 
+#ifndef __ARGENTUM_KERNEL__
+
+#include <netinet/in.h>
+
+#ifndef _PATH_PROTOCOLS
+#define _PATH_PROTOCOLS "/etc/protocols"
+#endif
+
+#ifndef _PATH_SERVICES
+#define _PATH_SERVICES "/etc/services"
+#endif
+
+struct protoent *getprotoent(void);
+struct servent  *getservent(void);
 struct hostent  *gethostbyaddr(const void *, socklen_t, int);
 struct hostent  *gethostbyname(const char *);
 struct protoent *getprotobyname(const char *);
 struct servent  *getservbyname(const char *, const char *);
 
 extern int h_errno;
+
+#endif  // !__ARGENTUM_KERNEL__
 
 __END_DECLS
 

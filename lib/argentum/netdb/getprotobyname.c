@@ -4,6 +4,11 @@
 struct protoent *
 getprotobyname(const char *name)
 {
-  fprintf(stderr, "TODO: getprotobyname(%s)\n", name);
+  struct protoent *p;
+
+  while ((p = getprotoent()) != NULL) {
+    if (strcmp(name, p->p_name) == 0)
+      return p;
+  }
   return NULL;
 }

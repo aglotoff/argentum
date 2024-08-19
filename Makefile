@@ -70,7 +70,7 @@ fs: clean-fs $(OBJ)/fs.img
 $(OBJ)/fs.img: $(SYSROOT) $(USER_APPS)
 	@echo "+ GEN $@"
 	$(V)mkdir -p $@.d/{,dev,etc,home/{,root,guest},tmp}
-	$(V)cp -afR $(SYSROOT)/* $@.d/
+	$(V)cp -afRd $(SYSROOT)/* $@.d/
 	$(V)genext2fs -B 4096 -b 131072 -d $@.d -P -U $@
 
 ifndef CPUS

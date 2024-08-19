@@ -15,6 +15,7 @@ libc_a_SOURCES += \
   %D%/netdb/gethostbyname.c \
   %D%/netdb/getprotobyname.c \
   %D%/netdb/getservbyname.c \
+  %D%/netdb/netdb.c \
   %D%/poll/poll.c \
   %D%/signal/kill.c \
   %D%/signal/killpg.c \

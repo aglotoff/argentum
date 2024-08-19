@@ -36,8 +36,11 @@ for Cortex-A9.
    make ports-dash
    make ports-diffutils
    make ports-file
+   make ports-findutils
    make ports-gcc (requires binutils)
    make ports-gzip
+   make ports-iana-etc
+   make ports-inetutils (requires iana-etc and ncurses)
    make ports-less
    make ports-m4
    make ports-make

@@ -8,6 +8,7 @@
 #include <sys/stat.h>
 #include <sys/select.h>
 #include <sys/utsname.h>
+#include <netdb.h>
 #include <time.h>
 
 #include <kernel/cprintf.h>
@@ -90,6 +91,7 @@ static int32_t (*syscalls[])(void) = {
   [__SYS_READLINK]    = sys_readlink,
   [__SYS_TIMES]       = sys_times,
   [__SYS_MOUNT]       = sys_mount,
+  [__SYS_GETHOSTBYNAME] = sys_gethostbyname,
 };
 
 int32_t
@@ -1015,6 +1017,7 @@ sys_fcntl(void)
   }
 
   file_put(file);
+
   return r;
 }
 
@@ -1108,8 +1111,6 @@ sys_select(void)
   if ((r = sys_arg_buf(4, (void *) &timeout, sizeof(*timeout), VM_READ)) < 0)
     goto out4;
 
-  //cprintf("[k] --select %p %p\n", sys_arch_get_arg(4), timeout);
- 
   r = 0;
 
   for (fd = 0; fd < FD_SETSIZE; fd++) {
@@ -1482,6 +1483,30 @@ sys_setsockopt(void)
 out2:
   if (option_value != NULL)
     k_free(option_value);
+out1:
+  return r;
+}
+
+int32_t
+sys_gethostbyname(void)
+{
+  char *name;
+  ip_addr_t addr;
+  uintptr_t addr_va;
+  int r;
+
+  if ((r = sys_arg_str(0, PATH_MAX, VM_READ, &name)) < 0)
+    goto out1;
+  if ((r = sys_arg_va(1, &addr_va, sizeof addr, VM_WRITE, 0)) < 0)
+    goto out2;
+
+  if ((r = net_gethostbyname(name, &addr)) < 0)
+    goto out2;
+
+  r = sys_copy_out(&addr, addr_va, sizeof addr);
+
+out2:
+  k_free(name);
 out1:
   return r;
 }

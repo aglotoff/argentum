@@ -46,6 +46,7 @@ LIB_SRCFILES := \
 	lib/argentum/netdb/gethostbyname.c \
 	lib/argentum/netdb/getprotobyname.c \
 	lib/argentum/netdb/getservbyname.c \
+	lib/argentum/netdb/netdb.c \
 	lib/argentum/poll/poll.c \
 	lib/argentum/signal/kill.c \
 	lib/argentum/signal/killpg.c \

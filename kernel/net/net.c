@@ -6,6 +6,7 @@
 #include <kernel/thread.h>
 #include <kernel/object_pool.h>
 #include <kernel/vmspace.h>
+#include <netdb.h>
 
 #include <lwip/api.h>
 #include <lwip/dhcp.h>
@@ -318,4 +319,26 @@ net_setsockopt(struct File *file, int level, int option_name, const void *option
     return -errno;
 
   return r;
+}
+
+int
+net_select(struct File *file, struct timeval *timeout)
+{
+  int r;
+  fd_set dset;
+
+  dset.__fds_bits[0] = (1 << file->socket);
+
+  if ((r = lwip_select(file->socket + 1, &dset, NULL, NULL, timeout)) < 0)
+    return -errno;
+  
+  return r;
+}
+
+int
+net_gethostbyname(const char *name, ip_addr_t *addr)
+{
+  if (netconn_gethostbyname(name, addr) < 0)
+    return -errno;
+  return 0;
 }

@@ -21,5 +21,7 @@ ssize_t net_sendto(struct File *, uintptr_t, size_t, int, const struct sockaddr 
 int     net_setsockopt(struct File *, int, int, const void *, socklen_t);
 ssize_t net_read(struct File *, uintptr_t, size_t);
 ssize_t net_write(struct File *, uintptr_t, size_t);
+int     net_select(struct File *, struct timeval *);
+int     net_gethostbyname(const char *, ip_addr_t *);
 
 #endif  // !__KERNEL_INCLUDE_KERNEL_NET_H__

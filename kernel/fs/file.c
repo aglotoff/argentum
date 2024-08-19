@@ -271,6 +271,7 @@ file_select(struct File *file, struct timeval *timeout)
   case FD_INODE:
     return fs_select(file, timeout);
   case FD_SOCKET:
+    return net_select(file, timeout);
   case FD_PIPE:
     return -EBADF;
   default:

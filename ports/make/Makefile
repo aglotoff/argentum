@@ -15,7 +15,6 @@ install: all
 	make -C $(SRC_DIR) DESTDIR=$(SYSROOT) install
 
 $(TARBALL_FILE):
-
 	wget "https://ftp.gnu.org/gnu/make/${TARBALL_NAME}" -O $@
 
 $(SRC_DIR): $(TARBALL_FILE)

@@ -4,6 +4,11 @@
 struct servent *
 getservbyname(const char *name, const char *proto)
 {
-  fprintf(stderr, "TODO: getservbyname(%s,%s)\n", name, proto);
+  struct servent *p;
+
+  while ((p = getservent()) != NULL) {
+    if ((strcmp(name, p->s_name) == 0) && (strcmp(proto, p->s_proto) == 0))
+      return p;
+  }
   return NULL;
 }
