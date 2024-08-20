@@ -46,9 +46,9 @@
 #define PHYS_KMI0         0x10006000    ///< Keyboard/Mouse Interface 0
 #define PHYS_UART0        0x10009000    ///< UART 0 Interface
 #define PHYS_LCD          0x10020000    ///< Color LCD Controller configuration
-#define PHYS_GICC         0x1F000100    ///< Interrupt interface
-#define PHYS_PTIMER       0x1F000600    ///< Private timer
-#define PHYS_GICD         0x1F001000    ///< Distributor
+// #define PHYS_GICC         0x1F000100    ///< Interrupt interface
+// #define PHYS_PTIMER       0x1F000600    ///< Private timer
+// #define PHYS_GICD         0x1F001000    ///< Distributor
 #define PHYS_ETH          0x4E000000    ///< Static memory (CS3) Ethernet
 
 /** Exception vectors are mapped at this virtual address */

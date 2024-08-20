@@ -11,9 +11,7 @@
 #include <kernel/irq.h>
 #include <kernel/monitor.h>
 #include <kernel/semaphore.h>
-
-#include "gic.h"
-#include "ptimer.h"
+#include <kernel/mach.h>
 
 static void trap_handle_abort(struct TrapFrame *);
 
@@ -173,13 +171,13 @@ print_trapframe(struct TrapFrame *tf)
   cprintf("  r12  %p    pc   %p\n", tf->r12, tf->pc);
 }
 
-static struct Gic gic;
-static struct PTimer ptimer;
 
-static int
-ptimer_irq(void *)
+int
+timer_irq(void *)
 {
   struct Process *my_process = process_current();
+
+  // cprintf("Tick!\n");
 
   if (my_process != NULL) {
     if ((my_process->thread->tf->psr & PSR_M_MASK) != PSR_M_USR) {
@@ -189,13 +187,12 @@ ptimer_irq(void *)
     }
   }
 
-  ptimer_eoi(&ptimer);
   tick();
 
   return 1;
 }
 
-static int
+int
 ipi_irq(void *)
 {
   return 1;
@@ -204,57 +201,51 @@ ipi_irq(void *)
 void
 interrupt_ipi(void)
 {
-  gic_sgi(&gic, 0);
+  mach[mach_type]->interrupt_ipi();
 }
 
 static int
 irq_id(void)
 {
-  return gic_intid(&gic);
+  return mach[mach_type]->irq_id();
 }
 
 void
 interrupt_enable(int irq, int cpu)
 {
-  gic_setup(&gic, irq, cpu);
+  mach[mach_type]->interrupt_enable(irq, cpu);
 }
 
 void
 interrupt_mask(int irq)
 {
-  gic_disable(&gic, irq);
+  mach[mach_type]->interrupt_mask(irq);
 }
 
 void
 interrupt_unmask(int irq)
 {
-  gic_enable(&gic, irq);
+  mach[mach_type]->interrupt_unmask(irq);
 }
 
 void
 interrupt_init(void)
 {
-  gic_init(&gic, PA2KVA(PHYS_GICC), PA2KVA(PHYS_GICD));
-  ptimer_init(&ptimer, PA2KVA(PHYS_PTIMER));
-
-  k_irq_attach(IRQ_PTIMER, ptimer_irq, NULL);
-  k_irq_attach(0, ipi_irq, NULL);
+  mach[mach_type]->interrupt_init();
+  mach[mach_type]->timer_init();
 }
 
 void
 interrupt_init_percpu(void)
 {
-  gic_init_percpu(&gic);
-  ptimer_init_percpu(&ptimer);
-
-  interrupt_unmask(IRQ_PTIMER);
-  interrupt_unmask(0);
+  mach[mach_type]->interrupt_init_percpu();
+  mach[mach_type]->timer_init_percpu();
 }
 
 static void
 irq_eoi(int irq)
 {
-  gic_eoi(&gic, irq);
+  mach[mach_type]->interrupt_eoi(irq);
 }
 
 void

@@ -16,7 +16,7 @@
 #define T_FIQ       7         ///< FIQ (Fast Interrupt)
 
 // IRQ numbers
-#define IRQ_PTIMER    29
+// #define IRQ_PTIMER    29
 #define IRQ_UART0     44
 #define IRQ_MCIA      49
 #define IRQ_MCIB      50
@@ -75,6 +75,9 @@ struct ISRThread {
 };
 
 void interrupt_attach_thread(struct ISRThread *, int, void (*)(void));
+
+int timer_irq(void *);
+int ipi_irq(void *);
 
 #endif  // !__ASSEMBLER__
 

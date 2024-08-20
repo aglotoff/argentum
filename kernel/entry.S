@@ -42,6 +42,9 @@ _start:
 
   .globl  entry
 entry:
+  mov   r4, r0
+  mov   r5, r1
+
   // Set access rights to CP10 and CP11 (the FPU coprocessors)
   ldr   r0, =(CP15_CPACR_CPN(10, CPAC_FULL) | CP15_CPACR_CPN(11, CPAC_FULL))
   mcr   CP15_CPACR(r0)
@@ -99,8 +102,9 @@ entry:
   bne   ap_wait
 
   // BSP calls main().
-  ldr   r1, =main
-  blx   r1
+  mov   r0, r5
+  ldr   r2, =main
+  blx   r2
   b     .
 
 ap_wait:

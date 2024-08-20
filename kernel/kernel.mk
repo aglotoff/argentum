@@ -66,11 +66,13 @@ KERNEL_SRCFILES :=	\
 	kernel/process/signal.c \
 	kernel/process/vmspace.c \
 	kernel/cprintf.c \
+	kernel/mach.c \
 	kernel/entry.S \
 	kernel/kdebug.c \
 	kernel/monitor.c \
 	kernel/pipe.c \
 	kernel/ptimer.c \
+	kernel/sp804.c \
 	kernel/syscall.c \
 	kernel/trapentry.S \
 	kernel/trap.c \
@@ -141,6 +143,7 @@ $(OBJ)/kernel/kernel: $(KERNEL_OBJFILES) $(KERNEL_BINFILES) kernel/kernel.ld
 		-b binary $(KERNEL_BINFILES)
 	$(V)$(OBJDUMP) -S $@ > $@.asm
 	$(V)$(NM) -n $@ > $@.sym
+	$(V)$(OBJCOPY) -O binary $@ $@.bin
 
 all-kernel: $(OBJ)/kernel/kernel
 

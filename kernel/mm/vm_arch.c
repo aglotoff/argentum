@@ -24,7 +24,7 @@
  */
 
 #define MAKE_L1_SECTION(pa, ap) \
-  ((pa) | L1_DESC_TYPE_SECT | L1_DESC_SECT_AP(ap))
+  ((pa) | L1_DESC_TYPE_SECT | L1_DESC_SECT_AP(ap) | L1_DESC_SECT_B | L1_DESC_SECT_C)
 
 // Initial translation table to "get off the ground"
 __attribute__((__aligned__(L1_TABLE_SIZE))) l1_desc_t

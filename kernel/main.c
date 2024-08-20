@@ -25,6 +25,7 @@
 #include <kernel/mailbox.h>
 #include <kernel/net.h>
 #include <kernel/semaphore.h>
+#include <kernel/mach.h>
 
 static void mp_main(void);
 
@@ -40,86 +41,18 @@ struct utsname utsname = {
   .machine = "arm",
 };
 
-char test_stacks[3][PAGE_SIZE];
-struct KThread *test1, *test2, *test3;
-
-struct KMutex *test_mux;
-
-void
-test_func1(void *unused)
-{
-  (void) unused;
-
-  cprintf("1: Starting\n");
-  cprintf("1: Acquiring mutex\n");
-
-  k_mutex_lock(test_mux);
-
-  cprintf("1: Mutex acquired\n");
-
-  k_thread_yield();
-
-  cprintf("1: Releasing mutex\n");
-
-  k_mutex_unlock(test_mux);
-
-  cprintf("1: Mutex released\n");
-
-  k_thread_exit();
-}
-
-void
-test_func2(void *unused)
-{
-  (void) unused;
-
-  cprintf("2: Starting\n");
-  k_thread_resume(test1);
-
-  for (;;) {
-    k_thread_yield();
-  }
-}
-
-void
-test_func3(void *unused)
-{
-  (void) unused;
-
-  cprintf("3: Starting\n");
-  cprintf("3: Acquiring mutex\n");
-
-  k_mutex_lock(test_mux);
-
-  cprintf("3: Mutex acquired\n");
-
-  k_thread_resume(test2);
-  k_thread_yield();
-
-  cprintf("3: Releasing mutex\n");
-
-  k_mutex_unlock(test_mux);
-
-  cprintf("3: Mutex released\n");
-
-  k_thread_exit();
-}
-
 /**
  * Main kernel function.
  *
  * The bootstrap processor starts running C code here.
  */
-void main(void)
+void main(uintptr_t r1)
 {
-  // Begin the memory manager initialization
-  page_init_low(); // Physical page allocator (lower memory)
-  vm_arch_init();       // Memory management unit and kernel mappings
+  mach_type = r1;
 
-  // Now we can initialize the console to print messages during initialization
-  
-
-  // Complete the memory manager initialization
+  // Initialize the memory manager
+  page_init_low();  // Physical page allocator (lower memory)
+  vm_arch_init();   // Memory management unit and kernel mappings
   page_init_high(); // Physical page allocator (higher memory)
 
   // Initialize core services
@@ -129,35 +62,22 @@ void main(void)
   k_mailbox_system_init();
   k_sched_init();
 
-  vm_space_init();  // Virtual memory manager
-
+  vm_space_init();      // Virtual memory manager
   interrupt_init();     // Interrupt controller
 
   // Initialize the device drivers
-
-  console_init(); // Console driver
-  rtc_init(); // Real-time clock
-  sd_init();  // MultiMedia Card
-  eth_init(); // Ethernet
+  console_init();       // Console
+  rtc_init();           // Real-time clock
+  sd_init();            // MultiMedia Card
+  eth_init();           // Ethernet
 
   // Initialize the remaining kernel services
-  buf_init();     // Buffer cache
-  file_init();    // File table
-  
-  pipe_init();    // Pipes subsystem
-  process_init(); // Process table
+  buf_init();           // Buffer cache
+  file_init();          // File table
+  pipe_init();          // Pipes
+  process_init();       // Process table
   signal_init_system(); // Signals
-  net_init();     // Network
-
-  // test_mux = k_mutex_create("test");
-
-  // test1 = k_thread_create(NULL, test_func1, NULL, 1);
-  // test2 = k_thread_create(NULL, test_func2, NULL, 2);
-  // test3 = k_thread_create(NULL, test_func3, NULL, 3);
-
-  // k_thread_resume(test1);
-  
-  // k_thread_resume(test3);
+  net_init();           // Networking
 
   // Unblock other CPUs
   bsp_started = 1;
