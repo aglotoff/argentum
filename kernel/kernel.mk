@@ -44,6 +44,7 @@ KERNEL_SRCFILES :=	\
 	kernel/drivers/sd/pl180.c \
 	kernel/drivers/sd/sd.c \
 	kernel/drivers/eth.c \
+	kernel/mach/realview/realview.c \
 	kernel/gic.c \
 	kernel/fs/ext2_bitmap.c \
 	kernel/fs/ext2_block_alloc.c \

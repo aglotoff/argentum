@@ -46,9 +46,9 @@ struct utsname utsname = {
  *
  * The bootstrap processor starts running C code here.
  */
-void main(uintptr_t r1)
+void main(uintptr_t mach_type)
 {
-  mach_type = r1;
+  mach_init(mach_type);
 
   // Initialize the memory manager
   page_init_low();  // Physical page allocator (lower memory)

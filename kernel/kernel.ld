@@ -23,6 +23,15 @@ SECTIONS
     *(.rodata*)
   }
 
+  .mach (READONLY) : AT(ADDR(.mach) - 0x80000000) {
+    PROVIDE(__mach_begin__ = .);
+    *(.mach*)
+    PROVIDE(__mach_end__ = .);
+
+    /* Force the linker to allocate space for this section */
+    BYTE(0)
+  }
+
   /* Include debugging information in kernel memory */
   .debug : AT(ADDR(.debug) - 0x80000000) {
     PROVIDE(__debug_info_begin__ = .);

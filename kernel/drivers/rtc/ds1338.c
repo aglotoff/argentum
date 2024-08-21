@@ -71,7 +71,7 @@ ds1338_get_time(struct DS1338 *ds1338, struct tm *tm)
   uint8_t buf[7];
 
   // Read the contents of the time and calendar registers
-  sbcon_read(ds1338->i2c, ds1338->address, SECONDS, buf, 7);
+  sbcon_read(ds1338->i2c, ds1338->address, SECONDS, buf, sizeof buf);
 
   sec = bcd2bin(buf[SECONDS] & 0x7F);
   min = bcd2bin(buf[MINUTES] & 0xFF);

@@ -1,7 +1,11 @@
 # Argentum
 
-Toy UNIX-like operating system written for RealView Platform Baseboard Explore
-for Cortex-A9.
+Toy UNIX-like operating system written for ARMv7.
+
+The project is under active development and currently runs only in the QEMU
+emulator. The supported boards are:
+- RealView Platform Baseboard Explore for Cortex-A9 (`realview-pbx-a9`)
+- Realview Platform Baseboard for Cortex-A8 (`realview-pb-a8`)
 
 ![screenshot](./screenshot.png)
 

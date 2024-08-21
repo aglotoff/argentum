@@ -2,27 +2,7 @@
 #include <string.h>
 
 #include <kernel/drivers/rtc.h>
-#include <kernel/mm/memlayout.h>
-#include <kernel/vm.h>
-#include <kernel/spinlock.h>
-
-#include "ds1338.h"
-#include "sbcon.h"
-
-/*******************************************************************************
- * Time-of-Year RTC driver.
- * 
- * PBX-A9 has two serial bus inerfaces (SBCon0 and SBCon1). SBCon0 provides
- * access to the Maxim DS1338 RTC on the baseboard.
- ******************************************************************************/
-
-// RTC device address on the I2C bus
-#define RTC_ADDR    0xD0            
-
-static struct SBCon sbcon0;
-static struct DS1338 rtc;
-
-static struct KSpinLock  rtc_lock;
+#include <kernel/mach.h>
 
 /**
  * Initialize the RTC driver.
@@ -30,9 +10,7 @@ static struct KSpinLock  rtc_lock;
 void
 rtc_init(void)
 {
-  sbcon_init(&sbcon0, PA2KVA(PHYS_CON0));
-  ds1338_init(&rtc, &sbcon0, RTC_ADDR);
-  k_spinlock_init(&rtc_lock, "rtc");
+  mach_current->rtc_init();
 }
 
 /**
@@ -43,13 +21,7 @@ rtc_init(void)
 time_t
 rtc_get_time(void)
 {
-  struct tm tm;
-
-  k_spinlock_acquire(&rtc_lock);
-  ds1338_get_time(&rtc, &tm);
-  k_spinlock_release(&rtc_lock);
-
-  return mktime(&tm);
+  return mach_current->rtc_get_time();
 }
 
 /**
@@ -60,7 +32,5 @@ rtc_get_time(void)
 void
 rtc_set_time(time_t time)
 {
-  k_spinlock_acquire(&rtc_lock);
-  ds1338_get_time(&rtc, gmtime(&time));
-  k_spinlock_release(&rtc_lock);
+  mach_current->rtc_set_time(time);
 }

@@ -201,57 +201,57 @@ ipi_irq(void *)
 void
 interrupt_ipi(void)
 {
-  mach[mach_type]->interrupt_ipi();
+  mach_current->interrupt_ipi();
 }
 
 static int
-irq_id(void)
+interrupt_id(void)
 {
-  return mach[mach_type]->irq_id();
+  return mach_current->interrupt_id();
 }
 
 void
 interrupt_enable(int irq, int cpu)
 {
-  mach[mach_type]->interrupt_enable(irq, cpu);
+  mach_current->interrupt_enable(irq, cpu);
 }
 
 void
 interrupt_mask(int irq)
 {
-  mach[mach_type]->interrupt_mask(irq);
+  mach_current->interrupt_mask(irq);
 }
 
 void
 interrupt_unmask(int irq)
 {
-  mach[mach_type]->interrupt_unmask(irq);
+  mach_current->interrupt_unmask(irq);
 }
 
 void
 interrupt_init(void)
 {
-  mach[mach_type]->interrupt_init();
-  mach[mach_type]->timer_init();
+  mach_current->interrupt_init();
+  mach_current->timer_init();
 }
 
 void
 interrupt_init_percpu(void)
 {
-  mach[mach_type]->interrupt_init_percpu();
-  mach[mach_type]->timer_init_percpu();
+  mach_current->interrupt_init_percpu();
+  mach_current->timer_init_percpu();
 }
 
 static void
 irq_eoi(int irq)
 {
-  mach[mach_type]->interrupt_eoi(irq);
+  mach_current->interrupt_eoi(irq);
 }
 
 void
 interrupt_dispatch(void)
 {
-  int irq = irq_id();
+  int irq = interrupt_id();
 
   k_irq_begin();
 
