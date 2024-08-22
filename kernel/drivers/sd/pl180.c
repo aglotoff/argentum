@@ -1,6 +1,5 @@
-#include <kernel/sd.h>
-
-#include "pl180.h"
+#include <kernel/drivers/sd.h>
+#include <kernel/drivers/pl180.h>
 
 /*******************************************************************************
  * ARM PrimeCell Multimedia Card Interface (PL180) driver.

@@ -1,4 +1,4 @@
-#include "sbcon.h"
+#include <kernel/drivers/sbcon.h>
 
 /*******************************************************************************
  * Two-wire serial bus interface driver.

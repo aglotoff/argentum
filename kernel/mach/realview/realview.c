@@ -1,14 +1,23 @@
 #include <kernel/mach.h>
-#include <kernel/vmspace.h>
+#include <kernel/mm/memlayout.h>
 #include <kernel/trap.h>
 #include <kernel/irq.h>
 #include <kernel/spinlock.h>
+#include <kernel/fs/buf.h>
 
-#include "../../drivers/rtc/ds1338.h"
-#include "../../drivers/rtc/sbcon.h"
-#include "../../gic.h"
-#include "../../ptimer.h"
-#include "../../sp804.h"
+#include <kernel/drivers/ds1338.h>
+#include <kernel/drivers/sbcon.h>
+#include <kernel/drivers/gic.h>
+#include <kernel/drivers/ptimer.h>
+#include <kernel/drivers/sp804.h>
+#include <kernel/drivers/pl180.h>
+#include <kernel/drivers/sd.h>
+
+// #define PHYS_GICC         0x1F000100    ///< Interrupt interface
+#define PHYS_PTIMER       0x1F000600    ///< Private timer
+// #define PHYS_GICD         0x1F001000    ///< Distributor
+
+#define TICK_RATE     100U          // Desired timer events rate, in Hz
 
 static struct Gic gic;
 static struct PTimer ptimer;
@@ -140,7 +149,7 @@ realview_pb_a8_timer_irq(void *arg)
 static void
 realview_pb_a8_timer_init(void)
 {
-  sp804_init(&timer01, PA2KVA(0x10011000));
+  sp804_init(&timer01, PA2KVA(0x10011000), TICK_RATE);
   k_irq_attach(36, realview_pb_a8_timer_irq, NULL);
 }
 
@@ -148,6 +157,44 @@ static void
 realview_pb_a8_timer_init_percpu(void)
 {
 
+}
+
+struct PL180 mmci;
+
+// The queue of pending buffer requests
+static struct SD sd;
+
+/**
+ * Initialize the SD card driver.
+ * 
+ * @return 0 on success, a non-zero value on error.
+ */
+int
+realview_storage_init(void)
+{
+  // Power on
+  pl180_init(&mmci, PA2KVA(PHYS_MMCI));
+  sd_init(&sd, &mmci, IRQ_MCIA);
+  return 0;
+}
+
+/**
+ * Add buffer to the request queue and put the current process to sleep until
+ * the operation is completed.
+ * 
+ * @param buf The buffer to be processed.
+ */
+void
+realview_storage_request(struct Buf *buf)
+{
+  if (!k_mutex_holding(&buf->mutex))
+    panic("buf not locked");
+  if ((buf->flags & (BUF_DIRTY | BUF_VALID)) == BUF_VALID)
+    panic("nothing to do");
+  if (buf->dev != 0)
+    panic("dev must be 0, %d given", buf->dev);
+
+  sd_request(&sd, buf);
 }
 
 MACH_DEFINE(realview_pb_a8) {
@@ -168,6 +215,9 @@ MACH_DEFINE(realview_pb_a8) {
   .rtc_init              = realview_rtc_init,
   .rtc_get_time          = realview_rtc_get_time,
   .rtc_set_time          = realview_rtc_set_time,
+
+  .storage_init          = realview_storage_init,
+  .storage_request       = realview_storage_request,
 };
 
 static int
@@ -180,14 +230,15 @@ realview_pbx_a9_timer_irq(void *arg)
 static void
 realview_pbx_a9_timer_init(void)
 {
-  ptimer_init(&ptimer, PA2KVA(0x1F000600));
+  ptimer_init(&ptimer, PA2KVA(PHYS_PTIMER));
+  ptimer_init_percpu(&ptimer, TICK_RATE);
   k_irq_attach(29, realview_pbx_a9_timer_irq, NULL);
 }
 
 static void
 realview_pbx_a9_timer_init_percpu(void)
 {
-  ptimer_init_percpu(&ptimer);
+  ptimer_init_percpu(&ptimer, TICK_RATE);
   interrupt_unmask(29);
 }
 
@@ -209,4 +260,7 @@ MACH_DEFINE(realview_pbx_a9) {
   .rtc_init              = realview_rtc_init,
   .rtc_get_time          = realview_rtc_get_time,
   .rtc_set_time          = realview_rtc_set_time,
+
+  .storage_init          = realview_storage_init,
+  .storage_request       = realview_storage_request,
 };

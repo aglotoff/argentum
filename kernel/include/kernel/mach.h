@@ -9,6 +9,8 @@
 
 #define MACH_MAX  5108
 
+struct Buf;
+
 struct Machine {
   uint32_t type;
 
@@ -27,6 +29,9 @@ struct Machine {
   void   (*rtc_init)(void);
   time_t (*rtc_get_time)(void);
   void   (*rtc_set_time)(time_t);
+
+  int    (*storage_init)(void);
+  void   (*storage_request)(struct Buf *);
 };
 
 extern struct Machine *mach_current;

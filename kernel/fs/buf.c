@@ -1,7 +1,7 @@
 #include <kernel/assert.h>
 
 #include <kernel/cprintf.h>
-#include <kernel/sd.h>
+#include <kernel/storage.h>
 #include <kernel/fs/buf.h>
 #include <kernel/list.h>
 #include <kernel/object_pool.h>
@@ -204,7 +204,7 @@ buf_read(unsigned block_no, size_t block_size, dev_t dev)
   // If needed, read the block from the device.
   // TODO: check for I/O errors
   if (!(buf->flags & BUF_VALID))
-    sd_request(buf);
+    storage_request(buf);
 
   assert(buf->flags & BUF_VALID);
 
@@ -225,7 +225,7 @@ buf_write(struct Buf *buf)
     panic("not holding buf->mutex");
 
   // TODO: check for I/O errors
-  sd_request(buf);
+  storage_request(buf);
 }
 
 /**

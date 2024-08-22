@@ -8,7 +8,7 @@ struct PTimer {
 };
 
 void     ptimer_init(struct PTimer*, void *base);
-void     ptimer_init_percpu(struct PTimer *);
+void     ptimer_init_percpu(struct PTimer *, int);
 void     ptimer_eoi(struct PTimer *);
 
 #endif  // !__KERNEL_PTIMER_H__

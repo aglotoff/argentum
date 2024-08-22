@@ -43,9 +43,12 @@ KERNEL_SRCFILES :=	\
 	kernel/drivers/rtc/rtc.c \
 	kernel/drivers/sd/pl180.c \
 	kernel/drivers/sd/sd.c \
+	kernel/drivers/storage.c \
 	kernel/drivers/eth.c \
+	kernel/drivers/gic.c \
+	kernel/drivers/ptimer.c \
+	kernel/drivers/sp804.c \
 	kernel/mach/realview/realview.c \
-	kernel/gic.c \
 	kernel/fs/ext2_bitmap.c \
 	kernel/fs/ext2_block_alloc.c \
 	kernel/fs/ext2_inode_alloc.c \
@@ -72,8 +75,6 @@ KERNEL_SRCFILES :=	\
 	kernel/kdebug.c \
 	kernel/monitor.c \
 	kernel/pipe.c \
-	kernel/ptimer.c \
-	kernel/sp804.c \
 	kernel/syscall.c \
 	kernel/trapentry.S \
 	kernel/trap.c \

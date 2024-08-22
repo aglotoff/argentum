@@ -71,10 +71,11 @@ void interrupt_enable(int, int);
 
 struct ISRThread {
   struct KSemaphore semaphore;
-  void (*handler)(void);
+  void (*handler)(void *);
+  void *handler_arg;
 };
 
-void interrupt_attach_thread(struct ISRThread *, int, void (*)(void));
+void interrupt_attach_thread(struct ISRThread *, int, void (*)(void *), void *);
 
 int timer_irq(void *);
 int ipi_irq(void *);

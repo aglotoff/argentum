@@ -10,7 +10,7 @@ struct Sp804 {
   volatile uint32_t *base;    ///< Memory base address
 };
 
-int  sp804_init(struct Sp804 *, void *);
+int  sp804_init(struct Sp804 *, void *, int);
 void sp804_eoi(struct Sp804 *);
 
 #endif  // !__KERNEL_SP804_H__

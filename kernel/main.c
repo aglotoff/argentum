@@ -21,7 +21,7 @@
 #include <kernel/vmspace.h>
 #include <kernel/pipe.h>
 #include <kernel/process.h>
-#include <kernel/sd.h>
+#include <kernel/storage.h>
 #include <kernel/mailbox.h>
 #include <kernel/net.h>
 #include <kernel/semaphore.h>
@@ -68,7 +68,7 @@ void main(uintptr_t mach_type)
   // Initialize the device drivers
   console_init();       // Console
   rtc_init();           // Real-time clock
-  sd_init();            // MultiMedia Card
+  storage_init();            // MultiMedia Card
   eth_init();           // Ethernet
 
   // Initialize the remaining kernel services

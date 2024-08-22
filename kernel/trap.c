@@ -285,12 +285,12 @@ interrupt_thread(void *arg)
     if (k_semaphore_get(&isr->semaphore) < 0)
       panic("k_semaphore_get");
 
-    isr->handler();
+    isr->handler(isr->handler_arg);
   }
 }
 
 void
-interrupt_attach_thread(struct ISRThread *isr, int irq, void (*handler)(void))
+interrupt_attach_thread(struct ISRThread *isr, int irq, void (*handler)(void *), void *handler_arg)
 {
   struct KThread *thread;
 
@@ -298,7 +298,8 @@ interrupt_attach_thread(struct ISRThread *isr, int irq, void (*handler)(void))
     panic("Cannot create IRQ thread");
 
   k_semaphore_init(&isr->semaphore, 0);
-  isr->handler = handler;
+  isr->handler     = handler;
+  isr->handler_arg = handler_arg;
 
   k_irq_attach(irq, interrupt_common, isr);
 

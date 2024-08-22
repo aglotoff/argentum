@@ -14,7 +14,7 @@ static struct Pl011 uart0;
 
 static struct ISRThread serial_isr;
 
-static void serial_irq_thread(void);
+static void serial_irq_thread(void *);
 
 /**
  * Initialize the serial console driver.
@@ -23,7 +23,7 @@ void
 serial_init(void)
 {
   pl011_init(&uart0, PA2KVA(PHYS_UART0), UART_CLOCK, UART_BAUD_RATE);
-  interrupt_attach_thread(&serial_isr, IRQ_UART0, serial_irq_thread);
+  interrupt_attach_thread(&serial_isr, IRQ_UART0, serial_irq_thread, NULL);
 }
 
 /**
@@ -51,7 +51,7 @@ serial_getc(void)
  * Handle interrupt from the serial console.
  */
 static void
-serial_irq_thread(void)
+serial_irq_thread(void *)
 {
   char buf[2];
   int c;

@@ -103,7 +103,7 @@ static volatile uint32_t *eth;
 #define MAC_MII_DATA        7
 #define MAC_FLOW            8
 
-static void eth_irq_thread(void);
+static void eth_irq_thread(void *);
 
 static struct ISRThread eth_isr;
 
@@ -241,7 +241,7 @@ eth_init(void)
   // Enable interrupts
   eth[INT_EN] |= RSFL_INT;
 
-  interrupt_attach_thread(&eth_isr, IRQ_ETH, eth_irq_thread);
+  interrupt_attach_thread(&eth_isr, IRQ_ETH, eth_irq_thread, NULL);
 }
 
 static void
@@ -287,7 +287,7 @@ eth_rx(void)
 }
 
 static void
-eth_irq_thread(void)
+eth_irq_thread(void *)
 {
   uint32_t status;
 
