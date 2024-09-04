@@ -1,6 +1,6 @@
 // See the PrimeCell UART (PL011) Technical Reference Manual
 
-#include "pl011.h"
+#include <kernel/drivers/pl011.h>
 
 // UART registers, divided by 4 for use as uint32_t[] indicies
 #define UARTDR            (0x000 / 4)   // Data Register

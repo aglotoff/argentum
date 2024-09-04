@@ -4,6 +4,7 @@
 #include <kernel/irq.h>
 #include <kernel/spinlock.h>
 #include <kernel/fs/buf.h>
+#include <kernel/page.h>
 
 #include <kernel/drivers/ds1338.h>
 #include <kernel/drivers/sbcon.h>
@@ -12,6 +13,14 @@
 #include <kernel/drivers/sp804.h>
 #include <kernel/drivers/pl180.h>
 #include <kernel/drivers/sd.h>
+#include <kernel/drivers/ps2.h>
+#include <kernel/drivers/kbd.h>
+#include <kernel/drivers/pl050.h>
+#include <kernel/drivers/pl011.h>
+#include <kernel/drivers/uart.h>
+#include <kernel/drivers/pl111.h>
+#include <kernel/drivers/display.h>
+#include <kernel/drivers/lan9118.h>
 
 // #define PHYS_GICC         0x1F000100    ///< Interrupt interface
 #define PHYS_PTIMER       0x1F000600    ///< Private timer
@@ -160,30 +169,16 @@ realview_pb_a8_timer_init_percpu(void)
 }
 
 struct PL180 mmci;
-
-// The queue of pending buffer requests
 static struct SD sd;
 
-/**
- * Initialize the SD card driver.
- * 
- * @return 0 on success, a non-zero value on error.
- */
 int
 realview_storage_init(void)
 {
-  // Power on
   pl180_init(&mmci, PA2KVA(PHYS_MMCI));
   sd_init(&sd, &mmci, IRQ_MCIA);
   return 0;
 }
 
-/**
- * Add buffer to the request queue and put the current process to sleep until
- * the operation is completed.
- * 
- * @param buf The buffer to be processed.
- */
 void
 realview_storage_request(struct Buf *buf)
 {
@@ -195,6 +190,124 @@ realview_storage_request(struct Buf *buf)
     panic("dev must be 0, %d given", buf->dev);
 
   sd_request(&sd, buf);
+}
+
+// PBX-A9 has two KMIs: KMI0 is used for the keyboard and KMI1 is used for the
+// mouse.
+static struct Pl050 kmi0;    
+static struct PS2 ps2;
+
+int
+realview_kbd_init(void)
+{
+  pl050_init(&kmi0, PA2KVA(PHYS_KMI0));
+  ps2_init(&ps2, &kmi0, IRQ_KMI0);
+  return 0;
+}
+
+int
+realview_kbd_getc(void)
+{
+  return ps2_kbd_getc(&ps2);
+}
+
+#define UART_CLOCK        24000000U     // UART clock rate, in Hz
+#define UART_BAUD_RATE    115200        // Required baud rate
+
+// Use UART0 as serial debug console.
+static struct Uart uart0;
+static struct Pl011 pl011;
+
+int
+realview_serial_init(void)
+{
+  pl011_init(&pl011, PA2KVA(0x10009000), UART_CLOCK, UART_BAUD_RATE);
+  uart_init(&uart0, &pl011, IRQ_UART0);
+  return 0;
+}
+
+int
+realview_serial_getc(void)
+{
+  return uart_getc(&uart0);
+}
+
+int
+realview_serial_putc(int c)
+{
+  return uart_putc(&uart0, c);
+}
+
+static struct Display display;
+static struct Pl111 lcd;
+
+int
+realview_display_init(void)
+{
+  struct Page *page;
+
+  // Allocate the frame buffer.
+  if ((page = page_alloc_block(8, PAGE_ALLOC_ZERO, PAGE_TAG_FB)) == NULL)
+    panic("cannot allocate framebuffer");
+
+  page->ref_count++;
+
+  pl111_init(&lcd, PA2KVA(PHYS_LCD), page2pa(page), PL111_RES_VGA);
+
+  display_init(&display, page2kva(page));
+
+  return 0;
+}
+
+void
+realview_display_update(struct Console *console)
+{
+  display_update(&display, console);
+}
+
+void
+realview_display_flush(struct Console *console)
+{
+  display_flush(&display, console);
+}
+
+void
+realview_display_update_cursor(struct Console *console)
+{
+  display_update_cursor(&display, console);
+}
+
+void
+realview_display_erase(struct Console *console, unsigned from, unsigned to)
+{
+  display_erase(&display, console, from, to);
+}
+
+void
+realview_display_scroll_down(struct Console *console, unsigned n)
+{
+  display_scroll_down(&display, console, n);
+}
+
+void
+realview_display_draw_char_at(struct Console *console, unsigned n)
+{
+  display_draw_char_at(&display, console, n);
+}
+
+static struct Lan9118 lan9118;
+
+int
+realview_eth_init(void)
+{
+  lan9118_init(&lan9118);
+  return 0;
+}
+
+void
+realview_eth_write(const void *buf, size_t n)
+{
+  lan9118_write(&lan9118, buf, n);
 }
 
 MACH_DEFINE(realview_pb_a8) {
@@ -218,6 +331,24 @@ MACH_DEFINE(realview_pb_a8) {
 
   .storage_init          = realview_storage_init,
   .storage_request       = realview_storage_request,
+
+  .kbd_init              = realview_kbd_init,
+  .kbd_getc              = realview_kbd_getc,
+
+  .serial_init           = realview_serial_init,
+  .serial_getc           = realview_serial_getc,
+  .serial_putc           = realview_serial_putc,
+
+  .display_init          = realview_display_init,
+  .display_update        = realview_display_update,
+  .display_flush         = realview_display_flush,
+  .display_update_cursor = realview_display_update_cursor,
+  .display_erase         = realview_display_erase,
+  .display_scroll_down   = realview_display_scroll_down,
+  .display_draw_char_at  = realview_display_draw_char_at,
+
+  .eth_init              = realview_eth_init,
+  .eth_write             = realview_eth_write,
 };
 
 static int
@@ -263,4 +394,22 @@ MACH_DEFINE(realview_pbx_a9) {
 
   .storage_init          = realview_storage_init,
   .storage_request       = realview_storage_request,
+
+  .kbd_init              = realview_kbd_init,
+  .kbd_getc              = realview_kbd_getc,
+
+  .serial_init           = realview_serial_init,
+  .serial_getc           = realview_serial_getc,
+  .serial_putc           = realview_serial_putc,
+
+  .display_init          = realview_display_init,
+  .display_update        = realview_display_update,
+  .display_flush         = realview_display_flush,
+  .display_update_cursor = realview_display_update_cursor,
+  .display_erase         = realview_display_erase,
+  .display_scroll_down   = realview_display_scroll_down,
+  .display_draw_char_at  = realview_display_draw_char_at,
+
+  .eth_init              = realview_eth_init,
+  .eth_write             = realview_eth_write,
 };

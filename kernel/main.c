@@ -6,7 +6,7 @@
 #include <kernel/cprintf.h>
 #include <kernel/cpu.h>
 #include <kernel/drivers/console.h>
-#include <kernel/drivers/eth.h>
+#include <kernel/drivers/lan9118.h>
 #include <kernel/drivers/rtc.h>
 #include <kernel/fs/buf.h>
 #include <kernel/fs/file.h>
@@ -68,8 +68,8 @@ void main(uintptr_t mach_type)
   // Initialize the device drivers
   console_init();       // Console
   rtc_init();           // Real-time clock
-  storage_init();            // MultiMedia Card
-  eth_init();           // Ethernet
+  mach_current->storage_init();
+  mach_current->eth_init();
 
   // Initialize the remaining kernel services
   buf_init();           // Buffer cache

@@ -1,7 +1,7 @@
 // See ARM PrimeCell PS2 Keyboard/Mouse Interface (PL050) Technical Reference
 // Manual.
 
-#include "pl050.h"
+#include <kernel/drivers/pl050.h>
 
 // KMI registers, shifted right by 2 bits for use as uint32_t[] indices
 #define KMICR             (0x000 / 4)   // Control register

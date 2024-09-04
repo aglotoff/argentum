@@ -6,14 +6,19 @@
 #endif
 
 /**
- * @file include/drivers/eth.h
+ * @file include/drivers/lan9118.h
  * 
  * Ethernet driver.
  */
 
 #include <stddef.h>
+#include <stdint.h>
 
-void eth_init(void);
-void eth_write(const void *, size_t);
+struct Lan9118 {
+  volatile uint32_t *base;
+};
+
+void lan9118_init(struct Lan9118 *);
+void lan9118_write(struct Lan9118 *, const void *, size_t);
 
 #endif  // !__KERNEL_INCLUDE_KERNEL_DRIVERS_ETH_H__

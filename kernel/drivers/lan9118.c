@@ -3,7 +3,7 @@
 
 #include <kernel/cpu.h>
 #include <kernel/cprintf.h>
-#include <kernel/drivers/eth.h>
+#include <kernel/drivers/lan9118.h>
 #include <kernel/mm/memlayout.h>
 #include <kernel/page.h>
 #include <kernel/irq.h>
@@ -86,8 +86,6 @@
 #define E2P_CMD             (0xB0 / 4)    // EEPROM command
 #define E2P_DATA            (0xB4 / 4)    // EEPROM Data
 
-static volatile uint32_t *eth;
-
 #define MAC_CR              1
 #define   MAC_CR_RXEN         (1 << 2)
 #define   MAC_CR_TXEN         (1 << 3)
@@ -109,32 +107,32 @@ static struct ISRThread eth_isr;
 
 // Read from a MAC register
 uint32_t
-mac_read(uint8_t reg)
+mac_read(struct Lan9118 *lan9118, uint8_t reg)
 {
   uint32_t cmd, data;
   
   cmd = (reg & 0xFF) | MAC_CSR_CMD_BUSY | MAC_CSR_CMD_RNW;
-  eth[MAC_CSR_CMD] = cmd;
+  lan9118->base[MAC_CSR_CMD] = cmd;
 
-  while (eth[MAC_CSR_CMD] & MAC_CSR_CMD_BUSY)
+  while (lan9118->base[MAC_CSR_CMD] & MAC_CSR_CMD_BUSY)
     ;
 
-  data = eth[MAC_CSR_DATA];
+  data = lan9118->base[MAC_CSR_DATA];
   return data;
 }
 
 // Write to a MAC register
 void
-mac_write(uint8_t reg, uint32_t data)
+mac_write(struct Lan9118 *lan9118, uint8_t reg, uint32_t data)
 {
   uint32_t cmd;
   
   cmd = (reg & 0xFF) | MAC_CSR_CMD_BUSY;
 
-  eth[MAC_CSR_DATA] = data;
-  eth[MAC_CSR_CMD]  = cmd;
+  lan9118->base[MAC_CSR_DATA] = data;
+  lan9118->base[MAC_CSR_CMD]  = cmd;
 
-  while (eth[MAC_CSR_CMD] & MAC_CSR_CMD_BUSY)
+  while (lan9118->base[MAC_CSR_CMD] & MAC_CSR_CMD_BUSY)
     ;
 }
 
@@ -153,63 +151,63 @@ mac_write(uint8_t reg, uint32_t data)
 
 // Read from a PHY register
 uint16_t
-eth_phy_read(uint8_t reg)
+eth_phy_read(struct Lan9118 *lan9118, uint8_t reg)
 {
   uint32_t cmd, data;
 
   cmd = (1 << 11) | ((reg & 0x1F) << 6);
-  mac_write(MAC_MII_ACC, cmd);
+  mac_write(lan9118, MAC_MII_ACC, cmd);
 
-  while (mac_read(MAC_MII_ACC) & MAC_MII_ACC_BZY)
+  while (mac_read(lan9118, MAC_MII_ACC) & MAC_MII_ACC_BZY)
     ;
 
-  data = mac_read(MAC_MII_DATA);
+  data = mac_read(lan9118, MAC_MII_DATA);
   return data;
 }
 
 // Write to a PHY register
 void
-eth_phy_write(uint8_t reg, uint16_t data)
+eth_phy_write(struct Lan9118 *lan9118, uint8_t reg, uint16_t data)
 {
   uint32_t cmd;
   
   cmd = (1 << 11) | ((reg & 0x1F) << 6) | MAC_MII_ACC_WNR;
 
-  mac_write(MAC_MII_DATA, data);
-  mac_write(MAC_MII_ACC, cmd);
+  mac_write(lan9118, MAC_MII_DATA, data);
+  mac_write(lan9118, MAC_MII_ACC, cmd);
 
-  while (mac_read(MAC_MII_ACC) & MAC_MII_ACC_BZY)
+  while (mac_read(lan9118, MAC_MII_ACC) & MAC_MII_ACC_BZY)
     ;
 }
 
 uint8_t mac_addr[6];
 
 void
-eth_init(void)
+lan9118_init(struct Lan9118 *lan9118)
 {
   uint32_t mac_addr_lo, mac_addr_hi, mac_cr;
 
-  eth = (volatile uint32_t *) PA2KVA(PHYS_ETH);
+  lan9118->base = (volatile uint32_t *) PA2KVA(PHYS_ETH);
 
   // Write BYTE_TEST to wake chip up in case it is in sleep mode.
-  eth[BYTE_TEST] = 0;
+  lan9118->base[BYTE_TEST] = 0;
 
   // Software reset.
-  eth[HW_CFG] = HW_CFG_SRST;
-  while (eth[HW_CFG] & HW_CFG_SRST)
+  lan9118->base[HW_CFG] = HW_CFG_SRST;
+  while (lan9118->base[HW_CFG] & HW_CFG_SRST)
     ;
 
   // Enable PME_EN & PME_POL to active low
-  eth[PMT_CTRL] |= PMT_CTRL_PME_EN;
+  lan9118->base[PMT_CTRL] |= PMT_CTRL_PME_EN;
 
   // Disable all interrupts, clear any pending status, and configure IRQ_CFG.
-  eth[INT_EN]  = 0;
-  eth[INT_STS] = 0xFFFFFFFF;
-  eth[IRQ_CFG] = IRQ_EN | IRQ_POL | IRQ_TYPE;
+  lan9118->base[INT_EN]  = 0;
+  lan9118->base[INT_STS] = 0xFFFFFFFF;
+  lan9118->base[IRQ_CFG] = IRQ_EN | IRQ_POL | IRQ_TYPE;
 
   // Read the mac address
-  mac_addr_lo = mac_read(MAC_ADDRL);
-  mac_addr_hi = mac_read(MAC_ADDRH);
+  mac_addr_lo = mac_read(lan9118, MAC_ADDRL);
+  mac_addr_hi = mac_read(lan9118, MAC_ADDRH);
   mac_addr[0] = mac_addr_lo & 0xFF;
   mac_addr[1] = (mac_addr_lo >> 8) & 0xFF;
   mac_addr[2] = (mac_addr_lo >> 16) & 0xFF;
@@ -218,43 +216,43 @@ eth_init(void)
   mac_addr[5] = (mac_addr_hi >> 8) & 0xFF;
 
   // Reset the PHY
-  eth_phy_write(PHY_BCR, eth_phy_read(PHY_BCR) | PHY_BCR_RESET);
-  while (eth_phy_read(PHY_BCR) & PHY_BCR_RESET)
+  eth_phy_write(lan9118, PHY_BCR, eth_phy_read(lan9118, PHY_BCR) | PHY_BCR_RESET);
+  while (eth_phy_read(lan9118, PHY_BCR) & PHY_BCR_RESET)
     ;
 
   // Setup TLI store-and-forward, and preserve TxFifo size
-  eth[HW_CFG] = (eth[HW_CFG] & ((0xF << 16) | 0xFFF)) | HW_CFG_MBO;
+  lan9118->base[HW_CFG] = (lan9118->base[HW_CFG] & ((0xF << 16) | 0xFFF)) | HW_CFG_MBO;
   
   // Set transmit configuration
-  eth[TX_CFG] = TX_CFG_TX_ON;
+  lan9118->base[TX_CFG] = TX_CFG_TX_ON;
 
   // Set receive configuration
-  eth[RX_CFG] = 0x000;
+  lan9118->base[RX_CFG] = 0x000;
 
   // Setup MAC for TX and RX
-  mac_cr = mac_read(MAC_CR);
+  mac_cr = mac_read(lan9118, MAC_CR);
   mac_cr |= (MAC_CR_TXEN | MAC_CR_RXEN);
-  mac_write(MAC_CR, mac_cr);
+  mac_write(lan9118, MAC_CR, mac_cr);
 
-  eth[FIFO_INT] = 0xFF000000;
+  lan9118->base[FIFO_INT] = 0xFF000000;
 
   // Enable interrupts
-  eth[INT_EN] |= RSFL_INT;
+  lan9118->base[INT_EN] |= RSFL_INT;
 
-  interrupt_attach_thread(&eth_isr, IRQ_ETH, eth_irq_thread, NULL);
+  interrupt_attach_thread(&eth_isr, IRQ_ETH, eth_irq_thread, lan9118);
 }
 
 static void
-eth_rx(void)
+eth_rx(struct Lan9118 *lan9118)
 {
   uint32_t rx_used;
   
-  rx_used = (eth[RX_FIFO_INF] >> 16) & 0xFF;
+  rx_used = (lan9118->base[RX_FIFO_INF] >> 16) & 0xFF;
 
   while(rx_used > 0) {
     uint32_t rx_status, packet_len;
 
-    rx_status = eth[RX_STATUS_FIFO_PORT];
+    rx_status = lan9118->base[RX_STATUS_FIFO_PORT];
     packet_len = (rx_status >> 16) & 0x3FFF;
 
     if (rx_status & (1 << 15)) {
@@ -262,7 +260,7 @@ eth_rx(void)
       uint32_t i, tmp;
 
       for (i = ROUND_UP(packet_len, sizeof(uint32_t)); i > 0; i -= sizeof(uint32_t))
-        tmp = eth[RX_DATA_FIFO_PORT];
+        tmp = lan9118->base[RX_DATA_FIFO_PORT];
       (void) tmp;
     } else {
       uint32_t i;
@@ -275,34 +273,35 @@ eth_rx(void)
       data = (uint32_t *) page2kva(p);
 
       for (i = ROUND_UP(packet_len, sizeof(uint32_t)); i > 0; i -= sizeof(uint32_t))
-        *data++ = eth[RX_DATA_FIFO_PORT];
+        *data++ = lan9118->base[RX_DATA_FIFO_PORT];
 
       net_enqueue(packet, packet_len);
 
       page_free_one(p);
     }
 
-    rx_used = (eth[RX_FIFO_INF] >> 16) & 0xFF;
+    rx_used = (lan9118->base[RX_FIFO_INF] >> 16) & 0xFF;
   }
 }
 
 static void
-eth_irq_thread(void *)
+eth_irq_thread(void *arg)
 {
+  struct Lan9118 *lan9118 = (struct Lan9118 *) arg;
   uint32_t status;
 
   // Wake up
-  while (!(eth[PMT_CTRL]) & PMT_CTRL_READY)
-    eth[BYTE_TEST] = 0xFFFFFFFF;
+  while (!(lan9118->base[PMT_CTRL]) & PMT_CTRL_READY)
+    lan9118->base[BYTE_TEST] = 0xFFFFFFFF;
 
-  if (!(eth[IRQ_CFG] & IRQ_INT))
+  if (!(lan9118->base[IRQ_CFG] & IRQ_INT))
     warn("Unexpected IRQ");
 
-  status = eth[INT_STS] & eth[INT_EN];
+  status = lan9118->base[INT_STS] & lan9118->base[INT_EN];
 
   if (status & RSFL_INT) {
-    eth_rx();
-    eth[INT_STS] |= RSFL_INT;
+    eth_rx(lan9118);
+    lan9118->base[INT_STS] |= RSFL_INT;
   }
 
   if (status & ~(RSFL_INT))
@@ -312,8 +311,10 @@ eth_irq_thread(void *)
 }
 
 void
-eth_write(const void *buf, size_t n)
+lan9118_write(struct Lan9118 *lan9118, const void *buf, size_t n)
 {
+  (void) lan9118;
+
   static int last_tag;
   
   uint32_t *data;
@@ -326,15 +327,15 @@ eth_write(const void *buf, size_t n)
 
   k_irq_save();
 
-  eth[TX_DATA_FIFO_PORT] = cmd_a;
-  eth[TX_DATA_FIFO_PORT] = cmd_b;
+  lan9118->base[TX_DATA_FIFO_PORT] = cmd_a;
+  lan9118->base[TX_DATA_FIFO_PORT] = cmd_b;
 
   for (uint32_t i = (n+14+3)/sizeof(uint32_t); i > 0; i--)
-    eth[TX_DATA_FIFO_PORT] = *data++;
+    lan9118->base[TX_DATA_FIFO_PORT] = *data++;
 
-  eth[TX_CFG] = TX_CFG_TX_ON;
+  lan9118->base[TX_CFG] = TX_CFG_TX_ON;
 
-  eth[TX_CFG] = TX_CFG_STOP_TX;
+  lan9118->base[TX_CFG] = TX_CFG_STOP_TX;
 
   k_irq_restore();
 }

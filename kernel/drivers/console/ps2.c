@@ -6,30 +6,25 @@
 #include <kernel/trap.h>
 #include <kernel/irq.h>
 
-#include "kbd.h"
-#include "pl050.h"
+#include <kernel/drivers/ps2.h>
+#include <kernel/drivers/kbd.h>
+#include <kernel/drivers/pl050.h>
 
-// PBX-A9 has two KMIs: KMI0 is used for the keyboard and KMI1 is used for the
-// mouse.
-static struct Pl050 kmi0;    
+static void ps2_kbd_irq_thread(void *);
 
-static void kbd_irq_thread(void *);
-
-static struct ISRThread kbd_isr;
-
-/**
- * Initialize the keyboard driver.
- */
-void
-kbd_init(void)
+int
+ps2_init(struct PS2 *ps2, struct Pl050 *kmi, int irq)
 {
-  pl050_init(&kmi0, PA2KVA(PHYS_KMI0));
+  ps2->kmi = kmi;
+  ps2->irq = irq;
 
   // 0xF0 (Set Scan Code Set)
-  pl050_putc(&kmi0, 0xF0);
-  pl050_putc(&kmi0, 1);
+  pl050_putc(kmi, 0xF0);
+  pl050_putc(kmi, 1);
 
-  interrupt_attach_thread(&kbd_isr, IRQ_KMI0, kbd_irq_thread, NULL);
+  interrupt_attach_thread(&ps2->kbd_isr, irq, ps2_kbd_irq_thread, ps2);
+
+  return 0;
 }
 
 #define KEY_MAX             512
@@ -63,12 +58,13 @@ static char *key_sequences[KEY_MAX] = {
  * Get data and store it into the console buffer.
  */
 static void
-kbd_irq_thread(void *)
+ps2_kbd_irq_thread(void *arg)
 {
+  struct PS2 *ps2 = (struct PS2 *) arg;
   char buf[2];
   int c;
 
-  while ((c = kbd_getc()) >= 0) {
+  while ((c = ps2_kbd_getc(ps2)) >= 0) {
     if ((c == 0) || (c >= KEY_MAX))
       continue;
 
@@ -81,7 +77,7 @@ kbd_irq_thread(void *)
     }
   }
 
-  interrupt_unmask(IRQ_KMI0);
+  interrupt_unmask(ps2->irq);
 }
 
 // Keymap column indicies for different states
@@ -221,14 +217,14 @@ toggle_map[KEYMAP_LENGTH] = {
 };
 
 int
-kbd_getc(void)
+ps2_kbd_getc(struct PS2 *ps2)
 {
   // Driver state
   static int key_state;
 
   int scan_code, key_code, keymap_col;
 
-  if ((scan_code = pl050_getc(&kmi0)) < 0)
+  if ((scan_code = pl050_getc(ps2->kmi)) < 0)
     return scan_code;
 
   // Beginning of a E0 code sequence.
@@ -280,3 +276,4 @@ kbd_getc(void)
 
   return key_code;
 }
+

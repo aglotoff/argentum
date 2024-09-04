@@ -14,10 +14,10 @@
 #include <kernel/fs/fs.h>
 #include <kernel/cprintf.h>
 #include <kernel/tick.h>
+#include <kernel/mach.h>
 
-#include "kbd.h"
-#include "display.h"
-#include "serial.h"
+#include <kernel/drivers/kbd.h>
+#include <kernel/drivers/display.h>
 
 #define NCONSOLES   6   // The total number of virtual consoles
 
@@ -94,22 +94,23 @@ console_init(void)
     console->termios.c_ospeed = B9600;
   }
 
-  kbd_init();
-  serial_init();
-  display_init();
+  mach_current->kbd_init();
+  mach_current->serial_init();
+
+  mach_current->display_init();
 
   console_current = &consoles[0];
   console_system  = &consoles[0];
 
-  display_update(console_current);
+  mach_current->display_update(console_current);
 }
 
 static void
 console_out_flush(struct Console *console)
 {
   if (console == console_current) {
-    display_flush(console);
-    display_update_cursor(console);
+    mach_current->display_flush(console);
+    mach_current->display_update_cursor(console);
   }
 }
 
@@ -136,7 +137,7 @@ console_erase(struct Console *console, unsigned from, unsigned to)
   }
 
   if (console == console_current)
-    display_erase(console, from, to);
+    mach_current->display_erase(console, from, to);
 }
 
 static void
@@ -155,7 +156,7 @@ console_scroll_down(struct Console *console, unsigned n)
   unsigned i;
 
   if (console == console_current)
-    display_flush(console);
+    mach_current->display_flush(console);
 
   memmove(&console->out.buf[0], &console->out.buf[console->out.cols * n],
           sizeof(console->out.buf[0]) * (console->out.cols * (console->out.rows - n)));
@@ -169,7 +170,7 @@ console_scroll_down(struct Console *console, unsigned n)
   console->out.pos -= n * console->out.cols;
 
   if (console == console_current)
-    display_scroll_down(console, n);
+    mach_current->display_scroll_down(console, n);
 }
 
 static void
@@ -185,7 +186,7 @@ console_insert_rows(struct Console *cons, unsigned rows)
   n         = (max_rows - rows) * cons->out.cols;
 
   if (cons == console_current)
-    display_flush(cons);
+    mach_current->display_flush(cons);
 
   for (i = 0; i < rows * cons->out.cols; i++) {
     cons->out.buf[i + start_pos].ch = ' ';
@@ -197,7 +198,7 @@ console_insert_rows(struct Console *cons, unsigned rows)
           sizeof(cons->out.buf[0]) * n);
   
   if (cons == console_current)
-    display_flush(cons);
+    mach_current->display_flush(cons);
 }
 
 static int
@@ -208,24 +209,24 @@ console_print_char(struct Console *console, char c)
   switch (c) {
   case '\n':
     if (console == console_current)
-      display_flush(console);
+      mach_current->display_flush(console);
 
     console->out.pos += console->out.cols;
     console->out.pos -= console->out.pos % console->out.cols;
 
     if (console == console_current)
-      display_update_cursor(console);
+     mach_current->display_update_cursor(console);
 
     break;
 
   case '\r':
     if (console == console_current)
-      display_flush(console);
+      mach_current->display_flush(console);
 
     console->out.pos -= console->out.pos % console->out.cols;
 
     if (console == console_current)
-      display_update_cursor(console);
+      mach_current->display_update_cursor(console);
 
     break;
 
@@ -235,7 +236,7 @@ console_print_char(struct Console *console, char c)
 
       console->out.pos--;
       if (console == console_current)
-        display_update_cursor(console);
+        mach_current->display_update_cursor(console);
     }
     break;
 
@@ -399,7 +400,7 @@ console_handle_esc(struct Console *console, char c)
       }
 
       if (console == console_current)
-        display_draw_char_at(console, m);
+        mach_current->display_draw_char_at(console, m);
     }
     break;
  
@@ -483,7 +484,7 @@ console_out_char(struct Console *console, char c)
 
   // The first (aka system) console is also connected to the serial port
   if (console == console_system)
-    serial_putc(c);
+    mach_current->serial_putc(c);
 
   switch (console->out.state) {
   case PARSER_NORMAL:
@@ -853,7 +854,7 @@ console_switch(int n)
 {
   if (console_current != &consoles[n]) {
     console_current = &consoles[n];
-    display_update(console_current);
+    mach_current->display_update(console_current);
   }
 }
 
@@ -869,7 +870,7 @@ console_getc(void)
   int c;
   
   // Poll for any pending characters from UART and the keyboard.
-  while (((c = kbd_getc()) <= 0) && ((c = serial_getc()) <= 0))
+  while (((c = mach_current->kbd_getc()) <= 0) && ((c = mach_current->serial_getc()) <= 0))
     ;
 
   return c;

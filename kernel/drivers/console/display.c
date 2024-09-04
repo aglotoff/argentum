@@ -3,15 +3,10 @@
 #include <string.h>
 
 #include <kernel/drivers/console.h>
+#include <kernel/drivers/display.h>
 #include <kernel/mm/memlayout.h>
-#include <kernel/page.h>
 #include <kernel/vm.h>
 #include <kernel/types.h>
-
-#include "display.h"
-#include "pl111.h"
-
-static struct Pl111 lcd;
 
 // PC Screen Font format
 // See https://www.win.tue.nl/~aeb/linux/kbd/font-formats-1.html
@@ -23,161 +18,149 @@ struct PsfHeader {
 
 #define PSF_MAGIC  0x0436
 
-static struct {
-  uint8_t *bitmap;
-  uint8_t  glyph_width;
-  uint8_t  glyph_height;
-} font;
-
-static uint16_t *fb_base;
-static unsigned fb_width;
-static unsigned fb_height;
-
-unsigned display_pos;
-
-static unsigned cursor_pos;
-static int      cursor_visible;
-
-static void display_draw_cursor(void);
-static void display_erase_cursor(void);
-static void display_draw_char(unsigned, char, uint16_t, uint16_t);
+static void display_draw_cursor(struct Display *);
+static void display_erase_cursor(struct Display *);
+static void display_draw_char(struct Display *, unsigned, char, uint16_t, uint16_t);
 
 void
-display_draw_char_at(struct Console *console, unsigned i)
+display_draw_char_at(struct Display *display, struct Console *console, unsigned i)
 {
-  display_draw_char(i,
+  display_draw_char(display, 
+                    i,
                     console->out.buf[i].ch,
                     console->out.buf[i].fg,
                     console->out.buf[i].bg);
 
-  if (i == cursor_pos)
-    cursor_visible = 0;
+  if (i == display->cursor_pos)
+    display->cursor_visible = 0;
 }
 
 /**
  * Initialize the display driver.
  */
 int
-display_init(void)
+display_init(struct Display *display, void *base)
 {
   extern uint8_t _binary_kernel_drivers_console_vga_font_psf_start[];
 
-  struct Page *page;
   struct PsfHeader *psf;
 
   psf = (struct PsfHeader *) _binary_kernel_drivers_console_vga_font_psf_start;
   if ((psf->magic != PSF_MAGIC) || (psf->charsize != 16))
     return -EINVAL;
 
-  font.bitmap       = (uint8_t *) (psf + 1);
-  font.glyph_width  = 8;
-  font.glyph_height = psf->charsize;
+  display->font.bitmap       = (uint8_t *) (psf + 1);
+  display->font.glyph_width  = 8;
+  display->font.glyph_height = psf->charsize;
 
-  // Allocate the frame buffer.
-  if ((page = page_alloc_block(8, PAGE_ALLOC_ZERO, PAGE_TAG_FB)) == NULL)
-    return -ENOMEM;
+  display->pos = 0;
+  display->cursor_pos = 0;
+  display->cursor_visible = 0;
 
-  fb_width  = DEFAULT_FB_WIDTH;
-  fb_height = DEFAULT_FB_HEIGHT;
-  fb_base   = (uint16_t *) page2kva(page);
-  page->ref_count++;
-
-  pl111_init(&lcd, PA2KVA(PHYS_LCD), page2pa(page), PL111_RES_VGA);
+  display->fb_width  = DEFAULT_FB_WIDTH;
+  display->fb_height = DEFAULT_FB_HEIGHT;
+  display->fb_base   = (uint16_t *) base;
 
   return 0;
 }
 
 void
-display_update(struct Console *console)
+display_update(struct Display *display, struct Console *console)
 {
   unsigned i;
 
   for (i = 0; i < console->out.cols * console->out.rows; i++)
-    display_draw_char_at(console, i);
+    display_draw_char_at(display, console, i);
 
-  display_pos = console->out.pos;
-  cursor_pos  = display_pos;
+  display->pos = console->out.pos;
+  display->cursor_pos = display->pos;
 
-  display_draw_cursor();
+  display_draw_cursor(display);
 }
 
 void
-display_update_cursor(struct Console *console)
+display_update_cursor(struct Display *display, struct Console *console)
 {
-  display_pos = console->out.pos;
+  display->pos = console->out.pos;
 
-  if (cursor_pos != display_pos) {
-    display_erase_cursor();
-    cursor_pos = display_pos;
+  if (display->cursor_pos != display->pos) {
+    display_erase_cursor(display);
+    display->cursor_pos = display->pos;
   }
 
-  display_draw_cursor();
+  display_draw_cursor(display);
 }
 
 void
-display_erase(struct Console *console, unsigned from, unsigned to)
+display_erase(struct Display *display, struct Console *console, unsigned from, unsigned to)
 {
   unsigned i;
+  
 
   for (i = from; i <= to; i++) {
-    display_draw_char(i, ' ', console->out.buf[i].fg, console->out.buf[i].bg);
+    display_draw_char(display, i, ' ', console->out.buf[i].fg, console->out.buf[i].bg);
 
-    if (i == cursor_pos)
-      cursor_visible = 0;
+    if (i == display->cursor_pos)
+      display->cursor_visible = 0;
   }
 }
 
 void
-display_flush(struct Console *console)
+display_flush(struct Display *display, struct Console *console)
 {
-  if (display_pos < console->out.pos) {
-    for ( ; display_pos < console->out.pos; display_pos++)
-      display_draw_char_at(console, display_pos);
-  } else if (display_pos > console->out.pos) {
-    for ( ; display_pos > console->out.pos; display_pos--)
-      display_draw_char_at(console, display_pos);
+  if (display->pos < console->out.pos) {
+    for ( ; display->pos < console->out.pos; display->pos++)
+      display_draw_char_at(display, console, display->pos);
+  } else if (display->pos > console->out.pos) {
+    for ( ; display->pos > console->out.pos; display->pos--)
+      display_draw_char_at(display, console, display->pos);
   }
 }
 
 void
-display_scroll_down(struct Console *console, unsigned n)
+display_scroll_down(struct Display *display, struct Console *console, unsigned n)
 {
-  display_pos = console->out.pos;
+  
+  display->pos = console->out.pos;
 
-  if (cursor_pos < console->out.cols * n) {
-    cursor_pos = 0;
-    cursor_visible = 0;
+  if (display->cursor_pos < console->out.cols * n) {
+    display->cursor_pos = 0;
+    display->cursor_visible = 0;
   } else {
-    cursor_pos -= console->out.cols * n;
+    display->cursor_pos -= console->out.cols * n;
   }
 
-  memmove(&fb_base[0], &fb_base[fb_width * font.glyph_height * n],
-          sizeof(fb_base[0]) * fb_width * (fb_height - font.glyph_height * n));
-  memset(&fb_base[fb_width * (fb_height - font.glyph_height * n)], 0,
-        sizeof(fb_base[0]) * fb_width * font.glyph_height * n);
+  memmove(&display->fb_base[0],
+          &display->fb_base[display->fb_width * display->font.glyph_height * n],
+          sizeof(display->fb_base[0]) * display->fb_width * (display->fb_height - display->font.glyph_height * n));
+  memset(&display->fb_base[display->fb_width * (display->fb_height - display->font.glyph_height * n)],
+         0,
+         sizeof(display->fb_base[0]) * display->fb_width * display->font.glyph_height * n);
 }
 
 static void
-display_erase_cursor(void)
+display_erase_cursor(struct Display *display)
 {
-  if (cursor_visible) {
-    display_draw_char(cursor_pos,
-                      console_current->out.buf[cursor_pos].ch,
-                      console_current->out.buf[cursor_pos].fg,
-                      console_current->out.buf[cursor_pos].bg);
-    cursor_visible = 0;
+  if (display->cursor_visible) {
+    display_draw_char(display,
+                      display->cursor_pos,
+                      console_current->out.buf[display->cursor_pos].ch,
+                      console_current->out.buf[display->cursor_pos].fg,
+                      console_current->out.buf[display->cursor_pos].bg);
+    display->cursor_visible = 0;
   }
 }
 
 static void
-display_draw_cursor(void)
+display_draw_cursor(struct Display *display)
 {
-  if (!cursor_visible) {
-    display_draw_char(cursor_pos,
-                      console_current->out.buf[cursor_pos].ch,
-                      console_current->out.buf[cursor_pos].bg,
-                      console_current->out.buf[cursor_pos].fg);
-    cursor_visible = 1;
+  if (!display->cursor_visible) {
+    display_draw_char(display, 
+                      display->cursor_pos,
+                      console_current->out.buf[display->cursor_pos].ch,
+                      console_current->out.buf[display->cursor_pos].bg,
+                      console_current->out.buf[display->cursor_pos].fg);
+    display->cursor_visible = 1;
   }
 }
 
@@ -210,8 +193,8 @@ colors[] = {
 // instead.
 // TODO: implement this solution for better performance!
 static void
-display_draw_char(unsigned pos, char c, uint16_t fg, uint16_t bg)
-{
+display_draw_char(struct Display *display, unsigned pos, char c, uint16_t fg, uint16_t bg)
+{ 
   static uint8_t mask[] = { 128, 64, 32, 16, 8, 4, 2, 1 };
 
   uint8_t *glyph;
@@ -219,14 +202,14 @@ display_draw_char(unsigned pos, char c, uint16_t fg, uint16_t bg)
 
   if (c == '\0')
     c = ' ';
-  glyph = &font.bitmap[c * font.glyph_height];
+  glyph = &display->font.bitmap[c * display->font.glyph_height];
 
-  x0 = (pos % console_current->out.cols) * font.glyph_width;
-  y0 = (pos / console_current->out.cols) * font.glyph_height;
+  x0 = (pos % console_current->out.cols) * display->font.glyph_width;
+  y0 = (pos / console_current->out.cols) * display->font.glyph_height;
 
-  for (x = 0; x < font.glyph_width; x++)
-    for (y = 0; y < font.glyph_height; y++)
-      fb_base[fb_width * (y0 + y) + (x0 + x)] = (glyph[y] & mask[x])
+  for (x = 0; x < display->font.glyph_width; x++)
+    for (y = 0; y < display->font.glyph_height; y++)
+      display->fb_base[display->fb_width * (y0 + y) + (x0 + x)] = (glyph[y] & mask[x])
         ? colors[fg]
         : colors[bg];
 }

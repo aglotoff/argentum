@@ -10,7 +10,4 @@
 /** Key code for Ctrl+x */
 #define C(x) ((x) - '@')
 
-void kbd_init(void);
-int  kbd_getc(void);
-
 #endif  // !__KERNEL_DRIVERS_CONSOLE_KBD_H__

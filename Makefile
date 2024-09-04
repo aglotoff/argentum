@@ -77,8 +77,8 @@ ifndef CPUS
   CPUS := 2
 endif
 
-#QEMUOPTS := -M realview-pb-a8 -m 256
-QEMUOPTS := -M realview-pbx-a9 -m 256 -smp $(CPUS)
+QEMUOPTS := -M realview-pb-a8 -m 256
+#QEMUOPTS := -M realview-pbx-a9 -m 256 -smp $(CPUS)
 QEMUOPTS += -kernel $(KERNEL).bin
 QEMUOPTS += -drive if=sd,format=raw,file=$(OBJ)/fs.img
 QEMUOPTS += -nic user,hostfwd=tcp::8080-:80

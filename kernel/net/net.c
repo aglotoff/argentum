@@ -1,4 +1,4 @@
-#include <kernel/drivers/eth.h>
+#include <kernel/mach.h>
 #include <kernel/cprintf.h>
 #include <kernel/fs/file.h>
 #include <kernel/page.h>
@@ -40,7 +40,7 @@ eth_netif_output(struct netif *netif, struct pbuf *p)
   struct Page *page = page_alloc_one(0, PAGE_TAG_ETH_TX);
 
   pbuf_copy_partial(p, page2kva(page), p->tot_len, 0);
-  eth_write(page2kva(page), p->tot_len);
+  mach_current->eth_write(page2kva(page), p->tot_len);
 
   page_free_one(page);
 
