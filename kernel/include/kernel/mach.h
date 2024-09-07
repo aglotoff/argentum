@@ -32,8 +32,7 @@ struct Machine {
   void   (*rtc_set_time)(time_t);
 
   int    (*storage_init)(void);
-  void   (*storage_request)(struct Buf *);
-
+ 
   int    (*kbd_init)(void);
   int    (*kbd_getc)(void);
 

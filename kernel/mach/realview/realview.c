@@ -5,6 +5,7 @@
 #include <kernel/spinlock.h>
 #include <kernel/fs/buf.h>
 #include <kernel/page.h>
+#include <kernel/dev.h>
 
 #include <kernel/drivers/ds1338.h>
 #include <kernel/drivers/sbcon.h>
@@ -171,25 +172,23 @@ realview_pb_a8_timer_init_percpu(void)
 struct PL180 mmci;
 static struct SD sd;
 
+void
+realview_storage_request(struct Buf *buf)
+{
+  sd_request(&sd, buf);
+}
+
+struct BlockDev storage_dev = {
+  .request = realview_storage_request,
+};
+
 int
 realview_storage_init(void)
 {
   pl180_init(&mmci, PA2KVA(PHYS_MMCI));
   sd_init(&sd, &mmci, IRQ_MCIA);
+  dev_register_block(0, &storage_dev);
   return 0;
-}
-
-void
-realview_storage_request(struct Buf *buf)
-{
-  if (!k_mutex_holding(&buf->mutex))
-    panic("buf not locked");
-  if ((buf->flags & (BUF_DIRTY | BUF_VALID)) == BUF_VALID)
-    panic("nothing to do");
-  if (buf->dev != 0)
-    panic("dev must be 0, %d given", buf->dev);
-
-  sd_request(&sd, buf);
 }
 
 // PBX-A9 has two KMIs: KMI0 is used for the keyboard and KMI1 is used for the
@@ -330,7 +329,6 @@ MACH_DEFINE(realview_pb_a8) {
   .rtc_set_time          = realview_rtc_set_time,
 
   .storage_init          = realview_storage_init,
-  .storage_request       = realview_storage_request,
 
   .kbd_init              = realview_kbd_init,
   .kbd_getc              = realview_kbd_getc,
@@ -393,7 +391,6 @@ MACH_DEFINE(realview_pbx_a9) {
   .rtc_set_time          = realview_rtc_set_time,
 
   .storage_init          = realview_storage_init,
-  .storage_request       = realview_storage_request,
 
   .kbd_init              = realview_kbd_init,
   .kbd_getc              = realview_kbd_getc,

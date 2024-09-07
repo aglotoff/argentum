@@ -1,7 +1,6 @@
 #include <kernel/assert.h>
-
+#include <kernel/dev.h>
 #include <kernel/cprintf.h>
-#include <kernel/storage.h>
 #include <kernel/fs/buf.h>
 #include <kernel/list.h>
 #include <kernel/object_pool.h>
@@ -9,6 +8,8 @@
 #include <kernel/page.h>
 
 struct KObjectPool *buf_desc_cache;
+
+static void buf_request(struct Buf *);
 
 // Maximum size of the buffer cache
 #define BUF_CACHE_MAX_SIZE   1024
@@ -204,7 +205,7 @@ buf_read(unsigned block_no, size_t block_size, dev_t dev)
   // If needed, read the block from the device.
   // TODO: check for I/O errors
   if (!(buf->flags & BUF_VALID))
-    storage_request(buf);
+    buf_request(buf);
 
   assert(buf->flags & BUF_VALID);
 
@@ -225,7 +226,7 @@ buf_write(struct Buf *buf)
     panic("not holding buf->mutex");
 
   // TODO: check for I/O errors
-  storage_request(buf);
+  buf_request(buf);
 }
 
 /**
@@ -258,4 +259,26 @@ buf_release(struct Buf *buf)
   }
 
   k_spinlock_release(&buf_cache.lock);
+}
+
+/**
+ * Add buffer to the request queue and put the current process to sleep until
+ * the operation is completed.
+ * 
+ * @param buf The buffer to be processed.
+ */
+static void
+buf_request(struct Buf *buf)
+{
+  struct BlockDev *dev;
+
+  if (!k_mutex_holding(&buf->mutex))
+    panic("buf not locked");
+  if ((buf->flags & (BUF_DIRTY | BUF_VALID)) == BUF_VALID)
+    panic("nothing to do");
+
+  if ((dev = dev_lookup_block(buf->dev)) == NULL)
+    panic("no block device %d found", buf->dev);
+
+  dev->request(buf);
 }

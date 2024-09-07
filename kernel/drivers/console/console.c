@@ -15,9 +15,17 @@
 #include <kernel/cprintf.h>
 #include <kernel/tick.h>
 #include <kernel/mach.h>
+#include <kernel/dev.h>
 
 #include <kernel/drivers/kbd.h>
 #include <kernel/drivers/display.h>
+
+static struct CharDev console_dev = {
+  .read   = console_read,
+  .write  = console_write,
+  .ioctl  = console_ioctl,
+  .select = console_select,
+};
 
 #define NCONSOLES   6   // The total number of virtual consoles
 
@@ -103,6 +111,8 @@ console_init(void)
   console_system  = &consoles[0];
 
   mach_current->display_update(console_current);
+
+  dev_register_char(0x01, &console_dev);
 }
 
 static void
@@ -117,11 +127,11 @@ console_out_flush(struct Console *console)
 // Use the device minor number to select the virtual console corresponding to
 // this inode
 static struct Console *
-console_from_inode(struct Inode *inode)
+console_from_dev(dev_t dev)
 {
   // No need to lock since rdev cannot change once we obtain an inode ref
   // TODO: are we sure?
-  int minor = inode->rdev & 0xFF;
+  int minor = dev & 0xFF;
   return minor < NCONSOLES ? &consoles[minor] : NULL;
 }
 
@@ -564,9 +574,9 @@ console_putc(char c)
 }
 
 ssize_t
-console_write(struct Inode *inode, const void *buf, size_t nbytes)
+console_write(dev_t dev, const void *buf, size_t nbytes)
 {
-  struct Console *console = console_from_inode(inode);
+  struct Console *console = console_from_dev(dev);
   const char *s = (const char *) buf;
   size_t i;
 
@@ -588,9 +598,9 @@ console_write(struct Inode *inode, const void *buf, size_t nbytes)
 }
 
 int
-console_ioctl(struct Inode *inode, int request, int arg)
+console_ioctl(dev_t dev, int request, int arg)
 {
-  struct Console *console = console_from_inode(inode);
+  struct Console *console = console_from_dev(dev);
   struct winsize ws;
 
   if (console == NULL)
@@ -653,9 +663,9 @@ console_try_select(struct Console *console)
 }
 
 int
-console_select(struct Inode *inode, struct timeval *timeout)
+console_select(dev_t dev, struct timeval *timeout)
 {
-  struct Console *console = console_from_inode(inode);
+  struct Console *console = console_from_dev(dev);
   int r;
 
   if (console == NULL)
@@ -886,9 +896,9 @@ console_getc(void)
  * @return The number of bytes read or a negative value if an error occured.
  */
 ssize_t
-console_read(struct Inode *inode, uintptr_t buf, size_t nbytes)
+console_read(dev_t dev, uintptr_t buf, size_t nbytes)
 {
-  struct Console *cons = console_from_inode(inode);
+  struct Console *cons = console_from_dev(dev);
   char *s = (char *) buf;
   size_t i = 0;
 

@@ -13,6 +13,7 @@
 #include <kernel/fs/fs.h>
 #include <kernel/process.h>
 #include <kernel/vmspace.h>
+#include <kernel/dev.h>
 
 #include "ext2.h"
 
@@ -194,19 +195,15 @@ fs_inode_read_locked(struct Inode *ip, uintptr_t va, size_t nbyte, off_t *off)
 
   // Read from the corresponding device
   if (S_ISCHR(ip->mode) || S_ISBLK(ip->mode)) {
-    // cprintf("Read %x\n", ip->rdev);
+    struct CharDev *d = dev_lookup_char(ip->rdev);
 
-    if ((ip->rdev & 0xFF00) == 0x0100) {
-      fs_inode_unlock(ip);
+    if (d == NULL)
+      return -ENODEV;
 
-      // TODO: support other devices
-      ret = console_read(ip, va, nbyte);
-
-      fs_inode_lock(ip);
-      return ret;
-    } else {
-       return nbyte;
-    }
+    fs_inode_unlock(ip);
+    ret = d->read(ip->rdev, va, nbyte);
+    fs_inode_lock(ip);
+    return ret;
   }
 
   if ((off_t) (*off + nbyte) < *off)
@@ -241,19 +238,15 @@ fs_inode_write_locked(struct Inode *ip, uintptr_t va, size_t nbyte, off_t *off)
 
   // Write to the corresponding device
   if (S_ISCHR(ip->mode) || S_ISBLK(ip->mode)) {
-    // cprintf("Write %x\n", ip->rdev);
+    struct CharDev *d = dev_lookup_char(ip->rdev);
 
-    if ((ip->rdev & 0xFF00) == 0x0100) {
-      fs_inode_unlock(ip);
+    if (d == NULL)
+      return -ENODEV;
 
-      // TODO: support other devices
-      total = console_write(ip, (void *) va, nbyte);
-
-      fs_inode_lock(ip);
-      return total;
-    } else {
-      return nbyte;
-    }
+    fs_inode_unlock(ip);
+    total = d->write(ip->rdev, (const void *) va, nbyte);
+    fs_inode_lock(ip);
+    return total;
   }
 
   if ((off_t) (*off + nbyte) < *off)
@@ -814,15 +807,15 @@ fs_inode_ioctl_locked(struct Inode *inode, int request, int arg)
   // TODO: check perm
 
   if (S_ISCHR(inode->mode) || S_ISBLK(inode->mode)) {
-    if ((inode->rdev & 0xFF00) == 0x0100) {
-      fs_inode_unlock(inode);
+    struct CharDev *d = dev_lookup_char(inode->rdev);
 
-      // TODO: support other devices
-      ret = console_ioctl(inode, request, arg);
+    if (d == NULL)
+      return -ENODEV;
 
-      fs_inode_lock(inode);
-      return ret;
-    }
+    fs_inode_unlock(inode);
+    ret = d->ioctl(inode->rdev, request, arg);
+    fs_inode_lock(inode);
+    return ret;
   }
 
   return -ENOTTY;
@@ -839,15 +832,15 @@ fs_inode_select_locked(struct Inode *inode, struct timeval *timeout)
   // TODO: check perm
 
   if (S_ISCHR(inode->mode) || S_ISBLK(inode->mode)) {
-    if ((inode->rdev & 0xFF00) == 0x0100) {
-      fs_inode_unlock(inode);
+    struct CharDev *d = dev_lookup_char(inode->rdev);
 
-      // TODO: support other devices
-      ret = console_select(inode, timeout);
+    if (d == NULL)
+      return -ENODEV;
 
-      fs_inode_lock(inode);
-      return ret;
-    }
+    fs_inode_unlock(inode);
+    ret = d->select(inode->rdev, timeout);
+    fs_inode_lock(inode);
+    return ret;
   }
 
   return 0;

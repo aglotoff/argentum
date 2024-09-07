@@ -12,7 +12,7 @@
 #include <kernel/process.h>
 #include <kernel/types.h>
 
-#include "dev.h"
+#include "devfs.h"
 #include "ext2.h"
 
 struct PathNode *fs_root;
@@ -426,7 +426,7 @@ fs_mount(const char *type, const char *path)
     return -ENOENT;
 
   if (!strcmp(type, "devfs")) {
-    root = dev_mount(FS_DEV_DEV);
+    root = devfs_mount(FS_DEV_DEV);
   } else {
     fs_path_put(node);
     return -EINVAL;

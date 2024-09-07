@@ -63,16 +63,14 @@ struct Console {
 extern struct Console *console_current;
 extern struct Console *console_system;
 
-struct Inode;
-
 void    console_init(void);
 void    console_putc(char);
 void    console_interrupt(struct Console *, char *);
 int     console_getc(void);
-ssize_t console_read(struct Inode *, uintptr_t, size_t);
-ssize_t console_write(struct Inode *, const void *, size_t);
-int     console_ioctl(struct Inode *, int, int);
-int     console_select(struct Inode *, struct timeval *);
+ssize_t console_read(dev_t, uintptr_t, size_t);
+ssize_t console_write(dev_t, const void *, size_t);
+int     console_ioctl(dev_t, int, int);
+int     console_select(dev_t, struct timeval *);
 void    console_switch(int);
 
 // ANSI color codes

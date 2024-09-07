@@ -43,7 +43,6 @@ KERNEL_SRCFILES :=	\
 	kernel/drivers/rtc/rtc.c \
 	kernel/drivers/sd/pl180.c \
 	kernel/drivers/sd/sd.c \
-	kernel/drivers/storage.c \
 	kernel/drivers/lan9118.c \
 	kernel/drivers/gic.c \
 	kernel/drivers/ptimer.c \
@@ -54,7 +53,7 @@ KERNEL_SRCFILES :=	\
 	kernel/fs/ext2_inode_alloc.c \
 	kernel/fs/ext2_inode.c \
 	kernel/fs/ext2.c \
-	kernel/fs/dev.c \
+	kernel/fs/devfs.c \
 	kernel/fs/buf.c \
 	kernel/fs/file.c \
 	kernel/fs/inode.c \
@@ -70,6 +69,7 @@ KERNEL_SRCFILES :=	\
 	kernel/process/signal.c \
 	kernel/process/vmspace.c \
 	kernel/cprintf.c \
+	kernel/dev.c \
 	kernel/mach.c \
 	kernel/entry.S \
 	kernel/kdebug.c \

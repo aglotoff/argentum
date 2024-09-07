@@ -21,7 +21,6 @@
 #include <kernel/vmspace.h>
 #include <kernel/pipe.h>
 #include <kernel/process.h>
-#include <kernel/storage.h>
 #include <kernel/mailbox.h>
 #include <kernel/net.h>
 #include <kernel/semaphore.h>
@@ -48,12 +47,16 @@ struct utsname utsname = {
  */
 void main(uintptr_t mach_type)
 {
-  mach_init(mach_type);
-
   // Initialize the memory manager
   page_init_low();  // Physical page allocator (lower memory)
   vm_arch_init();   // Memory management unit and kernel mappings
   page_init_high(); // Physical page allocator (higher memory)
+
+  // Initialize the machine
+  mach_init(mach_type);
+
+  // Initialize the interrupt controller
+  interrupt_init();
 
   // Initialize core services
   k_object_pool_system_init();
@@ -62,10 +65,7 @@ void main(uintptr_t mach_type)
   k_mailbox_system_init();
   k_sched_init();
 
-  vm_space_init();      // Virtual memory manager
-  interrupt_init();     // Interrupt controller
-
-  // Initialize the device drivers
+  // Initialize device drivers
   console_init();       // Console
   rtc_init();           // Real-time clock
   mach_current->storage_init();
@@ -74,6 +74,7 @@ void main(uintptr_t mach_type)
   // Initialize the remaining kernel services
   buf_init();           // Buffer cache
   file_init();          // File table
+  vm_space_init();      // Virtual memory manager
   pipe_init();          // Pipes
   process_init();       // Process table
   signal_init_system(); // Signals
