@@ -385,9 +385,8 @@ screen_handle_esc(struct Screen *screen, char c)
     n = MIN(n, SCREEN_COLS - screen->pos % SCREEN_COLS);
 
     for (m = screen->pos - screen->pos % SCREEN_COLS + SCREEN_COLS - 1; m >= screen->pos; m--) {
-      unsigned t = SCREEN_COLS - screen->pos % SCREEN_COLS - n;
-      if (m >= screen->pos + 1) {
-        screen->buf[m] = screen->buf[m - t];
+      if (m > screen->pos) {
+        screen->buf[m] = screen->buf[m - n];
       } else {
         screen->buf[m].ch = ' ';
         screen->buf[m].fg = screen->fg_color;
