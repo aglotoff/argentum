@@ -6,6 +6,7 @@
 #include <kernel/fs/buf.h>
 #include <kernel/page.h>
 #include <kernel/dev.h>
+#include <kernel/drivers/console.h>
 
 #include <kernel/drivers/ds1338.h>
 #include <kernel/drivers/sbcon.h>
@@ -14,7 +15,6 @@
 #include <kernel/drivers/sp804.h>
 #include <kernel/drivers/pl180.h>
 #include <kernel/drivers/sd.h>
-#include <kernel/drivers/ps2.h>
 #include <kernel/drivers/kbd.h>
 #include <kernel/drivers/pl050.h>
 #include <kernel/drivers/pl011.h>
@@ -194,7 +194,6 @@ realview_storage_init(void)
 // PBX-A9 has two KMIs: KMI0 is used for the keyboard and KMI1 is used for the
 // mouse.
 static struct Pl050 kmi0;    
-static struct PS2 ps2;
 
 #define UART_CLOCK        24000000U     // UART clock rate, in Hz
 #define UART_BAUD_RATE    115200        // Required baud rate
@@ -202,12 +201,6 @@ static struct PS2 ps2;
 // Use UART0 as serial debug console.
 static struct Uart uart0;
 static struct Pl011 pl011;
-
-int
-realview_serial_putc(int c)
-{
-  return uart_putc(&uart0, c);
-}
 
 static struct Display display;
 static struct Pl111 lcd;
@@ -227,8 +220,7 @@ realview_console_init(void)
 
   display_init(&display, page2kva(page));
 
-  pl050_init(&kmi0, PA2KVA(PHYS_KMI0));
-  ps2_init(&ps2, &kmi0, IRQ_KMI0);
+  pl050_init(&kmi0, PA2KVA(PHYS_KMI0), IRQ_KMI0);
 
   pl011_init(&pl011, PA2KVA(0x10009000), UART_CLOCK, UART_BAUD_RATE);
   uart_init(&uart0, &pl011, IRQ_UART0);
@@ -241,46 +233,17 @@ realview_console_getc(void)
 {
   int c;
 
-  if ((c = ps2_kbd_getc(&ps2)) > 0)
+  if ((c = pl050_kbd_getc(&kmi0)) > 0)
     return c;
   
   return uart_getc(&uart0);
 }
 
 void
-realview_display_update(struct Screen *console)
+realview_console_putc(char c)
 {
-  display_update(&display, console);
-}
-
-void
-realview_display_flush(struct Screen *console)
-{
-  display_flush(&display, console);
-}
-
-void
-realview_display_update_cursor(struct Screen *console)
-{
-  display_update_cursor(&display, console);
-}
-
-void
-realview_display_erase(struct Screen *console, unsigned from, unsigned to)
-{
-  display_erase(&display, console, from, to);
-}
-
-void
-realview_display_scroll_down(struct Screen *console, unsigned n)
-{
-  display_scroll_down(&display, console, n);
-}
-
-void
-realview_display_draw_char_at(struct Screen *console, unsigned n)
-{
-  display_draw_char_at(&display, console, n);
+  uart_putc(&uart0, c);
+  screen_out_char(tty_system->out.screen, c);
 }
 
 static struct Lan9118 lan9118;
@@ -296,6 +259,53 @@ void
 realview_eth_write(const void *buf, size_t n)
 {
   lan9118_write(&lan9118, buf, n);
+}
+
+#define NSCREENS    6   // For now, all ttys are screens
+
+static struct Screen screens[NSCREENS];
+
+static void
+realview_tty_out_char(struct Tty *tty, char c)
+{
+  // The first (aka system) console is also connected to the serial port
+  if (tty == tty_system)
+    uart_putc(&uart0, c);
+
+  screen_out_char(tty->out.screen, c);
+}
+
+static void
+realview_tty_flush(struct Tty *tty)
+{
+  screen_flush(tty->out.screen);
+}
+
+static void
+realview_tty_erase(struct Tty *tty)
+{
+  screen_backspace(tty->out.screen);
+  realview_tty_out_char(tty, '\b');
+  realview_tty_flush(tty);
+}
+
+static void
+realview_tty_switch(struct Tty *tty)
+{
+  display_update(&display, tty->out.screen);
+}
+
+static void
+realview_tty_init_system(void)
+{
+  mach_current->console_init();
+}
+
+static void
+realview_tty_init(struct Tty *tty, int i)
+{
+  tty->out.screen = &screens[i];
+  screen_init(tty->out.screen, &display);
 }
 
 MACH_DEFINE(realview_pb_a8) {
@@ -321,15 +331,14 @@ MACH_DEFINE(realview_pb_a8) {
 
   .console_init          = realview_console_init,
   .console_getc          = realview_console_getc,
+  .console_putc          = realview_console_putc,
 
-  .serial_putc           = realview_serial_putc,
-
-  .display_update        = realview_display_update,
-  .display_flush         = realview_display_flush,
-  .display_update_cursor = realview_display_update_cursor,
-  .display_erase         = realview_display_erase,
-  .display_scroll_down   = realview_display_scroll_down,
-  .display_draw_char_at  = realview_display_draw_char_at,
+  .tty_erase             = realview_tty_erase,
+  .tty_flush             = realview_tty_flush,
+  .tty_init              = realview_tty_init,
+  .tty_init_system       = realview_tty_init_system,
+  .tty_out_char          = realview_tty_out_char,
+  .tty_switch            = realview_tty_switch,
 
   .eth_init              = realview_eth_init,
   .eth_write             = realview_eth_write,
@@ -380,15 +389,14 @@ MACH_DEFINE(realview_pbx_a9) {
 
   .console_init          = realview_console_init,
   .console_getc          = realview_console_getc,
+  .console_putc          = realview_console_putc,
 
-  .serial_putc           = realview_serial_putc,
-
-  .display_update        = realview_display_update,
-  .display_flush         = realview_display_flush,
-  .display_update_cursor = realview_display_update_cursor,
-  .display_erase         = realview_display_erase,
-  .display_scroll_down   = realview_display_scroll_down,
-  .display_draw_char_at  = realview_display_draw_char_at,
+  .tty_erase             = realview_tty_erase,
+  .tty_flush             = realview_tty_flush,
+  .tty_init              = realview_tty_init,
+  .tty_init_system       = realview_tty_init_system,
+  .tty_out_char          = realview_tty_out_char,
+  .tty_switch            = realview_tty_switch,
 
   .eth_init              = realview_eth_init,
   .eth_write             = realview_eth_write,

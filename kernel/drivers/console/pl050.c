@@ -3,13 +3,33 @@
 
 #include <kernel/drivers/pl050.h>
 
-// KMI registers, shifted right by 2 bits for use as uint32_t[] indices
-#define KMICR             (0x000 / 4)   // Control register
-#define   KMICR_RXINTREN    (1U << 4)   // Enable receiver interrupt
-#define KMISTAT           (0x004 / 4)   // Status register
-#define   KMISTAT_RXFULL    (1U << 4)   // Receiver register full
-#define   KMISTAT_TXEMPTY   (1U << 6)   // Transmit register empty
-#define KMIDATA           (0x008 / 4)   // Received data
+// KMI registers
+#define KMI_CR            0x000   // Control register
+#define   KMICR_RXINTREN    (1 << 4)   // Enable receiver interrupt
+#define KMI_STAT          0x004   // Status register
+#define   RXFULL            (1 << 4)   // Receiver register full
+#define   TXEMPTY           (1 << 6)   // Transmit register empty
+#define KMI_DATA          0x008   // Received data / data to be transmitted
+
+static void pl050_putc(void *, char);
+static int  pl050_getc(void *);
+
+static inline uint32_t
+pl050_read(struct Pl050 *pl050, uint32_t reg)
+{
+  return pl050->base[reg >> 2];
+}
+
+static inline void
+pl050_write(struct Pl050 *pl050, uint32_t reg, uint32_t data)
+{
+  pl050->base[reg >> 2] = data;
+}
+
+static struct PS2Ops pl050_ops = {
+  .getc = pl050_getc,
+  .putc = pl050_putc,
+};
 
 /**
  * Initialize the KMI driver.
@@ -18,14 +38,14 @@
  * @param base Memory base address.
  */
 int
-pl050_init(struct Pl050 *pl050, void *base)
+pl050_init(struct Pl050 *pl050, void *base, int irq)
 {
   pl050->base = (volatile uint32_t *) base;
-  
-  // Enable interrupts.
-  pl050->base[KMICR] = KMICR_RXINTREN;
 
-  return 0;
+  // Enable interrupts
+  pl050_write(pl050, KMI_CR, KMICR_RXINTREN);
+
+  return ps2_init(&pl050->ps2, &pl050_ops, pl050, irq);
 }
 
 /**
@@ -34,14 +54,16 @@ pl050_init(struct Pl050 *pl050, void *base)
  * @param pl050 Pointer to the driver instance.
  * @param c The character to be printed.
  */
-void
-pl050_putc(struct Pl050 *pl050, char c)
+static void
+pl050_putc(void *arg, char c)
 {
+  struct Pl050 *pl050 = (struct Pl050 *) arg;
+
   // Wait for the transmit register to become empty
-  while (!(pl050->base[KMISTAT] & KMISTAT_TXEMPTY))
+  while (!(pl050_read(pl050, KMI_STAT) & TXEMPTY))
     ;
 
-  pl050->base[KMIDATA] = c;
+  pl050_write(pl050, KMI_DATA, c);
 }
 
 /**
@@ -50,12 +72,20 @@ pl050_putc(struct Pl050 *pl050, char c)
  * @param pl050 Pointer to the driver instance.
  * @return The next iput character or -1 if there is none.
  */
-int
-pl050_getc(struct Pl050 *pl050)
+static int
+pl050_getc(void *arg)
 {
+  struct Pl050 *pl050 = (struct Pl050 *) arg;
+
   // Check whether the receive register is full.
-  if (!(pl050->base[KMISTAT] & KMISTAT_RXFULL))
+  if (!(pl050_read(pl050, KMI_STAT) & RXFULL))
     return -1;
 
-  return pl050->base[KMIDATA];
+  return pl050_read(pl050, KMI_DATA);
+}
+
+int
+pl050_kbd_getc(struct Pl050 *pl050)
+{
+  return ps2_kbd_getc(&pl050->ps2);
 }

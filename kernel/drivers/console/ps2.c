@@ -8,36 +8,24 @@
 
 #include <kernel/drivers/ps2.h>
 #include <kernel/drivers/kbd.h>
-#include <kernel/drivers/pl050.h>
 
 static void ps2_kbd_irq_thread(void *);
 
 int
-ps2_init(struct PS2 *ps2, struct Pl050 *kmi, int irq)
+ps2_init(struct PS2 *ps2, struct PS2Ops *ops, void *ops_arg, int irq)
 {
-  ps2->kmi = kmi;
-  ps2->irq = irq;
+  ps2->ops     = ops;
+  ps2->ops_arg = ops_arg;
+  ps2->irq     = irq;
 
   // 0xF0 (Set Scan Code Set)
-  pl050_putc(kmi, 0xF0);
-  pl050_putc(kmi, 1);
+  ps2->ops->putc(ps2->ops_arg, 0xF0);
+  ps2->ops->putc(ps2->ops_arg, 1);
 
   interrupt_attach_thread(&ps2->kbd_isr, irq, ps2_kbd_irq_thread, ps2);
 
   return 0;
 }
-
-#define KEY_MAX             512
-
-// Special key codes
-#define KEY_EXT             0x100
-#define KEY_UP              (KEY_EXT + 0x1)
-#define KEY_DOWN            (KEY_EXT + 0x2)
-#define KEY_RIGHT           (KEY_EXT + 0x3)
-#define KEY_LEFT            (KEY_EXT + 0x4)
-#define KEY_HOME            (KEY_EXT + 0x5)
-#define KEY_INSERT          (KEY_EXT + 0x6)
-#define KEY_BTAB            (KEY_EXT + 0x7)
 
 static char *key_sequences[KEY_MAX] = {
   [KEY_UP]      "\033[A",
@@ -224,7 +212,7 @@ ps2_kbd_getc(struct PS2 *ps2)
 
   int scan_code, key_code, keymap_col;
 
-  if ((scan_code = pl050_getc(ps2->kmi)) < 0)
+  if ((scan_code = ps2->ops->getc(ps2->ops_arg)) < 0)
     return scan_code;
 
   // Beginning of a E0 code sequence.
@@ -276,4 +264,3 @@ ps2_kbd_getc(struct PS2 *ps2)
 
   return key_code;
 }
-

@@ -23,13 +23,13 @@ static void display_erase_cursor(struct Display *);
 static void display_draw_char(struct Display *, unsigned, char, uint16_t, uint16_t);
 
 void
-display_draw_char_at(struct Display *display, struct Screen *console, unsigned i)
+display_draw_char_at(struct Display *display, unsigned i)
 {
-  display_draw_char(display, 
+  display_draw_char(display,
                     i,
-                    console->buf[i].ch,
-                    console->buf[i].fg,
-                    console->buf[i].bg);
+                    display->screen->buf[i].ch,
+                    display->screen->buf[i].fg,
+                    display->screen->buf[i].bg);
 
   if (i == display->cursor_pos)
     display->cursor_visible = 0;
@@ -65,23 +65,25 @@ display_init(struct Display *display, void *base)
 }
 
 void
-display_update(struct Display *display, struct Screen *console)
+display_update(struct Display *display, struct Screen *screen)
 {
   unsigned i;
 
-  for (i = 0; i < console->cols * console->rows; i++)
-    display_draw_char_at(display, console, i);
+  display->screen = screen;
 
-  display->pos = console->pos;
+  for (i = 0; i < display->screen->cols * display->screen->rows; i++)
+    display_draw_char_at(display, i);
+
+  display->pos = display->screen->pos;
   display->cursor_pos = display->pos;
 
   display_draw_cursor(display);
 }
 
 void
-display_update_cursor(struct Display *display, struct Screen *console)
+display_update_cursor(struct Display *display)
 {
-  display->pos = console->pos;
+  display->pos = display->screen->pos;
 
   if (display->cursor_pos != display->pos) {
     display_erase_cursor(display);
@@ -92,12 +94,12 @@ display_update_cursor(struct Display *display, struct Screen *console)
 }
 
 void
-display_erase(struct Display *display, struct Screen *console, unsigned from, unsigned to)
+display_erase(struct Display *display, unsigned from, unsigned to)
 {
   unsigned i;
   
   for (i = from; i <= to; i++) {
-    display_draw_char(display, i, ' ', console->buf[i].fg, console->buf[i].bg);
+    display_draw_char(display, i, ' ', display->screen->buf[i].fg, display->screen->buf[i].bg);
 
     if (i == display->cursor_pos)
       display->cursor_visible = 0;
@@ -105,28 +107,27 @@ display_erase(struct Display *display, struct Screen *console, unsigned from, un
 }
 
 void
-display_flush(struct Display *display, struct Screen *console)
+display_flush(struct Display *display)
 {
-  if (display->pos < console->pos) {
-    for ( ; display->pos < console->pos; display->pos++)
-      display_draw_char_at(display, console, display->pos);
-  } else if (display->pos > console->pos) {
-    for ( ; display->pos > console->pos; display->pos--)
-      display_draw_char_at(display, console, display->pos);
+  if (display->pos < display->screen->pos) {
+    for ( ; display->pos < display->screen->pos; display->pos++)
+      display_draw_char_at(display, display->pos);
+  } else if (display->pos > display->screen->pos) {
+    for ( ; display->pos > display->screen->pos; display->pos--)
+      display_draw_char_at(display, display->pos);
   }
 }
 
 void
-display_scroll_down(struct Display *display, struct Screen *console, unsigned n)
+display_scroll_down(struct Display *display, unsigned n)
 {
-  
-  display->pos = console->pos;
+  display->pos = display->screen->pos;
 
-  if (display->cursor_pos < console->cols * n) {
+  if (display->cursor_pos < display->screen->cols * n) {
     display->cursor_pos = 0;
     display->cursor_visible = 0;
   } else {
-    display->cursor_pos -= console->cols * n;
+    display->cursor_pos -= display->screen->cols * n;
   }
 
   memmove(&display->fb_base[0],
@@ -143,9 +144,9 @@ display_erase_cursor(struct Display *display)
   if (display->cursor_visible) {
     display_draw_char(display,
                       display->cursor_pos,
-                      tty_current->out->buf[display->cursor_pos].ch,
-                      tty_current->out->buf[display->cursor_pos].fg,
-                      tty_current->out->buf[display->cursor_pos].bg);
+                      display->screen->buf[display->cursor_pos].ch,
+                      display->screen->buf[display->cursor_pos].fg,
+                      display->screen->buf[display->cursor_pos].bg);
     display->cursor_visible = 0;
   }
 }
@@ -156,9 +157,9 @@ display_draw_cursor(struct Display *display)
   if (!display->cursor_visible) {
     display_draw_char(display, 
                       display->cursor_pos,
-                      tty_current->out->buf[display->cursor_pos].ch,
-                      tty_current->out->buf[display->cursor_pos].bg,
-                      tty_current->out->buf[display->cursor_pos].fg);
+                      display->screen->buf[display->cursor_pos].ch,
+                      display->screen->buf[display->cursor_pos].bg,
+                      display->screen->buf[display->cursor_pos].fg);
     display->cursor_visible = 1;
   }
 }
@@ -203,8 +204,8 @@ display_draw_char(struct Display *display, unsigned pos, char c, uint16_t fg, ui
     c = ' ';
   glyph = &display->font.bitmap[c * display->font.glyph_height];
 
-  x0 = (pos % tty_current->out->cols) * display->font.glyph_width;
-  y0 = (pos / tty_current->out->cols) * display->font.glyph_height;
+  x0 = (pos % display->screen->cols) * display->font.glyph_width;
+  y0 = (pos / display->screen->cols) * display->font.glyph_height;
 
   for (x = 0; x < display->font.glyph_width; x++)
     for (y = 0; y < display->font.glyph_height; y++)

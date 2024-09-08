@@ -7,15 +7,19 @@
 #error "This is a kernel header; user programs should not #include it"
 #endif
 
-struct Pl050;
-
-struct PS2 {
-  struct Pl050 *kmi;
-  struct ISRThread kbd_isr;
-  int irq;
+struct PS2Ops {
+  void (*putc)(void *, char);
+  int  (*getc)(void *);
 };
 
-int ps2_init(struct PS2 *, struct Pl050 *, int);
+struct PS2 {
+  struct PS2Ops    *ops;
+  void             *ops_arg;
+  struct ISRThread  kbd_isr;
+  int               irq;
+};
+
+int ps2_init(struct PS2 *, struct PS2Ops *, void *, int);
 int ps2_kbd_getc(struct PS2 *);
 
 #endif  // !__KERNEL_DRIVERS_PS2_H__

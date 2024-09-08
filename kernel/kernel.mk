@@ -37,6 +37,7 @@ KERNEL_SRCFILES :=	\
 	kernel/drivers/console/pl111.c \
 	kernel/drivers/console/console.c \
 	kernel/drivers/console/ps2.c \
+	kernel/drivers/console/screen.c \
 	kernel/drivers/console/uart.c \
 	kernel/drivers/rtc/ds1338.c \
 	kernel/drivers/rtc/sbcon.c \

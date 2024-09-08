@@ -8,16 +8,17 @@
  */
 
 #include <stdint.h>
+#include <kernel/drivers/ps2.h>
 
 /**
  * PL050 Driver instance.
  */
 struct Pl050 {
   volatile uint32_t *base;    ///< Memory base address
+  struct PS2         ps2;
 };
 
-int  pl050_init(struct Pl050 *, void *);
-void pl050_putc(struct Pl050 *, char);
-int  pl050_getc(struct Pl050 *);
+int  pl050_init(struct Pl050 *, void *, int);
+int  pl050_kbd_getc(struct Pl050 *);
 
 #endif  // !__KERNEL_DRIVERS_CONSOLE_PL050_H__

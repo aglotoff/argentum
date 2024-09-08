@@ -11,6 +11,7 @@
 
 struct Buf;
 struct Screen;
+struct Tty;
 
 struct Machine {
   uint32_t type;
@@ -35,15 +36,14 @@ struct Machine {
  
   int    (*console_init)(void);
   int    (*console_getc)(void);
+  void   (*console_putc)(char);
 
-  int    (*serial_putc)(int);
-
-  void   (*display_update)(struct Screen *);
-  void   (*display_erase)(struct Screen *, unsigned, unsigned);
-  void   (*display_draw_char_at)(struct Screen *, unsigned);
-  void   (*display_scroll_down)(struct Screen *, unsigned);
-  void   (*display_flush)(struct Screen *);
-  void   (*display_update_cursor)(struct Screen *);
+  void   (*tty_out_char)(struct Tty *, char);
+  void   (*tty_flush)(struct Tty *);
+  void   (*tty_erase)(struct Tty *);
+  void   (*tty_switch)(struct Tty *);
+  void   (*tty_init_system)(void);
+  void   (*tty_init)(struct Tty *, int);
 
   int    (*eth_init)(void);
   void   (*eth_write)(const void *, size_t);
