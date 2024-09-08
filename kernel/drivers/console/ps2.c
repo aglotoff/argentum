@@ -69,11 +69,11 @@ ps2_kbd_irq_thread(void *arg)
       continue;
 
     if (key_sequences[c] != NULL) {
-      console_interrupt(console_current, key_sequences[c]);
+      tty_process_input(console_current, key_sequences[c]);
     } else {
       buf[0] = c & 0xFF;
       buf[1] = '\0';
-      console_interrupt(console_current, buf);
+      tty_process_input(console_current, buf);
     }
   }
 

@@ -29,7 +29,7 @@ enum ParserState {
   PARSER_CSI,
 };
 
-struct Console {
+struct Tty {
   struct {
     char                buf[CONSOLE_INPUT_MAX];
     size_t              size;
@@ -60,17 +60,17 @@ struct Console {
   pid_t                 pgrp;
 };
 
-extern struct Console *console_current;
-extern struct Console *console_system;
+extern struct Tty *console_current;
+extern struct Tty *console_system;
 
 void    console_init(void);
 void    console_putc(char);
-void    console_interrupt(struct Console *, char *);
+void    tty_process_input(struct Tty *, char *);
 int     console_getc(void);
-ssize_t console_read(dev_t, uintptr_t, size_t);
-ssize_t console_write(dev_t, const void *, size_t);
-int     console_ioctl(dev_t, int, int);
-int     console_select(dev_t, struct timeval *);
+ssize_t tty_read(dev_t, uintptr_t, size_t);
+ssize_t tty_write(dev_t, uintptr_t, size_t);
+int     tty_ioctl(dev_t, int, int);
+int     tty_select(dev_t, struct timeval *);
 void    console_switch(int);
 
 // ANSI color codes

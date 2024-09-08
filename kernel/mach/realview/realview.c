@@ -196,40 +196,12 @@ realview_storage_init(void)
 static struct Pl050 kmi0;    
 static struct PS2 ps2;
 
-int
-realview_kbd_init(void)
-{
-  pl050_init(&kmi0, PA2KVA(PHYS_KMI0));
-  ps2_init(&ps2, &kmi0, IRQ_KMI0);
-  return 0;
-}
-
-int
-realview_kbd_getc(void)
-{
-  return ps2_kbd_getc(&ps2);
-}
-
 #define UART_CLOCK        24000000U     // UART clock rate, in Hz
 #define UART_BAUD_RATE    115200        // Required baud rate
 
 // Use UART0 as serial debug console.
 static struct Uart uart0;
 static struct Pl011 pl011;
-
-int
-realview_serial_init(void)
-{
-  pl011_init(&pl011, PA2KVA(0x10009000), UART_CLOCK, UART_BAUD_RATE);
-  uart_init(&uart0, &pl011, IRQ_UART0);
-  return 0;
-}
-
-int
-realview_serial_getc(void)
-{
-  return uart_getc(&uart0);
-}
 
 int
 realview_serial_putc(int c)
@@ -241,7 +213,7 @@ static struct Display display;
 static struct Pl111 lcd;
 
 int
-realview_display_init(void)
+realview_console_init(void)
 {
   struct Page *page;
 
@@ -255,41 +227,58 @@ realview_display_init(void)
 
   display_init(&display, page2kva(page));
 
+  pl050_init(&kmi0, PA2KVA(PHYS_KMI0));
+  ps2_init(&ps2, &kmi0, IRQ_KMI0);
+
+  pl011_init(&pl011, PA2KVA(0x10009000), UART_CLOCK, UART_BAUD_RATE);
+  uart_init(&uart0, &pl011, IRQ_UART0);
+
   return 0;
 }
 
+int
+realview_console_getc(void)
+{
+  int c;
+
+  if ((c = ps2_kbd_getc(&ps2)) > 0)
+    return c;
+  
+  return uart_getc(&uart0);
+}
+
 void
-realview_display_update(struct Console *console)
+realview_display_update(struct Tty *console)
 {
   display_update(&display, console);
 }
 
 void
-realview_display_flush(struct Console *console)
+realview_display_flush(struct Tty *console)
 {
   display_flush(&display, console);
 }
 
 void
-realview_display_update_cursor(struct Console *console)
+realview_display_update_cursor(struct Tty *console)
 {
   display_update_cursor(&display, console);
 }
 
 void
-realview_display_erase(struct Console *console, unsigned from, unsigned to)
+realview_display_erase(struct Tty *console, unsigned from, unsigned to)
 {
   display_erase(&display, console, from, to);
 }
 
 void
-realview_display_scroll_down(struct Console *console, unsigned n)
+realview_display_scroll_down(struct Tty *console, unsigned n)
 {
   display_scroll_down(&display, console, n);
 }
 
 void
-realview_display_draw_char_at(struct Console *console, unsigned n)
+realview_display_draw_char_at(struct Tty *console, unsigned n)
 {
   display_draw_char_at(&display, console, n);
 }
@@ -330,14 +319,11 @@ MACH_DEFINE(realview_pb_a8) {
 
   .storage_init          = realview_storage_init,
 
-  .kbd_init              = realview_kbd_init,
-  .kbd_getc              = realview_kbd_getc,
+  .console_init          = realview_console_init,
+  .console_getc          = realview_console_getc,
 
-  .serial_init           = realview_serial_init,
-  .serial_getc           = realview_serial_getc,
   .serial_putc           = realview_serial_putc,
 
-  .display_init          = realview_display_init,
   .display_update        = realview_display_update,
   .display_flush         = realview_display_flush,
   .display_update_cursor = realview_display_update_cursor,
@@ -392,14 +378,11 @@ MACH_DEFINE(realview_pbx_a9) {
 
   .storage_init          = realview_storage_init,
 
-  .kbd_init              = realview_kbd_init,
-  .kbd_getc              = realview_kbd_getc,
+  .console_init          = realview_console_init,
+  .console_getc          = realview_console_getc,
 
-  .serial_init           = realview_serial_init,
-  .serial_getc           = realview_serial_getc,
   .serial_putc           = realview_serial_putc,
 
-  .display_init          = realview_display_init,
   .display_update        = realview_display_update,
   .display_flush         = realview_display_flush,
   .display_update_cursor = realview_display_update_cursor,

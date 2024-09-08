@@ -8,7 +8,7 @@ struct timeval;
 
 struct CharDev {
   ssize_t (*read)(dev_t, uintptr_t, size_t);
-  ssize_t (*write)(dev_t, const void *, size_t);
+  ssize_t (*write)(dev_t, uintptr_t, size_t);
   int     (*ioctl)(dev_t, int, int);
   int     (*select)(dev_t, struct timeval *);
 };

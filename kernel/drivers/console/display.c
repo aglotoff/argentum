@@ -23,7 +23,7 @@ static void display_erase_cursor(struct Display *);
 static void display_draw_char(struct Display *, unsigned, char, uint16_t, uint16_t);
 
 void
-display_draw_char_at(struct Display *display, struct Console *console, unsigned i)
+display_draw_char_at(struct Display *display, struct Tty *console, unsigned i)
 {
   display_draw_char(display, 
                     i,
@@ -65,7 +65,7 @@ display_init(struct Display *display, void *base)
 }
 
 void
-display_update(struct Display *display, struct Console *console)
+display_update(struct Display *display, struct Tty *console)
 {
   unsigned i;
 
@@ -79,7 +79,7 @@ display_update(struct Display *display, struct Console *console)
 }
 
 void
-display_update_cursor(struct Display *display, struct Console *console)
+display_update_cursor(struct Display *display, struct Tty *console)
 {
   display->pos = console->out.pos;
 
@@ -92,11 +92,10 @@ display_update_cursor(struct Display *display, struct Console *console)
 }
 
 void
-display_erase(struct Display *display, struct Console *console, unsigned from, unsigned to)
+display_erase(struct Display *display, struct Tty *console, unsigned from, unsigned to)
 {
   unsigned i;
   
-
   for (i = from; i <= to; i++) {
     display_draw_char(display, i, ' ', console->out.buf[i].fg, console->out.buf[i].bg);
 
@@ -106,7 +105,7 @@ display_erase(struct Display *display, struct Console *console, unsigned from, u
 }
 
 void
-display_flush(struct Display *display, struct Console *console)
+display_flush(struct Display *display, struct Tty *console)
 {
   if (display->pos < console->out.pos) {
     for ( ; display->pos < console->out.pos; display->pos++)
@@ -118,7 +117,7 @@ display_flush(struct Display *display, struct Console *console)
 }
 
 void
-display_scroll_down(struct Display *display, struct Console *console, unsigned n)
+display_scroll_down(struct Display *display, struct Tty *console, unsigned n)
 {
   
   display->pos = console->out.pos;

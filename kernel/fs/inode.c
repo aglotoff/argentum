@@ -244,7 +244,7 @@ fs_inode_write_locked(struct Inode *ip, uintptr_t va, size_t nbyte, off_t *off)
       return -ENODEV;
 
     fs_inode_unlock(ip);
-    total = d->write(ip->rdev, (const void *) va, nbyte);
+    total = d->write(ip->rdev, va, nbyte);
     fs_inode_lock(ip);
     return total;
   }
