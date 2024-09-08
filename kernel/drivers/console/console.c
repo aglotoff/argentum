@@ -27,230 +27,219 @@ static struct CharDev tty_device = {
   .select = tty_select,
 };
 
-#define NCONSOLES   6   // The total number of virtual consoles
+#define NTTYS       6   // The total number of virtual ttys
+#define NSCREENS    6   // For now, all ttys are screens
 
-static struct KSpinLock console_lock;
-static struct Tty consoles[NCONSOLES];
+static struct Screen screens[NSCREENS];
 
-struct Tty *console_current;
-struct Tty *console_system;
+static struct Tty ttys[NTTYS];
+struct Tty *tty_current;
+struct Tty *tty_system;
 
 #define IN_EOF  (1 << 0)
 #define IN_EOL  (1 << 1)
 
-// Send a signal to all processes in the given console process group
 static void
-tty_signal(struct Tty *console, int signo)
+screen_init(struct Screen *screen)
 {
-  if (console->pgrp <= 1)
-    return;
+  unsigned i;
 
-  k_spinlock_release(&console->in.lock);
+  screen->fg_color      = COLOR_WHITE;
+  screen->bg_color      = COLOR_BLACK;
+  screen->state         = PARSER_NORMAL;
+  screen->esc_cur_param = -1;
+  screen->cols          = SCREEN_COLS;
+  screen->rows          = SCREEN_ROWS;
+  k_spinlock_init(&screen->lock, "screen");
 
-  if (signal_generate(-console->pgrp, signo, 0) != 0)
-    panic("cannot generate signal");
-
-  k_spinlock_acquire(&console->in.lock);
+  for (i = 0; i < screen->cols * screen->rows; i++) {
+    screen->buf[i].ch = ' ';
+    screen->buf[i].fg = COLOR_WHITE;
+    screen->buf[i].bg = COLOR_BLACK;
+  }
 }
 
 /**
  * Initialize the console devices.
  */
 void
-console_init(void)
+tty_init(void)
 {  
-  struct Tty *console;
+  int i;
 
-  k_spinlock_init(&console_lock, "console");
+  for (i = 0; i < NTTYS; i++) {
+    struct Tty *tty = &ttys[i];
 
-  for (console = consoles; console < &consoles[NCONSOLES]; console++) {
-    unsigned i;
+    k_spinlock_init(&tty->in.lock, "tty.in");
+    k_waitqueue_init(&tty->in.queue);
 
-    k_spinlock_init(&console->in.lock, "console.in");
-    k_waitqueue_init(&console->in.queue);
+    tty->out = &screens[i];
+    screen_init(tty->out);
 
-    console->out.fg_color      = COLOR_WHITE;
-    console->out.bg_color      = COLOR_BLACK;
-    console->out.state         = PARSER_NORMAL;
-    console->out.esc_cur_param = -1;
-    console->out.cols          = CONSOLE_COLS;
-    console->out.rows          = CONSOLE_ROWS;
-    k_spinlock_init(&console->out.lock, "console.out");
-
-    for (i = 0; i < console->out.cols * console->out.rows; i++) {
-      console->out.buf[i].ch = ' ';
-      console->out.buf[i].fg = COLOR_WHITE;
-      console->out.buf[i].bg = COLOR_BLACK;
-    }
-
-    console->termios.c_iflag = BRKINT | ICRNL | IXON | IXANY;
-    console->termios.c_oflag = OPOST | ONLCR;
-    console->termios.c_cflag = CREAD | CS8 | HUPCL;
-    console->termios.c_lflag = ISIG | ICANON | ECHO | ECHOE;
-    console->termios.c_cc[VEOF]   = C('D');
-    console->termios.c_cc[VEOL]   = _POSIX_VDISABLE;
-    console->termios.c_cc[VERASE] = C('H');
-    console->termios.c_cc[VINTR]  = C('C');
-    console->termios.c_cc[VKILL]  = C('U');
-    console->termios.c_cc[VMIN]   = 1;
-    console->termios.c_cc[VQUIT]  = C('\\');
-    console->termios.c_cc[VTIME]  = 0;
-    console->termios.c_cc[VSUSP]  = C('Z');
-    console->termios.c_cc[VSTART] = C('Q');
-    console->termios.c_cc[VSTOP]  = C('S');
-    console->termios.c_ispeed = B9600;
-    console->termios.c_ospeed = B9600;
+    tty->termios.c_iflag = BRKINT | ICRNL | IXON | IXANY;
+    tty->termios.c_oflag = OPOST | ONLCR;
+    tty->termios.c_cflag = CREAD | CS8 | HUPCL;
+    tty->termios.c_lflag = ISIG | ICANON | ECHO | ECHOE;
+    tty->termios.c_cc[VEOF]   = C('D');
+    tty->termios.c_cc[VEOL]   = _POSIX_VDISABLE;
+    tty->termios.c_cc[VERASE] = C('H');
+    tty->termios.c_cc[VINTR]  = C('C');
+    tty->termios.c_cc[VKILL]  = C('U');
+    tty->termios.c_cc[VMIN]   = 1;
+    tty->termios.c_cc[VQUIT]  = C('\\');
+    tty->termios.c_cc[VTIME]  = 0;
+    tty->termios.c_cc[VSUSP]  = C('Z');
+    tty->termios.c_cc[VSTART] = C('Q');
+    tty->termios.c_cc[VSTOP]  = C('S');
+    tty->termios.c_ispeed = B9600;
+    tty->termios.c_ospeed = B9600;
   }
 
-  console_current = &consoles[0];
-  console_system  = &consoles[0];
+  tty_current = &ttys[0];
+  tty_system  = &ttys[0];
 
   mach_current->console_init();
-  mach_current->display_update(console_current);
+  mach_current->display_update(tty_current->out);
 
   dev_register_char(0x01, &tty_device);
 }
 
-static void
-tty_flush(struct Tty *tty)
+
+int
+screen_is_current(struct Screen *screen)
 {
-  if (tty == console_current) {
-    mach_current->display_flush(tty);
-    mach_current->display_update_cursor(tty);
+  return (tty_current != NULL) && (screen == tty_current->out);
+}
+
+static void
+screen_flush(struct Screen *screen)
+{
+  if (screen_is_current(screen)) {
+    mach_current->display_flush(screen);
+    mach_current->display_update_cursor(screen);
   }
 }
 
-// Use the device minor number to select the virtual console corresponding to
-// this inode
-static struct Tty *
-tty_from_dev(dev_t dev)
-{
-  // No need to lock since rdev cannot change once we obtain an inode ref
-  // TODO: are we sure?
-  int minor = dev & 0xFF;
-  return minor < NCONSOLES ? &consoles[minor] : NULL;
-}
-
 static void
-console_erase(struct Tty *console, unsigned from, unsigned to)
+screen_erase(struct Screen *screen, unsigned from, unsigned to)
 {
   size_t i;
 
   for (i = from; i <= to; i++) {
-    console->out.buf[i].ch = ' ';
-    console->out.buf[i].fg = console->out.fg_color;
-    console->out.buf[i].bg = console->out.bg_color;
+    screen->buf[i].ch = ' ';
+    screen->buf[i].fg = screen->fg_color;
+    screen->buf[i].bg = screen->bg_color;
   }
 
-  if (console == console_current)
-    mach_current->display_erase(console, from, to);
+  if (screen_is_current(screen))
+    mach_current->display_erase(screen, from, to);
 }
 
 static void
-console_set_char(struct Tty *console, unsigned i, char c)
+screen_set_char(struct Screen *screen, unsigned i, char c)
 {
-  console->out.buf[i].ch = c;
-  console->out.buf[i].fg = console->out.fg_color & 0xF;
-  console->out.buf[i].bg = console->out.bg_color & 0xF;
+  screen->buf[i].ch = c;
+  screen->buf[i].fg = screen->fg_color & 0xF;
+  screen->buf[i].bg = screen->bg_color & 0xF;
 }
 
 #define DISPLAY_TAB_WIDTH  4
 
 static void
-console_scroll_down(struct Tty *console, unsigned n)
+screen_scroll_down(struct Screen *screen, unsigned n)
 {
   unsigned i;
 
-  if (console == console_current)
-    mach_current->display_flush(console);
+  if (screen_is_current(screen))
+    mach_current->display_flush(screen);
 
-  memmove(&console->out.buf[0], &console->out.buf[console->out.cols * n],
-          sizeof(console->out.buf[0]) * (console->out.cols * (console->out.rows - n)));
+  memmove(&screen->buf[0], &screen->buf[screen->cols * n],
+          sizeof(screen->buf[0]) * (screen->cols * (screen->rows - n)));
 
-  for (i = console->out.cols * (console->out.rows - n); i < console->out.cols * console->out.rows; i++) {
-    console->out.buf[i].ch = ' ';
-    console->out.buf[i].fg = COLOR_WHITE;
-    console->out.buf[i].bg = COLOR_BLACK;
+  for (i = screen->cols * (screen->rows - n); i < screen->cols * screen->rows; i++) {
+    screen->buf[i].ch = ' ';
+    screen->buf[i].fg = COLOR_WHITE;
+    screen->buf[i].bg = COLOR_BLACK;
   }
 
-  console->out.pos -= n * console->out.cols;
+  screen->pos -= n * screen->cols;
 
-  if (console == console_current)
-    mach_current->display_scroll_down(console, n);
+  if (screen_is_current(screen))
+    mach_current->display_scroll_down(screen, n);
 }
 
 static void
-console_insert_rows(struct Tty *cons, unsigned rows)
+screen_insert_rows(struct Screen *screen, unsigned rows)
 {
   unsigned max_rows, start_pos, end_pos, n, i;
   
-  max_rows  = cons->out.rows - cons->out.pos / cons->out.cols;
+  max_rows  = screen->rows - screen->pos / screen->cols;
   rows      = MIN(max_rows, rows);
 
-  start_pos = cons->out.pos - (cons->out.pos % cons->out.cols);
-  end_pos   = start_pos + rows * cons->out.cols;
-  n         = (max_rows - rows) * cons->out.cols;
+  start_pos = screen->pos - (screen->pos % screen->cols);
+  end_pos   = start_pos + rows * screen->cols;
+  n         = (max_rows - rows) * screen->cols;
 
-  if (cons == console_current)
-    mach_current->display_flush(cons);
+  if (screen_is_current(screen))
+    mach_current->display_flush(screen);
 
-  for (i = 0; i < rows * cons->out.cols; i++) {
-    cons->out.buf[i + start_pos].ch = ' ';
-    cons->out.buf[i + start_pos].fg = COLOR_WHITE;
-    cons->out.buf[i + start_pos].bg = COLOR_BLACK;
+  for (i = 0; i < rows * screen->cols; i++) {
+    screen->buf[i + start_pos].ch = ' ';
+    screen->buf[i + start_pos].fg = COLOR_WHITE;
+    screen->buf[i + start_pos].bg = COLOR_BLACK;
   }
 
-  memmove(&cons->out.buf[end_pos], &cons->out.buf[start_pos],
-          sizeof(cons->out.buf[0]) * n);
+  memmove(&screen->buf[end_pos], &screen->buf[start_pos],
+          sizeof(screen->buf[0]) * n);
   
-  if (cons == console_current)
-    mach_current->display_flush(cons);
+  if (screen_is_current(screen))
+    mach_current->display_flush(screen);
 }
 
 static int
-console_print_char(struct Tty *console, char c)
+screen_print_char(struct Screen *screen, char c)
 { 
   int ret = 0;
 
   switch (c) {
   case '\n':
-    if (console == console_current)
-      mach_current->display_flush(console);
+    if (screen_is_current(screen))
+      mach_current->display_flush(screen);
 
-    console->out.pos += console->out.cols;
-    console->out.pos -= console->out.pos % console->out.cols;
+    screen->pos += screen->cols;
+    screen->pos -= screen->pos % screen->cols;
 
-    if (console == console_current)
-     mach_current->display_update_cursor(console);
+    if (screen_is_current(screen))
+     mach_current->display_update_cursor(screen);
 
     break;
 
   case '\r':
-    if (console == console_current)
-      mach_current->display_flush(console);
+    if (screen_is_current(screen))
+      mach_current->display_flush(screen);
 
-    console->out.pos -= console->out.pos % console->out.cols;
+    screen->pos -= screen->pos % screen->cols;
 
-    if (console == console_current)
-      mach_current->display_update_cursor(console);
+    if (screen_is_current(screen))
+      mach_current->display_update_cursor(screen);
 
     break;
 
   case '\b':
-    if (console->out.pos > 0) {
-      tty_flush(console);
+    if (screen->pos > 0) {
+      screen_flush(screen);
 
-      console->out.pos--;
-      if (console == console_current)
-        mach_current->display_update_cursor(console);
+      screen->pos--;
+      if (screen_is_current(screen))
+        mach_current->display_update_cursor(screen);
     }
     break;
 
   case '\t':
     do {
-      console_set_char(console, console->out.pos++, ' ');
+      screen_set_char(screen, screen->pos++, ' ');
       ret++;
-    } while ((console->out.pos % DISPLAY_TAB_WIDTH) != 0);
+    } while ((screen->pos % DISPLAY_TAB_WIDTH) != 0);
     break;
 
   case C('G'):
@@ -259,207 +248,207 @@ console_print_char(struct Tty *console, char c)
 
   default:
     if (c < ' ') {
-      console_set_char(console, console->out.pos++, '^');
-      console_set_char(console, console->out.pos++, '@' + c);
+      screen_set_char(screen, screen->pos++, '^');
+      screen_set_char(screen, screen->pos++, '@' + c);
       ret += 2;
     } else {
-      console_set_char(console, console->out.pos++, c);
+      screen_set_char(screen, screen->pos++, c);
       ret++;
     }
     break;
   }
 
-  if (console->out.pos >= console->out.cols * console->out.rows)
-    console_scroll_down(console, 1);
+  if (screen->pos >= screen->cols * screen->rows)
+    screen_scroll_down(screen, 1);
 
   return ret;
 }
 
 void
-console_dump(struct Tty *console, unsigned c)
+screen_dump(struct Screen *screen, unsigned c)
 {
   const char sym[] = "0123456789ABCDEF";
 
-  console_print_char(console, '~');
-  console_print_char(console, '~');
-  console_print_char(console, '~');
+  screen_print_char(screen, '~');
+  screen_print_char(screen, '~');
+  screen_print_char(screen, '~');
 
-  console_print_char(console, sym[(c >> 28) & 0xF]);
-  console_print_char(console, sym[(c >> 24) & 0xF]);
-  console_print_char(console, sym[(c >> 20) & 0xF]);
-  console_print_char(console, sym[(c >> 16) & 0xF]);
-  console_print_char(console, sym[(c >> 12) & 0xF]);
-  console_print_char(console, sym[(c >> 8) & 0xF]);
-  console_print_char(console, sym[(c >> 4) & 0xF]);
-  console_print_char(console, sym[(c >> 0) & 0xF]);
+  screen_print_char(screen, sym[(c >> 28) & 0xF]);
+  screen_print_char(screen, sym[(c >> 24) & 0xF]);
+  screen_print_char(screen, sym[(c >> 20) & 0xF]);
+  screen_print_char(screen, sym[(c >> 16) & 0xF]);
+  screen_print_char(screen, sym[(c >> 12) & 0xF]);
+  screen_print_char(screen, sym[(c >> 8) & 0xF]);
+  screen_print_char(screen, sym[(c >> 4) & 0xF]);
+  screen_print_char(screen, sym[(c >> 0) & 0xF]);
 
-  console_print_char(console, '\n');
+  screen_print_char(screen, '\n');
 }
 
 // Handle the escape sequence terminated by the final character c.
 static void
-console_handle_esc(struct Tty *console, char c)
+screen_handle_esc(struct Screen *screen, char c)
 {
   int i, tmp;
   unsigned n, m;
 
-  tty_flush(console);
+  screen_flush(screen);
 
   switch (c) {
 
   // Cursor Up
   case 'A':
-    n = (console->out.esc_cur_param == 0) ? 1 : console->out.esc_params[0];
-    n = MIN(n, console->out.pos / console->out.cols);
-    console->out.pos -= n * console->out.cols;
+    n = (screen->esc_cur_param == 0) ? 1 : screen->esc_params[0];
+    n = MIN(n, screen->pos / screen->cols);
+    screen->pos -= n * screen->cols;
     break;
   
   // Cursor Down
   case 'B':
-    n = (console->out.esc_cur_param == 0) ? 1 : console->out.esc_params[0];
-    n = MIN(n, console->out.rows - console->out.pos / console->out.cols - 1);
-    console->out.pos += n * console->out.cols;
+    n = (screen->esc_cur_param == 0) ? 1 : screen->esc_params[0];
+    n = MIN(n, screen->rows - screen->pos / screen->cols - 1);
+    screen->pos += n * screen->cols;
     break;
 
   // Cursor Forward
   case 'C':
-    n = (console->out.esc_cur_param == 0) ? 1 : console->out.esc_params[0];
-    n = MIN(n, console->out.cols - console->out.pos % console->out.cols - 1);
-    console->out.pos += n;
+    n = (screen->esc_cur_param == 0) ? 1 : screen->esc_params[0];
+    n = MIN(n, screen->cols - screen->pos % screen->cols - 1);
+    screen->pos += n;
     break;
 
   // Cursor Back
   case 'D':
-    n = (console->out.esc_cur_param == 0) ? 1 : console->out.esc_params[0];
-    n = MIN(n, console->out.pos % console->out.cols);
-    console->out.pos -= n;
+    n = (screen->esc_cur_param == 0) ? 1 : screen->esc_params[0];
+    n = MIN(n, screen->pos % screen->cols);
+    screen->pos -= n;
     break;
 
   // Cursor Horizontal Absolute
   case 'G':
-    n = (console->out.esc_cur_param < 1) ? 1 : console->out.esc_params[0];
-    n = MIN(n, console->out.cols);
-    console->out.pos -= console->out.pos % console->out.cols;
-    console->out.pos += n - 1;
+    n = (screen->esc_cur_param < 1) ? 1 : screen->esc_params[0];
+    n = MIN(n, screen->cols);
+    screen->pos -= screen->pos % screen->cols;
+    screen->pos += n - 1;
     break;
 
   // Cursor Position
   case 'H':
-    n = (console->out.esc_cur_param < 1) ? 1 : console->out.esc_params[0];
-    n = MIN(n, console->out.rows);
+    n = (screen->esc_cur_param < 1) ? 1 : screen->esc_params[0];
+    n = MIN(n, screen->rows);
 
-    m = (console->out.esc_cur_param < 2) ? 1 : console->out.esc_params[1];
-    m = MIN(m, console->out.cols);
+    m = (screen->esc_cur_param < 2) ? 1 : screen->esc_params[1];
+    m = MIN(m, screen->cols);
 
-    console->out.pos = (n - 1) * console->out.cols + m - 1;
+    screen->pos = (n - 1) * screen->cols + m - 1;
     break;
 
   // Erase in Display
   case 'J':
-    n = (console->out.esc_cur_param < 1) ? 0 : console->out.esc_params[0];
+    n = (screen->esc_cur_param < 1) ? 0 : screen->esc_params[0];
     if (n == 0) {
-      console_erase(console, console->out.pos, CONSOLE_COLS * CONSOLE_ROWS - 1);
+      screen_erase(screen, screen->pos, SCREEN_COLS * SCREEN_ROWS - 1);
     } else if (n == 1) {
-      console_erase(console, 0, console->out.pos);
+      screen_erase(screen, 0, screen->pos);
     } else if (n == 2) {
-      console_erase(console, 0, CONSOLE_COLS * CONSOLE_ROWS - 1);
+      screen_erase(screen, 0, SCREEN_COLS * SCREEN_ROWS - 1);
     }
     break;
 
   // Erase in Line
   case 'K':
-    n = (console->out.esc_cur_param < 1) ? 0 : console->out.esc_params[0];
+    n = (screen->esc_cur_param < 1) ? 0 : screen->esc_params[0];
     if (n == 0) {
-      console_erase(console, console->out.pos, console->out.pos - console->out.pos % CONSOLE_COLS + CONSOLE_COLS - 1);
+      screen_erase(screen, screen->pos, screen->pos - screen->pos % SCREEN_COLS + SCREEN_COLS - 1);
     } else if (n == 1) {
-      console_erase(console, console->out.pos - console->out.pos % CONSOLE_COLS, console->out.pos);
+      screen_erase(screen, screen->pos - screen->pos % SCREEN_COLS, screen->pos);
     } else if (n == 2) {
-      console_erase(console, console->out.pos - console->out.pos % CONSOLE_COLS, console->out.pos - console->out.pos % CONSOLE_COLS + CONSOLE_COLS - 1);
+      screen_erase(screen, screen->pos - screen->pos % SCREEN_COLS, screen->pos - screen->pos % SCREEN_COLS + SCREEN_COLS - 1);
     }
     break;
 
   // Insert Line
   case 'L':
-    n = (console->out.esc_cur_param < 1) ? 1 : console->out.esc_params[0];
-    console_insert_rows(console, n);
+    n = (screen->esc_cur_param < 1) ? 1 : screen->esc_params[0];
+    screen_insert_rows(screen, n);
     break;
 
   // Cursor Vertical Position
   case 'd':
-    n = (console->out.esc_cur_param < 1) ? 1 : console->out.esc_params[0];
-    n = MIN(n, console->out.rows);
-    console->out.pos = (n - 1) * console->out.cols + console->out.pos % console->out.cols;
+    n = (screen->esc_cur_param < 1) ? 1 : screen->esc_params[0];
+    n = MIN(n, screen->rows);
+    screen->pos = (n - 1) * screen->cols + screen->pos % screen->cols;
     break;
 
   case '@':
-    n = (console->out.esc_cur_param < 1) ? 1 : console->out.esc_params[0];
-    n = MIN(n, CONSOLE_COLS - console->out.pos % CONSOLE_COLS);
+    n = (screen->esc_cur_param < 1) ? 1 : screen->esc_params[0];
+    n = MIN(n, SCREEN_COLS - screen->pos % SCREEN_COLS);
 
-    for (m = console->out.pos - console->out.pos % CONSOLE_COLS + CONSOLE_COLS - 1; m >= console->out.pos; m--) {
-      unsigned t = CONSOLE_COLS - console->out.pos % CONSOLE_COLS - n;
-      if (m >= console->out.pos + 1) {
-        console->out.buf[m] = console->out.buf[m - t];
+    for (m = screen->pos - screen->pos % SCREEN_COLS + SCREEN_COLS - 1; m >= screen->pos; m--) {
+      unsigned t = SCREEN_COLS - screen->pos % SCREEN_COLS - n;
+      if (m >= screen->pos + 1) {
+        screen->buf[m] = screen->buf[m - t];
       } else {
-        console->out.buf[m].ch = ' ';
-        console->out.buf[m].fg = console->out.fg_color;
-        console->out.buf[m].bg = console->out.bg_color;
+        screen->buf[m].ch = ' ';
+        screen->buf[m].fg = screen->fg_color;
+        screen->buf[m].bg = screen->bg_color;
       }
 
-      if (console == console_current)
-        mach_current->display_draw_char_at(console, m);
+      if (screen_is_current(screen))
+        mach_current->display_draw_char_at(screen, m);
     }
     break;
  
   // Set Graphic Rendition
   case 'm':
-    if (console->out.esc_cur_param == 0) {
+    if (screen->esc_cur_param == 0) {
       // All attributes off
-      console->out.bg_color = COLOR_BLACK;
-      console->out.fg_color = COLOR_WHITE;
+      screen->bg_color = COLOR_BLACK;
+      screen->fg_color = COLOR_WHITE;
       break;
     }
 
-    for (i = 0; (i < console->out.esc_cur_param) && (i < CONSOLE_ESC_MAX); i++) {
-      switch (console->out.esc_params[i]) {
+    for (i = 0; (i < screen->esc_cur_param) && (i < SCREEN_ESC_MAX); i++) {
+      switch (screen->esc_params[i]) {
       case 0:   // Reset all modes (styles and colors)
-        console->out.bg_color = COLOR_BLACK;
-        console->out.fg_color = COLOR_WHITE;
+        screen->bg_color = COLOR_BLACK;
+        screen->fg_color = COLOR_WHITE;
         break;
       case 1:   // Set bold mode
-        console->out.fg_color |= COLOR_BRIGHT;
+        screen->fg_color |= COLOR_BRIGHT;
         break;
       case 7:   // Set inverse/reverse mode
       case 27:
-        tmp = console->out.bg_color;
-        console->out.bg_color = console->out.fg_color;
-        console->out.fg_color = tmp;
+        tmp = screen->bg_color;
+        screen->bg_color = screen->fg_color;
+        screen->fg_color = tmp;
         break;
       case 22:  // Reset bold mode
-        console->out.fg_color &= ~COLOR_BRIGHT;
+        screen->fg_color &= ~COLOR_BRIGHT;
         break;
       case 39:
         // Default foreground color (white)
-        console->out.fg_color = (console->out.fg_color & ~COLOR_MASK) | COLOR_WHITE;
+        screen->fg_color = (screen->fg_color & ~COLOR_MASK) | COLOR_WHITE;
         break;
       case 49:
         // Default background color (black)
-        console->out.bg_color = (console->out.bg_color & ~COLOR_MASK) | COLOR_BLACK;
+        screen->bg_color = (screen->bg_color & ~COLOR_MASK) | COLOR_BLACK;
         break;
       default:
-        if ((console->out.esc_params[i] >= 30) && (console->out.esc_params[i] <= 37)) {
+        if ((screen->esc_params[i] >= 30) && (screen->esc_params[i] <= 37)) {
           // Set foreground color
-          console->out.fg_color = (console->out.fg_color & ~COLOR_MASK) | (console->out.esc_params[i] - 30);
-        } else if ((console->out.esc_params[i] >= 40) && (console->out.esc_params[i] <= 47)) {
+          screen->fg_color = (screen->fg_color & ~COLOR_MASK) | (screen->esc_params[i] - 30);
+        } else if ((screen->esc_params[i] >= 40) && (screen->esc_params[i] <= 47)) {
           // Set background color
-          console->out.bg_color = (console->out.bg_color & ~COLOR_MASK) | (console->out.esc_params[i] - 40);
+          screen->bg_color = (screen->bg_color & ~COLOR_MASK) | (screen->esc_params[i] - 40);
         }
       }
     }
     break;
 
   case 'b':
-    for (n = 0; n < console->out.esc_params[0]; n++)
-      console_print_char(console, console->out.buf[console->out.pos - 1].ch);
+    for (n = 0; n < screen->esc_params[0]; n++)
+      screen_print_char(screen, screen->buf[screen->pos - 1].ch);
     break;
 
   // TODO
@@ -473,140 +462,87 @@ console_handle_esc(struct Tty *console, char c)
   // TODO: handle other control sequences here
 
   default:
-    console_dump(console, c);
-    console_dump(console, console->out.esc_params[0]);
+    screen_dump(screen, c);
+    screen_dump(screen, screen->esc_params[0]);
     for (;;);
 
     break;
   }
 
-  tty_flush(console);
+  screen_flush(screen);
 }
 
 static void
-tty_out_char(struct Tty *console, char c)
+screen_out_char(struct Screen *screen, char c)
 {
   int i;
 
   // The first (aka system) console is also connected to the serial port
-  if (console == console_system)
+  if (screen_is_current(screen))
     mach_current->serial_putc(c);
 
-  switch (console->out.state) {
+  switch (screen->state) {
   case PARSER_NORMAL:
     if (c == '\x1b')
-      console->out.state = PARSER_ESC;
+      screen->state = PARSER_ESC;
     else
-      console_print_char(console, c);
+      screen_print_char(screen, c);
     break;
 
 	case PARSER_ESC:
 		if (c == '[') {
-			console->out.state = PARSER_CSI;
-      console->out.esc_cur_param = -1;
-      console->out.esc_question = 0;
-      for (i = 0; i < CONSOLE_ESC_MAX; i++)
-        console->out.esc_params[i] = 0;
+			screen->state = PARSER_CSI;
+      screen->esc_cur_param = -1;
+      screen->esc_question = 0;
+      for (i = 0; i < SCREEN_ESC_MAX; i++)
+        screen->esc_params[i] = 0;
 		} else {
-      // console_dump(console, c);
-			console->out.state = PARSER_NORMAL;
+			screen->state = PARSER_NORMAL;
 		}
 		break;
 
 	case PARSER_CSI:
     if (c == '?') {
-      if (console->out.esc_cur_param == -1) {
-        console->out.esc_question = 1;
+      if (screen->esc_cur_param == -1) {
+        screen->esc_question = 1;
       } else {
-        console->out.state = PARSER_NORMAL;
+        screen->state = PARSER_NORMAL;
       }
     } else {
       if (c >= '0' && c <= '9') {
-        if (console->out.esc_cur_param == -1)
-          console->out.esc_cur_param = 0;
+        if (screen->esc_cur_param == -1)
+          screen->esc_cur_param = 0;
 
         // Parse the current parameter
-        if (console->out.esc_cur_param < CONSOLE_ESC_MAX)
-          console->out.esc_params[console->out.esc_cur_param] = console->out.esc_params[console->out.esc_cur_param] * 10 + (c - '0');
+        if (screen->esc_cur_param < SCREEN_ESC_MAX)
+          screen->esc_params[screen->esc_cur_param] = screen->esc_params[screen->esc_cur_param] * 10 + (c - '0');
       } else if (c == ';') {
         // Next parameter
-        if (console->out.esc_cur_param < CONSOLE_ESC_MAX)
-          console->out.esc_cur_param++;
+        if (screen->esc_cur_param < SCREEN_ESC_MAX)
+          screen->esc_cur_param++;
       } else {
-        if (console->out.esc_cur_param < CONSOLE_ESC_MAX)
-          console->out.esc_cur_param++;
+        if (screen->esc_cur_param < SCREEN_ESC_MAX)
+          screen->esc_cur_param++;
 
-        console_handle_esc(console, c);
-        console->out.state = PARSER_NORMAL;
+        screen_handle_esc(screen, c);
+        screen->state = PARSER_NORMAL;
       }
     }
 		break;
 
 	default:
-		console->out.state = PARSER_NORMAL;
+		screen->state = PARSER_NORMAL;
     break;
 	}
 }
 
 static void
-tty_echo(struct Tty *tty, char c)
+screen_backspace(struct Screen *screen)
 {
-  k_spinlock_acquire(&tty->out.lock);
-  tty_out_char(tty, c);
-  tty_flush(tty);
-  k_spinlock_release(&tty->out.lock);
-}
-
-/**
- * Output character to the display.
- * 
- * @param c The character to be printed.
- */
-void
-console_putc(char c)
-{
-  if (console_system != NULL)
-    tty_echo(console_system, c);
-}
-
-static void
-console_backspace(struct Tty *tty)
-{
-  k_spinlock_acquire(&tty->out.lock);
-  if (tty->out.pos > 0)
-    console_set_char(tty, --tty->out.pos, ' ');
-  k_spinlock_release(&tty->out.lock);
-}
-
-static int
-tty_erase_input(struct Tty *tty)
-{
-  if (tty->in.size == 0)
-    return 0;
-
-  if (tty->termios.c_lflag & ECHOE) {
-    console_backspace(tty);
-    tty_echo(tty, '\b');
-  }
-
-  tty->in.size--;
-  if (tty->in.write_pos == 0) {
-    tty->in.write_pos = CONSOLE_INPUT_MAX - 1;
-  } else {
-    tty->in.write_pos--;
-  }
-  
-  return 1;
-}
-
-
-void
-console_switch(int n)
-{
-  if (console_current != &consoles[n]) {
-    console_current = &consoles[n];
-    mach_current->display_update(console_current);
-  }
+  k_spinlock_acquire(&screen->lock);
+  if (screen->pos > 0)
+    screen_set_char(screen, --screen->pos, ' ');
+  k_spinlock_release(&screen->lock);
 }
 
 /**
@@ -625,6 +561,77 @@ console_getc(void)
     ;
 
   return c;
+}
+
+static void
+screen_echo(struct Screen *screen, char c)
+{
+  k_spinlock_acquire(&screen->lock);
+  screen_out_char(screen, c);
+  screen_flush(screen);
+  k_spinlock_release(&screen->lock);
+}
+
+/**
+ * Output character to the display.
+ * 
+ * @param c The character to be printed.
+ */
+void
+console_putc(char c)
+{
+  if (tty_system != NULL)
+    screen_echo(tty_system->out, c);
+}
+
+// ----------------------------------------------------------------------------
+
+void
+tty_switch(int n)
+{
+  if ((n < 0) || (n >= NTTYS))
+    return; // panic?
+
+  if (tty_current != &ttys[n]) {
+    tty_current = &ttys[n];
+    mach_current->display_update(tty_current->out);
+  }
+}
+
+// Send a signal to all processes in the given console process group
+static void
+tty_signal(struct Tty *tty, int signo)
+{
+  if (tty->pgrp <= 1)
+    return;
+
+  k_spinlock_release(&tty->in.lock);
+
+  if (signal_generate(-tty->pgrp, signo, 0) != 0)
+    panic("cannot generate signal");
+
+  k_spinlock_acquire(&tty->in.lock);
+}
+
+static int
+tty_erase_input(struct Tty *tty)
+{
+  if (tty->in.size == 0)
+    return 0;
+
+  if (tty->termios.c_lflag & ECHOE) {
+    screen_backspace(tty->out);
+    screen_echo(tty->out, '\b');
+  }
+
+  tty->in.size--;
+  if (tty->in.write_pos == 0) {
+    tty->in.write_pos = TTY_INPUT_MAX - 1;
+  } else {
+    tty->in.write_pos--;
+  }
+  
+  return 1;
 }
 
 /**
@@ -678,7 +685,7 @@ tty_process_input(struct Tty *tty, char *buf)
           ;
 
         if (tty->termios.c_lflag & ECHOK)
-          tty_echo(tty, c);
+          screen_echo(tty->out, c);
 
         continue;
       }
@@ -695,24 +702,24 @@ tty_process_input(struct Tty *tty, char *buf)
     // Handle flow control characters
     if (tty->termios.c_iflag & (IXON | IXOFF)) {
       if (c == tty->termios.c_cc[VSTOP]) {
-        k_spinlock_acquire(&tty->out.lock);
-        tty->out.stopped = 1;
-        k_spinlock_release(&tty->out.lock);
+        k_spinlock_acquire(&tty->out->lock);
+        tty->out->stopped = 1;
+        k_spinlock_release(&tty->out->lock);
 
         if (tty->termios.c_iflag & IXOFF)
-          tty_echo(tty, c);
+          screen_echo(tty->out, c);
 
         continue;
       }
 
       if ((c == tty->termios.c_cc[VSTART]) || (tty->termios.c_iflag & IXANY)) {
-        k_spinlock_acquire(&tty->out.lock);
-        tty->out.stopped = 0;
-        k_spinlock_release(&tty->out.lock);
+        k_spinlock_acquire(&tty->out->lock);
+        tty->out->stopped = 0;
+        k_spinlock_release(&tty->out->lock);
 
         if (c == tty->termios.c_cc[VSTART]) {
           if (tty->termios.c_iflag & IXOFF)
-            tty_echo(tty, c);
+            screen_echo(tty->out, c);
           continue;
         }
       }
@@ -733,17 +740,17 @@ tty_process_input(struct Tty *tty, char *buf)
 
       if (sig) {
         tty_signal(tty, sig);
-        tty_echo(tty, c);
+        screen_echo(tty->out, c);
         continue;
       }
     }
 
     if ((c != tty->termios.c_cc[VEOF]) && (tty->termios.c_lflag & ECHO))
-      tty_echo(tty, c);
+      screen_echo(tty->out, c);
     else if ((c == '\n') && (tty->termios.c_lflag & ECHONL))
-      tty_echo(tty, c);
+      screen_echo(tty->out, c);
 
-    if (tty->in.size == (CONSOLE_INPUT_MAX - 1)) {
+    if (tty->in.size == (TTY_INPUT_MAX - 1)) {
       // Reserve space for one EOL character at the end of the input buffer
       if (!(tty->termios.c_lflag & ICANON))
         continue;
@@ -751,13 +758,13 @@ tty_process_input(struct Tty *tty, char *buf)
           (c != tty->termios.c_cc[VEOF]) &&
           (c != '\n'))
         continue;
-    } else if (tty->in.size == CONSOLE_INPUT_MAX) {
+    } else if (tty->in.size == TTY_INPUT_MAX) {
       // Input buffer full - discard all extra characters
       continue;
     }
 
     tty->in.buf[tty->in.write_pos] = c;
-    tty->in.write_pos = (tty->in.write_pos + 1) % CONSOLE_INPUT_MAX;
+    tty->in.write_pos = (tty->in.write_pos + 1) % TTY_INPUT_MAX;
     tty->in.size++;
   }
 
@@ -765,6 +772,17 @@ tty_process_input(struct Tty *tty, char *buf)
     k_waitqueue_wakeup_all(&tty->in.queue);
 
   k_spinlock_release(&tty->in.lock);
+}
+
+// Use the device minor number to select the virtual console corresponding to
+// this inode
+static struct Tty *
+tty_from_dev(dev_t dev)
+{
+  // No need to lock since rdev cannot change once we obtain an inode ref
+  // TODO: are we sure?
+  int minor = dev & 0xFF;
+  return minor < NTTYS ? &ttys[minor] : NULL;
 }
 
 /**
@@ -801,7 +819,7 @@ tty_read(dev_t dev, uintptr_t buf, size_t nbytes)
 
     // Grab the next character
     c = tty->in.buf[tty->in.read_pos];
-    tty->in.read_pos = (tty->in.read_pos + 1) % CONSOLE_INPUT_MAX;
+    tty->in.read_pos = (tty->in.read_pos + 1) % TTY_INPUT_MAX;
     tty->in.size--;
 
     if (tty->termios.c_lflag & ICANON) {
@@ -844,25 +862,25 @@ tty_write(dev_t dev, uintptr_t buf, size_t nbytes)
   if (tty == NULL)
     return -ENODEV;
 
-  k_spinlock_acquire(&tty->out.lock);
+  k_spinlock_acquire(&tty->out->lock);
 
-  if (!tty->out.stopped) {
+  if (!tty->out->stopped) {
     // TODO: unlock periodically to not block the entire system?
     for (i = 0; i != nbytes; i++) {
       int c, r;
 
       if ((r = vm_space_copy_in(&c, buf + i, 1)) < 0) {
-        k_spinlock_release(&tty->out.lock);
+        k_spinlock_release(&tty->out->lock);
         return r;
       }
 
-      tty_out_char(tty, c);
+      screen_out_char(tty->out, c);
     }
 
-    tty_flush(tty);
+    screen_flush(tty->out);
   }
 
-  k_spinlock_release(&tty->out.lock);
+  k_spinlock_release(&tty->out->lock);
   
   return i;
 }
@@ -892,14 +910,14 @@ tty_ioctl(dev_t dev, int request, int arg)
                       sizeof(struct termios));
 
   case TIOCGPGRP:
-    return console_current->pgrp;
+    return tty_current->pgrp;
   case TIOCSPGRP:
     // TODO: validate
-    console_current->pgrp = arg;
+    tty_current->pgrp = arg;
     return 0;
   case TIOCGWINSZ:
-    ws.ws_col = CONSOLE_COLS;
-    ws.ws_row = CONSOLE_ROWS;
+    ws.ws_col = SCREEN_COLS;
+    ws.ws_row = SCREEN_ROWS;
     ws.ws_xpixel = DEFAULT_FB_WIDTH;
     ws.ws_ypixel = DEFAULT_FB_HEIGHT;
     return vm_copy_out(process_current()->vm->pgtab, &ws, arg, sizeof ws);

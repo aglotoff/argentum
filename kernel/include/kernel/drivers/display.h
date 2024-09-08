@@ -9,6 +9,8 @@
 
 #include <stdint.h>
 
+struct Screen;
+
 struct Display {
   uint16_t     *fb_base;
   unsigned      fb_width;
@@ -29,11 +31,11 @@ struct Display {
 #define DEFAULT_FB_HEIGHT   480
 
 int  display_init(struct Display *, void *);
-void display_update(struct Display *, struct Tty *);
-void display_erase(struct Display *, struct Tty *, unsigned, unsigned);
-void display_draw_char_at(struct Display *, struct Tty *, unsigned);
-void display_scroll_down(struct Display *, struct Tty *, unsigned);
-void display_flush(struct Display *, struct Tty *);
-void display_update_cursor(struct Display *, struct Tty *);
+void display_update(struct Display *, struct Screen *);
+void display_erase(struct Display *, struct Screen *, unsigned, unsigned);
+void display_draw_char_at(struct Display *, struct Screen *, unsigned);
+void display_scroll_down(struct Display *, struct Screen *, unsigned);
+void display_flush(struct Display *, struct Screen *);
+void display_update_cursor(struct Display *, struct Screen *);
 
 #endif  // !__KERNEL_DRIVERS_CONSOLE_DISPLAY_H__

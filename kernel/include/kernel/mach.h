@@ -10,7 +10,7 @@
 #define MACH_MAX  5108
 
 struct Buf;
-struct Tty;
+struct Screen;
 
 struct Machine {
   uint32_t type;
@@ -38,12 +38,12 @@ struct Machine {
 
   int    (*serial_putc)(int);
 
-  void   (*display_update)(struct Tty *);
-  void   (*display_erase)(struct Tty *, unsigned, unsigned);
-  void   (*display_draw_char_at)(struct Tty *, unsigned);
-  void   (*display_scroll_down)(struct Tty *, unsigned);
-  void   (*display_flush)(struct Tty *);
-  void   (*display_update_cursor)(struct Tty *);
+  void   (*display_update)(struct Screen *);
+  void   (*display_erase)(struct Screen *, unsigned, unsigned);
+  void   (*display_draw_char_at)(struct Screen *, unsigned);
+  void   (*display_scroll_down)(struct Screen *, unsigned);
+  void   (*display_flush)(struct Screen *);
+  void   (*display_update_cursor)(struct Screen *);
 
   int    (*eth_init)(void);
   void   (*eth_write)(const void *, size_t);

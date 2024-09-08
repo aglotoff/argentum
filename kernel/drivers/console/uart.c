@@ -53,7 +53,7 @@ uart_irq_thread(void *arg)
     if (c != 0) {
       buf[0] = c;
       buf[1] = '\0';
-      tty_process_input(console_system, buf);
+      tty_process_input(tty_system, buf);
     }
   }
 

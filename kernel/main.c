@@ -66,8 +66,8 @@ void main(uintptr_t mach_type)
   k_sched_init();
 
   // Initialize device drivers
-  console_init();       // Console
-  rtc_init();           // Real-time clock
+  tty_init();                   // Console
+  rtc_init();                   // Real-time clock
   mach_current->storage_init();
   mach_current->eth_init();
 

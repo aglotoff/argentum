@@ -248,37 +248,37 @@ realview_console_getc(void)
 }
 
 void
-realview_display_update(struct Tty *console)
+realview_display_update(struct Screen *console)
 {
   display_update(&display, console);
 }
 
 void
-realview_display_flush(struct Tty *console)
+realview_display_flush(struct Screen *console)
 {
   display_flush(&display, console);
 }
 
 void
-realview_display_update_cursor(struct Tty *console)
+realview_display_update_cursor(struct Screen *console)
 {
   display_update_cursor(&display, console);
 }
 
 void
-realview_display_erase(struct Tty *console, unsigned from, unsigned to)
+realview_display_erase(struct Screen *console, unsigned from, unsigned to)
 {
   display_erase(&display, console, from, to);
 }
 
 void
-realview_display_scroll_down(struct Tty *console, unsigned n)
+realview_display_scroll_down(struct Screen *console, unsigned n)
 {
   display_scroll_down(&display, console, n);
 }
 
 void
-realview_display_draw_char_at(struct Tty *console, unsigned n)
+realview_display_draw_char_at(struct Screen *console, unsigned n)
 {
   display_draw_char_at(&display, console, n);
 }

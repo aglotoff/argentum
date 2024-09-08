@@ -69,11 +69,11 @@ ps2_kbd_irq_thread(void *arg)
       continue;
 
     if (key_sequences[c] != NULL) {
-      tty_process_input(console_current, key_sequences[c]);
+      tty_process_input(tty_current, key_sequences[c]);
     } else {
       buf[0] = c & 0xFF;
       buf[1] = '\0';
-      tty_process_input(console_current, buf);
+      tty_process_input(tty_current, buf);
     }
   }
 
@@ -251,7 +251,7 @@ ps2_kbd_getc(struct PS2 *ps2)
 
   // Alt + F1..F6 pressed
   if ((key_state & STATE_ALT) && (scan_code >= 0x3B) && (scan_code <= 0x40)) {
-    console_switch(scan_code - 0x3B);
+    tty_switch(scan_code - 0x3B);
     return 0;
   }
 

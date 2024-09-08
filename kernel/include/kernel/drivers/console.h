@@ -18,10 +18,10 @@
 #include <kernel/spinlock.h>
 #include <kernel/waitqueue.h>
 
-#define CONSOLE_INPUT_MAX 256
-#define CONSOLE_ESC_MAX   16   // The maximum number of esc parameters
-#define CONSOLE_COLS   80
-#define CONSOLE_ROWS  30
+#define TTY_INPUT_MAX     256
+#define SCREEN_ESC_MAX    16   // The maximum number of esc parameters
+#define SCREEN_COLS       80
+#define SCREEN_ROWS       30
 
 enum ParserState {
   PARSER_NORMAL,
@@ -29,41 +29,44 @@ enum ParserState {
   PARSER_CSI,
 };
 
+struct Screen {
+  int                 fg_color;                     // Current foreground color
+  int                 bg_color;                     // Current background color
+  enum ParserState    state;          
+  unsigned            esc_params[SCREEN_ESC_MAX];  // The esc sequence parameters
+  int                 esc_cur_param;                // Index of the current esc parameter
+  int                 esc_question;
+  struct {
+    unsigned ch : 8;
+    unsigned fg : 4;
+    unsigned bg : 4;
+  }                   buf[SCREEN_COLS * SCREEN_ROWS];
+  unsigned            cols;
+  unsigned            rows;
+  unsigned            pos;
+  int                 stopped;
+  struct KSpinLock     lock;
+};
+
 struct Tty {
   struct {
-    char                buf[CONSOLE_INPUT_MAX];
+    char                buf[TTY_INPUT_MAX];
     size_t              size;
     size_t              read_pos;
     size_t              write_pos;
-    struct KSpinLock     lock;
-    struct KWaitQueue  queue;
+    struct KSpinLock    lock;
+    struct KWaitQueue   queue;
   } in;
-  struct {
-    int                 fg_color;                     // Current foreground color
-    int                 bg_color;                     // Current background color
-    enum ParserState    state;          
-    unsigned            esc_params[CONSOLE_ESC_MAX];  // The esc sequence parameters
-    int                 esc_cur_param;                // Index of the current esc parameter
-    int                 esc_question;
-    struct {
-      unsigned ch : 8;
-      unsigned fg : 4;
-      unsigned bg : 4;
-    }                   buf[CONSOLE_COLS * CONSOLE_ROWS];
-    unsigned            cols;
-    unsigned            rows;
-    unsigned            pos;
-    int                 stopped;
-    struct KSpinLock     lock;
-  } out;
+  struct Screen       *out;
   struct termios        termios;
   pid_t                 pgrp;
 };
 
-extern struct Tty *console_current;
-extern struct Tty *console_system;
+extern struct Tty *tty_current;
+extern struct Tty *tty_system;
 
-void    console_init(void);
+void    tty_init(void);
+
 void    console_putc(char);
 void    tty_process_input(struct Tty *, char *);
 int     console_getc(void);
@@ -71,7 +74,7 @@ ssize_t tty_read(dev_t, uintptr_t, size_t);
 ssize_t tty_write(dev_t, uintptr_t, size_t);
 int     tty_ioctl(dev_t, int, int);
 int     tty_select(dev_t, struct timeval *);
-void    console_switch(int);
+void    tty_switch(int);
 
 // ANSI color codes
 #define COLOR_MASK            7
