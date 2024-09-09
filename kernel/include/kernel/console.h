@@ -6,13 +6,15 @@
 #endif
 
 /**
- * @file include/cprintf.h
+ * @file include/console.h
  *
  * Formatted output to console.
  */
 
 #include <stdarg.h>
 
+void console_putc(char);
+int  console_getc(void);
 void vcprintf(const char *, va_list);
 void cprintf(const char *, ...);
 

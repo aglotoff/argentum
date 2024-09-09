@@ -1,6 +1,6 @@
 #include <kernel/assert.h>
 #include <kernel/dev.h>
-#include <kernel/cprintf.h>
+#include <kernel/console.h>
 
 #define DEV_MAJOR_MIN 0
 #define DEV_MAJOR_MAX 255

@@ -1,7 +1,7 @@
 #include <kernel/assert.h>
 #include <errno.h>
 
-#include <kernel/cprintf.h>
+#include <kernel/console.h>
 #include <kernel/timer.h>
 #include <kernel/spinlock.h>
 

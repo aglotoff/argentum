@@ -2,7 +2,7 @@
 #include <fcntl.h>
 
 #include <kernel/assert.h>
-#include <kernel/cprintf.h>
+#include <kernel/console.h>
 #include <kernel/process.h>
 #include <kernel/fd.h>
 #include <kernel/fs/file.h>

@@ -5,7 +5,7 @@
 #include <kernel/mailbox.h>
 #include <kernel/thread.h>
 #include <kernel/types.h>
-#include <kernel/cprintf.h>
+#include <kernel/console.h>
 #include <kernel/object_pool.h>
 #include <kernel/page.h>
 

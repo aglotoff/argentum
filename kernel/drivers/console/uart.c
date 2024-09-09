@@ -1,6 +1,6 @@
 #include <kernel/drivers/pl011.h>
 #include <kernel/drivers/uart.h>
-#include <kernel/drivers/console.h>
+#include <kernel/tty.h>
 
 static void uart_irq_thread(void *);
 

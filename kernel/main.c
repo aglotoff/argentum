@@ -3,9 +3,9 @@
 #include <stdint.h>
 #include <sys/utsname.h>
 
-#include <kernel/cprintf.h>
+#include <kernel/console.h>
 #include <kernel/cpu.h>
-#include <kernel/drivers/console.h>
+#include <kernel/tty.h>
 #include <kernel/drivers/lan9118.h>
 #include <kernel/drivers/rtc.h>
 #include <kernel/fs/buf.h>

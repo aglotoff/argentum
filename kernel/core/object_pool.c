@@ -3,7 +3,7 @@
 #include <string.h>
 
 #include <kernel/assert.h>
-#include <kernel/cprintf.h>
+#include <kernel/console.h>
 #include <kernel/object_pool.h>
 #include <kernel/page.h>
 #include <kernel/types.h>

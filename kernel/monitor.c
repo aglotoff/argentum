@@ -1,8 +1,8 @@
 #include <string.h>
 
 #include <kernel/armv7/regs.h>
-#include <kernel/drivers/console.h>
-#include <kernel/cprintf.h>
+#include <kernel/tty.h>
+#include <kernel/console.h>
 #include <kernel/kdebug.h>
 #include <kernel/object_pool.h>
 #include <kernel/mm/memlayout.h>

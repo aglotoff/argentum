@@ -1,7 +1,7 @@
 #include <signal.h>
 
 #include <kernel/armv7/regs.h>
-#include <kernel/cprintf.h>
+#include <kernel/console.h>
 #include <kernel/page.h>
 #include <kernel/vmspace.h>
 #include <kernel/process.h>

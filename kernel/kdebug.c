@@ -1,7 +1,7 @@
 #include <kernel/dwarf.h>
 #include <stddef.h>
 
-#include <kernel/cprintf.h>
+#include <kernel/console.h>
 #include <kernel/kdebug.h>
 
 static int scan_aranges(uintptr_t, struct PcDebugInfo *); 

@@ -4,7 +4,7 @@
 #include <kernel/mutex.h>
 #include <kernel/object_pool.h>
 #include <kernel/thread.h>
-#include <kernel/cprintf.h>
+#include <kernel/console.h>
 
 #include "core_private.h"
 

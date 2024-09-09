@@ -35,7 +35,6 @@ KERNEL_SRCFILES :=	\
 	kernel/drivers/console/pl011.c \
 	kernel/drivers/console/pl050.c \
 	kernel/drivers/console/pl111.c \
-	kernel/drivers/console/console.c \
 	kernel/drivers/console/ps2.c \
 	kernel/drivers/console/screen.c \
 	kernel/drivers/console/uart.c \
@@ -69,7 +68,7 @@ KERNEL_SRCFILES :=	\
 	kernel/process/process.c \
 	kernel/process/signal.c \
 	kernel/process/vmspace.c \
-	kernel/cprintf.c \
+	kernel/console.c \
 	kernel/dev.c \
 	kernel/mach.c \
 	kernel/entry.S \
@@ -79,6 +78,7 @@ KERNEL_SRCFILES :=	\
 	kernel/syscall.c \
 	kernel/trapentry.S \
 	kernel/trap.c \
+	kernel/tty.c \
 	kernel/main.c
 
 KERNEL_SRCFILES += \

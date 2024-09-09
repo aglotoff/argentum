@@ -42,9 +42,6 @@ struct Tty {
 extern struct Tty *tty_current;
 extern struct Tty *tty_system;
 
-void    console_putc(char);
-int     console_getc(void);
-
 void    tty_init(void);
 void    tty_process_input(struct Tty *, char *);
 ssize_t tty_read(dev_t, uintptr_t, size_t);

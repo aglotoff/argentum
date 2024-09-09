@@ -11,7 +11,7 @@
 #include <netdb.h>
 #include <time.h>
 
-#include <kernel/cprintf.h>
+#include <kernel/console.h>
 #include <kernel/cpu.h>
 #include <kernel/drivers/rtc.h>
 #include <kernel/fd.h>

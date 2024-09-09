@@ -6,7 +6,7 @@
 #include <kernel/fs/buf.h>
 #include <kernel/page.h>
 #include <kernel/dev.h>
-#include <kernel/drivers/console.h>
+#include <kernel/tty.h>
 
 #include <kernel/drivers/ds1338.h>
 #include <kernel/drivers/sbcon.h>

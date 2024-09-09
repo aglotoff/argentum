@@ -2,7 +2,7 @@
 #include <errno.h>
 #include <string.h>
 
-#include <kernel/cprintf.h>
+#include <kernel/console.h>
 #include <kernel/drivers/rtc.h>
 #include <kernel/fs/buf.h>
 

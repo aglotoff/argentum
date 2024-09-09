@@ -1,6 +1,6 @@
 #include <string.h>
 
-#include <kernel/cprintf.h>
+#include <kernel/console.h>
 #include <kernel/page.h>
 #include <kernel/spinlock.h>
 #include <kernel/types.h>

@@ -1,6 +1,6 @@
 #include <stdint.h>
 
-#include <kernel/drivers/console.h>
+#include <kernel/tty.h>
 #include <kernel/mm/memlayout.h>
 #include <kernel/vm.h>
 #include <kernel/trap.h>

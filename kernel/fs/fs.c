@@ -6,7 +6,7 @@
 
 #include <kernel/fs/fs.h>
 #include <kernel/fs/file.h>
-#include <kernel/cprintf.h>
+#include <kernel/console.h>
 
 #define STATUS_MASK (O_APPEND | O_NONBLOCK | O_SYNC)
 

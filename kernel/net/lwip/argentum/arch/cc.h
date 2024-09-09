@@ -7,7 +7,7 @@
 #include <sys/time.h>
 
 #include <kernel/assert.h>
-#include <kernel/cprintf.h>
+#include <kernel/console.h>
 
 #define LWIP_NO_CTYPE_H         1
 

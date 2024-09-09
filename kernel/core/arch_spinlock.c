@@ -1,5 +1,5 @@
 #include <kernel/armv7/regs.h>
-#include <kernel/cprintf.h>
+#include <kernel/console.h>
 #include <kernel/kdebug.h>
 #include <kernel/spinlock.h>
 #include <kernel/types.h>

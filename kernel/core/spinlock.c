@@ -2,7 +2,7 @@
 #include <string.h>
 
 #include <kernel/assert.h>
-#include <kernel/cprintf.h>
+#include <kernel/console.h>
 #include <kernel/cpu.h>
 #include <kernel/irq.h>
 #include <kernel/kdebug.h>

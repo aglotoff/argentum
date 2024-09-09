@@ -1,7 +1,7 @@
 #include <string.h>
 
 #include <kernel/drivers/screen.h>
-#include <kernel/drivers/console.h>
+#include <kernel/tty.h>
 #include <kernel/drivers/display.h>
 #include <kernel/drivers/kbd.h>
 #include <kernel/types.h>

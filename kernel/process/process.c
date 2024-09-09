@@ -8,7 +8,7 @@
 
 #include <kernel/armv7/regs.h>
 #include <kernel/cpu.h>
-#include <kernel/cprintf.h>
+#include <kernel/console.h>
 #include <kernel/elf.h>
 #include <kernel/fd.h>
 #include <kernel/fs/fs.h>

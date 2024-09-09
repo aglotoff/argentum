@@ -1,5 +1,5 @@
 #include <errno.h>
-#include <kernel/cprintf.h>
+#include <kernel/console.h>
 #include <kernel/page.h>
 #include <kernel/vm.h>
 #include <kernel/types.h>

@@ -3,7 +3,7 @@
 #include <sys/stat.h>
 #include <sys/mman.h>
 
-#include <kernel/cprintf.h>
+#include <kernel/console.h>
 #include <kernel/elf.h>
 #include <kernel/fs/fs.h>
 #include <kernel/fd.h>

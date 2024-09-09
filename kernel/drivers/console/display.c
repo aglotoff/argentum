@@ -2,7 +2,7 @@
 #include <stdint.h>
 #include <string.h>
 
-#include <kernel/drivers/console.h>
+#include <kernel/tty.h>
 #include <kernel/drivers/display.h>
 #include <kernel/mm/memlayout.h>
 #include <kernel/vm.h>

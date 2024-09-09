@@ -4,7 +4,7 @@
 
 #include <kernel/fs/fs.h>
 #include <kernel/object_pool.h>
-#include <kernel/cprintf.h>
+#include <kernel/console.h>
 
 #include "devfs.h"
 

@@ -6,7 +6,7 @@
 #include <kernel/process.h>
 #include <kernel/vmspace.h>
 #include <kernel/thread.h>
-#include <kernel/cprintf.h>
+#include <kernel/console.h>
 
 #include <kernel/armv7/regs.h>
 

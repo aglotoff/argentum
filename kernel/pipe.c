@@ -1,7 +1,7 @@
 #include <errno.h>
 #include <fcntl.h>
 
-#include <kernel/cprintf.h>
+#include <kernel/console.h>
 #include <kernel/fs/file.h>
 #include <kernel/object_pool.h>
 #include <kernel/page.h>

@@ -6,8 +6,8 @@
 #include <string.h>
 #include <unistd.h>
 
-#include <kernel/cprintf.h>
-#include <kernel/drivers/console.h>
+#include <kernel/console.h>
+#include <kernel/tty.h>
 #include <kernel/drivers/rtc.h>
 #include <kernel/fs/buf.h>
 #include <kernel/fs/fs.h>

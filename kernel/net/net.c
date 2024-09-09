@@ -1,5 +1,5 @@
 #include <kernel/mach.h>
-#include <kernel/cprintf.h>
+#include <kernel/console.h>
 #include <kernel/fs/file.h>
 #include <kernel/page.h>
 #include <kernel/net.h>

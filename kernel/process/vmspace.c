@@ -3,8 +3,8 @@
 #include <string.h>
 #include <sys/mman.h>
 
-#include <kernel/cprintf.h>
-#include <kernel/drivers/console.h>
+#include <kernel/console.h>
+#include <kernel/tty.h>
 #include <kernel/fs/fs.h>
 #include <kernel/types.h>
 #include <kernel/object_pool.h>
