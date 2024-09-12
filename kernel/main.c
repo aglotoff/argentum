@@ -22,6 +22,7 @@
 #include <kernel/pipe.h>
 #include <kernel/process.h>
 #include <kernel/mailbox.h>
+#include <kernel/ipc.h>
 #include <kernel/net.h>
 #include <kernel/semaphore.h>
 #include <kernel/mach.h>
@@ -79,6 +80,8 @@ void main(uintptr_t mach_type)
   process_init();       // Process table
   signal_init_system(); // Signals
   net_init();           // Networking
+
+  // ipc_init();
 
   // Unblock other CPUs
   bsp_started = 1;

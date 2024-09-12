@@ -70,6 +70,7 @@ KERNEL_SRCFILES :=	\
 	kernel/process/vmspace.c \
 	kernel/console.c \
 	kernel/dev.c \
+	kernel/ipc.c \
 	kernel/mach.c \
 	kernel/entry.S \
 	kernel/kdebug.c \
