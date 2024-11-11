@@ -131,9 +131,9 @@ process_setup_vm(struct Process *proc)
   return 0;
 }
 
-void 
+int 
 arch_trap_frame_init(struct Process *process, uintptr_t entry, uintptr_t arg1,
-                   uintptr_t arg2, uintptr_t arg3, uintptr_t sp)
+                     uintptr_t arg2, uintptr_t arg3, uintptr_t sp)
 {
   process->thread->tf->r0  = arg1;              // argc
   process->thread->tf->r1  = arg2;              // argv
@@ -141,6 +141,7 @@ arch_trap_frame_init(struct Process *process, uintptr_t entry, uintptr_t arg1,
   process->thread->tf->sp  = sp;                // stack pointer
   process->thread->tf->psr = PSR_M_USR | PSR_F; // user mode, interrupts enabled
   process->thread->tf->pc  = entry;             // process entry point
+  return arg1;
 }
 
 static int
@@ -181,9 +182,7 @@ process_load_binary(struct Process *proc, const void *binary)
   if (addr != (VIRT_USTACK_TOP - USTACK_SIZE))
     return (int) addr;
 
-  arch_trap_frame_init(proc, elf->entry, 0, 0, 0, VIRT_USTACK_TOP);
-
-  return 0;
+  return arch_trap_frame_init(proc, elf->entry, 0, 0, 0, VIRT_USTACK_TOP);
 }
 
 int

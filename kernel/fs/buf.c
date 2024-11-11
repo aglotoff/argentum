@@ -7,7 +7,7 @@
 #include <kernel/spinlock.h>
 #include <kernel/page.h>
 
-struct KObjectPool *buf_desc_cache;
+struct KObjectPool *buf_pool;
 
 static void buf_request(struct Buf *);
 
@@ -21,14 +21,12 @@ static struct {
 } buf_cache;
 
 static void
-buf_ctor(void *ptr, size_t size)
+buf_ctor(void *ptr, size_t)
 {
   struct Buf *buf = (struct Buf *) ptr;
 
   k_waitqueue_init(&buf->wait_queue);
   k_mutex_init(&buf->mutex, "buf");
-
-  (void) size;
 }
 
 /**
@@ -37,10 +35,13 @@ buf_ctor(void *ptr, size_t size)
 void
 buf_init(void)
 {
-  buf_desc_cache = k_object_pool_create("buf_desc_cache", sizeof(struct Buf), 0,
-                                      buf_ctor, NULL);
-  if (buf_desc_cache == NULL)
-    panic("cannot allocate buf_desc_cache");
+  buf_pool = k_object_pool_create("buf_pool",
+                                  sizeof(struct Buf),
+                                  0,
+                                  buf_ctor,
+                                  NULL);
+  if (buf_pool == NULL)
+    panic("cannot allocate buf_pool");
 
   k_spinlock_init(&buf_cache.lock, "buf_cache");
   k_list_init(&buf_cache.head);
@@ -93,11 +94,11 @@ buf_alloc(size_t block_size)
   assert(k_spinlock_holding(&buf_cache.lock));
   assert(buf_cache.size < BUF_CACHE_MAX_SIZE);
 
-  if ((buf = (struct Buf *) k_object_pool_get(buf_desc_cache)) == NULL)
+  if ((buf = (struct Buf *) k_object_pool_get(buf_pool)) == NULL)
     return NULL;
 
   if ((buf->data = buf_alloc_data(block_size)) == NULL) {
-    k_object_pool_put(buf_desc_cache, buf);
+    k_object_pool_put(buf_pool, buf);
     return NULL;
   }
 
@@ -163,7 +164,7 @@ buf_get(unsigned block_no, size_t block_size, dev_t dev)
 
     if ((b->data = buf_alloc_data(block_size)) == NULL) {
       k_list_remove(&b->cache_link);
-      k_object_pool_put(buf_desc_cache, b);
+      k_object_pool_put(buf_pool, b);
 
       k_spinlock_release(&buf_cache.lock);
 
@@ -202,7 +203,7 @@ buf_read(unsigned block_no, size_t block_size, dev_t dev)
 
   k_mutex_lock(&buf->mutex);
 
-  // If needed, read the block from the device.
+  // If needed, read the block contents.
   // TODO: check for I/O errors
   if (!(buf->flags & BUF_VALID))
     buf_request(buf);

@@ -137,9 +137,9 @@ void           process_destroy(int);
 void           process_free(struct Process *);
 pid_t          process_copy(int);
 pid_t          process_wait(pid_t, int *, int);
-int            process_exec(const char *, char *const[], char *const[]);
+int            process_exec(const char *, uintptr_t, uintptr_t);
 void          *process_grow(ptrdiff_t);
-void           arch_trap_frame_init(struct Process *, uintptr_t, uintptr_t, uintptr_t, uintptr_t, uintptr_t);
+int            arch_trap_frame_init(struct Process *, uintptr_t, uintptr_t, uintptr_t, uintptr_t, uintptr_t);
 void           process_update_times(struct Process *, clock_t, clock_t);
 void           process_get_times(struct Process *, struct tms *);
 

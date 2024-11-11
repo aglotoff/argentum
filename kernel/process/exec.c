@@ -4,6 +4,7 @@
 #include <sys/mman.h>
 
 #include <kernel/console.h>
+#include <kernel/object_pool.h>
 #include <kernel/elf.h>
 #include <kernel/fs/fs.h>
 #include <kernel/fd.h>
@@ -15,173 +16,399 @@
 #include <kernel/types.h>
 #include <kernel/irq.h>
 
+#define STACK_BOTTOM  (VIRT_USTACK_TOP - USTACK_SIZE)
+#define STACK_PROT    (PROT_READ | PROT_WRITE | VM_USER)
+
 static int
-copy_args(struct VMSpace *vm, char *const args[], uintptr_t limit, char **sp)
+user_stack_put(struct VMSpace *vm, const void *buf, size_t n, uintptr_t *va_p)
 {
-  char *oargs[32];
-  char *p;
-  size_t n;
-  int i, r;
-  
-  for (p = *sp, i = 0; args[i] != NULL; i++) {
-    if (i >= 32)
-      return -E2BIG;
+  uintptr_t va = ROUND_DOWN(*va_p - n, sizeof(uintptr_t));
+  int r;
 
-    n = strlen(args[i]);
-    p -= ROUND_UP(n + 1, sizeof(uint32_t));
-
-    if (p < (char *) limit)
-      return -E2BIG;
-
-    if ((r = vm_copy_out(vm->pgtab, args[i], (uintptr_t) p, n)) < 0)
-      return r;
-
-    oargs[i] = p;
-  }
-  oargs[i] = NULL;
-
-  n = (i + 1) * sizeof(char *);
-  p -= ROUND_UP(n, sizeof(uint32_t));
-  
-  if (p < (char *) (VIRT_USTACK_TOP - USTACK_SIZE))
+  if (va < STACK_BOTTOM)
     return -E2BIG;
 
-  if ((r = vm_copy_out(vm->pgtab, oargs, (uintptr_t) p, n)) < 0)
+  if ((r = vm_copy_out(vm->pgtab, buf, va, n)) < 0)
     return r;
 
-  *sp = p;
+  *va_p = va;
 
-  return i;
+  return 0;
 }
 
-int
-process_exec(const char *path, char *const argv[], char *const envp[])
+static int
+user_stack_put_string(struct VMSpace *vm, const char *s, uintptr_t *va_p)
 {
-  struct Process *proc;
-  struct PathNode *pp;
-  struct Inode *inode;
-  Elf32_Ehdr elf;
-  Elf32_Phdr ph;
-  off_t off;
-  struct VMSpace *vm, *old_vm;
-  uintptr_t ustack;
-  char *usp, *uargv, *uenvp;
-  int r, argc;
-  uintptr_t a;
+  return user_stack_put(vm, s, strlen(s) + 1, va_p);
+}
 
-  if ((r = fs_lookup(path, 0, &pp)) < 0)
+#define VEC_MAX 31
+
+static int
+user_stack_put_strings(struct VMSpace *vm, char *const args[],
+                       uintptr_t *args_va, uintptr_t *va_p, int *argc_p)
+{
+  int i, r;
+  uintptr_t va;
+
+  for (va = *va_p, i = 0; args[i] != NULL; i++) {
+    if (i > VEC_MAX)
+      return -E2BIG;
+
+    if ((r = user_stack_put_string(vm, args[i], &va)))
+      return r;
+
+    args_va[i] = va;
+  }
+  args_va[i] = (uintptr_t) NULL;
+
+  *va_p = va;
+  *argc_p = i;
+
+  return 0;
+}
+
+static int
+user_stack_put_vector(struct VMSpace *vm, uintptr_t *vec, int count,
+                      uintptr_t *va_p)
+{
+  return user_stack_put(vm, vec, (count + 1) * sizeof(uintptr_t), va_p);
+}
+
+struct ExecContext {
+  struct Inode   *inode;
+  struct VMSpace *vm;
+  uintptr_t       argv[VEC_MAX + 1];
+  int             argc;
+  uintptr_t       envp[VEC_MAX + 1];
+  int             envc;
+  uintptr_t       argv_va;
+  uintptr_t       env_va;
+  uintptr_t       sp_va;
+  uintptr_t       entry_va;
+};
+
+int
+user_stack_init(char *const argv[], char *const envp[], struct ExecContext *e)
+{
+  uintptr_t va;
+  int r;
+
+  va = vmspace_map(e->vm, STACK_BOTTOM, USTACK_SIZE, STACK_PROT);
+  if (va != STACK_BOTTOM)
+    return (int) va;
+
+  // Copy args and environment.
+  va = VIRT_USTACK_TOP;
+
+  // Copy the environment strings
+  if ((r = user_stack_put_strings(e->vm, envp, e->envp, &va, &e->envc)) != 0)
     return r;
-  if (pp == NULL)
+  
+  // Copy the initial argument strings (additional arguments may be put later)
+  if ((r = user_stack_put_strings(e->vm, argv, e->argv, &va, &e->argc)) != 0)
+    return r;
+
+  e->sp_va = va;
+
+  return 0;
+}
+
+static int
+user_stack_finalize(struct ExecContext *ctx)
+{
+  uintptr_t usp = ctx->sp_va;
+  int r;
+
+  // Put the final environment vector
+  if ((r = user_stack_put_vector(ctx->vm, ctx->envp, ctx->envc, &usp)) < 0)
+    return r;
+  ctx->env_va = usp;
+
+  // Put the final arguments vector
+  if ((r = user_stack_put_vector(ctx->vm, ctx->argv, ctx->argc, &usp)) < 0)
+    return r;
+  ctx->argv_va = usp;
+
+  // Stack must be aligned to an 8-byte boundary in order for variadic args
+  // to properly work (at least on ARM)!
+  usp = ROUND_DOWN(usp, 8);
+  ctx->sp_va = usp;
+
+  return 0;
+}
+
+static int
+resolve_inode(struct Inode *inode, char *p, struct ExecContext *ctx, char **pp)
+{
+  char buf[1024];
+  off_t off;
+  int i, r;
+
+  if (!S_ISREG(inode->mode))
     return -ENOENT;
 
-  inode = fs_path_inode(pp);
-  fs_path_put(pp);
-
-  fs_inode_lock(inode);
-
-  if (!S_ISREG(inode->mode)) {
-    r = -ENOENT;
-    goto out1;
-  }
-
-  if (!fs_permission(inode, FS_PERM_EXEC, 0)) {
-    r = -EPERM;
-    goto out1;
-  }
-
-  vm = vm_space_create();
+  if (!fs_permission(inode, FS_PERM_EXEC, 0))
+    return -EPERM;
 
   off = 0;
-  if ((r = fs_inode_read_locked(inode, (uintptr_t) &elf, sizeof(elf), &off)) != sizeof(elf))
-    goto out2;
-  
-  if (memcmp(elf.ident, "\x7f""ELF", 4) != 0) {
-    r = -EINVAL;
-    goto out2;
+  if ((r = fs_inode_read_locked(inode, (uintptr_t) buf, 1024, &off)) < 0) 
+    return r;
+
+  if ((r < 3) || (buf[0] != '#') || (buf[1] != '!')) {
+    *pp = NULL;
+    return 0;
   }
 
-  // heap   = 0;
-  ustack = VIRT_USTACK_TOP - USTACK_SIZE;
+  for (i = 2; i < r; i++)
+    if ((buf[i] == ' ') || (buf[i] == '\t') || (buf[i] == '\n'))
+      break;
+  buf[i] = '\0';
+
+  if (ctx->argc > VEC_MAX)
+    return -E2BIG;
+  
+  if ((r = user_stack_put_string(ctx->vm, p, &ctx->sp_va)) < 0)
+    return r;
+
+  for (i = ctx->argc; i > 0; i--)
+    ctx->argv[i + 1] = ctx->argv[i];
+  ctx->argv[1] = ctx->sp_va;
+  ctx->argc++;
+
+  if ((p = k_malloc(strlen(&buf[2]) + 1)) == NULL)
+    return -ENOMEM;
+
+  strncpy(p, &buf[2], strlen(&buf[2]) + 1);
+
+  *pp = p;
+
+  return 0;
+}
+
+static int
+resolve(const char *path, struct ExecContext *ctx)
+{
+  struct Inode *inode;
+  char *p = (char *) path;
+
+  for (;;) {
+    int r;
+    char *interpreter;
+
+    if ((r = fs_lookup_inode(p, 0, &inode)) < 0)
+      return r;
+
+    fs_inode_lock(inode);
+
+    if ((r = resolve_inode(inode, p, ctx, &interpreter)) < 0) {
+      fs_inode_unlock(inode);
+      fs_inode_put(inode);
+      return r;
+    }
+
+    if (interpreter == NULL)
+      break;
+
+    if (p != path)
+      k_free(p);
+
+    p = interpreter;
+
+    fs_inode_unlock(inode);
+    fs_inode_put(inode);
+  }
+
+  if (p != path)
+    k_free(p);
+
+  ctx->inode = inode;
+
+  return 0;
+}
+
+static int
+load_elf(struct ExecContext *ctx)
+{
+  Elf32_Ehdr elf;
+  Elf32_Phdr ph;
+  int r;
+  off_t off;
+  uintptr_t a;
+
+  off = 0;
+  if ((r = fs_inode_read_locked(ctx->inode, (uintptr_t) &elf, sizeof(elf),
+                                &off)) != sizeof(elf))
+    return -EINVAL;
+
+  if (memcmp(elf.ident, "\x7f""ELF", 4) != 0)
+    return -EINVAL;
 
   off = elf.phoff;
   while ((size_t) off < elf.phoff + elf.phnum * sizeof(ph)) {
-    if ((r = fs_inode_read_locked(inode, (uintptr_t) &ph, sizeof(ph), &off)) != sizeof(ph))
-      goto out2;
+    if ((r = fs_inode_read_locked(ctx->inode, (uintptr_t) &ph, sizeof(ph),
+                                  &off)) != sizeof(ph))
+      return r;
 
     if (ph.type != PT_LOAD)
       continue;
 
-    if (ph.filesz > ph.memsz) {
-      r = -EINVAL;
-      goto out2;
+    if (ph.filesz > ph.memsz)
+      return -EINVAL;
+
+    if ((ph.vaddr >= VIRT_KERNEL_BASE) || (ph.vaddr + ph.memsz > VIRT_KERNEL_BASE))
+      return -EINVAL;
+
+    a = vmspace_map(ctx->vm, ph.vaddr, ph.memsz,
+                    PROT_READ | PROT_WRITE | PROT_EXEC | VM_USER);
+    if (a != ph.vaddr)
+      return (int) a;
+
+    if ((r = vm_space_load_inode(ctx->vm->pgtab, (void *) ph.vaddr, ctx->inode,
+                                 ph.filesz, ph.offset)) < 0)
+      return r;
+  }
+
+  ctx->entry_va = elf.entry;
+
+  return 0;
+}
+
+static void
+sys_free_args(char **args)
+{
+  char **p;
+
+  for (p = args; *p != NULL; p++)
+    k_free(*p);
+
+  k_free(args);
+}
+
+static int
+copy_in_args(uintptr_t va, char ***store)
+{
+  void *pgtab = process_current()->vm->pgtab;
+  char **args;
+  size_t len;
+  size_t total_len;
+  int r;
+
+  if ((vm_user_check_args(pgtab, va, &len, VM_READ | VM_USER)) < 0)
+    return r;
+  
+  total_len = (len + 1) * sizeof(char *);
+  if (total_len > ARG_MAX)
+    return -E2BIG;
+
+  if ((args = (char **) k_malloc(total_len)) == NULL)
+    return -ENOMEM;
+
+  memset(args, 0, total_len);
+
+  for (size_t i = 0; i < len; i++) {
+    uintptr_t str_va;
+    size_t str_len;
+
+    if ((r = vm_copy_in(pgtab, &str_va, va + (sizeof(char *)*i),
+                        sizeof str_va)) < 0) {
+      sys_free_args(args);
+      return r;
     }
 
-    if ((ph.vaddr >= VIRT_KERNEL_BASE) || (ph.vaddr + ph.memsz > VIRT_KERNEL_BASE)) {
-      r = -EINVAL;
-      goto out2;
+    if ((r = vm_user_check_str(pgtab, str_va, &str_len,
+                               VM_READ | VM_USER)) < 0) {
+      sys_free_args(args);
+      return r;
     }
 
-    a = vmspace_map(vm, ph.vaddr, ph.memsz, PROT_READ | PROT_WRITE | PROT_EXEC | VM_USER);
-    if (a != ph.vaddr) {
-      r = (int) a;
-      goto out2;
+    total_len += str_len + 1;
+    if (total_len > ARG_MAX) {
+      sys_free_args(args);
+      return -E2BIG;
     }
 
+    if ((args[i] = k_malloc(str_len + 1)) == NULL) {
+      sys_free_args(args);
+      return -ENOMEM;
+    }
 
-    if ((r = vm_space_load_inode(vm->pgtab, (void *) ph.vaddr, inode, ph.filesz, ph.offset)) < 0) {
-      goto out2;
+    if ((vm_copy_in(pgtab, args[i], str_va, str_len + 1) != 0) ||
+         (args[i][str_len] != '\0')) {
+      sys_free_args(args);
+      return -EFAULT;
     }
   }
 
-  a = vmspace_map(vm, ustack, USTACK_SIZE, PROT_READ | PROT_WRITE | VM_USER);
-  if (a != ustack) {
-    r = (int) a;
-    goto out2;
+  if (store) *store = args;
+
+  return 0;
+}
+
+int
+process_exec(const char *path, uintptr_t argv_va, uintptr_t envp_va)
+{
+  struct Process *proc;
+  struct VMSpace *old_vm;
+  int r;
+  struct ExecContext ctx;
+
+  char **argv, **envp;
+
+  if ((ctx.vm = vm_space_create()) == NULL) {
+    r = -ENOMEM;
+    goto out1;
   }
 
-  // Copy args and environment.
-  usp = (char *) VIRT_USTACK_TOP;
-  if ((r = copy_args(vm, argv, ustack, &usp)) < 0)
+  if ((r = copy_in_args(argv_va, &argv)) != 0)
     goto out2;
+  
+  if ((r = copy_in_args(envp_va, &envp)) != 0)
+    goto out3;
 
-  argc = r;
-  uargv = usp;
+  if ((r = user_stack_init(argv, envp, &ctx)) != 0)
+    goto out4;
 
-  if ((r = copy_args(vm, envp, ustack, &usp)) < 0)
-    goto out2;
+  if ((r = resolve(path, &ctx)) != 0)
+    goto out4;
 
-  uenvp = usp;
+  if ((r = user_stack_finalize(&ctx)) != 0)
+    goto out5;
 
-  fs_inode_unlock(inode);
-  fs_inode_put(inode);
+  if ((r = load_elf(&ctx)) != 0)
+    goto out5;
+
+  fs_inode_unlock(ctx.inode);
+  fs_inode_put(ctx.inode);
+
+  sys_free_args(envp);
+  sys_free_args(argv);
 
   proc = process_current();
+
+  fd_close_on_exec(proc);
 
   strncpy(proc->name, path, 63);
 
   old_vm = proc->vm;
-  proc->vm = vm;
+  proc->vm = ctx.vm;
 
-  vm_arch_load(vm->pgtab);
-
+  vm_arch_load(ctx.vm->pgtab);
   vm_space_destroy(old_vm);
 
-  fd_close_on_exec(proc);
+  return arch_trap_frame_init(proc, ctx.entry_va, ctx.argc, ctx.argv_va, 
+                              ctx.env_va,
+                              ctx.sp_va);
 
-  // Stack must be aligned to an 8-byte boundary in order for variadic args
-  // to properly work!
-  usp = ROUND_DOWN(usp, 8);
-
-  arch_trap_frame_init(proc, elf.entry, argc, (uint32_t) uargv, (uint32_t) uenvp,
-                     (uint32_t) usp);
-
-  return argc;
-
+out5:
+  fs_inode_unlock(ctx.inode);
+  fs_inode_put(ctx.inode);
+out4:
+  sys_free_args(envp);
+out3:
+  sys_free_args(argv);
 out2:
-  vm_space_destroy(vm);
+  vm_space_destroy(ctx.vm);
 out1:
-  fs_inode_unlock(inode);
-  fs_inode_put(inode);
-
   return r;
 }

@@ -324,76 +324,6 @@ sys_arg_str(int n, size_t max, int perm, char **strp)
   return 0;
 }
 
-static void
-sys_free_args(char **args)
-{
-  char **p;
-
-  for (p = args; *p != NULL; p++)
-    k_free(*p);
-
-  k_free(args);
-}
-
-static int
-sys_arg_args(int n, char ***store, size_t *len_store)
-{
-  void *pgtab = process_current()->vm->pgtab;
-  uintptr_t va = sys_arch_get_arg(n);
-  char **args;
-  size_t len;
-  size_t total_len;
-  int r;
-
-  if ((vm_user_check_args(pgtab, va, &len, VM_READ | VM_USER)) < 0)
-    return r;
-  
-  total_len = (len + 1) * sizeof(char *);
-  if (total_len > ARG_MAX)
-    return -E2BIG;
-
-  if ((args = (char **) k_malloc(total_len)) == NULL)
-    return -ENOMEM;
-
-  memset(args, 0, total_len);
-
-  for (size_t i = 0; i < len; i++) {
-    uintptr_t str_va;
-    size_t str_len;
-
-    if ((r = vm_copy_in(pgtab, &str_va, va + (sizeof(char *)*i), sizeof str_va)) < 0) {
-      sys_free_args(args);
-      return r;
-    }
-
-    if ((r = vm_user_check_str(pgtab, str_va, &str_len, VM_READ | VM_USER)) < 0) {
-      sys_free_args(args);
-      return r;
-    }
-
-    total_len += str_len + 1;
-    if (total_len > ARG_MAX) {
-      sys_free_args(args);
-      return -E2BIG;
-    }
-
-    if ((args[i] = k_malloc(str_len + 1)) == NULL) {
-      sys_free_args(args);
-      return -ENOMEM;
-    }
-
-    if ((vm_copy_in(pgtab, args[i], str_va, str_len + 1) != 0) || (args[i][str_len] != '\0')) {
-      sys_free_args(args);
-      return -EFAULT;
-    }
-  }
-
-  *len_store = total_len;
-  *store = args;
-
-  return 0;
-}
-
 static int
 sys_copy_out(const void *src, uintptr_t va, size_t n)
 {
@@ -421,28 +351,18 @@ int32_t
 sys_exec(void)
 {
   char *path;
-  char **argv, **envp;
-  size_t argv_len, envp_len;
+  uintptr_t argv, envp;
   int r;
 
   if ((r = sys_arg_str(0, PATH_MAX, VM_READ, &path)) < 0)
     goto out1;
-  if ((r = sys_arg_args(1, &argv, &argv_len)) < 0)
+  if ((r = sys_arg_va(1, &argv, 1, 0, 0)) < 0)
     goto out2;
-  if ((r = sys_arg_args(2, &envp, &envp_len)) < 0)
-    goto out3;
-
-  if (argv_len + envp_len > ARG_MAX) {
-    r = -E2BIG;
-    goto out4;
-  }
+  if ((r = sys_arg_va(2, &envp, 1, 0, 0)) < 0)
+    goto out2;
 
   r = process_exec(path, argv, envp);
 
-out4:
-  sys_free_args(envp);
-out3:
-  sys_free_args(argv);
 out2:
   k_free(path);
 out1:
