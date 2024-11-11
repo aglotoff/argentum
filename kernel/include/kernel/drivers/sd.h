@@ -1,12 +1,7 @@
 #ifndef __KERNEL_DRIVERS_SD_H__
 #define __KERNEL_DRIVERS_SD_H__
 
-#ifndef __ARGENTUM_KERNEL__
-#error "This is a kernel header; user programs should not #include it"
-#endif
-
 #include <kernel/list.h>
-#include <kernel/trap.h>
 #include <kernel/spinlock.h>
 
 #define SD_BLOCKLEN               512         // Single block length in bytes
@@ -27,8 +22,6 @@ struct SD {
   struct KListLink queue;
   struct KSpinLock lock;
   struct PL180 *mmci;
-  struct ISRThread isr;
-  int irq;
 };
 
 int  sd_init(struct SD *, struct PL180 *, int);

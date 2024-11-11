@@ -1,16 +1,16 @@
 #include <kernel/drivers/pl011.h>
 #include <kernel/drivers/uart.h>
 #include <kernel/tty.h>
+#include <kernel/interrupt.h>
 
-static void uart_irq_thread(void *);
+static int uart_irq_thread(int, void *);
 
 int
 uart_init(struct Uart *uart, struct Pl011 *pl011, int irq)
 {
   uart->pl011 = pl011;
-  uart->irq = irq;
 
-  interrupt_attach_thread(&uart->uart_isr, irq, uart_irq_thread, uart);
+  interrupt_attach_thread(irq, uart_irq_thread, uart);
 
   return 0;
 }
@@ -41,13 +41,15 @@ uart_putc(struct Uart *uart, int c)
   return 0;
 }
 
-static void
-uart_irq_thread(void *arg)
+static int
+uart_irq_thread(int irq, void *arg)
 {
   struct Uart *uart = (struct Uart *) arg;
 
   char buf[2];
   int c;
+
+  (void) irq;
 
   while ((c = uart_getc(uart)) >= 0) {
     if (c != 0) {
@@ -57,5 +59,5 @@ uart_irq_thread(void *arg)
     }
   }
 
-  interrupt_unmask(uart->irq);
+  return 1;
 }

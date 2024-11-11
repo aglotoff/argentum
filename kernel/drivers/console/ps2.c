@@ -4,25 +4,24 @@
 #include <kernel/mm/memlayout.h>
 #include <kernel/vm.h>
 #include <kernel/trap.h>
-#include <kernel/irq.h>
+#include <kernel/interrupt.h>
 
 #include <kernel/drivers/ps2.h>
 #include <kernel/drivers/kbd.h>
 
-static void ps2_kbd_irq_thread(void *);
+static int ps2_kbd_irq_thread(int, void *);
 
 int
 ps2_init(struct PS2 *ps2, struct PS2Ops *ops, void *ops_arg, int irq)
 {
   ps2->ops     = ops;
   ps2->ops_arg = ops_arg;
-  ps2->irq     = irq;
 
   // 0xF0 (Set Scan Code Set)
   ps2->ops->putc(ps2->ops_arg, 0xF0);
   ps2->ops->putc(ps2->ops_arg, 1);
 
-  interrupt_attach_thread(&ps2->kbd_isr, irq, ps2_kbd_irq_thread, ps2);
+  interrupt_attach_thread(irq, ps2_kbd_irq_thread, ps2);
 
   return 0;
 }
@@ -45,12 +44,14 @@ static char *key_sequences[KEY_MAX] = {
  * 
  * Get data and store it into the console buffer.
  */
-static void
-ps2_kbd_irq_thread(void *arg)
+static int
+ps2_kbd_irq_thread(int irq, void *arg)
 {
   struct PS2 *ps2 = (struct PS2 *) arg;
   char buf[2];
   int c;
+
+  (void) irq;
 
   while ((c = ps2_kbd_getc(ps2)) >= 0) {
     if ((c == 0) || (c >= KEY_MAX))
@@ -65,7 +66,7 @@ ps2_kbd_irq_thread(void *arg)
     }
   }
 
-  interrupt_unmask(ps2->irq);
+  return 1;
 }
 
 // Keymap column indicies for different states

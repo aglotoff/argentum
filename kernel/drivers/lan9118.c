@@ -1,15 +1,16 @@
 #include <stdint.h>
 #include <string.h>
 
-#include <kernel/cpu.h>
+#include <kernel/core/cpu.h>
 #include <kernel/console.h>
 #include <kernel/drivers/lan9118.h>
 #include <kernel/mm/memlayout.h>
 #include <kernel/page.h>
-#include <kernel/irq.h>
+#include <kernel/core/irq.h>
 #include <kernel/net.h>
-#include <kernel/types.h>
 #include <kernel/trap.h>
+#include <kernel/types.h>
+#include <kernel/interrupt.h>
 
 // RX an TX FIFO ports, divided by 4 for use as uint32_t[] indices
 #define RX_DATA_FIFO_PORT   (0x00 / 4)
@@ -101,9 +102,7 @@
 #define MAC_MII_DATA        7
 #define MAC_FLOW            8
 
-static void eth_irq_thread(void *);
-
-static struct ISRThread eth_isr;
+static int eth_irq_thread(int, void *);
 
 // Read from a MAC register
 uint32_t
@@ -239,7 +238,7 @@ lan9118_init(struct Lan9118 *lan9118)
   // Enable interrupts
   lan9118->base[INT_EN] |= RSFL_INT;
 
-  interrupt_attach_thread(&eth_isr, IRQ_ETH, eth_irq_thread, lan9118);
+  interrupt_attach_thread(IRQ_ETH, eth_irq_thread, lan9118);
 }
 
 static void
@@ -284,11 +283,13 @@ eth_rx(struct Lan9118 *lan9118)
   }
 }
 
-static void
-eth_irq_thread(void *arg)
+static int
+eth_irq_thread(int irq, void *arg)
 {
   struct Lan9118 *lan9118 = (struct Lan9118 *) arg;
   uint32_t status;
+
+  (void) irq;
 
   // Wake up
   while (!(lan9118->base[PMT_CTRL]) & PMT_CTRL_READY)
@@ -307,7 +308,7 @@ eth_irq_thread(void *arg)
   if (status & ~(RSFL_INT))
     panic("Unexpected interupt %x", status & ~(RSFL_INT));
 
-  interrupt_unmask(IRQ_ETH);
+  return 1;
 }
 
 void
@@ -325,7 +326,7 @@ lan9118_write(struct Lan9118 *lan9118, const void *buf, size_t n)
   cmd_a = (((uintptr_t) buf & 0x3) << 16) | 0x00003000 | (n + 14);
   cmd_b = (last_tag++ << 16) | (n + 14);
 
-  k_irq_save();
+  k_irq_state_save();
 
   lan9118->base[TX_DATA_FIFO_PORT] = cmd_a;
   lan9118->base[TX_DATA_FIFO_PORT] = cmd_b;
@@ -337,5 +338,5 @@ lan9118_write(struct Lan9118 *lan9118, const void *buf, size_t n)
 
   lan9118->base[TX_CFG] = TX_CFG_STOP_TX;
 
-  k_irq_restore();
+  k_irq_state_restore();
 }

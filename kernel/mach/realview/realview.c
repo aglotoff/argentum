@@ -1,7 +1,7 @@
 #include <kernel/mach.h>
 #include <kernel/mm/memlayout.h>
 #include <kernel/trap.h>
-#include <kernel/irq.h>
+#include <kernel/interrupt.h>
 #include <kernel/spinlock.h>
 #include <kernel/fs/buf.h>
 #include <kernel/page.h>
@@ -74,7 +74,7 @@ realview_interrupt_init_pbx_a9(void)
 {
   gic_init(&gic, PA2KVA(0x1F000100), PA2KVA(0x1F001000));
 
-  k_irq_attach(0, ipi_irq, NULL);
+  interrupt_attach(0, ipi_irq, NULL);
 
   *(volatile int *) PA2KVA(0x10000030) = 0x10000;
   gic_sgi(&gic, 0);
@@ -150,17 +150,18 @@ realview_rtc_set_time(time_t time)
 }
 
 static int
-realview_pb_a8_timer_irq(void *arg)
+realview_pb_a8_timer_irq(int irq, void *arg)
 {
+  (void) irq;
   sp804_eoi(&timer01);
-  return timer_irq(arg);
+  return timer_irq(irq, arg);
 }
 
 static void
 realview_pb_a8_timer_init(void)
 {
   sp804_init(&timer01, PA2KVA(0x10011000), TICK_RATE);
-  k_irq_attach(36, realview_pb_a8_timer_irq, NULL);
+  interrupt_attach(36, realview_pb_a8_timer_irq, NULL);
 }
 
 static void
@@ -345,10 +346,11 @@ MACH_DEFINE(realview_pb_a8) {
 };
 
 static int
-realview_pbx_a9_timer_irq(void *arg)
+realview_pbx_a9_timer_irq(int irq, void *arg)
 {
+  (void) irq;
   ptimer_eoi(&ptimer);
-  return timer_irq(arg);
+  return timer_irq(irq, arg);
 }
 
 static void
@@ -356,7 +358,7 @@ realview_pbx_a9_timer_init(void)
 {
   ptimer_init(&ptimer, PA2KVA(PHYS_PTIMER));
   ptimer_init_percpu(&ptimer, TICK_RATE);
-  k_irq_attach(29, realview_pbx_a9_timer_irq, NULL);
+  interrupt_attach(29, realview_pbx_a9_timer_irq, NULL);
 }
 
 static void

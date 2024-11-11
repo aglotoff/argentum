@@ -3,9 +3,9 @@
 #include <stddef.h>
 
 #include <kernel/process.h>
-#include <kernel/irq.h>
+#include <kernel/core/irq.h>
 #include <kernel/console.h>
-#include <kernel/cpu.h>
+#include <kernel/core/cpu.h>
 #include <kernel/timer.h>
 #include <kernel/mm/memlayout.h>
 #include <kernel/vm.h>
@@ -16,19 +16,19 @@
  * Save the current CPU interrupt state and disable interrupts.
  */
 void
-k_irq_save(void)
+k_irq_state_save(void)
 {
-  int status = k_arch_irq_save();
+  int status = k_arch_irq_state_save();
 
   if (_k_cpu()->irq_save_count++ == 0)
     _k_cpu()->irq_flags = status;
 }
 
 /**
- * Restore the interrupt state saved by a preceding k_irq_save() call.
+ * Restore the interrupt state saved by a preceding k_irq_state_save() call.
  */
 void
-k_irq_restore(void)
+k_irq_state_restore(void)
 {
   if (k_arch_irq_is_enabled())
     panic("interruptible");
@@ -37,25 +37,25 @@ k_irq_restore(void)
     panic("interruptible");
 
   if (_k_cpu()->irq_save_count == 0)
-    k_arch_irq_restore(_k_cpu()->irq_flags);
+    k_arch_irq_state_restore(_k_cpu()->irq_flags);
 }
 
 /**
- * Notify the kernel that an ISR processing has started.
+ * Notify the kernel that an IRQ handler has started.
  */
 void
-k_irq_begin(void)
+k_irq_handler_begin(void)
 {
-  k_irq_save();
+  k_irq_state_save();
   ++_k_cpu()->lock_count;
-  k_irq_restore();
+  k_irq_state_restore();
 }
 
 /**
- * Notify the kernel that an ISR processing is finished.
+ * Notify the kernel that an IRQ handler has finished.
  */
 void
-k_irq_end(void)
+k_irq_handler_end(void)
 {
   struct KCpu *my_cpu;
 
@@ -80,29 +80,4 @@ k_irq_end(void)
   }
 
   _k_sched_unlock();
-}
-
-static struct {
-  k_irq_handler_t handler;
-  void *arg;
-} irq_handlers[IRQ_MAX];
-
-void
-k_irq_attach(int irq, k_irq_handler_t handler, void *arg)
-{
-  irq_handlers[irq].handler = handler;
-  irq_handlers[irq].arg = arg;
-
-  interrupt_enable(irq, k_cpu_id());
-  interrupt_unmask(irq);
-}
-
-int
-k_irq_dispatch(int irq)
-{
-  if (irq_handlers[irq].handler)
-    return irq_handlers[irq].handler(irq_handlers[irq].arg);
- 
-  cprintf("Unexpected IRQ %d from CPU %d\n", irq, k_cpu_id());
-  return 1;
 }

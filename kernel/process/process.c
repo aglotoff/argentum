@@ -7,7 +7,7 @@
 #include <sys/wait.h>
 
 #include <kernel/armv7/regs.h>
-#include <kernel/cpu.h>
+#include <kernel/core/cpu.h>
 #include <kernel/console.h>
 #include <kernel/elf.h>
 #include <kernel/fd.h>
@@ -23,7 +23,7 @@
 #include <kernel/trap.h>
 #include <kernel/tick.h>
 #include <kernel/semaphore.h>
-#include <kernel/irq.h>
+#include <kernel/core/irq.h>
 
 struct KObjectPool *process_cache;
 struct KObjectPool *thread_cache;

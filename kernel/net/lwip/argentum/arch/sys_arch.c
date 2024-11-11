@@ -1,4 +1,4 @@
-#include <kernel/cpu.h>
+#include <kernel/core/cpu.h>
 #include <kernel/object_pool.h>
 #include <kernel/page.h>
 #include <kernel/mutex.h>

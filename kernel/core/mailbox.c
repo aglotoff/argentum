@@ -1,7 +1,7 @@
 #include <errno.h>
 #include <string.h>
 
-#include <kernel/cpu.h>
+#include <kernel/core/cpu.h>
 #include <kernel/mailbox.h>
 #include <kernel/thread.h>
 #include <kernel/types.h>

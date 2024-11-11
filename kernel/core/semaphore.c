@@ -1,7 +1,7 @@
 #include <kernel/assert.h>
 #include <errno.h>
 
-#include <kernel/cpu.h>
+#include <kernel/core/cpu.h>
 #include <kernel/semaphore.h>
 #include <kernel/thread.h>
 #include <kernel/object_pool.h>

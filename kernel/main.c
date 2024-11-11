@@ -4,13 +4,13 @@
 #include <sys/utsname.h>
 
 #include <kernel/console.h>
-#include <kernel/cpu.h>
+#include <kernel/core/cpu.h>
 #include <kernel/tty.h>
 #include <kernel/drivers/lan9118.h>
 #include <kernel/drivers/rtc.h>
 #include <kernel/fs/buf.h>
 #include <kernel/fs/file.h>
-#include <kernel/irq.h>
+#include <kernel/core/irq.h>
 #include <kernel/mailbox.h>
 #include <kernel/mutex.h>
 #include <kernel/semaphore.h>
@@ -26,6 +26,7 @@
 #include <kernel/net.h>
 #include <kernel/semaphore.h>
 #include <kernel/mach.h>
+#include <kernel/interrupt.h>
 
 static void mp_main(void);
 
@@ -57,7 +58,7 @@ void main(uintptr_t mach_type)
   mach_init(mach_type);
 
   // Initialize the interrupt controller
-  interrupt_init();
+  arch_interrupt_init();
 
   // Initialize core services
   k_object_pool_system_init();
@@ -98,7 +99,7 @@ void mp_enter(void)
 {
   // Per-CPU initialization
   vm_arch_init_percpu(); // Load the kernel page table
-  interrupt_init_percpu();
+  arch_interrupt_init_percpu();
 
   mp_main();
 }

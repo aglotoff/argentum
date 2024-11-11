@@ -1,12 +1,13 @@
 #include <kernel/assert.h>
-#include <kernel/cpu.h>
-#include <kernel/irq.h>
-
-#include <kernel/armv7/regs.h>
+#include <kernel/core/cpu.h>
+#include <kernel/core/irq.h>
 
 #include "core_private.h"
 
-struct KCpu _cpus[NCPU];
+// TODO: should be architecture-specific
+#define K_CPU_MAX   4
+
+static struct KCpu _k_cpus[K_CPU_MAX];
 
 /**
  * Get the current CPU structure.
@@ -23,13 +24,5 @@ _k_cpu(void)
   if (k_arch_irq_is_enabled())
     panic("interruptible");
 
-  // In case of four Cortex-A9 processors, the CPU IDs are 0x0, 0x1, 0x2, and
-  // 0x3 so we can use them as array indicies.
-  return &_cpus[k_cpu_id()];
-}
-
-unsigned
-k_arch_cpu_id(void)
-{
-  return cp15_mpidr_get() & CP15_MPIDR_CPU_ID;
+  return &_k_cpus[k_cpu_id()];
 }

@@ -6,7 +6,7 @@
  * processes timeouts and performs thread switch.
  */
 
-#include <kernel/cpu.h>
+#include <kernel/core/cpu.h>
 #include <kernel/tick.h>
 #include <kernel/timer.h>
 #include <kernel/spinlock.h>

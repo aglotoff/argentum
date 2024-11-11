@@ -22,15 +22,10 @@
 #define IRQ_MCIB      50
 #define IRQ_KMI0      52
 #define IRQ_ETH       60
-#define IRQ_MAX       64
 
 #ifndef __ASSEMBLER__
 
 #include <stdint.h>
-
-#include <kernel/semaphore.h>
-
-struct KThread;
 
 /** Generic Trap Frame */
 struct TrapFrame {
@@ -61,24 +56,8 @@ void trap(struct TrapFrame *tf);
  */
 void print_trapframe(struct TrapFrame *tf);
 
-void interrupt_init(void);
-void interrupt_init_percpu(void);
-void interrupt_dispatch(void);
-void interrupt_ipi(void);
-void interrupt_mask(int);
-void interrupt_unmask(int);
-void interrupt_enable(int, int);
-
-struct ISRThread {
-  struct KSemaphore semaphore;
-  void (*handler)(void *);
-  void *handler_arg;
-};
-
-void interrupt_attach_thread(struct ISRThread *, int, void (*)(void *), void *);
-
-int timer_irq(void *);
-int ipi_irq(void *);
+int timer_irq(int, void *);
+int ipi_irq(int, void *);
 
 #endif  // !__ASSEMBLER__
 

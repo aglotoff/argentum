@@ -12,7 +12,7 @@
 #include <time.h>
 
 #include <kernel/console.h>
-#include <kernel/cpu.h>
+#include <kernel/core/cpu.h>
 #include <kernel/drivers/rtc.h>
 #include <kernel/fd.h>
 #include <kernel/fs/file.h>
@@ -24,7 +24,7 @@
 #include <kernel/sys.h>
 #include <kernel/types.h>
 #include <kernel/object_pool.h>
-#include <kernel/irq.h>
+#include <kernel/core/irq.h>
 
 #include <lwip/sockets.h>
 

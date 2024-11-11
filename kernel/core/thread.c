@@ -3,8 +3,8 @@
 #include <string.h>
 
 #include <kernel/console.h>
-#include <kernel/cpu.h>
-#include <kernel/irq.h>
+#include <kernel/core/cpu.h>
+#include <kernel/core/irq.h>
 #include <kernel/thread.h>
 #include <kernel/spinlock.h>
 #include <kernel/process.h>
@@ -234,9 +234,9 @@ k_thread_current(void)
 {
   struct KThread *thread;
 
-  k_irq_save();
+  k_irq_state_save();
   thread = _k_cpu()->thread;
-  k_irq_restore();
+  k_irq_state_restore();
 
   return thread;
 }

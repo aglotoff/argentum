@@ -16,6 +16,7 @@ ifdef PROCESS_NAME
 endif
 
 KERNEL_SRCFILES :=	\
+	kernel/core/arch_cpu.c \
 	kernel/core/arch_irq.c \
 	kernel/core/arch_spinlock.c \
 	kernel/core/arch_switch.S \
@@ -68,11 +69,13 @@ KERNEL_SRCFILES :=	\
 	kernel/process/process.c \
 	kernel/process/signal.c \
 	kernel/process/vmspace.c \
+	kernel/arch_interrupt.c \
 	kernel/console.c \
 	kernel/dev.c \
 	kernel/ipc.c \
 	kernel/mach.c \
 	kernel/entry.S \
+	kernel/interrupt.c \
 	kernel/kdebug.c \
 	kernel/monitor.c \
 	kernel/pipe.c \

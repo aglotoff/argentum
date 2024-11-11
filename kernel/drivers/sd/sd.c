@@ -2,6 +2,7 @@
 #include <kernel/drivers/sd.h>
 #include <kernel/drivers/pl180.h>
 #include <kernel/fs/buf.h>
+#include <kernel/interrupt.h>
 
 /*******************************************************************************
  * SD Card Driver
@@ -36,7 +37,7 @@ enum {
   OCR_BUSY     = (1 << 31),     // Card power up status bit
 };
 
-static void sd_irq_thread(void *);
+static int  sd_irq_thread(int, void *);
 static void sd_start_transfer(struct SD *, struct Buf *);
 
 int
@@ -67,7 +68,6 @@ sd_init(struct SD *sd, struct PL180 *mmci, int irq)
   // Set the block length (512 bytes) for all I/O operations
   pl180_send_cmd(mmci, CMD_SET_BLOCKLEN, SD_BLOCKLEN, SD_RESPONSE_R1, NULL);
 
-  sd->irq = irq;
   sd->mmci = mmci;
 
   // Initialize the buffer queue
@@ -77,7 +77,7 @@ sd_init(struct SD *sd, struct PL180 *mmci, int irq)
   // Enable interrupts
   pl180_k_irq_enable(sd->mmci);
   
-  interrupt_attach_thread(&sd->isr, sd->irq, sd_irq_thread, sd);
+  interrupt_attach_thread(irq, sd_irq_thread, sd);
 
   return 0;
 }
@@ -135,12 +135,14 @@ sd_start_transfer(struct SD *sd, struct Buf *buf)
 
 // Handle the SD card interrupts. Complete the current data transfer operation
 // and wake up the corresponding task.
-static void
-sd_irq_thread(void *arg)
+static int
+sd_irq_thread(int irq, void *arg)
 {
   struct SD *sd = (struct SD *) arg;
   struct KListLink *link;
   struct Buf *buf, *next_buf;
+
+  (void) irq;
 
   k_spinlock_acquire(&sd->lock);
 
@@ -183,5 +185,5 @@ sd_irq_thread(void *arg)
 
   k_spinlock_release(&sd->lock);
 
-  interrupt_unmask(sd->irq);
+  return 1;
 }

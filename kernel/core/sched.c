@@ -3,8 +3,8 @@
 #include <string.h>
 
 #include <kernel/console.h>
-#include <kernel/cpu.h>
-#include <kernel/irq.h>
+#include <kernel/core/cpu.h>
+#include <kernel/core/irq.h>
 #include <kernel/thread.h>
 #include <kernel/mutex.h>
 #include <kernel/spinlock.h>
@@ -351,7 +351,7 @@ _k_sched_may_yield(struct KThread *thread)
 
   if ((my_thread != NULL) && (_k_sched_priority_cmp(thread, my_thread) > 0)) {
     if (my_cpu->lock_count > 0) {
-      // Cannot yield right now, delay until the last call to k_irq_end()
+      // Cannot yield right now, delay until the last call to k_irq_handler_end()
       // or thread_unlock().
       my_thread->flags |= THREAD_FLAG_RESCHEDULE;
     } else {

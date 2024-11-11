@@ -14,7 +14,7 @@
 #include <kernel/process.h>
 #include <kernel/vmspace.h>
 #include <kernel/types.h>
-#include <kernel/irq.h>
+#include <kernel/core/irq.h>
 
 #define STACK_BOTTOM  (VIRT_USTACK_TOP - USTACK_SIZE)
 #define STACK_PROT    (PROT_READ | PROT_WRITE | VM_USER)

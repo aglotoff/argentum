@@ -3,8 +3,8 @@
 
 #include <kernel/assert.h>
 #include <kernel/console.h>
-#include <kernel/cpu.h>
-#include <kernel/irq.h>
+#include <kernel/core/cpu.h>
+#include <kernel/core/irq.h>
 #include <kernel/kdebug.h>
 #include <kernel/process.h>
 #include <kernel/spinlock.h>
@@ -39,7 +39,7 @@ k_spinlock_acquire(struct KSpinLock *spin)
   }
 
   // Disable interrupts to avoid deadlocks
-  k_irq_save();
+  k_irq_state_save();
 
   k_arch_spinlock_acquire(&spin->locked);
 
@@ -66,7 +66,7 @@ k_spinlock_release(struct KSpinLock *spin)
 
   k_arch_spinlock_release(&spin->locked);
   
-  k_irq_restore();
+  k_irq_state_restore();
 }
 
 /**
@@ -80,9 +80,9 @@ k_spinlock_holding(struct KSpinLock *spin)
 {
   int r;
 
-  k_irq_save();
+  k_irq_state_save();
   r = spin->locked && (spin->cpu == _k_cpu());
-  k_irq_restore();
+  k_irq_state_restore();
 
   return r;
 }

@@ -8,10 +8,11 @@
 #include <kernel/sys.h>
 #include <kernel/trap.h>
 #include <kernel/types.h>
-#include <kernel/irq.h>
+#include <kernel/core/irq.h>
 #include <kernel/monitor.h>
 #include <kernel/semaphore.h>
 #include <kernel/mach.h>
+#include <kernel/interrupt.h>
 
 static void trap_handle_abort(struct TrapFrame *);
 
@@ -171,9 +172,8 @@ print_trapframe(struct TrapFrame *tf)
   cprintf("  r12  %p    pc   %p\n", tf->r12, tf->pc);
 }
 
-
 int
-timer_irq(void *)
+timer_irq(int, void *)
 {
   struct Process *my_process = process_current();
 
@@ -193,115 +193,8 @@ timer_irq(void *)
 }
 
 int
-ipi_irq(void *)
+ipi_irq(int, void *)
 {
   return 1;
 }
 
-void
-interrupt_ipi(void)
-{
-  mach_current->interrupt_ipi();
-}
-
-static int
-interrupt_id(void)
-{
-  return mach_current->interrupt_id();
-}
-
-void
-interrupt_enable(int irq, int cpu)
-{
-  mach_current->interrupt_enable(irq, cpu);
-}
-
-void
-interrupt_mask(int irq)
-{
-  mach_current->interrupt_mask(irq);
-}
-
-void
-interrupt_unmask(int irq)
-{
-  mach_current->interrupt_unmask(irq);
-}
-
-void
-interrupt_init(void)
-{
-  mach_current->interrupt_init();
-  mach_current->timer_init();
-}
-
-void
-interrupt_init_percpu(void)
-{
-  mach_current->interrupt_init_percpu();
-  mach_current->timer_init_percpu();
-}
-
-static void
-irq_eoi(int irq)
-{
-  mach_current->interrupt_eoi(irq);
-}
-
-void
-interrupt_dispatch(void)
-{
-  int irq = interrupt_id();
-
-  k_irq_begin();
-
-  interrupt_mask(irq);
-  irq_eoi(irq);
-
-  // k_irq_enable();
-
-  // Enable nested interrupts
-  if (k_irq_dispatch(irq & 0xFFFFFF))
-    interrupt_unmask(irq);
-
-  k_irq_end();
-}
-
-static int
-interrupt_common(void *arg)
-{
-  struct ISRThread *isr = (struct ISRThread *) arg;
-
-  k_semaphore_put(&isr->semaphore);
-  return 0;
-}
-
-static void
-interrupt_thread(void *arg)
-{
-  struct ISRThread *isr = (struct ISRThread *) arg;
-
-  for (;;) {
-    if (k_semaphore_get(&isr->semaphore) < 0)
-      panic("k_semaphore_get");
-
-    isr->handler(isr->handler_arg);
-  }
-}
-
-void
-interrupt_attach_thread(struct ISRThread *isr, int irq, void (*handler)(void *), void *handler_arg)
-{
-  struct KThread *thread;
-
-  if ((thread = k_thread_create(NULL, interrupt_thread, isr, 0)) == NULL)
-    panic("Cannot create IRQ thread");
-
-  k_semaphore_init(&isr->semaphore, 0);
-  isr->handler     = handler;
-  isr->handler_arg = handler_arg;
-
-  k_irq_attach(irq, interrupt_common, isr);
-
-  k_thread_resume(thread);
-}

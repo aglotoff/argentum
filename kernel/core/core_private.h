@@ -4,7 +4,7 @@
 #include <kernel/spinlock.h>
 #include <kernel/thread.h>
 #include <kernel/console.h>
-#include <kernel/cpu.h>
+#include <kernel/core/cpu.h>
 
 struct Context;
 struct KListLink;
@@ -75,8 +75,8 @@ struct KCpu {
   struct Context *sched_context;  ///< Saved scheduler context
   struct KThread *thread;         ///< The currently running kernel task
   int             lock_count;     ///< Sheculer lock nesting level
-  int             irq_save_count; ///< Nesting level of k_irq_save() calls
-  int             irq_flags;      ///< IRQ state before the first k_irq_save()
+  int             irq_save_count; ///< Nesting level of k_irq_state_save() calls
+  int             irq_flags;      ///< IRQ state before the first k_irq_state_save()
 };
 
 struct KCpu    *_k_cpu(void);
