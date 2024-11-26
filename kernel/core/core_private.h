@@ -20,6 +20,7 @@ struct KThread *_k_sched_wakeup_one_locked(struct KListLink *, int);
 int             _k_sched_sleep(struct KListLink *, int, unsigned long, struct KSpinLock *);
 void            _k_sched_raise_priority(struct KThread *, int);
 void            _k_sched_recalc_priority(struct KThread *);
+void            _k_sched_tick(void);
 
 void            _k_mutex_may_raise_priority(struct KMutex *, int);
 
@@ -81,4 +82,11 @@ struct KCpu {
 
 struct KCpu    *_k_cpu(void);
 
+void _k_timeout_process_queue(struct KListLink *, void (*)(struct KTimeout *));
+void _k_timeout_init(struct KTimeout *);
+void _k_timeout_enqueue(struct KListLink *queue, struct KTimeout *entry, unsigned long delay);
+void _k_timeout_dequeue(struct KListLink *queue, struct KTimeout *entry);
+void _k_timeout_fini(struct KTimeout *timer);
+
 #endif  // !__CORE_PRIVATE_H
+

@@ -14,33 +14,23 @@
 
 #include "core_private.h"
 
-static struct KSpinLock tick_lock = K_SPINLOCK_INITIALIZER("tick");
-static unsigned long tick_counter;
+static struct KSpinLock k_tick_lock = K_SPINLOCK_INITIALIZER("k_tick");
+static unsigned long k_tick_counter = 0;
 
 /**
  * Notify the kernel that a tick occured.
  */
 void
-tick(void)
+k_tick(void)
 {
-  struct KThread *current_task = k_thread_current();
-
-  // Tell the scheduler that the current task has used up its time slice
-  // TODO: add support for other sheduling policies
-  if (current_task != NULL) {
-    _k_sched_lock();
-    current_task->flags |= THREAD_FLAG_RESCHEDULE;
-    _k_sched_unlock();
-  }
+  _k_sched_tick();
 
   // TODO: all timeouts are processed by CPU #0, is it ok?
   if (k_cpu_id() == 0) {
-    // Increment the tick counter
-    k_spinlock_acquire(&tick_lock);
-    tick_counter++;
-    k_spinlock_release(&tick_lock);
+    k_spinlock_acquire(&k_tick_lock);
+    k_tick_counter++;
+    k_spinlock_release(&k_tick_lock);
 
-    // Process timeouts
     k_timer_tick();
   }
 }
@@ -49,14 +39,14 @@ tick(void)
  * Get the current value of the tick counter.
  */
 unsigned long
-tick_get(void)
+k_tick_get(void)
 {
   unsigned long counter;
 
   // TODO: could use atomic operation
-  k_spinlock_acquire(&tick_lock);
-  counter = tick_counter;
-  k_spinlock_release(&tick_lock);
+  k_spinlock_acquire(&k_tick_lock);
+  counter = k_tick_counter;
+  k_spinlock_release(&k_tick_lock);
 
   return counter;
 }

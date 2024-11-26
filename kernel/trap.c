@@ -187,7 +187,7 @@ timer_irq(int, void *)
     }
   }
 
-  tick();
+  k_tick();
 
   return 1;
 }

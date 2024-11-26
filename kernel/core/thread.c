@@ -96,27 +96,6 @@ arch_thread_init_stack(struct KThread *thread)
   thread->context->lr = (uint32_t) k_thread_run;
 }
 
-static void
-k_thread_timeout_callback(void *arg)
-{
-  struct KThread *thread = (struct KThread *) arg;
-
-  _k_sched_lock();
-
-  switch (thread->state) {
-  case THREAD_STATE_MUTEX:
-    // TODO
-    // fall through
-  case THREAD_STATE_SLEEP:
-    _k_sched_resume(thread, -ETIMEDOUT);
-    break;
-  }
-
-  // TODO: possible race condition if thread is destroyed!!!
-
-  _k_sched_unlock();
-}
-
 void
 k_thread_interrupt(struct KThread *thread)
 {
@@ -177,7 +156,7 @@ k_thread_create(struct Process *process, void (*entry)(void *), void *arg,
   thread->kstack         = stack;
   thread->tf             = NULL;
 
-  k_timer_init(&thread->timer, k_thread_timeout_callback, thread, 0, 0, 0);
+  _k_timeout_init(&thread->timer);
 
   arch_thread_init_stack(thread);
 
@@ -196,7 +175,7 @@ k_thread_exit(void)
   if (thread == NULL)
     panic("no current thread");
 
-  k_timer_fini(&thread->timer);
+  _k_timeout_fini(&thread->timer);
 
   _k_sched_lock();
 

@@ -3,14 +3,19 @@
 
 #include <kernel/list.h>
 
-struct KTimer {
+struct KTimeout {
   struct KListLink link;
   unsigned long    remain;
-  int              state;
-  void           (*callback)(void *);
-  void            *callback_arg;
-  unsigned long    delay;
-  unsigned long    period;
+ 
+};
+
+struct KTimer {
+  struct KTimeout entry;
+  int                state;
+  void             (*callback)(void *);
+  void              *callback_arg;
+  unsigned long      delay;
+  unsigned long      period;
 };
 
 enum {
@@ -26,5 +31,7 @@ int  k_timer_fini(struct KTimer *);
 int  k_timer_start(struct KTimer *);
 int  k_timer_stop(struct KTimer *);
 void k_timer_tick(void);
+
+void k_tick(void);
 
 #endif  // !__KERNEL_INCLUDE_timer_H__

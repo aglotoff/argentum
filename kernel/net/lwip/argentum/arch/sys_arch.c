@@ -80,10 +80,10 @@ sys_arch_sem_wait(sys_sem_t *sem, u32_t timeout)
 {
   unsigned long start, end;
 
-  start = tick_get();
+  start = k_tick_get();
   if (k_semaphore_timed_get(*sem, timeout / MS_PER_TICK) < 0)
     return SYS_ARCH_TIMEOUT; 
-  end = tick_get();
+  end = k_tick_get();
   
   return MIN(timeout, (end - start) * MS_PER_TICK);
 }
@@ -143,10 +143,10 @@ sys_arch_mbox_fetch(sys_mbox_t *mbox, void **msg, u32_t timeout)
 {
   unsigned long start, end;
 
-  start = tick_get();
+  start = k_tick_get();
   if (k_mailbox_receive(*mbox, msg, timeout / 10, 1) < 0)
     return SYS_ARCH_TIMEOUT;
-  end = tick_get();
+  end = k_tick_get();
   
   return MIN(timeout, (end - start) * 10);
 }
@@ -210,13 +210,13 @@ int errno;
 u32_t
 sys_jiffies(void)
 {
-  return tick_get();
+  return k_tick_get();
 }
 
 u32_t
 sys_now(void)
 {
-  return tick_get() * 10;
+  return k_tick_get() * 10;
 }
 
 static struct KSpinLock lwip_lock = K_SPINLOCK_INITIALIZER("lwip");

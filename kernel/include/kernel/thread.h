@@ -85,7 +85,7 @@ struct KThread {
   void             *arg;
 
   /** Timer for timeouts */
-  struct KTimer     timer;
+  struct KTimeout timer;
   /** Value that indicated sleep result */
   int               sleep_result;
   int               err;
@@ -105,6 +105,5 @@ void            k_thread_interrupt(struct KThread *);
 
 void            k_sched_init(void);
 void            k_sched_start(void);
-void            tick(void);
 
 #endif  // __KERNEL_INCLUDE_KERNEL_THREAD_H__

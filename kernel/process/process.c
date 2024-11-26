@@ -522,14 +522,14 @@ process_nanosleep(const struct timespec *rqtp, struct timespec *rmtp)
   struct KSemaphore sem;
   int r;
 
-  start = tick_get();
+  start = k_tick_get();
 
   rq_timeout = rqtp->tv_sec * TICKS_PER_SECOND + rqtp->tv_nsec / NS_PER_TICK;
 
   k_semaphore_init(&sem, 0);
   r = k_semaphore_timed_get(&sem, rq_timeout);
 
-  rm_timeout = MIN(tick_get() - start, rq_timeout);
+  rm_timeout = MIN(k_tick_get() - start, rq_timeout);
 
   if (rmtp != NULL) {
     rmtp->tv_sec  = rm_timeout / TICKS_PER_SECOND;

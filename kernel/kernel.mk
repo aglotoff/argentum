@@ -31,6 +31,7 @@ KERNEL_SRCFILES :=	\
 	kernel/core/sched.c \
 	kernel/core/spinlock.c \
 	kernel/core/tick.c \
+	kernel/core/timeout.c \
 	kernel/core/waitqueue.c \
 	kernel/drivers/console/display.c \
 	kernel/drivers/console/pl011.c \

@@ -22,7 +22,7 @@ struct InterruptThread {
 
 static struct {
   interrupt_handler_t handler;
-  void *arg;
+  void *handler_arg;
 } interrupt_handlers[INTERRUPT_HANDLER_MAX];
 
 void
@@ -34,8 +34,8 @@ interrupt_attach(int irq, interrupt_handler_t handler, void *handler_arg)
   if (interrupt_handlers[irq].handler != NULL)
     panic("interrupt handler %d already attached", irq);
 
-  interrupt_handlers[irq].handler = handler;
-  interrupt_handlers[irq].arg = handler_arg;
+  interrupt_handlers[irq].handler     = handler;
+  interrupt_handlers[irq].handler_arg = handler_arg;
 
   arch_interrupt_enable(irq, k_cpu_id());
   arch_interrupt_unmask(irq);
@@ -85,7 +85,8 @@ static int
 interrupt_handler_call(int irq)
 {
   if (interrupt_handlers[irq].handler)
-    return interrupt_handlers[irq].handler(irq, interrupt_handlers[irq].arg);
+    return interrupt_handlers[irq].handler(irq,
+                                           interrupt_handlers[irq].handler_arg);
  
   // TODO: warn
   cprintf("Unexpected IRQ %d from CPU %d\n", irq, k_cpu_id());

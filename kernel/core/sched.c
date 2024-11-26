@@ -19,6 +19,7 @@
 
 void k_arch_switch(struct Context **, struct Context *);
 
+KLIST_DECLARE(_k_sched_timeouts);
 KLIST_DECLARE(threads_to_destroy);
 static struct KListLink sched_queue[THREAD_MAX_PRIORITIES];
 struct KSpinLock _k_sched_spinlock = K_SPINLOCK_INITIALIZER("sched");
@@ -216,8 +217,9 @@ _k_sched_sleep(struct KListLink *queue, int state, unsigned long timeout,
   if (my_cpu->thread == NULL)
     panic("called not by a thread");
 
-  if (timeout != 0)
-    _k_timer_start(&my_thread->timer, timeout);
+  if (timeout != 0) {
+    _k_timeout_enqueue(&_k_sched_timeouts, &my_thread->timer, timeout);
+  }
 
   my_thread->state = state;
 
@@ -226,8 +228,11 @@ _k_sched_sleep(struct KListLink *queue, int state, unsigned long timeout,
 
   _k_sched_yield_locked();
 
-  if (timeout != 0)
-    k_timer_stop(&my_thread->timer);
+  if (timeout != 0) {
+    if (my_thread->timer.link.next != NULL) {
+      _k_timeout_dequeue(&_k_sched_timeouts, &my_thread->timer);
+    }
+  }
 
   // someone may call this function while holding _k_sched_spinlock?
   if (lock != NULL) {
@@ -360,3 +365,39 @@ _k_sched_may_yield(struct KThread *thread)
     }
   }
 }
+
+void
+k_thread_timeout_callback(struct KTimeout *entry)
+{
+  struct KThread *thread = KLIST_CONTAINER(entry, struct KThread, timer);
+
+  switch (thread->state) {
+  case THREAD_STATE_MUTEX:
+    // TODO
+    // fall through
+  case THREAD_STATE_SLEEP:
+    _k_sched_resume(thread, -ETIMEDOUT);
+    break;
+  }
+}
+
+void
+_k_sched_tick(void)
+{
+  struct KThread *current_task = k_thread_current();
+
+  // Tell the scheduler that the current task has used up its time slice
+  // TODO: add support for other sheduling policies
+  if (current_task != NULL) {
+    _k_sched_lock();
+    current_task->flags |= THREAD_FLAG_RESCHEDULE;
+    _k_sched_unlock();
+  }
+
+  if (k_cpu_id() == 0) {
+    _k_sched_lock();
+    _k_timeout_process_queue(&_k_sched_timeouts, k_thread_timeout_callback);
+    _k_sched_unlock();
+  }
+}
+

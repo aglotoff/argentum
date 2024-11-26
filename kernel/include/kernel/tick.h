@@ -10,7 +10,7 @@
 /** The number of nanoseconds in one tick */
 #define NS_PER_TICK         10000000
 
-unsigned long tick_get(void);
-void          tick(void);
+unsigned long k_tick_get(void);
+void          k_tick(void);
 
 #endif  // !__KERNEL_INCLUDE_TICK_H__
