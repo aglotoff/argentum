@@ -2,7 +2,7 @@
 #include <kernel/object_pool.h>
 #include <kernel/page.h>
 #include <kernel/mutex.h>
-#include <kernel/mailbox.h>
+#include <kernel/core/mailbox.h>
 #include <kernel/semaphore.h>
 #include <kernel/thread.h>
 #include <kernel/tick.h>
@@ -112,8 +112,9 @@ err_t
 sys_mbox_new(sys_mbox_t *mbox, int size)
 {
   struct KMailBox *kmailbox;
+  (void) size;
 
-  if ((kmailbox = k_mailbox_create(sizeof(void *), size)) == NULL)
+  if ((kmailbox = k_mailbox_create(sizeof(void *), PAGE_SIZE)) == NULL)
     return ERR_MEM;
 
   *mbox = kmailbox;
@@ -123,19 +124,19 @@ sys_mbox_new(sys_mbox_t *mbox, int size)
 void
 sys_mbox_post(sys_mbox_t *mbox, void *msg)
 {
-  k_mailbox_send(*mbox, &msg, 0, 1);
+  k_mailbox_timed_send(*mbox, &msg, 0);
 }
 
 err_t
 sys_mbox_trypost(sys_mbox_t *mbox, void *msg)
 {
-  return k_mailbox_send(*mbox, &msg, 0, 0);
+  return k_mailbox_try_send(*mbox, &msg);
 }
 
 err_t
 sys_mbox_trypost_fromisr(sys_mbox_t *mbox, void *msg)
 {
-  return k_mailbox_send(*mbox, &msg, 0, 0);
+  return k_mailbox_try_send(*mbox, &msg);
 }
 
 u32_t
@@ -144,17 +145,17 @@ sys_arch_mbox_fetch(sys_mbox_t *mbox, void **msg, u32_t timeout)
   unsigned long start, end;
 
   start = k_tick_get();
-  if (k_mailbox_receive(*mbox, msg, timeout / 10, 1) < 0)
+  if (k_mailbox_timed_receive(*mbox, msg, timeout / 10) < 0)
     return SYS_ARCH_TIMEOUT;
   end = k_tick_get();
-  
+
   return MIN(timeout, (end - start) * 10);
 }
 
 u32_t
 sys_arch_mbox_tryfetch(sys_mbox_t *mbox, void **msg)
 {
-  if (k_mailbox_receive(*mbox, msg, 0, 0) < 0)
+  if (k_mailbox_try_receive(*mbox, msg) < 0)
     return SYS_MBOX_EMPTY;
   return 0;
 }

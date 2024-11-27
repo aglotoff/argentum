@@ -11,7 +11,7 @@
 #include <kernel/fs/buf.h>
 #include <kernel/fs/file.h>
 #include <kernel/core/irq.h>
-#include <kernel/mailbox.h>
+#include <kernel/core/mailbox.h>
 #include <kernel/mutex.h>
 #include <kernel/semaphore.h>
 #include <kernel/timer.h>
@@ -21,7 +21,6 @@
 #include <kernel/vmspace.h>
 #include <kernel/pipe.h>
 #include <kernel/process.h>
-#include <kernel/mailbox.h>
 #include <kernel/ipc.h>
 #include <kernel/net.h>
 #include <kernel/semaphore.h>

@@ -2,7 +2,7 @@
 #include <string.h>
 
 #include <kernel/core/cpu.h>
-#include <kernel/mailbox.h>
+#include <kernel/core/mailbox.h>
 #include <kernel/thread.h>
 #include <kernel/types.h>
 #include <kernel/console.h>
@@ -14,192 +14,258 @@
 static void k_mailbox_ctor(void *, size_t);
 static void k_mailbox_dtor(void *, size_t);
 static void k_mailbox_init_common(struct KMailBox *, size_t, void *, size_t);
+static void k_mailbox_fini_common(struct KMailBox *);
+static int  k_mailbox_try_receive_locked(struct KMailBox *, void *);
+static int  k_mailbox_try_send_locked(struct KMailBox *, const void *);
 
 static struct KObjectPool *k_mailbox_pool;
 
 void
 k_mailbox_system_init(void)
 {
-  if ((k_mailbox_pool = k_object_pool_create("mailbox",
-                                             sizeof(struct KMailBox),
-                                             0,
-                                             k_mailbox_ctor,
-                                             k_mailbox_dtor)) == NULL)
+  k_mailbox_pool = k_object_pool_create("k_mailbox",
+                                        sizeof(struct KMailBox),
+                                        0,
+                                        k_mailbox_ctor,
+                                        k_mailbox_dtor);
+  if (k_mailbox_pool == NULL)
     panic("cannot create mailbox pool");
 }
 
 struct KMailBox *
-k_mailbox_create(size_t msg_size, size_t size)
+k_mailbox_create(size_t msg_size, size_t buf_size)
 {
-  struct KMailBox *mbox;
-  struct Page *page;
+  struct KMailBox *mailbox;
+  void *buf;
   
-  if ((mbox = (struct KMailBox *) k_object_pool_get(k_mailbox_pool)) == NULL)
+  if ((mailbox = (struct KMailBox *) k_object_pool_get(k_mailbox_pool)) == NULL)
     return NULL;
   
-  if ((size * msg_size) > PAGE_SIZE)
-    panic("size too large");
-  
-  if ((page = page_alloc_one(0, PAGE_TAG_MAILBOX)) == NULL) {
-    k_object_pool_put(k_mailbox_pool, mbox);
+  if ((buf = k_malloc(buf_size)) == NULL) {
+    k_object_pool_put(k_mailbox_pool, mailbox);
     return NULL;
   }
 
-  page->ref_count++;
+  k_mailbox_init_common(mailbox, msg_size, buf, buf_size);
+  mailbox->flags = 0;
 
-  k_mailbox_init_common(mbox, msg_size, page2kva(page), PAGE_SIZE);
+  return mailbox;
+}
 
-  return mbox;
+int
+k_mailbox_init(struct KMailBox *mailbox,
+               size_t msg_size,
+               void *buf,
+               size_t buf_size)
+{
+  k_mailbox_ctor(mailbox, sizeof(struct KMailBox));
+  k_mailbox_init_common(mailbox, msg_size, buf, buf_size);
+
+  return 0;
+}
+
+static void
+k_mailbox_init_common(struct KMailBox *mailbox, size_t msg_size, void *start,
+                      size_t buf_size)
+{
+  mailbox->buf_start = (uint8_t *) start;
+  mailbox->buf_end   = mailbox->buf_start + ROUND_DOWN(buf_size, msg_size);
+  mailbox->read_ptr  = mailbox->buf_start;
+  mailbox->write_ptr = mailbox->buf_start;
+  mailbox->msg_size  = msg_size;
+  mailbox->capacity  = buf_size / msg_size;
+  mailbox->size      = 0;
 }
 
 void
-k_mailbox_destroy(struct KMailBox *mbox)
+k_mailbox_destroy(struct KMailBox *mailbox)
 {
-  struct Page *page;
+  if ((mailbox == NULL) || (mailbox->type != K_MAILBOX_TYPE))
+    panic("bad mailbox pointer");
+  if (mailbox->flags & K_MAILBOX_STATIC)
+    panic("cannot destroy static objects");
 
-  page = kva2page(mbox->buf_start);
-  if (--page->ref_count == 0)
-    page_free_one(page);
+  k_spinlock_acquire(&mailbox->lock);
 
-  k_mailbox_fini(mbox);
+  k_mailbox_fini_common(mailbox);
+  k_free(mailbox->buf_start);
+
+  k_spinlock_release(&mailbox->lock);
+
+  k_object_pool_put(k_mailbox_pool, mailbox);
 }
 
 int
-k_mailbox_init(struct KMailBox *mbox, size_t msg_size, void *start, size_t size)
+k_mailbox_fini(struct KMailBox *mailbox)
 {
-  k_mailbox_ctor(mbox, sizeof(struct KMailBox));
-  k_mailbox_init_common(mbox, msg_size, start, size);
+  if ((mailbox == NULL) || (mailbox->type != K_MAILBOX_TYPE))
+    panic("bad mailbox pointer");
+  if (!(mailbox->flags & K_MAILBOX_STATIC))
+    panic("cannot fini non-static objects");
+
+  k_spinlock_acquire(&mailbox->lock);
+  k_mailbox_fini_common(mailbox);
+  k_spinlock_release(&mailbox->lock);
+
   return 0;
 }
 
-int
-k_mailbox_fini(struct KMailBox *mbox)
+static void
+k_mailbox_fini_common(struct KMailBox *mailbox)
 {
-  k_spinlock_acquire(&mbox->lock);
-  _k_sched_wakeup_all(&mbox->receive_list, -EINVAL);
-  _k_sched_wakeup_all(&mbox->send_list, -EINVAL);
-  k_spinlock_release(&mbox->lock);
+  assert(k_spinlock_holding(&mailbox->lock));
 
-  return 0;
+  _k_sched_wakeup_all(&mailbox->receivers, -EINVAL);
+  _k_sched_wakeup_all(&mailbox->senders, -EINVAL);
 }
 
 int
-k_mailbox_receive(struct KMailBox *mbox, void *msg, unsigned long timeout,
-                  int blocking)
+k_mailbox_try_receive(struct KMailBox *mailbox, void *message)
 {
-  struct KThread *my_task = k_thread_current();
   int r;
 
-  if ((my_task == NULL) && blocking)
-    // TODO: choose another value to indicate an error?
-    return -EAGAIN;
+  if ((mailbox == NULL) || (mailbox->type != K_MAILBOX_TYPE))
+    panic("bad mailbox pointer");
 
-  k_spinlock_acquire(&mbox->lock);
-
-  while (mbox->size == 0) {
-    struct KCpu *my_cpu = _k_cpu();
-
-    if (!blocking || (my_cpu->lock_count > 0)) {
-      // Can't block
-      k_spinlock_release(&mbox->lock);
-      return -EAGAIN;
-    }
-
-    if ((r = _k_sched_sleep(&mbox->receive_list, THREAD_STATE_SLEEP, timeout, &mbox->lock)) != 0) {
-      k_spinlock_release(&mbox->lock);;
-      return r;
-    }
-  }
-
-  memmove(msg, mbox->read_ptr, mbox->msg_size);
-
-  mbox->read_ptr += mbox->msg_size;
-  if (mbox->read_ptr >= mbox->buf_end)
-    mbox->read_ptr = mbox->buf_start;
-
-  if (mbox->size-- == mbox->max_size)
-    _k_sched_wakeup_one(&mbox->send_list, 0);
-
-  k_spinlock_release(&mbox->lock);
+  k_spinlock_acquire(&mailbox->lock);
+  r = k_mailbox_try_receive_locked(mailbox, message);
+  k_spinlock_release(&mailbox->lock);
 
   return r;
 }
 
 int
-k_mailbox_send(struct KMailBox *mbox, const void *msg, unsigned long timeout,
-            int blocking)
+k_mailbox_timed_receive(struct KMailBox *mailbox,
+                        void *message,
+                        unsigned long timeout)
 {
-  struct KThread *my_task = k_thread_current();
-  int ret;
+  int r;
 
-  if ((my_task == NULL) && blocking)
-    // TODO: choose another value to indicate an error?
-    return -EAGAIN;
+  if ((mailbox == NULL) || (mailbox->type != K_MAILBOX_TYPE))
+    panic("bad mailbox pointer");
 
-  k_spinlock_acquire(&mbox->lock);
+  k_spinlock_acquire(&mailbox->lock);
 
-  while (mbox->size == mbox->max_size) {
-    struct KCpu *my_cpu = _k_cpu();
+  while ((r = k_mailbox_try_receive_locked(mailbox, message)) != 0) {
+    if (r != -EAGAIN)
+      break;
 
-    if (!blocking || (my_cpu->lock_count > 0)) {
-      // Can't block
-      k_spinlock_release(&mbox->lock);
-      return -EAGAIN;
-    }
-
-    _k_sched_sleep(&mbox->send_list, THREAD_STATE_SLEEP, timeout, &mbox->lock);
-
-    if ((ret = my_task->sleep_result) != 0) {
-      k_spinlock_release(&mbox->lock);
-      return ret;
-    }
+    r = _k_sched_sleep(&mailbox->receivers,
+                       THREAD_STATE_SLEEP,
+                       timeout,
+                       &mailbox->lock);
+    if (r < 0)
+      break;
   }
 
-  memmove(mbox->write_ptr, msg, mbox->msg_size);
+  k_spinlock_release(&mailbox->lock);
 
-  mbox->write_ptr += mbox->msg_size;
-  if (mbox->write_ptr >= mbox->buf_end)
-    mbox->write_ptr = mbox->buf_start;
+  return r;
+}
 
-  if (mbox->size++ == 0)
-    _k_sched_wakeup_one(&mbox->receive_list, 0);
+static int
+k_mailbox_try_receive_locked(struct KMailBox *mailbox, void *message)
+{
+  assert(k_spinlock_holding(&mailbox->lock));
 
-  k_spinlock_release(&mbox->lock);
+  if (mailbox->size == 0)
+    return -EAGAIN;
 
-  return ret;
+  memmove(message, mailbox->read_ptr, mailbox->msg_size);
+
+  mailbox->read_ptr += mailbox->msg_size;
+  if (mailbox->read_ptr >= mailbox->buf_end)
+    mailbox->read_ptr = mailbox->buf_start;
+
+  if (mailbox->size-- == mailbox->capacity)
+    _k_sched_wakeup_one(&mailbox->senders, 0);
+
+  return 0;
+}
+
+int
+k_mailbox_try_send(struct KMailBox *mailbox, const void *message)
+{
+  int r;
+
+  if ((mailbox == NULL) || (mailbox->type != K_MAILBOX_TYPE))
+    panic("bad mailbox pointer");
+
+  k_spinlock_acquire(&mailbox->lock);
+  r = k_mailbox_try_send_locked(mailbox, message);
+  k_spinlock_release(&mailbox->lock);
+
+  return r;
+}
+
+int
+k_mailbox_timed_send(struct KMailBox *mailbox,
+                     const void *message,
+                     unsigned long timeout)
+{
+  int r;
+
+  if ((mailbox == NULL) || (mailbox->type != K_MAILBOX_TYPE))
+    panic("bad mailbox pointer");
+
+  k_spinlock_acquire(&mailbox->lock);
+
+  while ((r = k_mailbox_try_send_locked(mailbox, message)) != 0) {
+    if (r != -EAGAIN)
+      break;
+
+    r = _k_sched_sleep(&mailbox->senders,
+                       THREAD_STATE_SLEEP,
+                       timeout,
+                       &mailbox->lock);
+    if (r < 0)
+      break;
+  }
+
+  k_spinlock_release(&mailbox->lock);
+
+  return r;
+}
+
+static int
+k_mailbox_try_send_locked(struct KMailBox *mailbox, const void *message)
+{
+  assert(k_spinlock_holding(&mailbox->lock));
+  
+  if (mailbox->size == mailbox->capacity)
+    return -EAGAIN;
+  
+  memmove(mailbox->write_ptr, message, mailbox->msg_size);
+
+  mailbox->write_ptr += mailbox->msg_size;
+  if (mailbox->write_ptr >= mailbox->buf_end)
+    mailbox->write_ptr = mailbox->buf_start;
+
+  if (mailbox->size++ == 0)
+    _k_sched_wakeup_one(&mailbox->receivers, 0);
+
+  return 0;
 }
 
 static void
 k_mailbox_ctor(void *p, size_t n)
 {
-  struct KMailBox *mbox = (struct KMailBox *) p;
+  struct KMailBox *mailbox = (struct KMailBox *) p;
   (void) n;
 
-  k_spinlock_init(&mbox->lock, "k_mailbox");
-  k_list_init(&mbox->receive_list);
-  k_list_init(&mbox->send_list);
+  k_spinlock_init(&mailbox->lock, "k_mailbox");
+  k_list_init(&mailbox->receivers);
+  k_list_init(&mailbox->senders);
+  mailbox->type = K_MAILBOX_TYPE;
 }
 
 static void
 k_mailbox_dtor(void *p, size_t n)
 {
-  struct KMailBox *mbox = (struct KMailBox *) p;
+  struct KMailBox *mailbox = (struct KMailBox *) p;
   (void) n;
 
-  assert(!k_spinlock_holding(&mbox->lock));
-  assert(k_list_is_empty(&mbox->receive_list));
-  assert(k_list_is_empty(&mbox->send_list));
-}
-
-static void
-k_mailbox_init_common(struct KMailBox *mbox, size_t msg_size, void *start,
-                      size_t size)
-{
-  mbox->buf_start = (uint8_t *) start;
-  mbox->buf_end   = mbox->buf_start + ROUND_DOWN(size, msg_size);
-  mbox->read_ptr  = mbox->buf_start;
-  mbox->write_ptr = mbox->buf_start;
-  mbox->msg_size  = msg_size;
-  mbox->max_size  = size / msg_size;
-  mbox->size      = 0;
+  assert(!k_spinlock_holding(&mailbox->lock));
+  assert(k_list_is_empty(&mailbox->receivers));
+  assert(k_list_is_empty(&mailbox->senders));
 }

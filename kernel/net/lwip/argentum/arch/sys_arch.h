@@ -2,7 +2,7 @@
 #define __LWIP_OSDEV_ARCH_SYS_ARCH_H__
 
 #include <kernel/mutex.h>
-#include <kernel/mailbox.h>
+#include <kernel/core/mailbox.h>
 #include <kernel/semaphore.h>
 #include <kernel/thread.h>
 
