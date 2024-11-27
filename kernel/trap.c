@@ -10,7 +10,7 @@
 #include <kernel/types.h>
 #include <kernel/core/irq.h>
 #include <kernel/monitor.h>
-#include <kernel/semaphore.h>
+#include <kernel/core/semaphore.h>
 #include <kernel/mach.h>
 #include <kernel/interrupt.h>
 

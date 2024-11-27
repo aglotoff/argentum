@@ -22,7 +22,7 @@
 #include <kernel/vmspace.h>
 #include <kernel/trap.h>
 #include <kernel/tick.h>
-#include <kernel/semaphore.h>
+#include <kernel/core/semaphore.h>
 #include <kernel/core/irq.h>
 
 struct KObjectPool *process_cache;

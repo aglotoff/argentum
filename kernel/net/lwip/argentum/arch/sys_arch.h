@@ -3,7 +3,7 @@
 
 #include <kernel/mutex.h>
 #include <kernel/core/mailbox.h>
-#include <kernel/semaphore.h>
+#include <kernel/core/semaphore.h>
 #include <kernel/thread.h>
 
 typedef struct KMailBox *sys_mbox_t;

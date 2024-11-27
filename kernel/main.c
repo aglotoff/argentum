@@ -13,7 +13,7 @@
 #include <kernel/core/irq.h>
 #include <kernel/core/mailbox.h>
 #include <kernel/mutex.h>
-#include <kernel/semaphore.h>
+#include <kernel/core/semaphore.h>
 #include <kernel/timer.h>
 #include <kernel/object_pool.h>
 #include <kernel/vm.h>
@@ -23,7 +23,6 @@
 #include <kernel/process.h>
 #include <kernel/ipc.h>
 #include <kernel/net.h>
-#include <kernel/semaphore.h>
 #include <kernel/mach.h>
 #include <kernel/interrupt.h>
 

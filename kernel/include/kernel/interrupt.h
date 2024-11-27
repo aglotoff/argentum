@@ -1,7 +1,7 @@
 #ifndef __KERNEL_INCLUDE_KERNEL_INTERRUPT_H__
 #define __KERNEL_INCLUDE_KERNEL_INTERRUPT_H__
 
-#include <kernel/semaphore.h>
+#include <kernel/core/semaphore.h>
 
 struct KThread;
 

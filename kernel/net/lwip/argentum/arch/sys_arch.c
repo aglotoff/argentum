@@ -3,7 +3,7 @@
 #include <kernel/page.h>
 #include <kernel/mutex.h>
 #include <kernel/core/mailbox.h>
-#include <kernel/semaphore.h>
+#include <kernel/core/semaphore.h>
 #include <kernel/thread.h>
 #include <kernel/tick.h>
 #include <kernel/types.h>
