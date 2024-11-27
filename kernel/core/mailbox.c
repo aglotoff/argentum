@@ -60,6 +60,7 @@ k_mailbox_init(struct KMailBox *mailbox,
 {
   k_mailbox_ctor(mailbox, sizeof(struct KMailBox));
   k_mailbox_init_common(mailbox, msg_size, buf, buf_size);
+  mailbox->flags = K_MAILBOX_STATIC;
 
   return 0;
 }
