@@ -21,7 +21,9 @@ int             _k_sched_sleep(struct KListLink *, int, unsigned long, struct KS
 void            _k_sched_raise_priority(struct KThread *, int);
 void            _k_sched_recalc_priority(struct KThread *);
 void            _k_sched_tick(void);
+void            _k_sched_update_effective_priority(void);
 
+int             _k_mutex_get_highest_priority(struct KListLink *);
 void            _k_mutex_may_raise_priority(struct KMutex *, int);
 
 void            _k_timer_start(struct KTimer *, unsigned long);

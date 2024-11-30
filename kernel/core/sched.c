@@ -246,10 +246,8 @@ _k_sched_sleep(struct KListLink *queue, int state, unsigned long timeout,
 void
 _k_sched_raise_priority(struct KThread *thread, int priority)
 {
-  if (!k_spinlock_holding(&_k_sched_spinlock))
-    panic("sched not locked");
-  if (thread->priority <= priority)
-    panic("new priority must be higher");
+  assert(k_spinlock_holding(&_k_sched_spinlock));
+  assert(thread->priority > priority);
 
   thread->priority = priority;
 
@@ -262,10 +260,11 @@ _k_sched_raise_priority(struct KThread *thread, int priority)
     _k_sched_enqueue(thread);
     break;
   case THREAD_STATE_MUTEX:
+    // Re-insert to update priority
     k_list_remove(&thread->link);
-    _k_sched_add(&thread->wait_mutex->queue, thread);
-
-    _k_mutex_may_raise_priority(thread->wait_mutex, thread->priority);
+    _k_sched_add(&thread->sleep_on_mutex->queue, thread);
+  
+    _k_mutex_may_raise_priority(thread->sleep_on_mutex, thread->priority);
     break;
   default:
     break;
@@ -401,3 +400,17 @@ _k_sched_tick(void)
   }
 }
 
+void
+_k_sched_update_effective_priority(void)
+{
+  struct KThread *thread = k_thread_current();
+  int new_priority, max_mutex_priority;
+
+  new_priority = thread->saved_priority;
+
+  max_mutex_priority = _k_mutex_get_highest_priority(&thread->owned_mutexes);
+  if (max_mutex_priority < new_priority)
+    new_priority = max_mutex_priority;
+
+  thread->priority = new_priority;
+}

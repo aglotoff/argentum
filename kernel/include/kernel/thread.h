@@ -69,8 +69,8 @@ struct KThread {
   /** CPU */
   struct KCpu       *cpu;
 
-  struct KListLink   mutex_list;
-  struct KMutex     *wait_mutex;
+  struct KListLink   owned_mutexes;
+  struct KMutex     *sleep_on_mutex;
 
   /** Bottom of the kernel-mode stack */
   void              *kstack;

@@ -140,9 +140,9 @@ k_thread_create(struct Process *process, void (*entry)(void *), void *arg,
   stack = (uint8_t *) page2kva(stack_page);
   stack_page->ref_count++;
 
-  k_list_init(&thread->mutex_list);
+  k_list_init(&thread->owned_mutexes);
   k_list_null(&thread->link);
-  thread->wait_mutex     = NULL;
+  thread->sleep_on_mutex     = NULL;
 
   thread->flags          = 0;
   thread->saved_priority = priority;

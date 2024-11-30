@@ -20,6 +20,8 @@ struct KThread;
  * while holding the lock.
  */
 struct KMutex {
+  int               type;
+  int               flags;
   /** The task currently holding the mutex. */
   struct KThread   *owner;
   /** Link into the list of all mutexes owned by the same thread. */
@@ -32,13 +34,23 @@ struct KMutex {
   const char       *name;
 };
 
+#define K_MUTEX_TYPE    0x4D555458  // {'M','U','T','X'}
+#define K_MUTEX_STATIC  (1 << 0)
+
 void           k_mutex_system_init(void);
 void           k_mutex_init(struct KMutex *, const char *);
 void           k_mutex_fini(struct KMutex *);
 struct KMutex *k_mutex_create(const char *);
 void           k_mutex_destroy(struct KMutex *);
-int            k_mutex_lock(struct KMutex *);
+int            k_mutex_try_lock(struct KMutex *);
+int            k_mutex_timed_lock(struct KMutex *, unsigned long);
 int            k_mutex_unlock(struct KMutex *);
 int            k_mutex_holding(struct KMutex *);
+
+static inline int
+k_mutex_lock(struct KMutex *mutex)
+{
+  return k_mutex_timed_lock(mutex, 0);
+}
 
 #endif  // !__KERNEL_INCLUDE_KERNEL_MUTEX_H__
