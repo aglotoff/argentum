@@ -13,7 +13,7 @@
 #include <kernel/vmspace.h>
 #include <kernel/fs/fs.h>
 #include <kernel/console.h>
-#include <kernel/tick.h>
+#include <kernel/time.h>
 #include <kernel/mach.h>
 #include <kernel/dev.h>
 
@@ -475,7 +475,7 @@ tty_select(dev_t dev, struct timeval *timeout)
     unsigned long t = 0;
 
     if (timeout != NULL) {
-      t = timeout->tv_sec * TICKS_PER_SECOND + timeout->tv_usec / US_PER_TICK;
+      t = timeval2ticks(timeout);
       k_spinlock_release(&tty->in.lock);
       return 0;
     }

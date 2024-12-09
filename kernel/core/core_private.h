@@ -27,6 +27,13 @@ int             _k_mutex_get_highest_priority(struct KListLink *);
 void            _k_mutex_may_raise_priority(struct KMutex *, int);
 
 void            _k_timer_start(struct KTimer *, unsigned long);
+void            _k_timer_tick(void);
+
+void            _k_timeout_process_queue(struct KListLink *, void (*)(struct KTimeout *));
+void            _k_timeout_init(struct KTimeout *);
+void            _k_timeout_enqueue(struct KListLink *queue, struct KTimeout *entry, unsigned long delay);
+void            _k_timeout_dequeue(struct KListLink *queue, struct KTimeout *entry);
+void            _k_timeout_fini(struct KTimeout *timer);
 
 extern struct KSpinLock _k_sched_spinlock;
 
@@ -83,12 +90,6 @@ struct KCpu {
 };
 
 struct KCpu    *_k_cpu(void);
-
-void _k_timeout_process_queue(struct KListLink *, void (*)(struct KTimeout *));
-void _k_timeout_init(struct KTimeout *);
-void _k_timeout_enqueue(struct KListLink *queue, struct KTimeout *entry, unsigned long delay);
-void _k_timeout_dequeue(struct KListLink *queue, struct KTimeout *entry);
-void _k_timeout_fini(struct KTimeout *timer);
 
 #endif  // !__CORE_PRIVATE_H
 

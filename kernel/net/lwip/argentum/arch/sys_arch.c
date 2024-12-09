@@ -5,7 +5,7 @@
 #include <kernel/core/mailbox.h>
 #include <kernel/core/semaphore.h>
 #include <kernel/thread.h>
-#include <kernel/tick.h>
+#include <kernel/time.h>
 #include <kernel/types.h>
 #include <lwip/sys.h>
 
@@ -76,16 +76,16 @@ sys_sem_signal(sys_sem_t *sem)
 }
 
 u32_t
-sys_arch_sem_wait(sys_sem_t *sem, u32_t timeout)
+sys_arch_sem_wait(sys_sem_t *sem, u32_t timeout_ms)
 {
-  unsigned long start, end;
+  unsigned long start_ticks, end_ticks;
 
-  start = k_tick_get();
-  if (k_semaphore_timed_get(*sem, timeout / MS_PER_TICK) < 0)
+  start_ticks = k_tick_get();
+  if (k_semaphore_timed_get(*sem, ms2ticks(timeout_ms)) < 0)
     return SYS_ARCH_TIMEOUT; 
-  end = k_tick_get();
+  end_ticks = k_tick_get();
   
-  return MIN(timeout, (end - start) * MS_PER_TICK);
+  return MIN(timeout_ms, ticks2ms(end_ticks - start_ticks));
 }
 
 void
@@ -140,16 +140,16 @@ sys_mbox_trypost_fromisr(sys_mbox_t *mbox, void *msg)
 }
 
 u32_t
-sys_arch_mbox_fetch(sys_mbox_t *mbox, void **msg, u32_t timeout)
+sys_arch_mbox_fetch(sys_mbox_t *mbox, void **msg, u32_t timeout_ms)
 {
-  unsigned long start, end;
+  unsigned long start_ticks, end_ticks;
 
-  start = k_tick_get();
-  if (k_mailbox_timed_receive(*mbox, msg, timeout / 10) < 0)
+  start_ticks = k_tick_get();
+  if (k_mailbox_timed_receive(*mbox, msg, ms2ticks(timeout_ms)) < 0)
     return SYS_ARCH_TIMEOUT;
-  end = k_tick_get();
+  end_ticks = k_tick_get();
 
-  return MIN(timeout, (end - start) * 10);
+  return MIN(timeout_ms, ticks2ms(end_ticks - start_ticks));
 }
 
 u32_t

@@ -2,7 +2,7 @@
 #include <errno.h>
 
 #include <kernel/console.h>
-#include <kernel/timer.h>
+#include <kernel/core/timer.h>
 #include <kernel/spinlock.h>
 
 #include "core_private.h"
@@ -123,11 +123,13 @@ _k_timer_timeout(struct KTimeout *entry)
 }
 
 void
-k_timer_tick(void)
+_k_timer_tick(void)
 {
-  k_spinlock_acquire(&k_timer_lock);
-  _k_timeout_process_queue(&k_timer_queue, _k_timer_timeout);
-  k_spinlock_release(&k_timer_lock);
+  if (k_cpu_id() == 0) {
+    k_spinlock_acquire(&k_timer_lock);
+    _k_timeout_process_queue(&k_timer_queue, _k_timer_timeout);
+    k_spinlock_release(&k_timer_lock);
+  }
 }
 
 static void

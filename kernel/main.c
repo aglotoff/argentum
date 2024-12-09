@@ -6,15 +6,13 @@
 #include <kernel/console.h>
 #include <kernel/core/cpu.h>
 #include <kernel/tty.h>
-#include <kernel/drivers/lan9118.h>
-#include <kernel/drivers/rtc.h>
 #include <kernel/fs/buf.h>
 #include <kernel/fs/file.h>
 #include <kernel/core/irq.h>
 #include <kernel/core/mailbox.h>
 #include <kernel/mutex.h>
 #include <kernel/core/semaphore.h>
-#include <kernel/timer.h>
+#include <kernel/core/timer.h>
 #include <kernel/object_pool.h>
 #include <kernel/vm.h>
 #include <kernel/page.h>
@@ -25,6 +23,7 @@
 #include <kernel/net.h>
 #include <kernel/mach.h>
 #include <kernel/interrupt.h>
+#include <kernel/time.h>
 
 static void mp_main(void);
 
@@ -67,7 +66,6 @@ void main(uintptr_t mach_type)
 
   // Initialize device drivers
   tty_init();                   // Console
-  rtc_init();                   // Real-time clock
   mach_current->storage_init();
   mach_current->eth_init();
 
@@ -81,6 +79,8 @@ void main(uintptr_t mach_type)
   net_init();           // Networking
 
   // ipc_init();
+
+  time_init();
 
   // Unblock other CPUs
   bsp_started = 1;

@@ -1,6 +1,6 @@
 diff -ruN old/config.sub new/config.sub
 --- old/config.sub	2023-12-31 20:00:18.000000000 +0300
-+++ new/config.sub	2024-08-12 10:51:54.398474110 +0300
++++ new/config.sub	2024-12-09 19:19:37.005326356 +0300
 @@ -1725,7 +1725,7 @@
  	     | skyos* | haiku* | rdos* | toppers* | drops* | es* \
  	     | onefs* | tirtos* | phoenix* | fuchsia* | redox* | bme* \
@@ -12,7 +12,7 @@ diff -ruN old/config.sub new/config.sub
  	sco3.2v2 | sco3.2v[4-9]* | sco5v6*)
 diff -ruN old/newlib/configure.host new/newlib/configure.host
 --- old/newlib/configure.host	2023-12-31 20:00:18.000000000 +0300
-+++ new/newlib/configure.host	2024-08-12 10:51:54.398474110 +0300
++++ new/newlib/configure.host	2024-12-09 19:19:37.015326359 +0300
 @@ -439,6 +439,11 @@
  	posix_dir=posix
  	unix_dir=unix
@@ -37,7 +37,7 @@ diff -ruN old/newlib/configure.host new/newlib/configure.host
    *-wrs-vxworks*)
 diff -ruN old/newlib/libc/acinclude.m4 new/newlib/libc/acinclude.m4
 --- old/newlib/libc/acinclude.m4	2023-12-31 20:00:18.000000000 +0300
-+++ new/newlib/libc/acinclude.m4	2024-08-12 10:51:54.398474110 +0300
++++ new/newlib/libc/acinclude.m4	2024-12-09 19:19:37.015326359 +0300
 @@ -25,6 +25,7 @@
    w65
    xtensa
@@ -48,7 +48,7 @@ diff -ruN old/newlib/libc/acinclude.m4 new/newlib/libc/acinclude.m4
  AC_TYPE_LONG_DOUBLE
 diff -ruN old/newlib/libc/include/machine/setjmp.h new/newlib/libc/include/machine/setjmp.h
 --- old/newlib/libc/include/machine/setjmp.h	2023-12-31 20:00:18.000000000 +0300
-+++ new/newlib/libc/include/machine/setjmp.h	2024-08-12 10:51:54.408474110 +0300
++++ new/newlib/libc/include/machine/setjmp.h	2024-12-09 19:19:37.015326359 +0300
 @@ -439,7 +439,7 @@
  
  _END_STD_C
@@ -60,14 +60,15 @@ diff -ruN old/newlib/libc/include/machine/setjmp.h new/newlib/libc/include/machi
  #ifdef __cplusplus
 diff -ruN old/newlib/libc/include/sys/features.h new/newlib/libc/include/sys/features.h
 --- old/newlib/libc/include/sys/features.h	2023-12-31 20:00:18.000000000 +0300
-+++ new/newlib/libc/include/sys/features.h	2024-08-12 10:51:54.408474110 +0300
-@@ -545,6 +545,12 @@
++++ new/newlib/libc/include/sys/features.h	2024-12-09 19:21:09.405284437 +0300
+@@ -545,6 +545,13 @@
  
  #endif /* __CYGWIN__ */
  
 +#ifdef __ARGENTUM__
 +
-+#define _POSIX_TIMERS			1
++#define _POSIX_TIMERS			        1
++#define _POSIX_MONOTONIC_CLOCK		1
 +
 +#endif /* __ARGENTUM__ */
 +
@@ -76,7 +77,7 @@ diff -ruN old/newlib/libc/include/sys/features.h new/newlib/libc/include/sys/fea
  #endif
 diff -ruN old/newlib/libc/include/sys/signal.h new/newlib/libc/include/sys/signal.h
 --- old/newlib/libc/include/sys/signal.h	2023-12-31 20:00:18.000000000 +0300
-+++ new/newlib/libc/include/sys/signal.h	2024-08-12 10:55:15.618483112 +0300
++++ new/newlib/libc/include/sys/signal.h	2024-12-09 19:19:37.015326359 +0300
 @@ -113,6 +113,27 @@
  #define sa_sigaction  _signal_handlers._sigaction
  #endif
@@ -107,7 +108,7 @@ diff -ruN old/newlib/libc/include/sys/signal.h new/newlib/libc/include/sys/signa
  #define SA_NOCLDSTOP 1  /* only value supported now for sa_flags */
 diff -ruN old/newlib/libc/include/sys/stat.h new/newlib/libc/include/sys/stat.h
 --- old/newlib/libc/include/sys/stat.h	2023-12-31 20:00:18.000000000 +0300
-+++ new/newlib/libc/include/sys/stat.h	2024-08-12 10:51:54.408474110 +0300
++++ new/newlib/libc/include/sys/stat.h	2024-12-09 19:19:37.015326359 +0300
 @@ -142,7 +142,7 @@
  int	stat (const char *__restrict __path, struct stat *__restrict __sbuf );
  mode_t	umask (mode_t __mask );
@@ -119,7 +120,7 @@ diff -ruN old/newlib/libc/include/sys/stat.h new/newlib/libc/include/sys/stat.h
  #endif
 diff -ruN old/newlib/libc/include/sys/types.h new/newlib/libc/include/sys/types.h
 --- old/newlib/libc/include/sys/types.h	2023-12-31 20:00:18.000000000 +0300
-+++ new/newlib/libc/include/sys/types.h	2024-08-12 10:51:54.408474110 +0300
++++ new/newlib/libc/include/sys/types.h	2024-12-09 19:19:37.015326359 +0300
 @@ -45,25 +45,6 @@
  #include <sys/_types.h>
  #include <sys/_stdint.h>
@@ -172,7 +173,7 @@ diff -ruN old/newlib/libc/include/sys/types.h new/newlib/libc/include/sys/types.
  #endif	/* _SYS_TYPES_H */
 diff -ruN old/newlib/libc/posix/posix_spawn.c new/newlib/libc/posix/posix_spawn.c
 --- old/newlib/libc/posix/posix_spawn.c	2023-12-31 20:00:18.000000000 +0300
-+++ new/newlib/libc/posix/posix_spawn.c	2024-08-12 10:51:54.408474110 +0300
++++ new/newlib/libc/posix/posix_spawn.c	2024-12-09 19:19:37.015326359 +0300
 @@ -258,8 +258,8 @@
  		if (fchdir (fae->fae_dirfd) == -1)
  			return (errno);
@@ -185,7 +186,7 @@ diff -ruN old/newlib/libc/posix/posix_spawn.c new/newlib/libc/posix/posix_spawn.
  
 diff -ruN old/newlib/libc/sys/Makefile.inc new/newlib/libc/sys/Makefile.inc
 --- old/newlib/libc/sys/Makefile.inc	2023-12-31 20:00:18.000000000 +0300
-+++ new/newlib/libc/sys/Makefile.inc	2024-08-12 10:51:54.408474110 +0300
++++ new/newlib/libc/sys/Makefile.inc	2024-12-09 19:19:37.015326359 +0300
 @@ -70,3 +70,6 @@
  if HAVE_LIBC_SYS_Z8KSIM_DIR
  include %D%/z8ksim/Makefile.inc

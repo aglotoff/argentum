@@ -1,13 +1,7 @@
-#ifndef __KERNEL_INCLUDE_KTIMER_H__
-#define __KERNEL_INCLUDE_KTIMER_H__
+#ifndef __KERNEL_INCLUDE_KERNEL_TIMER_H__
+#define __KERNEL_INCLUDE_KERNEL_TIMER_H__
 
-#include <kernel/list.h>
-
-struct KTimeout {
-  struct KListLink link;
-  unsigned long    remain;
- 
-};
+#include <kernel/core/tick.h>
 
 struct KTimer {
   struct KTimeout entry;
@@ -30,8 +24,7 @@ int  k_timer_init(struct KTimer *, void (*)(void *), void *, unsigned long,
 int  k_timer_fini(struct KTimer *);
 int  k_timer_start(struct KTimer *);
 int  k_timer_stop(struct KTimer *);
-void k_timer_tick(void);
 
 void k_tick(void);
 
-#endif  // !__KERNEL_INCLUDE_timer_H__
+#endif  // !__KERNEL_INCLUDE_KERNEL_TIMER_H__

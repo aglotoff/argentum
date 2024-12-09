@@ -8,7 +8,7 @@
 
 #include <kernel/console.h>
 #include <kernel/tty.h>
-#include <kernel/drivers/rtc.h>
+#include <kernel/time.h>
 #include <kernel/fs/buf.h>
 #include <kernel/fs/fs.h>
 #include <kernel/process.h>
@@ -217,7 +217,7 @@ fs_inode_read_locked(struct Inode *ip, uintptr_t va, size_t nbyte, off_t *off)
   if ((ret = ip->fs->ops->read(ip, va, nbyte, *off)) < 0)
     return ret;
 
-  ip->atime  = rtc_get_time();
+  ip->atime  = time_get_seconds();
   ip->flags |= FS_INODE_DIRTY;
 
   *off += ret;
@@ -263,7 +263,7 @@ fs_inode_write_locked(struct Inode *ip, uintptr_t va, size_t nbyte, off_t *off)
     if (*off > ip->size)
       ip->size = *off;
 
-    ip->mtime = rtc_get_time();
+    ip->mtime = time_get_seconds();
     ip->flags |= FS_INODE_DIRTY;
   }
 
@@ -377,7 +377,7 @@ fs_inode_truncate_locked(struct Inode *inode, off_t length)
   inode->fs->ops->trunc(inode, length);
   
   inode->size = length;
-  inode->ctime = inode->mtime = rtc_get_time();
+  inode->ctime = inode->mtime = time_get_seconds();
   inode->flags |= FS_INODE_DIRTY;
 
   return 0;
@@ -748,7 +748,7 @@ fs_inode_chmod_locked(struct Inode *inode, mode_t mode)
   // TODO: additional permission checks
 
   inode->mode  = (inode->mode & ~CHMOD_MASK) | (mode & CHMOD_MASK);
-  inode->ctime = rtc_get_time();
+  inode->ctime = time_get_seconds();
   inode->flags |= FS_INODE_DIRTY;
 
   return 0;

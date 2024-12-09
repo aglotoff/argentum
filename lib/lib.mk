@@ -94,6 +94,7 @@ LIB_SRCFILES := \
 	lib/argentum/sys/stat/mknod.c \
 	lib/argentum/sys/stat/stat.c \
 	lib/argentum/sys/stat/umask.c \
+	lib/argentum/sys/time/clock_gettime.c \
 	lib/argentum/sys/time/gettimeofday.c \
 	lib/argentum/sys/time/select.c \
 	lib/argentum/sys/time/setitimer.c \

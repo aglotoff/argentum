@@ -21,7 +21,7 @@
 #include <kernel/spinlock.h>
 #include <kernel/vmspace.h>
 #include <kernel/trap.h>
-#include <kernel/tick.h>
+#include <kernel/core/tick.h>
 #include <kernel/core/semaphore.h>
 #include <kernel/core/irq.h>
 
@@ -513,32 +513,6 @@ process_grow(ptrdiff_t increment)
 {
   panic("deprecated %d\n", increment);
   return NULL;
-}
-
-int
-process_nanosleep(const struct timespec *rqtp, struct timespec *rmtp)
-{
-  unsigned long rq_timeout, rm_timeout, start;
-  struct KSemaphore sem;
-  int r;
-
-  start = k_tick_get();
-
-  rq_timeout = rqtp->tv_sec * TICKS_PER_SECOND + rqtp->tv_nsec / NS_PER_TICK;
-
-  k_semaphore_init(&sem, 0);
-  r = k_semaphore_timed_get(&sem, rq_timeout);
-
-  rm_timeout = MIN(k_tick_get() - start, rq_timeout);
-
-  if (rmtp != NULL) {
-    rmtp->tv_sec  = rm_timeout / TICKS_PER_SECOND;
-    rmtp->tv_nsec = (rm_timeout % TICKS_PER_SECOND) * NS_PER_TICK;
-  }
-
-  k_semaphore_fini(&sem);
-
-  return r == -ETIMEDOUT ? 0 : r;
 }
 
 pid_t

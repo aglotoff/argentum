@@ -6,7 +6,7 @@
 #include <kernel/core/irq.h>
 #include <kernel/console.h>
 #include <kernel/core/cpu.h>
-#include <kernel/timer.h>
+#include <kernel/core/timer.h>
 #include <kernel/mm/memlayout.h>
 #include <kernel/vm.h>
 

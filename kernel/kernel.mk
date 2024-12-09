@@ -42,7 +42,6 @@ KERNEL_SRCFILES :=	\
 	kernel/drivers/console/uart.c \
 	kernel/drivers/rtc/ds1338.c \
 	kernel/drivers/rtc/sbcon.c \
-	kernel/drivers/rtc/rtc.c \
 	kernel/drivers/sd/pl180.c \
 	kernel/drivers/sd/sd.c \
 	kernel/drivers/lan9118.c \
@@ -71,6 +70,7 @@ KERNEL_SRCFILES :=	\
 	kernel/process/signal.c \
 	kernel/process/vmspace.c \
 	kernel/arch_interrupt.c \
+	kernel/arch_time.c \
 	kernel/console.c \
 	kernel/dev.c \
 	kernel/ipc.c \
@@ -81,6 +81,7 @@ KERNEL_SRCFILES :=	\
 	kernel/monitor.c \
 	kernel/pipe.c \
 	kernel/syscall.c \
+	kernel/time.c \
 	kernel/trapentry.S \
 	kernel/trap.c \
 	kernel/tty.c \

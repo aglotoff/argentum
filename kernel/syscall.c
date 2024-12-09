@@ -13,7 +13,6 @@
 
 #include <kernel/console.h>
 #include <kernel/core/cpu.h>
-#include <kernel/drivers/rtc.h>
 #include <kernel/fd.h>
 #include <kernel/fs/file.h>
 #include <kernel/fs/fs.h>
@@ -25,6 +24,7 @@
 #include <kernel/types.h>
 #include <kernel/object_pool.h>
 #include <kernel/core/irq.h>
+#include <kernel/time.h>
 
 #include <lwip/sockets.h>
 
@@ -518,7 +518,7 @@ sys_nanosleep(void)
   if ((r = sys_arg_va(1, &rmt_va, sizeof rmt, VM_WRITE, 1)) < 0)
     goto out2;
 
-  if ((r = process_nanosleep(rqtp, &rmt)) < 0)
+  if ((r = time_nanosleep(rqtp, &rmt)) < 0)
     goto out2;
 
   if (rmt_va && ((r = sys_copy_out(&rmt, rmt_va, sizeof rmt)) < 0))
@@ -1565,6 +1565,7 @@ sys_clock_time(void)
 {
   clockid_t clock_id;
   uintptr_t prev_va;
+  struct timespec timespec;
   int r;
   
   if ((r = sys_arg_ulong(0, &clock_id)) < 0)
@@ -1572,19 +1573,10 @@ sys_clock_time(void)
   if ((r = sys_arg_va(1, &prev_va, sizeof(struct timespec), VM_WRITE, 1)) < 0)
     return r;
 
-  if (clock_id != CLOCK_REALTIME)
-    return -EINVAL;
+  if ((r = time_get(clock_id, &timespec)) == 0)
+    r = sys_copy_out(&timespec, prev_va, sizeof(struct timespec));
 
-  if (prev_va) {
-    struct timespec prev_value;
-    prev_value.tv_sec  = rtc_get_time();
-    prev_value.tv_nsec = 0;
-
-    if ((r = sys_copy_out(&prev_value, prev_va, sizeof(struct timespec))) < 0)
-      return r;
-  }
-
-  return 0;
+  return r;
 }
 
 int32_t

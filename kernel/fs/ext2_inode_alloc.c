@@ -3,8 +3,8 @@
 #include <string.h>
 
 #include <kernel/console.h>
-#include <kernel/drivers/rtc.h>
 #include <kernel/fs/buf.h>
+#include <kernel/time.h>
 
 #include "ext2.h"
 
@@ -46,7 +46,7 @@ ext2_inode_init(struct Ext2SuperblockData *sb, dev_t dev, uint32_t table, uint32
   raw = (struct Ext2Inode *) &buf->data[sb->inode_size * inode_block_idx];
   memset(raw, 0, sb->inode_size);
   raw->mode  = mode;
-  raw->ctime = raw->atime = raw->mtime = rtc_get_time();
+  raw->ctime = raw->atime = raw->mtime = time_get_seconds();
 
   if (((mode & EXT2_S_IFMASK) == EXT2_S_IFBLK) ||
       ((mode & EXT2_S_IFMASK) == EXT2_S_IFCHR)) {

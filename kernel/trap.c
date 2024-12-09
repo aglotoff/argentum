@@ -13,6 +13,7 @@
 #include <kernel/core/semaphore.h>
 #include <kernel/mach.h>
 #include <kernel/interrupt.h>
+#include <kernel/time.h>
 
 static void trap_handle_abort(struct TrapFrame *);
 
@@ -173,11 +174,15 @@ print_trapframe(struct TrapFrame *tf)
 }
 
 int
+ipi_irq(int, void *)
+{
+  return 1;
+}
+
+int
 timer_irq(int, void *)
 {
   struct Process *my_process = process_current();
-
-  // cprintf("Tick!\n");
 
   if (my_process != NULL) {
     if ((my_process->thread->tf->psr & PSR_M_MASK) != PSR_M_USR) {
@@ -189,12 +194,7 @@ timer_irq(int, void *)
 
   k_tick();
 
+  time_tick();
+
   return 1;
 }
-
-int
-ipi_irq(int, void *)
-{
-  return 1;
-}
-

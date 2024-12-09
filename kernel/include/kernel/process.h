@@ -153,7 +153,6 @@ int            signal_pending(sigset_t *);
 int            signal_mask(int, const sigset_t *, sigset_t *);
 int            signal_suspend(const sigset_t *);
 
-int            process_nanosleep(const struct timespec *, struct timespec *);
 pid_t          process_get_gid(pid_t);
 int            process_set_gid(pid_t, pid_t);
 int            process_match_pid(struct Process *, pid_t);

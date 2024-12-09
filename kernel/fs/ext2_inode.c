@@ -4,7 +4,6 @@
 #include <sys/stat.h>
 
 #include <kernel/console.h>
-#include <kernel/drivers/rtc.h>
 #include <kernel/fs/buf.h>
 #include <kernel/fs/fs.h>
 #include <kernel/types.h>

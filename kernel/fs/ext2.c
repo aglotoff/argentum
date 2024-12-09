@@ -4,12 +4,12 @@
 #include <sys/stat.h>
 
 #include <kernel/console.h>
-#include <kernel/drivers/rtc.h>
 #include <kernel/fs/buf.h>
 #include <kernel/fs/fs.h>
 #include <kernel/object_pool.h>
 #include <kernel/process.h>
 #include <kernel/types.h>
+#include <kernel/time.h>
 
 #include "ext2.h"
 
@@ -55,7 +55,7 @@ ext2_inode_create(struct Inode *dirp, char *name, mode_t mode, dev_t rdev,
   if ((r = ext2_link(dirp, name, ip)))
     panic("Cannot create link");
 
-  ip->ctime = ip->mtime = rtc_get_time();
+  ip->ctime = ip->mtime = time_get_seconds();
   ip->flags |= FS_INODE_DIRTY;
 
   *istore = ip;
@@ -79,7 +79,7 @@ ext2_create(struct Inode *dirp, char *name, mode_t mode,
   assert(istore != NULL);
   *istore = ip;
 
-  dirp->atime = dirp->ctime = dirp->mtime = rtc_get_time();
+  dirp->atime = dirp->ctime = dirp->mtime = time_get_seconds();
   dirp->flags |= FS_INODE_DIRTY;
 
   return 0;
@@ -110,7 +110,7 @@ ext2_mkdir(struct Inode *dirp, char *name, mode_t mode,
     panic("Cannot create ..");
 
   dirp->nlink++;
-  dirp->atime = dirp->ctime = dirp->mtime = rtc_get_time();
+  dirp->atime = dirp->ctime = dirp->mtime = time_get_seconds();
   dirp->flags |= FS_INODE_DIRTY;
 
   assert(istore != NULL);
@@ -136,7 +136,7 @@ ext2_mknod(struct Inode *dirp, char *name, mode_t mode, dev_t dev,
   assert(istore != NULL);
   *istore = ip;
 
-  dirp->atime = dirp->ctime = dirp->mtime = rtc_get_time();
+  dirp->atime = dirp->ctime = dirp->mtime = time_get_seconds();
   dirp->flags |= FS_INODE_DIRTY;
 
   return 0;
@@ -157,7 +157,7 @@ ext2_dirent_read(struct Inode *dir, struct Ext2DirEntry *de, off_t off)
   if (ret != de->name_len)
     panic("Cannot read directory");
 
-  dir->atime  = rtc_get_time();
+  dir->atime  = time_get_seconds();
   dir->flags |= FS_INODE_DIRTY;
 
   return 0;
@@ -258,7 +258,7 @@ ext2_link(struct Inode *dir, char *name, struct Inode *inode)
       // Reuse an empty entry
       new_de.rec_len = de.rec_len;
 
-      inode->ctime = rtc_get_time();
+      inode->ctime = time_get_seconds();
       inode->nlink++;
       inode->flags |= FS_INODE_DIRTY;
 
@@ -272,7 +272,7 @@ ext2_link(struct Inode *dir, char *name, struct Inode *inode)
       new_de.rec_len = de.rec_len - de_len;
       de.rec_len = de_len;
 
-      inode->ctime = rtc_get_time();
+      inode->ctime = time_get_seconds();
       inode->nlink++;
       inode->flags |= FS_INODE_DIRTY;
 
@@ -288,7 +288,7 @@ ext2_link(struct Inode *dir, char *name, struct Inode *inode)
   new_de.rec_len = sb->block_size;
   dir->size = off + sb->block_size;
 
-  inode->ctime = rtc_get_time();
+  inode->ctime = time_get_seconds();
   inode->nlink++;
   inode->flags |= FS_INODE_DIRTY;
 
@@ -355,7 +355,7 @@ ext2_unlink(struct Inode *dir, struct Inode *ip)
     }
 
     if (--ip->nlink > 0)
-      ip->ctime = rtc_get_time();
+      ip->ctime = time_get_seconds();
     ip->flags |= FS_INODE_DIRTY;
 
     return 0;
@@ -376,7 +376,7 @@ ext2_rmdir(struct Inode *dir, struct Inode *ip)
     return r;
 
   dir->nlink--;
-  dir->ctime = dir->mtime = rtc_get_time();
+  dir->ctime = dir->mtime = time_get_seconds();
   dir->flags |= FS_INODE_DIRTY;
 
   return 0;
@@ -411,7 +411,7 @@ ext2_sb_sync(struct Ext2SuperblockData *sb, dev_t dev)
 
   k_mutex_lock(&sb->mutex);
 
-  sb->wtime = rtc_get_time();
+  sb->wtime = time_get_seconds();
 
   if ((buf = buf_read(1, 1024, dev)) == NULL)
     panic("cannot read the superblock");

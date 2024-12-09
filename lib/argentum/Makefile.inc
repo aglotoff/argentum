@@ -63,6 +63,7 @@ libc_a_SOURCES += \
   %D%/sys/stat/mknod.c \
   %D%/sys/stat/stat.c \
   %D%/sys/stat/umask.c \
+  %D%/sys/time/clock_gettime.c \
   %D%/sys/time/gettimeofday.c \
   %D%/sys/time/select.c \
   %D%/sys/time/setitimer.c \

@@ -8,8 +8,7 @@
 #include <limits.h>
 #include <stdint.h>
 
-#include <kernel/timer.h>
-#include <kernel/list.h>
+#include <kernel/core/tick.h>
 
 #define THREAD_MAX_PRIORITIES  (2 * NZERO)
 
