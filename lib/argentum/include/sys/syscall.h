@@ -76,6 +76,8 @@
 #include <errno.h>
 #include <stdint.h>
 
+#if defined(__arm__) || defined(__thumb__)
+
 // Generic system call: pass system call number as an immediate operand of the
 // SVC instruction, and up to three parameters in R0, R1, R2.
 // Interrupt kernel with the SVC instruction.
@@ -124,6 +126,8 @@ __syscall(uint8_t num, uint32_t a1, uint32_t a2, uint32_t a3, uint32_t a4,
 
   return r;
 }
+
+#endif
 
 #define __syscall0(num)     \
   __syscall(num, 0, 0, 0, 0, 0, 0)

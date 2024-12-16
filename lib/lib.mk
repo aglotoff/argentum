@@ -42,6 +42,7 @@ LIB_SRCFILES := \
 	lib/argentum/include/netdb.h \
 	lib/argentum/include/poll.h \
 	lib/argentum/include/ucontext.h \
+	lib/argentum/machine/arm/sigstub.S \
 	lib/argentum/mntent/getmntent.c \
 	lib/argentum/netdb/gethostbyaddr.c \
 	lib/argentum/netdb/gethostbyname.c \
@@ -54,7 +55,6 @@ LIB_SRCFILES := \
 	lib/argentum/signal/sigaction.c \
 	lib/argentum/signal/sigpending.c \
 	lib/argentum/signal/sigprocmask.c \
-	lib/argentum/signal/sigstub.S \
 	lib/argentum/signal/sigsuspend.c \
 	lib/argentum/stdio/flockfile.c \
 	lib/argentum/stdio/funlockfile.c \
@@ -164,8 +164,7 @@ LIB_SRCFILES := \
 	lib/argentum/unistd/vfork.c \
 	lib/argentum/unistd/write.c \
 	lib/argentum/utime/utime.c \
-	lib/argentum/crt0.S \
-	lib/argentum/progname.c
+	lib/argentum/crt0.c
 
 LIB_SRCFILES := $(patsubst lib/%, $(NEWLIB)/newlib/libc/sys/%, $(LIB_SRCFILES))
 

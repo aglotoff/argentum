@@ -22,7 +22,6 @@ libc_a_SOURCES += \
   %D%/signal/sigaction.c \
   %D%/signal/sigpending.c \
   %D%/signal/sigprocmask.c \
-  %D%/signal/sigstub.S \
   %D%/signal/sigsuspend.c \
   %D%/stdio/flockfile.c \
   %D%/stdio/funlockfile.c \
@@ -133,4 +132,9 @@ libc_a_SOURCES += \
   %D%/unistd/vfork.c \
   %D%/unistd/write.c \
   %D%/utime/utime.c \
-  %D%/progname.c
+  %D%/crt0.c
+
+if HAVE_LIBC_MACHINE_ARM
+  libc_a_SOURCES += \
+    %D%/machine/arm/sigstub.S
+endif
