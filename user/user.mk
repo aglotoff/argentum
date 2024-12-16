@@ -29,7 +29,7 @@ USER_APPS := $(patsubst user/%.c, $(SYSROOT)/%, $(USER_SRCFILES))
 USER_APPS := $(patsubst user/%.cc, $(SYSROOT)/%, $(USER_APPS))
 USER_APPS := $(patsubst user/%.S, $(SYSROOT)/%, $(USER_APPS))
 
-$(OBJ)/user/hello: user/hello.c $(OBJ)/.vars.USER_CFLAGS
+$(OBJ)/user/hello: user/hello.c $(OBJ)/.vars.USER_CFLAGS $(SYSROOT)/usr/lib/libc.a
 	@echo "+ CC [USER] $<"
 	@mkdir -p $(@D)
 	$(V)$(CC) $(USER_CFLAGS) -o $@ $<

@@ -94,7 +94,7 @@ diff -ruN old/newlib/libc/include/sys/signal.h new/newlib/libc/include/sys/signa
 +struct sigaction {
 +  union {
 +    _sig_func_ptr _sa_handler;
-+    void (*_sa_sigaction)(int, struct siginfo *, void *);
++    void (*_sa_sigaction)(int, siginfo_t *, void *);
 +  } _u;
 +	sigset_t sa_mask;
 +	int sa_flags;

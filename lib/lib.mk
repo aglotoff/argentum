@@ -41,6 +41,7 @@ LIB_SRCFILES := \
 	lib/argentum/include/mntent.h \
 	lib/argentum/include/netdb.h \
 	lib/argentum/include/poll.h \
+	lib/argentum/include/ucontext.h \
 	lib/argentum/mntent/getmntent.c \
 	lib/argentum/netdb/gethostbyaddr.c \
 	lib/argentum/netdb/gethostbyname.c \

@@ -1,6 +1,7 @@
 #include <errno.h>
 #include <signal.h>
 #include <sys/mman.h>
+#include <ucontext.h>
 
 #include <kernel/object_pool.h>
 #include <kernel/process.h>
@@ -486,32 +487,9 @@ signal_dequeue(struct Process *process)
 }
 
 struct SignalFrame {
-  // Saved by user:
-  uint32_t s[32];
-  uint32_t fpscr;
-  uint32_t r1;
-  uint32_t r2;
-  uint32_t r3;
-  uint32_t r4;
-  uint32_t r5;
-  uint32_t r6;
-  uint32_t r7;
-  uint32_t r8;
-  uint32_t r9;
-  uint32_t r10;
-  uint32_t r11;
-  uint32_t r12;
-
-  // Saved by kernel:
-  uint32_t signo;
-  uint32_t handler;
-  uint32_t r0;
-  uint32_t sp;
-  uint32_t lr;
-  uint32_t pc;
-  uint32_t psr;
-  uint32_t trapno;
-  sigset_t mask;
+  ucontext_t ucontext;
+  uint32_t   handler;
+  siginfo_t  info;
 };
 
 static int
@@ -521,19 +499,19 @@ signal_arch_prepare(struct Process *process, struct Signal *signal)
   int signo = signal->info.si_signo;
   struct SignalFrame ctx;
 
-  ctx.r0      = process->thread->tf->r0;
-  ctx.sp      = process->thread->tf->sp;
-  ctx.lr      = process->thread->tf->lr;
-  ctx.pc      = process->thread->tf->pc;
-  ctx.psr     = process->thread->tf->psr;
-  ctx.mask    = process->signal_mask;
-  ctx.signo   = signo;
+  ctx.ucontext.uc_mcontext.r0 = process->thread->tf->r0;
+  ctx.ucontext.uc_mcontext.sp = process->thread->tf->sp;
+  ctx.ucontext.uc_mcontext.lr = process->thread->tf->lr;
+  ctx.ucontext.uc_mcontext.pc = process->thread->tf->pc;
+  ctx.ucontext.uc_mcontext.psr = process->thread->tf->psr;
+  ctx.ucontext.uc_sigmask = process->signal_mask;
+  ctx.info    = signal->info;
   ctx.handler = (uintptr_t) (process->signal_actions[signo - 1].sa_handler);
 
   if (vm_copy_out(process->vm->pgtab, &ctx, ctx_va, sizeof ctx) != 0)
     return SIGKILL;
 
-  process->thread->tf->r0 = ctx_va + offsetof(struct SignalFrame, signo);
+  process->thread->tf->r0 = ctx_va + offsetof(struct SignalFrame, info);
   process->thread->tf->sp = ctx_va;
   process->thread->tf->pc = process->signal_stub;
 
@@ -553,17 +531,17 @@ signal_arch_return(struct Process *process)
     return -EFAULT;
 
   // Make sure we're returning to user mode
-  if ((ctx.psr & PSR_M_MASK) != PSR_M_USR)
+  if ((ctx.ucontext.uc_mcontext.psr & PSR_M_MASK) != PSR_M_USR)
     panic("bad PSR");
 
   // No need to check SP, LR, and PC - bad values will lead to page faults
 
-  process->signal_mask     = ctx.mask;
-  process->thread->tf->r0  = ctx.r0;
-  process->thread->tf->sp  = ctx.sp;
-  process->thread->tf->lr  = ctx.lr;
-  process->thread->tf->pc  = ctx.pc;
-  process->thread->tf->psr = ctx.psr;
+  process->signal_mask     = ctx.ucontext.uc_sigmask;
+  process->thread->tf->r0  = ctx.ucontext.uc_mcontext.r0;
+  process->thread->tf->sp  = ctx.ucontext.uc_mcontext.sp;
+  process->thread->tf->lr  = ctx.ucontext.uc_mcontext.lr;
+  process->thread->tf->pc  = ctx.ucontext.uc_mcontext.pc;
+  process->thread->tf->psr = ctx.ucontext.uc_mcontext.psr;
 
   return 0;
 }
