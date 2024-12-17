@@ -16,6 +16,7 @@
 #include <kernel/time.h>
 #include <kernel/mach.h>
 #include <kernel/dev.h>
+#include <kernel/signal.h>
 
 #include <kernel/drivers/kbd.h>
 #include <kernel/drivers/display.h>

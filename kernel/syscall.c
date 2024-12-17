@@ -25,6 +25,7 @@
 #include <kernel/object_pool.h>
 #include <kernel/core/irq.h>
 #include <kernel/time.h>
+#include <kernel/signal.h>
 
 #include <lwip/sockets.h>
 
@@ -1455,7 +1456,7 @@ sys_sigaction(void)
   if ((r = sys_arg_va(3, &oact_va, sizeof oact, VM_WRITE, 1)) < 0)
     goto out2;
 
-  if ((r = signal_action(sig, stub, act, &oact)) < 0)
+  if ((r = signal_action_change(sig, stub, act, &oact)) < 0)
     goto out2;
 
   if (oact_va)
@@ -1471,7 +1472,13 @@ out1:
 int32_t
 sys_sigreturn(void)
 {
-  return signal_return();
+  uintptr_t ctx_va;
+  int r;
+
+  if ((r = sys_arg_ptr(0, &ctx_va, VM_READ, 0)) < 0)
+    return r;
+
+  return signal_return(ctx_va);
 }
 
 int32_t
@@ -1507,7 +1514,7 @@ sys_sigprocmask(void)
   if ((r = sys_arg_va(2, &oset_va, sizeof oset, VM_WRITE, 1)) < 0)
     goto out2;
 
-  if ((r = signal_mask(how, set, &oset)) < 0)
+  if ((r = signal_mask_change(how, set, &oset)) < 0)
     goto out2;
 
   if ((oset_va && ((r = sys_copy_out(&oset, oset_va, sizeof oset)) < 0)))

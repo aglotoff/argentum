@@ -1,7 +1,7 @@
 #ifndef __KERNEL_DRIVERS_SD_H__
 #define __KERNEL_DRIVERS_SD_H__
 
-#include <kernel/list.h>
+#include <kernel/core/list.h>
 #include <kernel/spinlock.h>
 
 #define SD_BLOCKLEN               512         // Single block length in bytes

@@ -1,9 +1,5 @@
-#ifndef __KERNEL_INCLUDE_KERNEL_LIST_H__
-#define __KERNEL_INCLUDE_KERNEL_LIST_H__
-
-#ifndef __ARGENTUM_KERNEL__
-#error "This is a kernel header; user programs should not #include it"
-#endif
+#ifndef __KERNEL_INCLUDE_KERNEL_CORE_LIST_H__
+#define __KERNEL_INCLUDE_KERNEL_CORE_LIST_H__
 
 /**
  * @file
@@ -86,4 +82,4 @@ k_list_remove(struct KListLink *link)
 #define KLIST_FOREACH(head, lp) \
   for (lp = (head)->next; lp != (head); lp = lp->next)
 
-#endif  // !__KERNEL_INCLUDE_KERNEL_LIST_H__
+#endif  // !__KERNEL_INCLUDE_KERNEL_CORE_LIST_H__

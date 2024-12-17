@@ -1,7 +1,7 @@
 #ifndef __KERNEL_INCLUDE_KERNEL_SEMAPHORE_H__
 #define __KERNEL_INCLUDE_KERNEL_SEMAPHORE_H__
 
-#include <kernel/list.h>
+#include <kernel/core/list.h>
 #include <kernel/spinlock.h>
 
 struct KSemaphore {

@@ -14,6 +14,7 @@
 #include <kernel/mach.h>
 #include <kernel/interrupt.h>
 #include <kernel/time.h>
+#include <kernel/signal.h>
 
 static void trap_handle_abort(struct TrapFrame *);
 

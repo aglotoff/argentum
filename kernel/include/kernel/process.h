@@ -12,7 +12,7 @@
 
 #include <kernel/core/cpu.h>
 #include <kernel/spinlock.h>
-#include <kernel/list.h>
+#include <kernel/core/list.h>
 #include <kernel/vm.h>
 #include <kernel/thread.h>
 #include <kernel/trap.h>
@@ -103,14 +103,6 @@ enum {
   PROCESS_STATUS_AVAILABLE = (1 << 0),
 };
 
-extern struct KSpinLock __process_lock;
-extern struct KListLink __process_list;
-
-struct Signal {
-  struct KListLink link;
-  siginfo_t        info;
-};
-
 static inline struct Process *
 process_current(void)
 {
@@ -118,19 +110,6 @@ process_current(void)
   return task != NULL ? task->process : NULL;
 }
 
-static inline void
-process_lock(void)
-{
-  k_spinlock_acquire(&__process_lock);
-}
-
-static inline void
-process_unlock(void)
-{
-  k_spinlock_release(&__process_lock);
-}
-
-void           signal_init_system(void);
 void           process_init(void);
 int            process_create(const void *, struct Process **);
 void           process_destroy(int);
@@ -142,17 +121,6 @@ void          *process_grow(ptrdiff_t);
 int            arch_trap_frame_init(struct Process *, uintptr_t, uintptr_t, uintptr_t, uintptr_t, uintptr_t);
 void           process_update_times(struct Process *, clock_t, clock_t);
 void           process_get_times(struct Process *, struct tms *);
-
-void           signal_init(struct Process *);
-int            signal_generate(pid_t, int, int);
-void           signal_clone(struct Process *, struct Process *);
-void           signal_deliver_pending(void);
-int            signal_action(int, uintptr_t, struct sigaction *, struct sigaction *);
-int            signal_return(void);
-int            signal_pending(sigset_t *);
-int            signal_mask(int, const sigset_t *, sigset_t *);
-int            signal_suspend(const sigset_t *);
-
 pid_t          process_get_gid(pid_t);
 int            process_set_gid(pid_t, pid_t);
 int            process_match_pid(struct Process *, pid_t);

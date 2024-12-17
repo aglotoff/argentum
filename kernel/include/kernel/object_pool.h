@@ -11,7 +11,7 @@
 #error "This is a kernel header; user programs should not #include it"
 #endif
 
-#include <kernel/list.h>
+#include <kernel/core/list.h>
 #include <kernel/spinlock.h>
 
 #define K_OBJECT_POOL_NAME_MAX  64

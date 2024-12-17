@@ -24,6 +24,9 @@
 #include <kernel/core/tick.h>
 #include <kernel/core/semaphore.h>
 #include <kernel/core/irq.h>
+#include <kernel/signal.h>
+
+#include "process_private.h"
 
 struct KObjectPool *process_cache;
 struct KObjectPool *thread_cache;
@@ -76,6 +79,8 @@ process_init(void)
   // Create the init process
   if (process_create(_binary_obj_user_init_start, &init_process) != 0)
     panic("Cannot create the init process");
+
+  signal_init_system();
 }
 
 struct Process *
@@ -314,9 +319,7 @@ process_destroy(int status)
   current->flags |= PROCESS_STATUS_AVAILABLE;
   current->status = status;
 
-  // Wakeup the parent process
-  if (current->parent)
-    k_waitqueue_wakeup_all(&current->parent->wait_queue);
+  _signal_state_change_to_parent(current);
 
   process_unlock();
 
@@ -396,6 +399,8 @@ process_wait(pid_t pid, int *stat_loc, int options)
   if (options & ~(WNOHANG | WUNTRACED))
     return -EINVAL;
 
+  // TODO: everything related to SIGCHLD
+
   process_lock();
 
   for (;;) {
@@ -455,8 +460,11 @@ process_wait(pid_t pid, int *stat_loc, int options)
       break;
     }
 
-    if ((r = k_waitqueue_sleep(&current->wait_queue, &__process_lock)) != 0)
-      break;
+    if ((r = k_waitqueue_sleep(&current->wait_queue, &__process_lock)) != 0) {
+      if ((r != -EINTR) || (options & WNOHANG)) {
+        break;
+      }
+    }
   }
 
   process_unlock();
@@ -577,4 +585,34 @@ process_update_times(struct Process *process, clock_t user, clock_t system)
   process->times.tms_utime += user;
   process->times.tms_stime += system;
   process_unlock();
+}
+
+void
+_process_continue(struct Process *process)
+{
+  assert(process != NULL);
+  assert(k_spinlock_holding(&__process_lock));
+
+  if (process->state == PROCESS_STATE_STOPPED) {
+    process->state = PROCESS_STATE_ACTIVE;
+    k_thread_interrupt(process->thread);
+
+    _signal_state_change_to_parent(process);
+  }
+}
+
+void
+_process_stop(struct Process *process)
+{
+  assert(process != NULL);
+  assert(k_spinlock_holding(&__process_lock));
+
+  if (process->state != PROCESS_STATE_STOPPED) {
+    process->state = PROCESS_STATE_STOPPED;
+    process->status = 0x7f;
+
+     // process->flags |= PROCESS_STATUS_AVAILABLE;
+
+    _signal_state_change_to_parent(process);
+  }
 }

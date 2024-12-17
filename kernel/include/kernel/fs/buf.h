@@ -14,7 +14,7 @@
 #include <stdint.h>
 #include <sys/types.h>
 
-#include <kernel/list.h>
+#include <kernel/core/list.h>
 #include <kernel/mutex.h>
 #include <kernel/waitqueue.h>
 

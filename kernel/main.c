@@ -75,7 +75,6 @@ void main(uintptr_t mach_type)
   vm_space_init();      // Virtual memory manager
   pipe_init();          // Pipes
   process_init();       // Process table
-  signal_init_system(); // Signals
   net_init();           // Networking
 
   // ipc_init();

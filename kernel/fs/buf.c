@@ -2,7 +2,7 @@
 #include <kernel/dev.h>
 #include <kernel/console.h>
 #include <kernel/fs/buf.h>
-#include <kernel/list.h>
+#include <kernel/core/list.h>
 #include <kernel/object_pool.h>
 #include <kernel/spinlock.h>
 #include <kernel/page.h>

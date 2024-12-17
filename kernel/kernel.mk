@@ -64,6 +64,7 @@ KERNEL_SRCFILES :=	\
 	kernel/mm/vm.c \
 	kernel/mm/vm_arch.c \
 	kernel/net/net.c \
+	kernel/process/arch_signal.c \
 	kernel/process/exec.c \
 	kernel/process/fd.c \
 	kernel/process/process.c \

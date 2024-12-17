@@ -9,7 +9,7 @@
 #include <sys/types.h>
 
 #include <kernel/elf.h>
-#include <kernel/list.h>
+#include <kernel/core/list.h>
 #include <kernel/vm.h>
 #include <kernel/armv7/mmu.h>
 #include <kernel/spinlock.h>
