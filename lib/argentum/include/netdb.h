@@ -46,12 +46,14 @@ struct protoent {
 #define _PATH_SERVICES "/etc/services"
 #endif
 
+void             endservent(void);
 struct protoent *getprotoent(void);
 struct servent  *getservent(void);
 struct hostent  *gethostbyaddr(const void *, socklen_t, int);
 struct hostent  *gethostbyname(const char *);
 struct protoent *getprotobyname(const char *);
 struct servent  *getservbyname(const char *, const char *);
+void             setservent(int);
 
 extern int h_errno;
 

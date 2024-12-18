@@ -11,11 +11,13 @@ libc_a_SOURCES += \
   %D%/grp/getgrnam.c \
   %D%/grp/setgrent.c \
   %D%/mntent/getmntent.c \
+  %D%/netdb/endservent.c \
   %D%/netdb/gethostbyaddr.c \
   %D%/netdb/gethostbyname.c \
   %D%/netdb/getprotobyname.c \
   %D%/netdb/getservbyname.c \
   %D%/netdb/netdb.c \
+  %D%/netdb/setservent.c \
   %D%/poll/poll.c \
   %D%/signal/kill.c \
   %D%/signal/killpg.c \
