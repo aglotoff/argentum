@@ -6,20 +6,15 @@ LWIPDIR := kernel/net/lwip
 include kernel/net/lwip/Filelists.mk
 
 KERNEL_CFLAGS  := $(CFLAGS) $(INIT_CFLAGS) -Ikernel/include -D__ARGENTUM_KERNEL__
-KERNEL_CFLAGS  += -O1 -mapcs-frame -fno-omit-frame-pointer -gdwarf-3
+KERNEL_CFLAGS  += -O1 -fno-omit-frame-pointer -gdwarf-3
 KERNEL_CFLAGS  += -ffreestanding -nostdlib -fno-builtin 
 KERNEL_CFLAGS  += -I$(LWIPDIR)/include -I$(LWIPDIR)/argentum -Wno-type-limits
-KERNEL_LDFLAGS := $(LDFLAGS) -T kernel/kernel.ld -nostdlib
 
 ifdef PROCESS_NAME
 	KERNEL_MAIN_CFLAGS := -DPROCESS_NAME=$(PROCESS_NAME)
 endif
 
-KERNEL_SRCFILES :=	\
-	kernel/core/arch_cpu.c \
-	kernel/core/arch_irq.c \
-	kernel/core/arch_spinlock.c \
-	kernel/core/arch_switch.S \
+KERNEL_SRCFILES := \
 	kernel/core/cpu.c \
 	kernel/core/irq.c \
 	kernel/core/mutex.c \
@@ -64,26 +59,21 @@ KERNEL_SRCFILES :=	\
 	kernel/mm/vm.c \
 	kernel/mm/vm_arch.c \
 	kernel/net/net.c \
-	kernel/process/arch_signal.c \
 	kernel/process/exec.c \
 	kernel/process/fd.c \
 	kernel/process/process.c \
 	kernel/process/signal.c \
 	kernel/process/vmspace.c \
-	kernel/arch_interrupt.c \
-	kernel/arch_time.c \
 	kernel/console.c \
 	kernel/dev.c \
 	kernel/ipc.c \
 	kernel/mach.c \
-	kernel/entry.S \
 	kernel/interrupt.c \
 	kernel/kdebug.c \
 	kernel/monitor.c \
 	kernel/pipe.c \
 	kernel/syscall.c \
 	kernel/time.c \
-	kernel/trapentry.S \
 	kernel/trap.c \
 	kernel/tty.c \
 	kernel/main.c
@@ -118,9 +108,12 @@ KERNEL_SRCFILES += \
 	kernel/net/lwip/argentum/arch/sys_arch.c \
 	kernel/net/lwip/argentum/arch/sio.c
 
+include arch/${ARCH}/kernel/arch_kernel.mk
+
 KERNEL_OBJFILES := $(patsubst %.c, $(OBJ)/%.o, $(KERNEL_SRCFILES))
 KERNEL_OBJFILES := $(patsubst %.S, $(OBJ)/%.o, $(KERNEL_OBJFILES))
-KERNEL_OBJFILES := $(patsubst $(OBJ)/lib/%, $(OBJ)/kernel/%, $(KERNEL_OBJFILES))
+
+KERNEL_LDFLAGS := $(LDFLAGS) -T $(KERNEL_LDFILE) -nostdlib
 
 # Embed the initial process directly into the kernel binary
 ifdef PROCESS_NAME
@@ -138,7 +131,12 @@ $(OBJ)/kernel/%.o: kernel/%.c $(OBJ)/.vars.KERNEL_CFLAGS
 	@mkdir -p $(@D)
 	$(V)$(CC) $(KERNEL_CFLAGS) -c -o $@ $<
 
-$(OBJ)/kernel/%.o: kernel/%.S $(OBJ)/.vars.KERNEL_CFLAGS
+$(OBJ)/arch/$(ARCH)/kernel/%.o: arch/$(ARCH)/kernel/%.c $(OBJ)/.vars.KERNEL_CFLAGS
+	@echo "+ CC [KERNEL] $<"
+	@mkdir -p $(@D)
+	$(V)$(CC) $(KERNEL_CFLAGS) -c -o $@ $<
+
+$(OBJ)/arch/$(ARCH)/kernel/%.o: arch/$(ARCH)/kernel/%.S $(OBJ)/.vars.KERNEL_CFLAGS
 	@echo "+ AS [KERNEL] $<"
 	@mkdir -p $(@D)
 	$(V)$(CC) $(KERNEL_CFLAGS) -c -o $@ $<
@@ -147,13 +145,12 @@ $(OBJ)/kernel/%.o: kernel/%.S $(OBJ)/.vars.KERNEL_CFLAGS
 $(OBJ)/kernel/main.o: override KERNEL_CFLAGS += $(KERNEL_MAIN_CFLAGS)
 $(OBJ)/kernel/main.o: $(OBJ)/.vars.KERNEL_MAIN_CFLAGS
 
-$(OBJ)/kernel/kernel: $(KERNEL_OBJFILES) $(KERNEL_BINFILES) kernel/kernel.ld
+$(OBJ)/kernel/kernel: $(KERNEL_OBJFILES) $(KERNEL_BINFILES) $(KERNEL_LDFILE)
 	@echo "+ LD [KERNEL] $@"
 	$(V)$(LD) -o $@ $(KERNEL_LDFLAGS) $(KERNEL_OBJFILES) $(LIBGCC) \
 		-b binary $(KERNEL_BINFILES)
 	$(V)$(OBJDUMP) -S $@ > $@.asm
 	$(V)$(NM) -n $@ > $@.sym
-	$(V)$(OBJCOPY) -O binary $@ $@.bin
 
 all-kernel: $(OBJ)/kernel/kernel
 

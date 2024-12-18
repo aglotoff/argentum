@@ -12,15 +12,16 @@ TOP     := .
 OBJ     := obj
 SYSROOT := sysroot
 
-# Cross-compiler toolchain
-#
-# The recommended target for the cross-compiler toolchain is "arm-none-eabi-".
-# If you want to use the host tools (i.e. binutils, gcc, gdb, etc.), comment
-# this line out.
-TOOLPREFIX := arm-none-argentum-
+ARCH := arm
 
-# QEMU executable
-QEMU := qemu-system-arm
+# Common compiler flags
+BASE_FLAGS := -Wall -Wextra -Werror
+BASE_FLAGS += -Wno-address-of-packed-member -Wno-maybe-uninitialized
+
+CFLAGS     := $(BASE_FLAGS) --std=gnu11
+CXXFLAGS   := $(BASE_FLAGS)
+
+include arch/$(ARCH)/env.mk
 
 AR      := $(TOOLPREFIX)ar
 CC      := $(TOOLPREFIX)gcc
@@ -30,13 +31,6 @@ LD      := $(TOOLPREFIX)ld
 NM      := $(TOOLPREFIX)nm
 OBJCOPY := $(TOOLPREFIX)objcopy
 OBJDUMP := $(TOOLPREFIX)objdump
-
-# Common compiler flags
-BASE_FLAGS := -Wall -Wextra -Werror
-BASE_FLAGS += -Wno-address-of-packed-member -Wno-maybe-uninitialized
-# BASE_FLAGS += -mcpu=cortex-a9 -mhard-float -mfpu=vfp
-CFLAGS     := $(BASE_FLAGS) --std=gnu11
-CXXFLAGS   := $(BASE_FLAGS)
 
 # Common linker flags
 LDFLAGS := -z max-page-size=0x1000
@@ -77,18 +71,7 @@ ifndef CPUS
   CPUS := 2
 endif
 
-#QEMUOPTS := -M realview-pb-a8 -m 256
-QEMUOPTS := -M realview-pbx-a9 -m 256 -smp $(CPUS)
-QEMUOPTS += -kernel $(KERNEL).bin
-QEMUOPTS += -drive if=sd,format=raw,file=$(OBJ)/fs.img
-QEMUOPTS += -nic user,hostfwd=tcp::8080-:80
-QEMUOPTS += -serial mon:stdio
-
-qemu: $(OBJ)/fs.img $(KERNEL)
-	$(QEMU) $(QEMUOPTS)
-
-qemu-gdb: $(OBJ)/fs.img $(KERNEL)
-	$(QEMU) $(QEMUOPTS) -s -S
+include arch/$(ARCH)/qemu.mk
 
 $(SYSROOT):
 	@mkdir -p $@{,/dev,/usr{,/lib,/include}}
@@ -101,4 +84,4 @@ clean:
 .PHONY: all all-kernel all-lib all-user \
 	clean clean-fs clean-kernel clean-user clean-lib \
 	install-headers install-lib \
-	fs qemu qemu-gdb
+	fs
