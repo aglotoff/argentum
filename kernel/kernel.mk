@@ -43,7 +43,6 @@ KERNEL_SRCFILES := \
 	kernel/drivers/gic.c \
 	kernel/drivers/ptimer.c \
 	kernel/drivers/sp804.c \
-	kernel/mach/realview/realview.c \
 	kernel/fs/ext2_bitmap.c \
 	kernel/fs/ext2_block_alloc.c \
 	kernel/fs/ext2_inode_alloc.c \
@@ -57,7 +56,6 @@ KERNEL_SRCFILES := \
 	kernel/fs/fs.c \
 	kernel/mm/page.c \
 	kernel/mm/vm.c \
-	kernel/mm/vm_arch.c \
 	kernel/net/net.c \
 	kernel/process/exec.c \
 	kernel/process/fd.c \

@@ -1,30 +1,44 @@
-#include <signal.h>
+#include <sys/time.h>		/* for setitimer */
+#include <unistd.h>		/* for pause */
+#include <signal.h>		/* for signal */
 #include <stdio.h>
-#include <ucontext.h>
+#include <stdlib.h>
 
-volatile int fff = 0;
+#define INTERVAL 1000		/* number of milliseconds to go off */
 
-void
-handler(int signo, siginfo_t *info, void *context) {
-  printf("Helllooooo! %d, [%d %d %d %lx]\n", 
-          signo, 
-          info->si_code, 
-          info->si_signo, 
-          info->si_value.sival_int,
-          ((ucontext_t *) context)->uc_mcontext.pc);
-}
+/* function prototype */
+void DoStuff(int);
 
 int main(void) {
   struct sigaction sa;
-  sa.sa_sigaction = handler;
+  sa.sa_mask = 0;
+  sa.sa_flags = 0;
+  sa.sa_handler = DoStuff;
+  struct itimerval it_val;	/* for setting itimer */
 
-  sigaction(SIGINT, &sa, NULL);
+  /* Upon SIGALRM, call DoStuff().
+   * Set interval timer.  We want frequency in ms, 
+   * but the setitimer call needs seconds and useconds. */
+  if (sigaction(SIGALRM, &sa, NULL) != 0) {
+    perror("Unable to catch SIGALRM");
+    exit(1);
+  }
+  it_val.it_value.tv_sec =     INTERVAL/1000;
+  it_val.it_value.tv_usec =    (INTERVAL*1000) % 1000000;	
+  it_val.it_interval = it_val.it_value;
+  if (setitimer(ITIMER_REAL, &it_val, NULL) == -1) {
+    perror("error calling setitimer()");
+    exit(1);
+  }
 
-   while (fff == 0) { 
+  while (1) {}
 
-   }
+  return 0;
+}
 
-   printf("deddddd\n");
-
-   return 0;
+/*
+ * DoStuff
+ */
+void DoStuff(int) {
+  printf("Timer went off.\n");
 }

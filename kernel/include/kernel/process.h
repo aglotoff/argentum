@@ -7,17 +7,19 @@
 
 #include <limits.h>
 #include <signal.h>
+#include <sys/time.h>
 #include <sys/times.h>
 #include <sys/types.h>
+#include <time.h>
 
 #include <kernel/core/cpu.h>
 #include <kernel/spinlock.h>
 #include <kernel/core/list.h>
+#include <kernel/core/timer.h>
 #include <kernel/vm.h>
 #include <kernel/thread.h>
 #include <kernel/trap.h>
 #include <kernel/waitqueue.h>
-#include <time.h>
 
 struct File;
 struct KSpinLock;
@@ -90,6 +92,11 @@ struct Process {
   struct FileDesc       fd[OPEN_MAX];
   /** Lock protecting the file descriptors */
   struct KSpinLock      fd_lock;
+
+  struct {
+    struct itimerval value;
+    struct KTimer    timer;
+  } itimers[3];
 };
 
 enum {
@@ -124,5 +131,6 @@ void           process_get_times(struct Process *, struct tms *);
 pid_t          process_get_gid(pid_t);
 int            process_set_gid(pid_t, pid_t);
 int            process_match_pid(struct Process *, pid_t);
+int            process_set_itimer(int, struct itimerval *, struct itimerval *);
 
 #endif  // __KERNEL_INCLUDE_KERNEL_PROCESS_H__

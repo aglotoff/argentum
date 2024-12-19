@@ -32,7 +32,7 @@ $(SRC_DIR)/Makefile: | $(SRC_DIR)
 							vim_cv_tgetent=zero \
 							./configure --host=arm-none-argentum \
 							            --with-tlib=ncurses \
-													--with-features=tiny \
+													--with-features=normal \
 													--disable-gui \
 													--without-x \
 													--disable-selinux \

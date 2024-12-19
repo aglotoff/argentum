@@ -25,6 +25,7 @@
 #include <kernel/core/semaphore.h>
 #include <kernel/core/irq.h>
 #include <kernel/signal.h>
+#include <kernel/time.h>
 
 #include "process_private.h"
 
@@ -50,15 +51,19 @@ static void arch_trap_frame_pop(struct TrapFrame *);
 static struct Process *init_process;
 
 static void
-process_ctor(void *buf, size_t size)
+process_itimer(void *arg)
+{
+  signal_generate((pid_t) arg, SIGALRM, 0);
+}
+
+static void
+process_ctor(void *buf, size_t)
 {
   struct Process *proc = (struct Process *) buf;
 
   k_waitqueue_init(&proc->wait_queue);
   k_list_init(&proc->children);
   k_list_init(&proc->signal_queue);
-
-  (void) size;
 }
 
 void
@@ -97,6 +102,7 @@ process_alloc(void)
     k_object_pool_put(process_cache, process);
     return NULL;
   }
+
   k_list_init(&process->children);
   k_list_null(&process->pid_link);
   k_list_null(&process->link);
@@ -112,6 +118,10 @@ process_alloc(void)
   process->times.tms_stime  = 0;
   process->times.tms_cutime = 0;
   process->times.tms_cstime = 0;
+
+  k_timer_init(&process->itimers[ITIMER_PROF].timer, process_itimer, (void *) process->pid, 0, 0, 0);
+  k_timer_init(&process->itimers[ITIMER_REAL].timer, process_itimer, (void *) process->pid, 0, 0, 0);
+  k_timer_init(&process->itimers[ITIMER_VIRTUAL].timer, process_itimer, (void *) process->pid, 0, 0, 0);
 
   k_spinlock_acquire(&pid_hash.lock);
 
@@ -295,6 +305,10 @@ process_destroy(int status)
   assert(init_process != NULL);
 
   process_lock();
+
+  k_timer_fini(&current->itimers[ITIMER_PROF].timer);
+  k_timer_fini(&current->itimers[ITIMER_REAL].timer);
+  k_timer_fini(&current->itimers[ITIMER_VIRTUAL].timer);
 
   // Move children to the init process
   has_zombies = 0;
@@ -615,4 +629,34 @@ _process_stop(struct Process *process)
 
     _signal_state_change_to_parent(process);
   }
+}
+
+int
+process_set_itimer(int which, struct itimerval *value, struct itimerval *ovalue)
+{
+  struct Process *process = process_current();
+
+  if (which != ITIMER_REAL) {
+    cprintf("TODO: itimer %d\n", which);
+    return -EINVAL;
+  }
+
+  process_lock();
+
+  // TODO: reimplement using timers
+  k_timer_stop(&process->itimers[which].timer);
+
+  if (value->it_value.tv_sec != 0 || value->it_value.tv_usec != 0) {
+    k_timer_init(&process->itimers[which].timer,
+      process_itimer, (void *) process->pid,
+      timeval2ticks(&value->it_value), timeval2ticks(&value->it_interval),
+      1);
+  }
+
+  if (ovalue != NULL)
+    *ovalue = process->itimers[which].value;
+
+  process_unlock();
+
+  return 0;
 }

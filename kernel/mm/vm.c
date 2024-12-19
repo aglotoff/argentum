@@ -27,23 +27,23 @@ vm_page_lookup(void *pgtab, uintptr_t va, int *flags_store)
 
   assert(k_spinlock_holding(&vm_lock));
 
-  if ((pte = vm_arch_lookup(pgtab, va, 0)) == NULL)
+  if ((pte = arch_vm_lookup(pgtab, va, 0)) == NULL)
     return NULL;
 
-  if (!vm_arch_pte_valid(pte) || !(vm_arch_pte_flags(pte) & VM_PAGE))
+  if (!arch_vm_pte_valid(pte) || !(arch_vm_pte_flags(pte) & VM_PAGE))
     return NULL;
 
   if (flags_store) {
     if (va == 0x8cb8) {
       *flags_store = *(int *) pte;
     } else {
-      *flags_store = vm_arch_pte_flags(pte);
+      *flags_store = arch_vm_pte_flags(pte);
     }
 
     
   }
 
-  return pa2page(vm_arch_pte_addr(pte));
+  return pa2page(arch_vm_pte_addr(pte));
 }
 
 /**
@@ -65,7 +65,7 @@ vm_page_insert(void *pgtab, struct Page *page, uintptr_t va, int flags)
 
   assert(k_spinlock_holding(&vm_lock));
 
-  if ((pte = vm_arch_lookup(pgtab, va, 1)) == NULL)
+  if ((pte = arch_vm_lookup(pgtab, va, 1)) == NULL)
     return -ENOMEM;
 
   // Incrementing the reference counter before calling vm_page_remove() allows
@@ -76,7 +76,7 @@ vm_page_insert(void *pgtab, struct Page *page, uintptr_t va, int flags)
   // If present, remove the previous mapping
   vm_page_remove(pgtab, (uintptr_t) va);
 
-  vm_arch_pte_set(pte, page2pa(page), flags | VM_PAGE);
+  arch_vm_pte_set(pte, page2pa(page), flags | VM_PAGE);
 
   return 0;
 }
@@ -98,19 +98,19 @@ vm_page_remove(void *pgtab, uintptr_t va)
 
   assert(k_spinlock_holding(&vm_lock));
 
-  if ((pte = vm_arch_lookup(pgtab, va, 0)) == NULL)
+  if ((pte = arch_vm_lookup(pgtab, va, 0)) == NULL)
     return 0;
 
-  if (!vm_arch_pte_valid(pte) || !(vm_arch_pte_flags(pte) & VM_PAGE))
+  if (!arch_vm_pte_valid(pte) || !(arch_vm_pte_flags(pte) & VM_PAGE))
     return 0;
 
-  page = pa2page(vm_arch_pte_addr(pte));
+  page = pa2page(arch_vm_pte_addr(pte));
 
   if (--page->ref_count == 0)
     page_free_one(page);
 
-  vm_arch_pte_clear(pte);
-  vm_arch_invalidate(va);
+  arch_vm_pte_clear(pte);
+  arch_vm_invalidate(va);
 
   return 0;
 }

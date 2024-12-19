@@ -3,6 +3,8 @@ KERNEL_SRCFILES += \
 	arch/${ARCH}/kernel/core/arch_irq.c \
 	arch/${ARCH}/kernel/core/arch_spinlock.c \
 	arch/${ARCH}/kernel/core/arch_switch.S \
+	arch/${ARCH}/kernel/mach/realview/realview.c \
+	arch/${ARCH}/kernel/mm/arch_vm.c \
 	arch/${ARCH}/kernel/process/arch_signal.c \
 	arch/${ARCH}/kernel/arch_interrupt.c \
 	arch/${ARCH}/kernel/arch_time.c \

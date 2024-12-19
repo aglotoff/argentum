@@ -36,7 +36,7 @@ vm_space_create(void)
   if ((vm = (struct VMSpace *) k_object_pool_get(vmcache)) == NULL)
     return NULL;
 
-  if ((vm->pgtab = vm_arch_create()) == NULL) {
+  if ((vm->pgtab = arch_vm_create()) == NULL) {
     k_object_pool_put(vmcache, vm);
     return NULL;
   }
@@ -63,7 +63,7 @@ vm_space_destroy(struct VMSpace *vm)
     k_object_pool_put(vm_areacache, area);
   }
 
-  vm_arch_destroy(vm->pgtab);
+  arch_vm_destroy(vm->pgtab);
 
   k_object_pool_put(vmcache, vm);
 }

@@ -48,7 +48,7 @@ void main(uintptr_t mach_type)
 {
   // Initialize the memory manager
   page_init_low();  // Physical page allocator (lower memory)
-  vm_arch_init();   // Memory management unit and kernel mappings
+  arch_vm_init();   // Memory management unit and kernel mappings
   page_init_high(); // Physical page allocator (higher memory)
 
   // Initialize the machine
@@ -95,7 +95,7 @@ void main(uintptr_t mach_type)
 void mp_enter(void)
 {
   // Per-CPU initialization
-  vm_arch_init_percpu(); // Load the kernel page table
+  arch_vm_init_percpu(); // Load the kernel page table
   arch_interrupt_init_percpu();
 
   mp_main();

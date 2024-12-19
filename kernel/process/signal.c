@@ -328,6 +328,9 @@ signal_generate(pid_t pid, int signo, int code)
     if (!process_match_pid(process, pid))
       continue;
 
+    if (signo == 0)
+      continue;
+
     if ((r = signal_generate_one(process, signo, code)) != 0)
       break;
   }

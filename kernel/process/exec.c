@@ -393,7 +393,7 @@ process_exec(const char *path, uintptr_t argv_va, uintptr_t envp_va)
   old_vm = proc->vm;
   proc->vm = ctx.vm;
 
-  vm_arch_load(ctx.vm->pgtab);
+  arch_vm_load(ctx.vm->pgtab);
   vm_space_destroy(old_vm);
 
   return arch_trap_frame_init(proc, ctx.entry_va, ctx.argc, ctx.argv_va, 

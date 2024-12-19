@@ -93,6 +93,7 @@ static int32_t (*syscalls[])(void) = {
   [__SYS_TIMES]       = sys_times,
   [__SYS_MOUNT]       = sys_mount,
   [__SYS_GETHOSTBYNAME] = sys_gethostbyname,
+  [__SYS_SETITIMER]   = sys_setitimer,
 };
 
 int32_t
@@ -1668,6 +1669,36 @@ sys_pipe(void)
 out2:
   file_put(read_file);
   file_put(write_file);
+out1:
+  return r;
+}
+
+
+int32_t
+sys_setitimer(void)
+{
+  struct itimerval *value, ovalue;
+  uintptr_t ovalue_va;
+  int which, r;
+
+  if ((r = sys_arg_int(0, &which)) < 0)
+    goto out1;
+  if ((r = sys_arg_buf(1, (void **) &value, sizeof *value, VM_READ)) < 0)
+    goto out1;
+  if ((r = sys_arg_va(2, &ovalue_va, sizeof ovalue, VM_WRITE, 1)) < 0)
+    goto out2;
+    
+  if ((r = process_set_itimer(which, value, &ovalue)) < 0)
+    goto out2;
+
+  if ((ovalue_va && ((r = sys_copy_out(&ovalue, ovalue_va, sizeof ovalue)) < 0)))
+    goto out2;
+
+  r = 0;
+
+out2:
+  if (value != NULL)
+    k_free(value);
 out1:
   return r;
 }

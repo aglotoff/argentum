@@ -82,7 +82,7 @@ k_sched_switch(struct KThread *thread)
   struct KCpu *my_cpu = _k_cpu();
 
   if (thread->process != NULL)
-    vm_arch_load(thread->process->vm->pgtab);
+    arch_vm_load(thread->process->vm->pgtab);
 
   thread->state = THREAD_STATE_RUNNING;
 
@@ -101,7 +101,7 @@ k_sched_switch(struct KThread *thread)
   thread->cpu = NULL;
 
   if (thread->process != NULL)
-    vm_arch_load_kernel();
+    arch_vm_load_kernel();
 }
 
 static void

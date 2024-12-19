@@ -69,5 +69,6 @@ int32_t sys_readlink(void);
 int32_t sys_times(void);
 int32_t sys_mount(void);
 int32_t sys_gethostbyname(void);
+int32_t sys_setitimer(void);
 
 #endif  // !__KERNEL_INCLUDE_KERNEL_SYSCALL_H__

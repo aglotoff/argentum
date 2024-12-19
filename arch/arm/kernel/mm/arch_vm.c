@@ -65,7 +65,7 @@ static void *kernel_pgtab;
  * @param pgtab Pointer to the page table to be loaded.
  */
 void
-vm_arch_load(void *pgtab)
+arch_vm_load(void *pgtab)
 {
   cp15_ttbr0_set(KVA2PA(pgtab));
   cp15_tlbiall();
@@ -75,9 +75,9 @@ vm_arch_load(void *pgtab)
  * Load the master kernel page table.
  */
 void
-vm_arch_load_kernel(void)
+arch_vm_load_kernel(void)
 {
-  vm_arch_load(kernel_pgtab);
+  arch_vm_load(kernel_pgtab);
 }
 
 /**
@@ -101,7 +101,7 @@ pte_ext(void *pte)
  * @return 1 if the page table entry is valid, 0 otherwise
  */
 int
-vm_arch_pte_valid(void *pte)
+arch_vm_pte_valid(void *pte)
 {
   // In our implementation, all valid PTEs map small pages 
   return (*(l2_desc_t *) pte & L2_DESC_TYPE_SM) == L2_DESC_TYPE_SM;
@@ -115,7 +115,7 @@ vm_arch_pte_valid(void *pte)
  * @return The corresponding base address
  */
 physaddr_t
-vm_arch_pte_addr(void *pte)
+arch_vm_pte_addr(void *pte)
 {
   return L2_DESC_SM_BASE(*(l2_desc_t *) pte);
 }
@@ -128,7 +128,7 @@ vm_arch_pte_addr(void *pte)
  * @return The corresponding mapping flags
  */
 int
-vm_arch_pte_flags(void *pte)
+arch_vm_pte_flags(void *pte)
 {
   return *pte_ext(pte);
 }
@@ -151,7 +151,7 @@ static int prot_to_ap[] = {
  * @param flags Mapping flags
  */
 void
-vm_arch_pte_set(void *pte, physaddr_t pa, int flags)
+arch_vm_pte_set(void *pte, physaddr_t pa, int flags)
 {
   int bits;
 
@@ -171,7 +171,7 @@ vm_arch_pte_set(void *pte, physaddr_t pa, int flags)
  * @param pte Pointer to the page table entry
  */
 void
-vm_arch_pte_clear(void *pte)
+arch_vm_pte_clear(void *pte)
 {
   *(l2_desc_t *) pte = 0;
   *pte_ext(pte) = 0;
@@ -183,7 +183,7 @@ vm_arch_pte_clear(void *pte)
  * @param va The virtual address of the page to invalidate
  */
 void
-vm_arch_invalidate(uintptr_t va)
+arch_vm_invalidate(uintptr_t va)
 {
   cp15_tlbimva(va);
 }
@@ -200,7 +200,7 @@ vm_arch_invalidate(uintptr_t va)
  *         or NULL if the relevant entry does not exist
  */
 void *
-vm_arch_lookup(void *pgtab, uintptr_t va, int alloc)
+arch_vm_lookup(void *pgtab, uintptr_t va, int alloc)
 {
   l1_desc_t *tt, *tte;
   l2_desc_t *pte;
@@ -290,14 +290,14 @@ init_fixed_mapping(uintptr_t va, uint32_t pa, size_t n, int flags)
       pa += L1_SECTION_SIZE;
       n  -= L1_SECTION_SIZE;
     } else {
-      l2_desc_t *pte = vm_arch_lookup(kernel_pgtab, va, 1);
+      l2_desc_t *pte = arch_vm_lookup(kernel_pgtab, va, 1);
 
       if (pte == NULL)
         panic("cannot allocate PTE for %p", va);
-      if (vm_arch_pte_valid(pte))
+      if (arch_vm_pte_valid(pte))
         panic("PTE for %p already exists", va);
 
-      vm_arch_pte_set(pte, pa, flags);
+      arch_vm_pte_set(pte, pa, flags);
 
       va += PAGE_SIZE;
       pa += PAGE_SIZE;
@@ -311,7 +311,7 @@ init_fixed_mapping(uintptr_t va, uint32_t pa, size_t n, int flags)
  * called only on the bootstrap processor.
  */
 void
-vm_arch_init(void)
+arch_vm_init(void)
 {
   extern uint8_t _start[];
 
@@ -338,7 +338,7 @@ vm_arch_init(void)
   // Permissions: kernel R, user NONE
   init_fixed_mapping(VIRT_VECTOR_BASE, (physaddr_t) _start, PAGE_SIZE, PROT_READ);
 
-  vm_arch_init_percpu();
+  arch_vm_init_percpu();
 }
 
 /**
@@ -346,7 +346,7 @@ vm_arch_init(void)
  * translation table
  */
 void
-vm_arch_init_percpu(void)
+arch_vm_init_percpu(void)
 {
   cp15_ttbr0_set(KVA2PA(kernel_pgtab));
   cp15_ttbr1_set(KVA2PA(kernel_pgtab));
@@ -365,7 +365,7 @@ vm_arch_init_percpu(void)
  * @return Pointer to the allocated page table or NULL if out of memory
  */
 void *
-vm_arch_create(void)
+arch_vm_create(void)
 {
   struct Page *page;
 
@@ -386,7 +386,7 @@ vm_arch_create(void)
  * @param pgtab Pointer to the page table to be destroyed.
  */
 void
-vm_arch_destroy(void *pgtab)
+arch_vm_destroy(void *pgtab)
 {
   struct Page *page;
   l1_desc_t *trtab;
@@ -407,7 +407,7 @@ vm_arch_destroy(void *pgtab)
 
     // Check that the caller has removed all mappings
     for (j = 0; j < L2_NR_ENTRIES * L2_TABLES_PER_PAGE; j++)
-      if (vm_arch_pte_valid(&pt[j]))
+      if (arch_vm_pte_valid(&pt[j]))
         panic("pte still in use");
 
     if (--page->ref_count == 0)

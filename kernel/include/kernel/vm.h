@@ -22,19 +22,19 @@
 
 struct Page;
 
-void        *vm_arch_create(void);
-void         vm_arch_destroy(void *);
-void        *vm_arch_lookup(void *, uintptr_t, int);
-int          vm_arch_pte_valid(void *);
-physaddr_t   vm_arch_pte_addr(void *);
-int          vm_arch_pte_flags(void *);
-void         vm_arch_pte_set(void *, physaddr_t, int);
-void         vm_arch_pte_clear(void *);
-void         vm_arch_invalidate(uintptr_t);
-void         vm_arch_init(void);
-void         vm_arch_init_percpu(void);
-void         vm_arch_load_kernel(void);
-void         vm_arch_load(void *);
+void        *arch_vm_create(void);
+void         arch_vm_destroy(void *);
+void        *arch_vm_lookup(void *, uintptr_t, int);
+int          arch_vm_pte_valid(void *);
+physaddr_t   arch_vm_pte_addr(void *);
+int          arch_vm_pte_flags(void *);
+void         arch_vm_pte_set(void *, physaddr_t, int);
+void         arch_vm_pte_clear(void *);
+void         arch_vm_invalidate(uintptr_t);
+void         arch_vm_init(void);
+void         arch_vm_init_percpu(void);
+void         arch_vm_load_kernel(void);
+void         arch_vm_load(void *);
 
 struct Page *vm_page_lookup(void *, uintptr_t, int *);
 int          vm_page_insert(void *, struct Page *, uintptr_t, int);
