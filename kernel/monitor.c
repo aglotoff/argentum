@@ -1,6 +1,6 @@
 #include <string.h>
 
-#include <kernel/armv7/regs.h>
+
 #include <kernel/tty.h>
 #include <kernel/console.h>
 #include <kernel/kdebug.h>
@@ -185,21 +185,12 @@ mon_kerninfo(int argc, char **argv, struct TrapFrame *tf)
 int
 mon_backtrace(int argc, char **argv, struct TrapFrame *tf)
 {
-  struct PcDebugInfo info;
-  uint32_t *fp;
-  
   (void) argc;
   (void) argv;
 
   cprintf("Stack backtrace:\n");
 
-  fp = (uint32_t *) (tf ? tf->r11 : r11_get());
-  for ( ; fp != NULL; fp = (uint32_t *) fp[APCS_FRAME_FP]) {
-    debug_info_pc(fp[-1], &info);
-
-    cprintf("  [%p] %s (%s at line %d)\n",
-            fp[-1], info.fn_name, info.file, info.line);
-  }
+  arch_mon_backtrace(tf);
 
   return 0;
 }

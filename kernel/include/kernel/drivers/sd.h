@@ -1,6 +1,8 @@
 #ifndef __KERNEL_DRIVERS_SD_H__
 #define __KERNEL_DRIVERS_SD_H__
 
+#include <stdint.h>
+
 #include <kernel/core/list.h>
 #include <kernel/spinlock.h>
 
@@ -15,16 +17,24 @@
 #define SD_RESPONSE_R6            7
 #define SD_RESPONSE_R7            8
 
-struct PL180;
 struct Buf;
+
+struct SDOps {
+  int  (*send_cmd)(void *, uint32_t, uint32_t, int, uint32_t *);
+  int  (*irq_enable)(void *);
+  int  (*begin_transfer)(void *, uint32_t, int);
+  int  (*receive_data)(void *, void *, size_t);
+  int  (*send_data)(void *, const void *, size_t);
+};
 
 struct SD {
   struct KListLink queue;
   struct KSpinLock lock;
-  struct PL180 *mmci;
+  struct SDOps *ops;
+  void *ctx;
 };
 
-int  sd_init(struct SD *, struct PL180 *, int);
+int  sd_init(struct SD *, struct SDOps *, void *, int);
 void sd_request(struct SD *, struct Buf *);
 
 #endif  // !__KERNEL_DRIVERS_SD_H__

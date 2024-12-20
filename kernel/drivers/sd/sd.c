@@ -1,6 +1,5 @@
 #include <kernel/assert.h>
 #include <kernel/drivers/sd.h>
-#include <kernel/drivers/pl180.h>
 #include <kernel/fs/buf.h>
 #include <kernel/interrupt.h>
 
@@ -41,42 +40,43 @@ static int  sd_irq_thread(int, void *);
 static void sd_start_transfer(struct SD *, struct Buf *);
 
 int
-sd_init(struct SD *sd, struct PL180 *mmci, int irq)
+sd_init(struct SD *sd, struct SDOps *ops, void *ctx, int irq)
 {
   uint32_t resp[4], rca;
 
   // Put each card into Idle State
-  pl180_send_cmd(mmci, CMD_GO_IDLE_STATE, 0, 0, NULL);
+  ops->send_cmd(ctx, CMD_GO_IDLE_STATE, 0, 0, NULL);
 
   // Request the card to send its valid operation conditions
   do {
-    pl180_send_cmd(mmci, CMD_APP, 0, SD_RESPONSE_R1, NULL) ;
-    pl180_send_cmd(mmci, CM_SD_SEND_OP_COND, OCR_VDD_MASK, SD_RESPONSE_R3,
+    ops->send_cmd(ctx, CMD_APP, 0, SD_RESPONSE_R1, NULL) ;
+    ops->send_cmd(ctx, CM_SD_SEND_OP_COND, OCR_VDD_MASK, SD_RESPONSE_R3,
                    resp);
   } while (!(resp[0] & OCR_BUSY));
 
   // Get the unique card identification (CID) number
-  pl180_send_cmd(mmci, CMD_ALL_SEND_CID, 0, SD_RESPONSE_R2, NULL);
+  ops->send_cmd(ctx, CMD_ALL_SEND_CID, 0, SD_RESPONSE_R2, NULL);
 
   // Ask the card to publish a new relative card address (RCA), which
   // will be used to address the card later
-  pl180_send_cmd(mmci, CMD_SEND_RELATIVE_ADDR, 0, SD_RESPONSE_R6, &rca);
+  ops->send_cmd(ctx, CMD_SEND_RELATIVE_ADDR, 0, SD_RESPONSE_R6, &rca);
 
   // Select the card and put it into the Transfer State
-  pl180_send_cmd(mmci, CMD_SELECT_CARD, rca & 0xFFFF0000, SD_RESPONSE_R1B, NULL);
+  ops->send_cmd(ctx, CMD_SELECT_CARD, rca & 0xFFFF0000, SD_RESPONSE_R1B, NULL);
 
   // Set the block length (512 bytes) for all I/O operations
-  pl180_send_cmd(mmci, CMD_SET_BLOCKLEN, SD_BLOCKLEN, SD_RESPONSE_R1, NULL);
+  ops->send_cmd(ctx, CMD_SET_BLOCKLEN, SD_BLOCKLEN, SD_RESPONSE_R1, NULL);
 
-  sd->mmci = mmci;
+  sd->ops = ops;
+  sd->ctx = ctx;
 
   // Initialize the buffer queue
   k_list_init(&sd->queue);
   k_spinlock_init(&sd->lock, "sd_queue");
 
   // Enable interrupts
-  pl180_k_irq_enable(sd->mmci);
-  
+  sd->ops->irq_enable(sd->ctx);
+
   interrupt_attach_thread(irq, sd_irq_thread, sd);
 
   return 0;
@@ -120,16 +120,16 @@ sd_start_transfer(struct SD *sd, struct Buf *buf)
   nblocks = buf->block_size / SD_BLOCKLEN;
 
   if (buf->flags & BUF_DIRTY) {
-    pl180_begin_transfer(sd->mmci, buf->block_size, 0);
+    sd->ops->begin_transfer(sd->ctx, buf->block_size, 0);
     cmd = (nblocks > 1) ? CMD_WRITE_MULTIPLE_BLOCK : CMD_WRITE_BLOCK;
   } else {
-    pl180_begin_transfer(sd->mmci, buf->block_size, 1);
+    sd->ops->begin_transfer(sd->ctx, buf->block_size, 1);
     cmd = (nblocks > 1) ? CMD_READ_MULTIPLE_BLOCK : CMD_READ_SINGLE_BLOCK;
   }
 
   arg = buf->block_no * buf->block_size;
 
-  if (pl180_send_cmd(sd->mmci, cmd, arg, SD_RESPONSE_R1, NULL) != 0)
+  if (sd->ops->send_cmd(sd->ctx, cmd, arg, SD_RESPONSE_R1, NULL) != 0)
     panic("error sending cmd %d, arg %d", cmd, arg);
 }
 
@@ -161,18 +161,18 @@ sd_irq_thread(int irq, void *arg)
 
   // Transfer the data and update the corresponding buffer flags.
   if (buf->flags & BUF_DIRTY) {
-    if (pl180_send_data(sd->mmci, buf->data, buf->block_size) != 0)
+    if (sd->ops->send_data(sd->ctx, buf->data, buf->block_size) != 0)
       panic("error writing block %d", buf->block_no);
     buf->flags &= ~BUF_DIRTY;
   } else {
-    if (pl180_receive_data(sd->mmci, buf->data, buf->block_size) != 0)
+    if (sd->ops->receive_data(sd->ctx, buf->data, buf->block_size) != 0)
       panic("error reading block %d", buf->block_no);
     buf->flags |= BUF_VALID;
   }
 
   // Multiple block transfers must be stopped manually by issuing CMD12.
   if (buf->block_size > SD_BLOCKLEN)
-    pl180_send_cmd(sd->mmci, CMD_STOP_TRANSMISSION, 0, SD_RESPONSE_R1B, NULL);
+    sd->ops->send_cmd(sd->ctx, CMD_STOP_TRANSMISSION, 0, SD_RESPONSE_R1B, NULL);
 
   // Begin processing the next buffer in the queue.
   if (!k_list_is_empty(&sd->queue)) {

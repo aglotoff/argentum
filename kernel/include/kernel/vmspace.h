@@ -11,7 +11,6 @@
 #include <kernel/elf.h>
 #include <kernel/core/list.h>
 #include <kernel/vm.h>
-#include <kernel/armv7/mmu.h>
 #include <kernel/spinlock.h>
 
 struct Inode;
@@ -25,7 +24,7 @@ struct VMSpaceMapEntry {
 };
 
 struct VMSpace {
-  l1_desc_t      *pgtab;
+  void            *pgtab;
   struct KSpinLock lock;
   struct KListLink areas;
 };

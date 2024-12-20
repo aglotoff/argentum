@@ -21,7 +21,7 @@ BASE_FLAGS += -Wno-address-of-packed-member -Wno-maybe-uninitialized
 CFLAGS     := $(BASE_FLAGS) --std=gnu11
 CXXFLAGS   := $(BASE_FLAGS)
 
-include arch/$(ARCH)/env.mk
+include config/arch/$(ARCH)/env.mk
 
 AR      := $(TOOLPREFIX)ar
 CC      := $(TOOLPREFIX)gcc
@@ -71,7 +71,7 @@ ifndef CPUS
   CPUS := 2
 endif
 
-include arch/$(ARCH)/qemu.mk
+include config/arch/$(ARCH)/qemu.mk
 
 $(SYSROOT):
 	@mkdir -p $@{,/dev,/usr{,/lib,/include}}

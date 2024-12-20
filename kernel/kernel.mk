@@ -29,20 +29,10 @@ KERNEL_SRCFILES := \
 	kernel/core/timeout.c \
 	kernel/core/waitqueue.c \
 	kernel/drivers/console/display.c \
-	kernel/drivers/console/pl011.c \
-	kernel/drivers/console/pl050.c \
-	kernel/drivers/console/pl111.c \
 	kernel/drivers/console/ps2.c \
 	kernel/drivers/console/screen.c \
 	kernel/drivers/console/uart.c \
-	kernel/drivers/rtc/ds1338.c \
-	kernel/drivers/rtc/sbcon.c \
-	kernel/drivers/sd/pl180.c \
 	kernel/drivers/sd/sd.c \
-	kernel/drivers/lan9118.c \
-	kernel/drivers/gic.c \
-	kernel/drivers/ptimer.c \
-	kernel/drivers/sp804.c \
 	kernel/fs/ext2_bitmap.c \
 	kernel/fs/ext2_block_alloc.c \
 	kernel/fs/ext2_inode_alloc.c \
@@ -65,14 +55,12 @@ KERNEL_SRCFILES := \
 	kernel/console.c \
 	kernel/dev.c \
 	kernel/ipc.c \
-	kernel/mach.c \
 	kernel/interrupt.c \
 	kernel/kdebug.c \
 	kernel/monitor.c \
 	kernel/pipe.c \
 	kernel/syscall.c \
 	kernel/time.c \
-	kernel/trap.c \
 	kernel/tty.c \
 	kernel/main.c
 
@@ -106,7 +94,7 @@ KERNEL_SRCFILES += \
 	kernel/net/lwip/argentum/arch/sys_arch.c \
 	kernel/net/lwip/argentum/arch/sio.c
 
-include arch/${ARCH}/kernel/arch_kernel.mk
+include kernel/arch/${ARCH}/arch_kernel.mk
 
 KERNEL_OBJFILES := $(patsubst %.c, $(OBJ)/%.o, $(KERNEL_SRCFILES))
 KERNEL_OBJFILES := $(patsubst %.S, $(OBJ)/%.o, $(KERNEL_OBJFILES))
@@ -129,13 +117,8 @@ $(OBJ)/kernel/%.o: kernel/%.c $(OBJ)/.vars.KERNEL_CFLAGS
 	@mkdir -p $(@D)
 	$(V)$(CC) $(KERNEL_CFLAGS) -c -o $@ $<
 
-$(OBJ)/arch/$(ARCH)/kernel/%.o: arch/$(ARCH)/kernel/%.c $(OBJ)/.vars.KERNEL_CFLAGS
+$(OBJ)/kernel/%.o: kernel/%.S $(OBJ)/.vars.KERNEL_CFLAGS
 	@echo "+ CC [KERNEL] $<"
-	@mkdir -p $(@D)
-	$(V)$(CC) $(KERNEL_CFLAGS) -c -o $@ $<
-
-$(OBJ)/arch/$(ARCH)/kernel/%.o: arch/$(ARCH)/kernel/%.S $(OBJ)/.vars.KERNEL_CFLAGS
-	@echo "+ AS [KERNEL] $<"
 	@mkdir -p $(@D)
 	$(V)$(CC) $(KERNEL_CFLAGS) -c -o $@ $<
 

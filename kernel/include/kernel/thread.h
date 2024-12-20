@@ -9,6 +9,7 @@
 #include <stdint.h>
 
 #include <kernel/core/tick.h>
+#include <arch/context.h>
 
 #define THREAD_MAX_PRIORITIES  (2 * NZERO)
 
@@ -25,24 +26,6 @@ enum {
 enum {
   THREAD_FLAG_RESCHEDULE = (1 << 0),
   THREAD_FLAG_DESTROY    = (1 << 1),
-};
-
-/**
- * Saved registers for kernel context switches (SP is saved implicitly).
- * See https://wiki.osdev.org/Calling_Conventions
- */
-struct Context {
-  uint32_t s[32];
-  uint32_t fpscr;
-  uint32_t r4;
-  uint32_t r5;
-  uint32_t r6;
-  uint32_t r7;
-  uint32_t r8;
-  uint32_t r9;
-  uint32_t r10;
-  uint32_t r11;
-  uint32_t lr;
 };
 
 struct KObjectPool;

@@ -13,6 +13,8 @@
 
 struct TrapFrame;
 
+void arch_mon_backtrace(struct TrapFrame *);
+
 /**
  * Enter the kernel monitor.
  */

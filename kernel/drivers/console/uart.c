@@ -1,4 +1,3 @@
-#include <kernel/drivers/pl011.h>
 #include <kernel/drivers/uart.h>
 #include <kernel/tty.h>
 #include <kernel/interrupt.h>
@@ -6,9 +5,10 @@
 static int uart_irq_thread(int, void *);
 
 int
-uart_init(struct Uart *uart, struct Pl011 *pl011, int irq)
+uart_init(struct Uart *uart, struct UartOps *ops, void *ctx, int irq)
 {
-  uart->pl011 = pl011;
+  uart->ops = ops;
+  uart->ctx = ctx;
 
   interrupt_attach_thread(irq, uart_irq_thread, uart);
 
@@ -20,7 +20,7 @@ uart_getc(struct Uart *uart)
 {
   int c;
   
-  c = pl011_read(uart->pl011);
+  c = uart->ops->read(uart->ctx);
 
   switch (c) {
   case '\x7f':
@@ -34,9 +34,9 @@ int
 uart_putc(struct Uart *uart, int c)
 {
   if (c == '\n')
-    pl011_write(uart->pl011, '\r');
+     uart->ops->write(uart->ctx, '\r');
 
-  pl011_write(uart->pl011, c);
+  uart->ops->write(uart->ctx, c);
 
   return 0;
 }
