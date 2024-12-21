@@ -192,12 +192,15 @@ $(NEWLIB)/newlib/libc/sys/argentum/%: lib/argentum/%
 $(NEWLIB)/newlib/Makefile.in: $(NEWLIB) $(NEWLIB)/newlib/libc/sys/argentum/Makefile.inc
 	$(V)cd $(@D) && autoreconf
 
+# HOST := arm-none-argentum
+HOST := i386-pc-elf
+
 $(OBJ)/lib/Makefile: $(NEWLIB)/newlib/Makefile.in
 	$(V)rm -rf $(@D)
 	$(V)mkdir -p $(@D)
 	$(V)cd $(@D) && CFLAGS="$(LIB_CFLAGS)" ../../lib/newlib-4.4.0.20231231/configure \
-		--host=arm-none-argentum \
-		--target=arm-none-argentum \
+		--host=$(HOST) \
+		--target=$(HOST) \
 		--prefix=/usr \
 		--with-newlib \
 		--disable-multilib \
@@ -208,7 +211,7 @@ $(OBJ)/lib/Makefile: $(NEWLIB)/newlib/Makefile.in
 $(SYSROOT)/usr/lib/libc.a: $(OBJ)/lib/Makefile $(LIB_SRCFILES)
 	$(V)cp -ar lib/argentum $(NEWLIB)/newlib/libc/sys/
 	$(V)cd $(OBJ)/lib && make CFLAGS="$(LIB_CFLAGS)" DESTDIR=/$(HOME)/argentum/sysroot all install
-	$(V)cp -ar $(SYSROOT)/usr/arm-none-argentum/* $(SYSROOT)/usr/
+	$(V)cp -ar $(SYSROOT)/usr/$(HOST)/* $(SYSROOT)/usr/
 
 all-lib: $(SYSROOT)/usr/lib/libc.a
 

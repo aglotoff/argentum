@@ -12,7 +12,8 @@ TOP     := .
 OBJ     := obj
 SYSROOT := sysroot
 
-ARCH := arm
+# ARCH := arm
+ARCH := i386
 
 # Common compiler flags
 BASE_FLAGS := -Wall -Wextra -Werror
