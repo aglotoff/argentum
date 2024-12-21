@@ -76,6 +76,9 @@ struct KThread {
   struct Process   *process;
 };
 
+void            arch_thread_init_stack(struct KThread *, void (*)(void));
+void            arch_thread_idle(void);
+
 struct KThread *k_thread_current(void);
 struct KThread *k_thread_create(struct Process *, void (*)(void *), void *, int);
 void            k_thread_exit(void);

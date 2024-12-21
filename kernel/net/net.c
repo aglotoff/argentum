@@ -1,4 +1,3 @@
-#include <kernel/mach.h>
 #include <kernel/console.h>
 #include <kernel/fs/file.h>
 #include <kernel/page.h>
@@ -16,6 +15,8 @@
 #include <lwip/tcpip.h>
 #include <lwip/icmp.h>
 #include <lwip/inet_chksum.h>
+
+void arch_eth_write(const void *, size_t);
 
 static struct netif eth_netif;
 
@@ -40,7 +41,7 @@ eth_netif_output(struct netif *netif, struct pbuf *p)
   struct Page *page = page_alloc_one(0, PAGE_TAG_ETH_TX);
 
   pbuf_copy_partial(p, page2kva(page), p->tot_len, 0);
-  mach_current->eth_write(page2kva(page), p->tot_len);
+  arch_eth_write(page2kva(page), p->tot_len);
 
   page_free_one(page);
 

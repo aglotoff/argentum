@@ -77,25 +77,6 @@ k_thread_run(void)
   k_thread_exit();
 }
 
-static void
-arch_thread_init_stack(struct KThread *thread)
-{
-  uint8_t *sp = (uint8_t *) thread->kstack + PAGE_SIZE;
-
-  // Allocate space for user-mode trap frame
-  if (thread->process != NULL) {
-    sp -= sizeof(struct TrapFrame);
-    thread->tf = (struct TrapFrame *) sp;
-    memset(thread->tf, 0, sizeof(struct TrapFrame));
-  }
-
-  // Initialize the kernel-mode thread context
-  sp -= sizeof(struct Context);
-  thread->context = (struct Context *) sp;
-  memset(thread->context, 0, sizeof(struct Context));
-  thread->context->lr = (uint32_t) k_thread_run;
-}
-
 void
 k_thread_interrupt(struct KThread *thread)
 {
@@ -158,7 +139,7 @@ k_thread_create(struct Process *process, void (*entry)(void *), void *arg,
 
   _k_timeout_init(&thread->timer);
 
-  arch_thread_init_stack(thread);
+  arch_thread_init_stack(thread, k_thread_run);
 
   return thread;
 }

@@ -396,7 +396,8 @@ process_exec(const char *path, uintptr_t argv_va, uintptr_t envp_va)
   arch_vm_load(ctx.vm->pgtab);
   vm_space_destroy(old_vm);
 
-  return arch_trap_frame_init(proc->thread->tf, ctx.entry_va, ctx.argc, ctx.argv_va, 
+  return arch_trap_frame_init(proc->thread->tf, ctx.entry_va, ctx.argc,
+                              ctx.argv_va, 
                               ctx.env_va,
                               ctx.sp_va);
 

@@ -133,7 +133,8 @@ k_sched_idle(void)
   _k_sched_unlock();
 
   k_irq_enable();
-  asm volatile("wfi");
+  
+  arch_thread_idle();
 
   _k_sched_lock();
 }

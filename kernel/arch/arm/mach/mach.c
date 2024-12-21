@@ -1,5 +1,5 @@
 #include <kernel/assert.h>
-#include <kernel/mach.h>
+#include <arch/arm/mach.h>
 
 // These symbols are defined by the linker script kernel.ld
 extern struct Machine __mach_begin__[], __mach_end__[];

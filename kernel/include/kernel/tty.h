@@ -42,6 +42,13 @@ struct Tty {
 extern struct Tty *tty_current;
 extern struct Tty *tty_system;
 
+void arch_tty_init_system(void);
+void arch_tty_init(struct Tty *, int);
+void arch_tty_switch(struct Tty *);
+void arch_tty_out_char(struct Tty *, char);
+void arch_tty_flush(struct Tty *);
+void arch_tty_erase(struct Tty *);
+
 void    tty_init(void);
 void    tty_process_input(struct Tty *, char *);
 ssize_t tty_read(dev_t, uintptr_t, size_t);

@@ -13,6 +13,9 @@
 
 #include <stdarg.h>
 
+int  arch_console_getc(void);
+void arch_console_putc(char);
+
 void console_putc(char);
 int  console_getc(void);
 void vcprintf(const char *, va_list);

@@ -117,6 +117,8 @@ process_current(void)
   return task != NULL ? task->process : NULL;
 }
 
+int arch_process_copy(struct Process *, struct Process *);
+
 void           process_init(void);
 int            process_create(const void *, struct Process **);
 void           process_destroy(int);
@@ -125,7 +127,6 @@ pid_t          process_copy(int);
 pid_t          process_wait(pid_t, int *, int);
 int            process_exec(const char *, uintptr_t, uintptr_t);
 void          *process_grow(ptrdiff_t);
-int            arch_trap_frame_init(struct TrapFrame *, uintptr_t, uintptr_t, uintptr_t, uintptr_t, uintptr_t);
 void           process_update_times(struct Process *, clock_t, clock_t);
 void           process_get_times(struct Process *, struct tms *);
 pid_t          process_get_gid(pid_t);

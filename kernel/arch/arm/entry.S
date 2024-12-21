@@ -101,9 +101,9 @@ entry:
   cmp   r0, #0
   bne   ap_wait
 
-  // BSP calls main().
+  // BSP calls arch_init().
   mov   r0, r5
-  ldr   r2, =main
+  ldr   r2, =arch_init
   blx   r2
   b     .
 
@@ -114,7 +114,7 @@ ap_wait:
   beq   ap_wait
 
   // Call mp_enter()
-  ldr   r1, =mp_enter
+  ldr   r1, =arch_mp_init
   blx   r1
   b     .
 

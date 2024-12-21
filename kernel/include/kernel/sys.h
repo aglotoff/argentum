@@ -7,6 +7,9 @@
 
 #include <stdint.h>
 
+int     sys_arch_get_num(void);
+int32_t sys_arch_get_arg(int);
+
 int32_t sys_dispatch(void);
 
 int32_t sys_read(void);

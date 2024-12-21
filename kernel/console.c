@@ -2,12 +2,13 @@
 
 #include <kernel/console.h>
 #include <kernel/tty.h>
-#include <kernel/mach.h>
 #include <kernel/monitor.h>
 #include <kernel/spinlock.h>
 
 static struct KSpinLock lock = K_SPINLOCK_INITIALIZER("cprintf");
 static int locking = 1;
+
+
 
 /**
  * Return the next input character from the console. Polls for any pending
@@ -21,7 +22,7 @@ console_getc(void)
   int c;
   
   // Poll for any pending characters from UART and the keyboard.
-  while ((c = mach_current->console_getc()) <= 0)
+  while ((c = arch_console_getc()) <= 0)
     ;
 
   return c;
@@ -35,9 +36,8 @@ console_getc(void)
 void
 console_putc(char c)
 {
-  if (tty_system != NULL) {
-    mach_current->console_putc(c);
-  }
+  if (tty_system != NULL)
+    arch_console_putc(c);
 }
 
 const char *panicstr;

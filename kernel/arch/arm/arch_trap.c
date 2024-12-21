@@ -10,7 +10,7 @@
 #include <kernel/core/irq.h>
 #include <kernel/monitor.h>
 #include <kernel/core/semaphore.h>
-#include <kernel/mach.h>
+#include <arch/arm/mach.h>
 #include <kernel/interrupt.h>
 #include <kernel/time.h>
 #include <kernel/signal.h>
@@ -212,4 +212,16 @@ arch_trap_frame_init(struct TrapFrame *tf, uintptr_t entry, uintptr_t arg1,
   tf->psr = PSR_M_USR | PSR_F; // user mode, interrupts enabled
   tf->pc  = entry;             // process entry point
   return arg1;
+}
+
+void
+arch_trap_frame_pop(struct TrapFrame *tf)
+{
+  asm volatile(
+    "mov     sp, %0\n"
+    "b       trap_user_exit\n"
+    :
+    : "r" (tf)
+    : "memory"
+  );
 }

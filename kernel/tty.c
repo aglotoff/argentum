@@ -14,7 +14,6 @@
 #include <kernel/fs/fs.h>
 #include <kernel/console.h>
 #include <kernel/time.h>
-#include <kernel/mach.h>
 #include <kernel/dev.h>
 #include <kernel/signal.h>
 
@@ -46,7 +45,7 @@ tty_init(void)
 {  
   int i;
 
-  mach_current->tty_init_system();
+  arch_tty_init_system();
 
   for (i = 0; i < NTTYS; i++) {
     struct Tty *tty = &ttys[i];
@@ -58,7 +57,7 @@ tty_init(void)
     
     tty->out.stopped = 0;
 
-    mach_current->tty_init(tty, i);
+    arch_tty_init(tty, i);
 
     tty->termios.c_iflag = BRKINT | ICRNL | IXON | IXANY;
     tty->termios.c_oflag = OPOST | ONLCR;
@@ -82,7 +81,7 @@ tty_init(void)
   tty_current = &ttys[0];
   tty_system  = &ttys[0];
 
-  mach_current->tty_switch(tty_current);
+  arch_tty_switch(tty_current);
 
   dev_register_char(0x01, &tty_device);
 }
@@ -91,8 +90,8 @@ static void
 tty_echo(struct Tty *tty, char c)
 {
   k_spinlock_acquire(&tty->out.lock);
-  mach_current->tty_out_char(tty, c);
-  mach_current->tty_flush(tty);
+  arch_tty_out_char(tty, c);
+  arch_tty_flush(tty);
   k_spinlock_release(&tty->out.lock);
 }
 
@@ -104,7 +103,7 @@ tty_switch(int n)
 
   if (tty_current != &ttys[n]) {
     tty_current = &ttys[n];
-    mach_current->tty_switch(tty_current);
+    arch_tty_switch(tty_current);
   }
 }
 
@@ -131,7 +130,7 @@ tty_erase_input(struct Tty *tty)
 
   if (tty->termios.c_lflag & ECHOE) {
     k_spinlock_acquire(&tty->out.lock);
-    mach_current->tty_erase(tty);
+    arch_tty_erase(tty);
     k_spinlock_release(&tty->out.lock);
   }
 
@@ -385,10 +384,10 @@ tty_write(dev_t dev, uintptr_t buf, size_t nbytes)
         return r;
       }
 
-      mach_current->tty_out_char(tty, c);
+      arch_tty_out_char(tty, c);
     }
 
-    mach_current->tty_flush(tty);
+    arch_tty_flush(tty);
   }
 
   k_spinlock_release(&tty->out.lock);

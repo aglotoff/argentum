@@ -1,4 +1,4 @@
-#include <kernel/mach.h>
+#include <arch/arm/mach.h>
 #include <kernel/interrupt.h>
 
 void

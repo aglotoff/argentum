@@ -43,5 +43,5 @@ arch_signal_return(struct Process *process, const struct SignalFrame *ctx)
   process->thread->tf->pc  = ctx->ucontext.uc_mcontext.pc;
   process->thread->tf->psr = ctx->ucontext.uc_mcontext.psr;
 
-  return 0;
+  return process->thread->tf->r0;;
 }

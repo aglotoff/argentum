@@ -45,7 +45,6 @@ struct KListLink __process_list;
 struct KSpinLock __process_lock;
 
 static void process_run(void *);
-static void arch_trap_frame_pop(struct TrapFrame *);
 
 static struct Process *init_process;
 
@@ -342,8 +341,8 @@ process_copy(int share_vm)
   process_lock();
 
   child->parent         = current;
-  *child->thread->tf    = *current->thread->tf;
-  child->thread->tf->r0 = 0;
+
+  arch_process_copy(current, child);
 
   fd_clone(current, child);
   signal_clone(current, child);
@@ -500,20 +499,6 @@ process_run(void *arg)
 
   // "Return" to the user space.
   arch_trap_frame_pop(process->thread->tf);
-}
-
-// Load the user-mode registers from the trap frame.
-// Doesn't return.
-static void
-arch_trap_frame_pop(struct TrapFrame *tf)
-{
-  asm volatile(
-    "mov     sp, %0\n"
-    "b       trap_user_exit\n"
-    :
-    : "r" (tf)
-    : "memory"
-  );
 }
 
 void *

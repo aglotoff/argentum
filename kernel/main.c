@@ -21,11 +21,8 @@
 #include <kernel/process.h>
 #include <kernel/ipc.h>
 #include <kernel/net.h>
-#include <kernel/mach.h>
 #include <kernel/interrupt.h>
 #include <kernel/time.h>
-
-static void mp_main(void);
 
 // Whether the bootstrap processor has finished its initialization?
 int bsp_started;
@@ -39,24 +36,25 @@ struct utsname utsname = {
   .machine = "arm",
 };
 
+void arch_init_devices(void);
+
+void
+mp_main(void)
+{
+  cprintf("Starting CPU %d\n", k_cpu_id());
+
+  // Enter the scheduler loop
+  k_sched_start();
+}
+
 /**
  * Main kernel function.
  *
  * The bootstrap processor starts running C code here.
  */
-void main(uintptr_t mach_type)
+void
+main(void)
 {
-  // Initialize the memory manager
-  page_init_low();  // Physical page allocator (lower memory)
-  arch_vm_init();   // Memory management unit and kernel mappings
-  page_init_high(); // Physical page allocator (higher memory)
-
-  // Initialize the machine
-  mach_init(mach_type);
-
-  // Initialize the interrupt controller
-  arch_interrupt_init();
-
   // Initialize core services
   k_object_pool_system_init();
   k_mutex_system_init();
@@ -66,8 +64,7 @@ void main(uintptr_t mach_type)
 
   // Initialize device drivers
   tty_init();                   // Console
-  mach_current->storage_init();
-  mach_current->eth_init();
+  arch_init_devices();
 
   // Initialize the remaining kernel services
   buf_init();           // Buffer cache
@@ -87,25 +84,3 @@ void main(uintptr_t mach_type)
   mp_main();
 }
 
-/**
- * Initialization code for non-boot (AP) processors.
- *
- * AP processors jump here from 'entry.S'.
- */
-void mp_enter(void)
-{
-  // Per-CPU initialization
-  arch_vm_init_percpu(); // Load the kernel page table
-  arch_interrupt_init_percpu();
-
-  mp_main();
-}
-
-static void
-mp_main(void)
-{
-  cprintf("Starting CPU %d\n", k_cpu_id());
-
-  // Enter the scheduler loop
-  k_sched_start();
-}

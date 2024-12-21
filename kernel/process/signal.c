@@ -302,12 +302,10 @@ signal_return(uintptr_t va)
 
   process_lock();
 
-  if ((r = arch_signal_return(current, &frame)) == 0) {
-    r = current->thread->tf->r0;
+  current->signal_mask = frame.ucontext.uc_sigmask;
+  sigdelset(&current->signal_mask, SIGKILL);
 
-    current->signal_mask = frame.ucontext.uc_sigmask;
-    sigdelset(&current->signal_mask, SIGKILL);
-  }
+  r = arch_signal_return(current, &frame);
 
   process_unlock();
 
