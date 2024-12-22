@@ -1,32 +1,52 @@
 
-#define ALIGN    1<<0            
-#define MEMINFO   1<<1
-#define FLAGS     (ALIGN | MEMINFO)
-#define MAGIC     0x1BADB002
-#define CHECKSUM  -(MAGIC + FLAGS)
+#include <kernel/mm/memlayout.h>
+#include <kernel/multiboot.h>
+
+#include <arch/i386/regs.h>
+
+#define MULTIBOOT_HEADER_FLAGS   	(MULTIBOOT_PAGE_ALIGN | MULTIBOOT_MEMORY_INFO)
 
 .section .entry, "a"
 .align 4
 
-.global _multiboot
-_multiboot:
-.long MAGIC
-.long FLAGS
-.long CHECKSUM
+.global multiboot_header
+multiboot_header:
+.long MULTIBOOT_HEADER_MAGIC
+.long MULTIBOOT_HEADER_FLAGS
+.long -(MULTIBOOT_HEADER_MAGIC + MULTIBOOT_HEADER_FLAGS)
 
 .global _start
-.type _start, @function
 _start:
-	mov $stack_top, %esp
+	movl    %cr4, %eax
+  orl     $(CR4_PSE), %eax
+  movl    %eax, %cr4
 
+  movl    $(KVA2PA(entry_pgdir)), %eax
+  movl    %eax, %cr3
+
+  movl    %cr0, %eax
+  orl     $(CR0_PG|CR0_WP), %eax
+  movl    %eax, %cr0
+
+	mov $kstack_top, %esp
+
+	mov $higher_half, %eax
+	jmp *%eax
+
+.text
+
+higher_half:
 	call arch_init
 
 	cli
+
 1:	hlt
 	jmp 1b
 
-.section .bss
-.align 16
-stack_bottom:
-.skip 16384 # 16 KiB
-stack_top:
+.bss
+
+  .globl    kstack, kstack_top
+  .p2align  12
+kstack:
+  .space    (KSTACK_SIZE * 4)
+kstack_top:

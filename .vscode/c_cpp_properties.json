@@ -9,7 +9,7 @@
       "includePath": [
         "./sysroot/usr/include",
         "./kernel/include",
-        "./kernel/arch/arm/include",
+        "./kernel/arch/i386/include",
         "./kernel/net/lwip/argentum",
         "./kernel/net/lwip/include"
       ],
