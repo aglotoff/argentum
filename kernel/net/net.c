@@ -48,11 +48,12 @@ eth_netif_output(struct netif *netif, struct pbuf *p)
   return ERR_OK;
 }
 
+// FIXME: temporary global var
+uint8_t mac_addr[6];
+
 static err_t 
 eth_netif_init(struct netif *netif)
 {
-  extern uint8_t mac_addr[6];
-
   netif->linkoutput = eth_netif_output;
   netif->output     = etharp_output;
   netif->mtu        = 1500;

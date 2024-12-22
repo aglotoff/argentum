@@ -89,8 +89,8 @@ k_sched_switch(struct KThread *thread)
   thread->cpu = my_cpu;
   my_cpu->thread = thread;
 
-  if (thread->context->lr < VIRT_KERNEL_BASE)
-    panic("bad PC");
+  // if (thread->context->lr < VIRT_KERNEL_BASE)
+  //   panic("bad PC");
 
   k_arch_switch(&my_cpu->sched_context, thread->context);
 

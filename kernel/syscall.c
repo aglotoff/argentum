@@ -128,7 +128,7 @@ sys_arg_int(int n, int *ip)
 }
 
 static int
-sys_arg_uint(int n, unsigned int *ip)
+sys_arg_uint(int n, size_t *ip)
 {
   *ip = sys_arch_get_arg(n);
   return 0;

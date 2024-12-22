@@ -226,7 +226,7 @@ k_object_pool_system_init(void)
     size_t size = ANON_POOLS_MIN_SIZE << i;
     char name[K_OBJECT_POOL_NAME_MAX];
 
-    snprintf(name, sizeof(name), "anon(%u)", size);
+    snprintf(name, sizeof(name), "anon(%u)", (unsigned) size);
 
     anon_pools[i] = k_object_pool_create(name, size, 0, NULL, NULL);
     if (anon_pools[i] == NULL)

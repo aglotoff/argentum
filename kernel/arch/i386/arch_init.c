@@ -1,6 +1,10 @@
 #include <string.h>
 #include <stdint.h>
 
+#include <kernel/vm.h>
+#include <kernel/page.h>
+#include <kernel/interrupt.h>
+
 enum vga_color {
 	VGA_COLOR_BLACK = 0,
 	VGA_COLOR_BLUE = 1,
@@ -88,4 +92,34 @@ void kernel_main(void)
 {
 	terminal_initialize();
 	terminal_writestring("Hello World!");
+}
+
+void main(void);
+void mp_main(void);
+
+void
+arch_init(void)
+{
+  kernel_main();
+}
+
+void
+arch_init_devices(void)
+{
+  // TODO
+}
+
+
+void
+arch_mp_init(void)
+{
+  // TODO
+}
+
+void
+arch_eth_write(const void *buf, size_t n)
+{
+  // TODO
+  (void) buf;
+  (void) n;
 }

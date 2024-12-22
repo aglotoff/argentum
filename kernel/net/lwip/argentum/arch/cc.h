@@ -6,8 +6,12 @@
 #include <stdlib.h>
 #include <sys/time.h>
 
+
 #include <kernel/assert.h>
 #include <kernel/console.h>
+
+// FIXME: dirty hack to force compiling on i386
+#define SSIZE_MAX 1
 
 #define LWIP_NO_CTYPE_H         1
 

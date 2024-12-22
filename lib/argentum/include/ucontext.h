@@ -29,6 +29,13 @@ typedef struct mcontext_t {
   uint32_t  fpscr;
 } mcontext_t;
 
+#elif defined(__i386__)
+
+typedef struct mcontext_t {
+  // TODO
+  uint32_t dummyl
+} mcontext_t;
+
 #endif
 
 typedef struct ucontext_t {

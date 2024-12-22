@@ -19,7 +19,7 @@ _multiboot:
 _start:
 	mov $stack_top, %esp
 
-	call kernel_main
+	call arch_init
 
 	cli
 1:	hlt

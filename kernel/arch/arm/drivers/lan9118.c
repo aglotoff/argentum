@@ -180,7 +180,7 @@ eth_phy_write(struct Lan9118 *lan9118, uint8_t reg, uint16_t data)
     ;
 }
 
-uint8_t mac_addr[6];
+extern uint8_t mac_addr[6];
 
 void
 lan9118_init(struct Lan9118 *lan9118)
