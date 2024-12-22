@@ -12,7 +12,7 @@ TOP     := .
 OBJ     := obj
 SYSROOT := sysroot
 
-# ARCH := arm
+#ARCH := arm
 ARCH := i386
 
 # Common compiler flags
@@ -23,6 +23,13 @@ CFLAGS     := $(BASE_FLAGS) --std=gnu11
 CXXFLAGS   := $(BASE_FLAGS)
 
 include config/arch/$(ARCH)/env.mk
+
+# Cross-compiler toolchain
+#
+# The recommended target for the cross-compiler toolchain is "arm-none-eabi-".
+# If you want to use the host tools (i.e. binutils, gcc, gdb, etc.), comment
+# this line out.
+TOOLPREFIX := $(HOST)-
 
 AR      := $(TOOLPREFIX)ar
 CC      := $(TOOLPREFIX)gcc

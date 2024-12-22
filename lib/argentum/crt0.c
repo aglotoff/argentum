@@ -7,6 +7,11 @@ extern char **environ;
 void __libc_init_array(void);
 int  main(int, char **, char **);
 
+#if defined(__i386__)
+void _init(void) {}
+void _fini(void) {}
+#endif
+
 void
 _start(int argc, char **argv, char **envp)
 {

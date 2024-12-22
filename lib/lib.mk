@@ -192,9 +192,6 @@ $(NEWLIB)/newlib/libc/sys/argentum/%: lib/argentum/%
 $(NEWLIB)/newlib/Makefile.in: $(NEWLIB) $(NEWLIB)/newlib/libc/sys/argentum/Makefile.inc
 	$(V)cd $(@D) && autoreconf
 
-# HOST := arm-none-argentum
-HOST := i386-pc-elf
-
 $(OBJ)/lib/Makefile: $(NEWLIB)/newlib/Makefile.in
 	$(V)rm -rf $(@D)
 	$(V)mkdir -p $(@D)

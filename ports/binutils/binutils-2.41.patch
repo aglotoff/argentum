@@ -1,6 +1,6 @@
-diff -ruN orig/bfd/config.bfd new/bfd/config.bfd
---- orig/bfd/config.bfd	2023-07-03 02:00:00.000000000 +0300
-+++ new/bfd/config.bfd	2024-01-01 10:23:03.587004723 +0300
+diff -ruN old/bfd/config.bfd new/bfd/config.bfd
+--- old/bfd/config.bfd	2023-07-03 02:00:00.000000000 +0300
++++ new/bfd/config.bfd	2024-12-21 17:31:40.654325104 +0300
 @@ -411,6 +411,10 @@
      targ_defvec=arm_elf32_le_vec
      targ_selvecs=arm_elf32_be_vec
@@ -12,9 +12,20 @@ diff -ruN orig/bfd/config.bfd new/bfd/config.bfd
    armeb-*-elf | arm*b-*-freebsd* | arm*b-*-linux-* | armeb-*-eabi*)
      targ_defvec=arm_elf32_be_vec
      targ_selvecs=arm_elf32_le_vec
-diff -ruN orig/config.sub new/config.sub
---- orig/config.sub	2023-07-03 02:00:00.000000000 +0300
-+++ new/config.sub	2024-01-01 10:21:15.717006706 +0300
+@@ -664,6 +668,10 @@
+     targ_selvecs=
+     targ64_selvecs=x86_64_elf64_vec
+     ;;
++  i[3-7]86-*-argentum*)
++    targ_defvec=i386_elf32_vec
++    targ_selvecs=
++    ;;
+ #ifdef BFD64
+   x86_64-*-cloudabi*)
+     targ_defvec=x86_64_elf64_cloudabi_vec
+diff -ruN old/config.sub new/config.sub
+--- old/config.sub	2023-07-03 02:00:00.000000000 +0300
++++ new/config.sub	2024-12-21 17:31:40.654325104 +0300
 @@ -1758,7 +1758,7 @@
  	     | onefs* | tirtos* | phoenix* | fuchsia* | redox* | bme* \
  	     | midnightbsd* | amdhsa* | unleashed* | emscripten* | wasi* \
@@ -24,9 +35,9 @@ diff -ruN orig/config.sub new/config.sub
  		;;
  	# This one is extra strict with allowed versions
  	sco3.2v2 | sco3.2v[4-9]* | sco5v6*)
-diff -ruN orig/gas/configure.tgt new/gas/configure.tgt
---- orig/gas/configure.tgt	2023-07-03 02:00:00.000000000 +0300
-+++ new/gas/configure.tgt	2024-01-01 10:25:47.027004698 +0300
+diff -ruN old/gas/configure.tgt new/gas/configure.tgt
+--- old/gas/configure.tgt	2023-07-03 02:00:00.000000000 +0300
++++ new/gas/configure.tgt	2024-12-21 17:31:40.654325104 +0300
 @@ -167,6 +167,7 @@
    arm-*-pe)				fmt=coff em=pe ;;
    arm-*-fuchsia*)			fmt=elf ;;
@@ -35,9 +46,17 @@ diff -ruN orig/gas/configure.tgt new/gas/configure.tgt
  
    avr-*-*)				fmt=elf bfd_gas=yes ;;
  
-diff -ruN orig/ld/Makefile.am new/ld/Makefile.am
---- orig/ld/Makefile.am	2023-07-03 02:00:00.000000000 +0300
-+++ new/ld/Makefile.am	2024-01-01 11:05:34.662497346 +0300
+@@ -265,6 +266,7 @@
+   i386-*-*nt*)				fmt=coff em=pe ;;
+   i386-*-rdos*)				fmt=elf ;;
+   i386-*-darwin*)			fmt=macho ;;
++  i386-*-argentum*)		fmt=elf ;;
+ 
+   ia16-*-elf*)				fmt=elf ;;
+ 
+diff -ruN old/ld/Makefile.am new/ld/Makefile.am
+--- old/ld/Makefile.am	2023-07-03 02:00:00.000000000 +0300
++++ new/ld/Makefile.am	2024-12-21 17:32:17.394316780 +0300
 @@ -173,6 +173,7 @@
  	earmelf_linux_fdpiceabi.c \
  	earmelf_nacl.c \
@@ -46,7 +65,15 @@ diff -ruN orig/ld/Makefile.am new/ld/Makefile.am
  	earmelf_phoenix.c \
  	earmelf_vxworks.c \
  	earmelfb.c \
-@@ -671,6 +672,7 @@
+@@ -275,6 +276,7 @@
+ 	eelf32xtensa.c \
+ 	eelf32z80.c \
+ 	eelf_i386.c \
++	eelf_i386_argentum.c \
+ 	eelf_i386_be.c \
+ 	eelf_i386_fbsd.c \
+ 	eelf_i386_haiku.c \
+@@ -671,6 +673,7 @@
  @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/earmelf_linux_fdpiceabi.Pc@am__quote@
  @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/earmelf_nacl.Pc@am__quote@
  @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/earmelf_nbsd.Pc@am__quote@
@@ -54,9 +81,9 @@ diff -ruN orig/ld/Makefile.am new/ld/Makefile.am
  @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/earmelf_phoenix.Pc@am__quote@
  @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/earmelf_vxworks.Pc@am__quote@
  @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/earmelfb.Pc@am__quote@
-diff -ruN orig/ld/Makefile.in new/ld/Makefile.in
---- orig/ld/Makefile.in	2023-07-03 02:00:00.000000000 +0300
-+++ new/ld/Makefile.in	2024-01-01 11:12:54.002497746 +0300
+diff -ruN old/ld/Makefile.in new/ld/Makefile.in
+--- old/ld/Makefile.in	2023-07-03 02:00:00.000000000 +0300
++++ new/ld/Makefile.in	2024-12-21 17:32:24.674315687 +0300
 @@ -674,6 +674,7 @@
  	earmelf_linux_fdpiceabi.c \
  	earmelf_nacl.c \
@@ -65,15 +92,31 @@ diff -ruN orig/ld/Makefile.in new/ld/Makefile.in
  	earmelf_phoenix.c \
  	earmelf_vxworks.c \
  	earmelfb.c \
-@@ -1293,6 +1294,7 @@
- @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/earmelf_linux_fdpiceabi.Po@am__quote@
- @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/earmelf_nacl.Po@am__quote@
- @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/earmelf_nbsd.Po@am__quote@
+@@ -776,6 +777,7 @@
+ 	eelf32xtensa.c \
+ 	eelf32z80.c \
+ 	eelf_i386.c \
++	eelf_i386_argentum.c \
+ 	eelf_i386_be.c \
+ 	eelf_i386_fbsd.c \
+ 	eelf_i386_haiku.c \
+@@ -1285,6 +1287,7 @@
+ @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/earm64pe.Po@am__quote@
+ @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/earm_wince_pe.Po@am__quote@
+ @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/earmelf.Po@am__quote@
 +@AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/earmelf_argentum.Po@am__quote@
- @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/earmelf_phoenix.Po@am__quote@
- @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/earmelf_vxworks.Po@am__quote@
- @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/earmelfb.Po@am__quote@
-@@ -2388,6 +2390,7 @@
+ @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/earmelf_fbsd.Po@am__quote@
+ @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/earmelf_fuchsia.Po@am__quote@
+ @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/earmelf_haiku.Po@am__quote@
+@@ -1458,6 +1461,7 @@
+ @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/eelf64tilegx.Po@am__quote@
+ @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/eelf64tilegx_be.Po@am__quote@
+ @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/eelf_i386.Po@am__quote@
++@AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/eelf_i386_argentum.Po@am__quote@
+ @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/eelf_i386_be.Po@am__quote@
+ @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/eelf_i386_fbsd.Po@am__quote@
+ @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/eelf_i386_haiku.Po@am__quote@
+@@ -2388,6 +2392,7 @@
  @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/earmelf_linux_fdpiceabi.Pc@am__quote@
  @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/earmelf_nacl.Pc@am__quote@
  @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/earmelf_nbsd.Pc@am__quote@
@@ -81,9 +124,9 @@ diff -ruN orig/ld/Makefile.in new/ld/Makefile.in
  @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/earmelf_phoenix.Pc@am__quote@
  @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/earmelf_vxworks.Pc@am__quote@
  @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/earmelfb.Pc@am__quote@
-diff -ruN orig/ld/configure.tgt new/ld/configure.tgt
---- orig/ld/configure.tgt	2023-07-03 02:00:00.000000000 +0300
-+++ new/ld/configure.tgt	2024-01-01 10:57:31.262497332 +0300
+diff -ruN old/ld/configure.tgt new/ld/configure.tgt
+--- old/ld/configure.tgt	2023-07-03 02:00:00.000000000 +0300
++++ new/ld/configure.tgt	2024-12-21 17:31:40.654325104 +0300
 @@ -194,6 +194,8 @@
  			;;
  arm-*-phoenix*)		targ_emul=armelf
@@ -93,9 +136,25 @@ diff -ruN orig/ld/configure.tgt new/ld/configure.tgt
  armeb-*-elf | armeb-*-eabi*)
  			targ_emul=armelfb
  			;;
-diff -ruN orig/ld/emulparams/armelf_argentum.sh new/ld/emulparams/armelf_argentum.sh
---- orig/ld/emulparams/armelf_argentum.sh	1970-01-01 03:00:00.000000000 +0300
-+++ new/ld/emulparams/armelf_argentum.sh	2024-01-01 12:11:07.972498196 +0300
+@@ -444,6 +446,8 @@
+ 			;;
+ i[3-7]86-*-chaos)	targ_emul=elf_i386_chaos
+ 			;;
++i[3-7]86-*-argentum*)	targ_emul=elf_i386_argentum
++			;;
+ ia16-*-elf*)		targ_emul=elf_i386
+ 			targ_extra_emuls=i386msdos
+ 			;;
+diff -ruN old/ld/emulparams/armelf_argentum.sh new/ld/emulparams/armelf_argentum.sh
+--- old/ld/emulparams/armelf_argentum.sh	1970-01-01 03:00:00.000000000 +0300
++++ new/ld/emulparams/armelf_argentum.sh	2024-12-21 17:31:40.654325104 +0300
 @@ -0,0 +1,2 @@
 +source_sh ${srcdir}/emulparams/armelf.sh
++DATA_ADDR="ALIGN(${MAXPAGESIZE})"
+diff -ruN old/ld/emulparams/elf_i386_argentum.sh new/ld/emulparams/elf_i386_argentum.sh
+--- old/ld/emulparams/elf_i386_argentum.sh	1970-01-01 03:00:00.000000000 +0300
++++ new/ld/emulparams/elf_i386_argentum.sh	2024-12-21 17:31:40.654325104 +0300
+@@ -0,0 +1,3 @@
++source_sh ${srcdir}/emulparams/elf_i386.sh
++TEXT_START_ADDR=0x08000000
 +DATA_ADDR="ALIGN(${MAXPAGESIZE})"

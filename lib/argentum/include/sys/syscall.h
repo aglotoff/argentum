@@ -109,11 +109,24 @@ __syscall_r(uint8_t num, uint32_t a1, uint32_t a2, uint32_t a3, uint32_t a4,
   return r0;
 }
 
-// Generic system call: pass system call number as an immediate operand of the
-// SVC instruction, and up to three parameters in R0, R1, R2.
-// Interrupt kernel with the SVC instruction.
-//
-// If a negative value is returned, set the errno variable and return -1.
+#elif defined(__i386__)
+
+static inline int32_t
+__syscall_r(uint8_t num, uint32_t a1, uint32_t a2, uint32_t a3, uint32_t a4,
+            uint32_t a5, uint32_t a6)
+{
+  int32_t ret;
+
+  asm volatile("int %1\n"
+		: "=a" (ret)
+		: "i" (0x80)
+    : "cc", "memory");
+
+  return ret;
+}
+
+#endif
+
 static inline int32_t
 __syscall(uint8_t num, uint32_t a1, uint32_t a2, uint32_t a3, uint32_t a4,
           uint32_t a5, uint32_t a6)
@@ -127,8 +140,6 @@ __syscall(uint8_t num, uint32_t a1, uint32_t a2, uint32_t a3, uint32_t a4,
 
   return r;
 }
-
-#endif
 
 #define __syscall0(num)     \
   __syscall(num, 0, 0, 0, 0, 0, 0)

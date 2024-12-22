@@ -106,15 +106,16 @@ KERNEL_LDFLAGS := $(LDFLAGS) -T $(KERNEL_LDFILE) -nostdlib
 KERNEL_BINFILES :=
 
 # Embed the initial process directly into the kernel binary
-# ifdef PROCESS_NAME
-# 	KERNEL_BINFILES := user/$(PROCESS_NAME)
-# else
-# 	KERNEL_BINFILES := user/init
-# endif
-# KERNEL_BINFILES := $(patsubst %, $(OBJ)/%, $(KERNEL_BINFILES))
+ifdef PROCESS_NAME
+	KERNEL_BINFILES += user/$(PROCESS_NAME)
+else
+	KERNEL_BINFILES += user/init
+endif
+
+KERNEL_BINFILES := $(patsubst %, $(OBJ)/%, $(KERNEL_BINFILES))
 
 # Embed the VGA font to print characters on LCD
-# KERNEL_BINFILES += kernel/drivers/console/vga_font.psf
+KERNEL_BINFILES += kernel/drivers/console/vga_font.psf
 
 $(OBJ)/kernel/%.o: kernel/%.c $(OBJ)/.vars.KERNEL_CFLAGS
 	@echo "+ CC [KERNEL] $<"

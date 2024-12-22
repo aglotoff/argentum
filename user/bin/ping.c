@@ -137,7 +137,7 @@ main(int argc, char **argv)
     }
 
     struct icmp_echo_hdr *icmp;
-    ssize_t len;
+    int len;
     struct ip_hdr *ip;
 
     if ((len = recvfrom(sockfd, buf, sizeof buf, 0, (struct sockaddr *) &from, &from_len)) < 0) {
