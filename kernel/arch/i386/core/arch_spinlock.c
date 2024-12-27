@@ -7,14 +7,14 @@ void
 k_arch_spinlock_acquire(volatile int *locked)
 {
   // TODO
-  (void) locked;
+  *locked = 1;
 }
 
 void
 k_arch_spinlock_release(volatile int *locked)
 {
   // TODO
-  (void) locked;
+  *locked = 0;
 }
 
 void

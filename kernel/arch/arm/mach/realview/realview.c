@@ -11,7 +11,7 @@
 #include <kernel/drivers/sd.h>
 #include <kernel/drivers/kbd.h>
 #include <kernel/drivers/uart.h>
-#include <kernel/drivers/display.h>
+#include <kernel/drivers/framebuffer.h>
 
 #include <arch/arm/ds1338.h>
 #include <arch/arm/sbcon.h>
@@ -204,7 +204,7 @@ static struct Pl050 kmi0;
 static struct Uart uart0;
 static struct Pl011 pl011;
 
-static struct Display display;
+static struct FrameBuffer fb;
 static struct Pl111 lcd;
 
 int
@@ -220,7 +220,7 @@ realview_console_init(void)
 
   pl111_init(&lcd, PA2KVA(PHYS_LCD), page2pa(page), PL111_RES_VGA);
 
-  display_init(&display, page2kva(page));
+  framebuffer_init(&fb, page2kva(page), 640, 480);
 
   pl050_init(&kmi0, PA2KVA(PHYS_KMI0), IRQ_KMI0);
 
@@ -287,14 +287,12 @@ static void
 realview_tty_erase(struct Tty *tty)
 {
   screen_backspace(tty->out.screen);
-  realview_tty_out_char(tty, '\b');
-  realview_tty_flush(tty);
 }
 
 static void
 realview_tty_switch(struct Tty *tty)
 {
-  display_update(&display, tty->out.screen);
+  screen_switch(tty->out.screen);
 }
 
 static void
@@ -307,7 +305,7 @@ static void
 realview_tty_init(struct Tty *tty, int i)
 {
   tty->out.screen = &screens[i];
-  screen_init(tty->out.screen, &display);
+  screen_init(tty->out.screen, &framebuffer_ops, &fb, 80, 30);
 }
 
 MACH_DEFINE(realview_pb_a8) {

@@ -16,7 +16,7 @@
 /** Physical address the kernel executable is loaded at */
 #define PHYS_KERNEL_LOAD  0x00100000
 /** Maximum physical memory available during the early boot process */
-#define PHYS_ENTRY_LIMIT  0x01000000
+#define PHYS_ENTRY_LIMIT  0x00400000
 /** Maximum available physical memory */
 #define PHYS_LIMIT        0x10000000
 

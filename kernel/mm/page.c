@@ -94,7 +94,7 @@ page_init_low(void)
   }
 
   // Place pages mapped by 'entry_pgdir' to the free list.
-  page_free_region(0, PHYS_KERNEL_LOAD);
+  // FIXME: add low memory to region
   page_free_region(KVA2PA(boot_alloc(0)), PHYS_ENTRY_LIMIT);
 
   page_initialized = 1;

@@ -12,7 +12,7 @@
 #include <stdint.h>
 
 static inline void
-lcr3_set(uint32_t value)
+cr3_set(uint32_t value)
 {
   asm volatile("movl %0, %%cr3" : : "r" (value));
 }

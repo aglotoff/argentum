@@ -2,12 +2,11 @@
 
 #include <kernel/drivers/screen.h>
 #include <kernel/tty.h>
-#include <kernel/drivers/display.h>
 #include <kernel/drivers/kbd.h>
 #include <kernel/types.h>
 
 void
-screen_init(struct Screen *screen, struct Display *display)
+screen_init(struct Screen *screen, struct ScreenOps *ops, void *ctx, int cols, int rows)
 {
   unsigned i;
 
@@ -15,9 +14,12 @@ screen_init(struct Screen *screen, struct Display *display)
   screen->bg_color      = COLOR_BLACK;
   screen->state         = PARSER_NORMAL;
   screen->esc_cur_param = -1;
-  screen->cols          = SCREEN_COLS;
-  screen->rows          = SCREEN_ROWS;
-  screen->display       = display;
+  screen->cols          = cols;
+  screen->rows          = rows;
+  screen->ops           = ops;
+  screen->ctx           = ctx;
+  screen->new_pos       = 0;
+  screen->old_pos       = 0;
  
   for (i = 0; i < screen->cols * screen->rows; i++) {
     screen->buf[i].ch = ' ';
@@ -36,8 +38,15 @@ void
 screen_flush(struct Screen *screen)
 {
   if (screen_is_current(screen)) {
-    display_flush(screen->display);
-    display_update_cursor(screen->display);
+    if (screen->old_pos < screen->new_pos) {
+      for ( ; screen->old_pos < screen->new_pos; screen->old_pos++)
+        screen->ops->draw_char_at(screen->ctx, screen->old_pos);
+    } else if (screen->old_pos > screen->new_pos) {
+      for ( ; screen->old_pos > screen->new_pos; screen->old_pos--)
+        screen->ops->draw_char_at(screen->ctx, screen->old_pos);
+    }
+
+    screen->ops->update_cursor(screen->ctx, screen->new_pos);
   }
 }
 
@@ -53,7 +62,7 @@ screen_erase(struct Screen *screen, unsigned from, unsigned to)
   }
 
   if (screen_is_current(screen))
-    display_erase(screen->display, from, to);
+    screen->ops->erase(screen->ctx, from, to);
 }
 
 static void
@@ -71,8 +80,7 @@ screen_scroll_down(struct Screen *screen, unsigned n)
 {
   unsigned i;
 
-  if (screen_is_current(screen))
-    display_flush(screen->display);
+  screen_flush(screen);
 
   memmove(&screen->buf[0], &screen->buf[screen->cols * n],
           sizeof(screen->buf[0]) * (screen->cols * (screen->rows - n)));
@@ -83,10 +91,15 @@ screen_scroll_down(struct Screen *screen, unsigned n)
     screen->buf[i].bg = COLOR_BLACK;
   }
 
-  screen->pos -= n * screen->cols;
+  screen->new_pos -= n * screen->cols;
 
-  if (screen_is_current(screen))
-    display_scroll_down(screen->display, n);
+  if (screen_is_current(screen)) {
+    screen->old_pos = screen->new_pos;
+    screen->ops->scroll_down(screen->ctx, n);
+
+    for (i = screen->cols * (screen->rows - n); i < screen->cols * screen->rows; i++)
+      screen->ops->draw_char_at(screen->ctx, i);
+  }
 }
 
 static void
@@ -94,15 +107,14 @@ screen_insert_rows(struct Screen *screen, unsigned rows)
 {
   unsigned max_rows, start_pos, end_pos, n, i;
   
-  max_rows  = screen->rows - screen->pos / screen->cols;
+  max_rows  = screen->rows - screen->new_pos / screen->cols;
   rows      = MIN(max_rows, rows);
 
-  start_pos = screen->pos - (screen->pos % screen->cols);
+  start_pos = screen->new_pos - (screen->new_pos % screen->cols);
   end_pos   = start_pos + rows * screen->cols;
   n         = (max_rows - rows) * screen->cols;
 
-  if (screen_is_current(screen))
-    display_flush(screen->display);
+  screen_flush(screen);
 
   for (i = 0; i < rows * screen->cols; i++) {
     screen->buf[i + start_pos].ch = ' ';
@@ -113,8 +125,17 @@ screen_insert_rows(struct Screen *screen, unsigned rows)
   memmove(&screen->buf[end_pos], &screen->buf[start_pos],
           sizeof(screen->buf[0]) * n);
   
-  if (screen_is_current(screen))
-    display_flush(screen->display);
+  screen_flush(screen);
+}
+
+static void
+screen_update_cursor(struct Screen *screen)
+{
+  if (screen_is_current(screen)) {
+    screen->old_pos = screen->new_pos;
+    // FIXME: pos may overflow
+    screen->ops->update_cursor(screen->ctx, screen->new_pos);
+  }
 }
 
 static int
@@ -124,43 +145,39 @@ screen_print_char(struct Screen *screen, char c)
 
   switch (c) {
   case '\n':
-    if (screen_is_current(screen))
-      display_flush(screen->display);
+    screen_flush(screen);
 
-    screen->pos += screen->cols;
-    screen->pos -= screen->pos % screen->cols;
+    screen->new_pos += screen->cols;
+    screen->new_pos -= screen->new_pos % screen->cols;
 
-    if (screen_is_current(screen))
-      display_update_cursor(screen->display);
+    screen_update_cursor(screen);
 
     break;
 
   case '\r':
-    if (screen_is_current(screen))
-      display_flush(screen->display);
+    screen_flush(screen);
 
-    screen->pos -= screen->pos % screen->cols;
+    screen->new_pos -= screen->new_pos % screen->cols;
 
-    if (screen_is_current(screen))
-      display_update_cursor(screen->display);
+    screen_update_cursor(screen);
 
     break;
 
   case '\b':
-    if (screen->pos > 0) {
+    if (screen->new_pos > 0) {
       screen_flush(screen);
 
-      screen->pos--;
-      if (screen_is_current(screen))
-        display_update_cursor(screen->display);
+      screen->new_pos--;
+
+      screen_update_cursor(screen);
     }
     break;
 
   case '\t':
     do {
-      screen_set_char(screen, screen->pos++, ' ');
+      screen_set_char(screen, screen->new_pos++, ' ');
       ret++;
-    } while ((screen->pos % DISPLAY_TAB_WIDTH) != 0);
+    } while ((screen->new_pos % DISPLAY_TAB_WIDTH) != 0);
     break;
 
   case C('G'):
@@ -169,17 +186,17 @@ screen_print_char(struct Screen *screen, char c)
 
   default:
     if (c < ' ') {
-      screen_set_char(screen, screen->pos++, '^');
-      screen_set_char(screen, screen->pos++, '@' + c);
+      screen_set_char(screen, screen->new_pos++, '^');
+      screen_set_char(screen, screen->new_pos++, '@' + c);
       ret += 2;
     } else {
-      screen_set_char(screen, screen->pos++, c);
+      screen_set_char(screen, screen->new_pos++, c);
       ret++;
     }
     break;
   }
 
-  if (screen->pos >= screen->cols * screen->rows)
+  if (screen->new_pos >= screen->cols * screen->rows)
     screen_scroll_down(screen, 1);
 
   return ret;
@@ -220,37 +237,37 @@ screen_handle_esc(struct Screen *screen, char c)
   // Cursor Up
   case 'A':
     n = (screen->esc_cur_param == 0) ? 1 : screen->esc_params[0];
-    n = MIN(n, screen->pos / screen->cols);
-    screen->pos -= n * screen->cols;
+    n = MIN(n, screen->new_pos / screen->cols);
+    screen->new_pos -= n * screen->cols;
     break;
   
   // Cursor Down
   case 'B':
     n = (screen->esc_cur_param == 0) ? 1 : screen->esc_params[0];
-    n = MIN(n, screen->rows - screen->pos / screen->cols - 1);
-    screen->pos += n * screen->cols;
+    n = MIN(n, screen->rows - screen->new_pos / screen->cols - 1);
+    screen->new_pos += n * screen->cols;
     break;
 
   // Cursor Forward
   case 'C':
     n = (screen->esc_cur_param == 0) ? 1 : screen->esc_params[0];
-    n = MIN(n, screen->cols - screen->pos % screen->cols - 1);
-    screen->pos += n;
+    n = MIN(n, screen->cols - screen->new_pos % screen->cols - 1);
+    screen->new_pos += n;
     break;
 
   // Cursor Back
   case 'D':
     n = (screen->esc_cur_param == 0) ? 1 : screen->esc_params[0];
-    n = MIN(n, screen->pos % screen->cols);
-    screen->pos -= n;
+    n = MIN(n, screen->new_pos % screen->cols);
+    screen->new_pos -= n;
     break;
 
   // Cursor Horizontal Absolute
   case 'G':
     n = (screen->esc_cur_param < 1) ? 1 : screen->esc_params[0];
     n = MIN(n, screen->cols);
-    screen->pos -= screen->pos % screen->cols;
-    screen->pos += n - 1;
+    screen->new_pos -= screen->new_pos % screen->cols;
+    screen->new_pos += n - 1;
     break;
 
   // Cursor Position
@@ -261,18 +278,18 @@ screen_handle_esc(struct Screen *screen, char c)
     m = (screen->esc_cur_param < 2) ? 1 : screen->esc_params[1];
     m = MIN(m, screen->cols);
 
-    screen->pos = (n - 1) * screen->cols + m - 1;
+    screen->new_pos = (n - 1) * screen->cols + m - 1;
     break;
 
   // Erase in Display
   case 'J':
     n = (screen->esc_cur_param < 1) ? 0 : screen->esc_params[0];
     if (n == 0) {
-      screen_erase(screen, screen->pos, SCREEN_COLS * SCREEN_ROWS - 1);
+      screen_erase(screen, screen->new_pos, screen->cols * screen->rows - 1);
     } else if (n == 1) {
-      screen_erase(screen, 0, screen->pos);
+      screen_erase(screen, 0, screen->new_pos);
     } else if (n == 2) {
-      screen_erase(screen, 0, SCREEN_COLS * SCREEN_ROWS - 1);
+      screen_erase(screen, 0, screen->cols * screen->rows - 1);
     }
     break;
 
@@ -280,11 +297,17 @@ screen_handle_esc(struct Screen *screen, char c)
   case 'K':
     n = (screen->esc_cur_param < 1) ? 0 : screen->esc_params[0];
     if (n == 0) {
-      screen_erase(screen, screen->pos, screen->pos - screen->pos % SCREEN_COLS + SCREEN_COLS - 1);
+      screen_erase(screen,
+                   screen->new_pos,
+                   screen->new_pos - screen->new_pos % screen->cols + screen->cols - 1);
     } else if (n == 1) {
-      screen_erase(screen, screen->pos - screen->pos % SCREEN_COLS, screen->pos);
+      screen_erase(screen,
+                   screen->new_pos - screen->new_pos % screen->cols,
+                   screen->new_pos);
     } else if (n == 2) {
-      screen_erase(screen, screen->pos - screen->pos % SCREEN_COLS, screen->pos - screen->pos % SCREEN_COLS + SCREEN_COLS - 1);
+      screen_erase(screen, 
+                   screen->new_pos - screen->new_pos % screen->cols,
+                   screen->new_pos - screen->new_pos % screen->cols + screen->cols - 1);
     }
     break;
 
@@ -298,15 +321,15 @@ screen_handle_esc(struct Screen *screen, char c)
   case 'd':
     n = (screen->esc_cur_param < 1) ? 1 : screen->esc_params[0];
     n = MIN(n, screen->rows);
-    screen->pos = (n - 1) * screen->cols + screen->pos % screen->cols;
+    screen->new_pos = (n - 1) * screen->cols + screen->new_pos % screen->cols;
     break;
 
   case '@':
     n = (screen->esc_cur_param < 1) ? 1 : screen->esc_params[0];
-    n = MIN(n, SCREEN_COLS - screen->pos % SCREEN_COLS);
+    n = MIN(n, screen->cols - screen->new_pos % screen->cols);
 
-    for (m = screen->pos - screen->pos % SCREEN_COLS + SCREEN_COLS - 1; m >= screen->pos; m--) {
-      if (m > screen->pos) {
+    for (m = screen->new_pos - screen->new_pos % screen->cols + screen->cols - 1; m >= screen->new_pos; m--) {
+      if (m > screen->new_pos) {
         screen->buf[m] = screen->buf[m - n];
       } else {
         screen->buf[m].ch = ' ';
@@ -315,7 +338,7 @@ screen_handle_esc(struct Screen *screen, char c)
       }
 
       if (screen_is_current(screen))
-        display_draw_char_at(screen->display, m);
+        screen->ops->draw_char_at(screen->ctx, m);
     }
     break;
  
@@ -368,7 +391,7 @@ screen_handle_esc(struct Screen *screen, char c)
 
   case 'b':
     for (n = 0; n < screen->esc_params[0]; n++)
-      screen_print_char(screen, screen->buf[screen->pos - 1].ch);
+      screen_print_char(screen, screen->buf[screen->new_pos - 1].ch);
     break;
 
   // TODO
@@ -455,6 +478,16 @@ screen_out_char(struct Screen *screen, char c)
 void
 screen_backspace(struct Screen *screen)
 {
-  if (screen->pos > 0)
-    screen_set_char(screen, --screen->pos, ' ');
+  if (screen->new_pos > 0)
+    screen_set_char(screen, --screen->new_pos, ' ');
+  
+  screen_out_char(screen, '\b');
+  screen_flush(screen);
+}
+
+void
+screen_switch(struct Screen *screen)
+{
+  screen->old_pos = screen->new_pos;
+  screen->ops->update(screen->ctx, screen);
 }

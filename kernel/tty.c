@@ -18,7 +18,6 @@
 #include <kernel/signal.h>
 
 #include <kernel/drivers/kbd.h>
-#include <kernel/drivers/display.h>
 
 static struct CharDev tty_device = {
   .read   = tty_read,
@@ -426,10 +425,10 @@ tty_ioctl(dev_t dev, int request, int arg)
     tty_current->pgrp = arg;
     return 0;
   case TIOCGWINSZ:
-    ws.ws_col = SCREEN_COLS;
-    ws.ws_row = SCREEN_ROWS;
-    ws.ws_xpixel = DEFAULT_FB_WIDTH;
-    ws.ws_ypixel = DEFAULT_FB_HEIGHT;
+    ws.ws_col = tty_current->out.screen->cols;
+    ws.ws_row = tty_current->out.screen->rows;
+    ws.ws_xpixel = tty_current->out.screen->cols * 8;  // FIXME
+    ws.ws_ypixel = tty_current->out.screen->rows * 16; // FIXME
     return vm_copy_out(process_current()->vm->pgtab, &ws, arg, sizeof ws);
   case TIOCSWINSZ:
     // cprintf("set winsize\n");

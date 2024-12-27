@@ -2,8 +2,10 @@
 #define __KERNEL_INCLUDE_KERNEL_DRIVERS_SCREEN_H__
 
 #define SCREEN_ESC_MAX    16   // The maximum number of esc parameters
-#define SCREEN_COLS       80
-#define SCREEN_ROWS       30
+
+// TODO: configure
+#define SCREEN_COLS_MAX   80
+#define SCREEN_ROWS_MAX   30
 
 enum ParserState {
   PARSER_NORMAL,
@@ -11,7 +13,15 @@ enum ParserState {
   PARSER_CSI,
 };
 
-struct Display;
+struct Screen;
+
+struct ScreenOps {
+  int (*update_cursor)(void *, unsigned);
+  int (*erase)(void *, unsigned, unsigned);
+  int (*scroll_down)(void *, unsigned);
+  int (*draw_char_at)(void *, unsigned);
+  int (*update)(void *, struct Screen *);
+};
 
 struct Screen {
   int                 fg_color;                     // Current foreground color
@@ -24,12 +34,15 @@ struct Screen {
     unsigned ch : 8;
     unsigned fg : 4;
     unsigned bg : 4;
-  }                   buf[SCREEN_COLS * SCREEN_ROWS];
+  }                   buf[SCREEN_COLS_MAX * SCREEN_ROWS_MAX];
   unsigned            cols;
   unsigned            rows;
-  unsigned            pos;
 
-  struct Display     *display;
+  unsigned            old_pos;
+  unsigned            new_pos;
+
+  struct ScreenOps   *ops;
+  void               *ctx;
 };
 
 // ANSI color codes
@@ -52,9 +65,10 @@ struct Screen {
 #define COLOR_BRIGHT_CYAN     (COLOR_BRIGHT + COLOR_CYAN)
 #define COLOR_BRIGHT_WHITE    (COLOR_BRIGHT + COLOR_WHITE)
 
-void screen_init(struct Screen *, struct Display *);
+void screen_init(struct Screen *, struct ScreenOps *, void *, int, int);
 void screen_out_char(struct Screen *, char);
 void screen_flush(struct Screen *);
 void screen_backspace(struct Screen *);
+void screen_switch(struct Screen *);
 
 #endif  // !__KERNEL_INCLUDE_KERNEL_DRIVERS_SCREEN_H__

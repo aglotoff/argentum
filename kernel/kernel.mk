@@ -28,7 +28,7 @@ KERNEL_SRCFILES := \
 	kernel/core/tick.c \
 	kernel/core/timeout.c \
 	kernel/core/waitqueue.c \
-	kernel/drivers/console/display.c \
+	kernel/drivers/framebuffer.c \
 	kernel/drivers/console/ps2.c \
 	kernel/drivers/console/screen.c \
 	kernel/drivers/console/uart.c \
