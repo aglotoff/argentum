@@ -45,6 +45,10 @@ pl050_init(struct Pl050 *pl050, void *base, int irq)
   // Enable interrupts
   pl050_write(pl050, KMI_CR, KMICR_RXINTREN);
 
+  // 0xF0 (Set Scan Code Set)
+  pl050_putc(pl050, 0xF0);
+  pl050_putc(pl050, 1);
+
   return ps2_init(&pl050->ps2, &pl050_ops, pl050, irq);
 }
 

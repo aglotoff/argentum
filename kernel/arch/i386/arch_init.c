@@ -24,8 +24,10 @@ arch_init(void)
 
 	tty_init();
 
-  for (int i = 0; i < 40; i++)
+  for (int i = 0; i < 3; i++)
     cprintf("Hello World  %d\n", i);
+
+  panic("fff");
 
   kernel_main();
 }

@@ -4,6 +4,7 @@ KERNEL_SRCFILES += \
 	kernel/arch/${ARCH}/core/arch_spinlock.c \
 	kernel/arch/${ARCH}/core/arch_switch.c \
 	kernel/arch/${ARCH}/core/arch_thread.c \
+	kernel/arch/${ARCH}/drivers/i8042.c \
 	kernel/arch/${ARCH}/drivers/vga.c \
 	kernel/arch/${ARCH}/mm/arch_vm.c \
 	kernel/arch/$(ARCH)/process/arch_process.c \

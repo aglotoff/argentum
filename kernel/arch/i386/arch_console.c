@@ -4,14 +4,15 @@
 #include <kernel/mm/memlayout.h>
 #include <kernel/drivers/screen.h>
 #include <kernel/tty.h>
+#include <arch/i386/i8042.h>
 
 extern struct Screen screen;
+extern struct I8042 i8042;
 
 int
 arch_console_getc(void)
 {
-  // TODO
-  return -1;
+  return i8042_getc(&i8042);
 }
 
 void

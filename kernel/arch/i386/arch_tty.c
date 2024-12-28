@@ -2,16 +2,19 @@
 #include <kernel/drivers/screen.h>
 
 #include <arch/i386/vga.h>
+#include <arch/i386/i8042.h>
 
 #define NSCREENS    6   // For now, all ttys are screens
 
 static struct Screen screens[NSCREENS];
 
 struct Vga vga;
+struct I8042 i8042;
 
 void
 arch_tty_init_system(void)
 {
+  i8042_init(&i8042, 0);
   vga_init(&vga, (void *) 0x800B8000, &screens[0]);
 }
 
