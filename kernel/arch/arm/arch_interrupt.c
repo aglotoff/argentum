@@ -8,7 +8,7 @@ arch_interrupt_ipi(void)
 }
 
 int
-arch_interrupt_id(void)
+arch_interrupt_id(struct TrapFrame *)
 {
   return mach_current->interrupt_id();
 }

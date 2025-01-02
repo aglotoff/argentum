@@ -7,6 +7,8 @@
 
 #define CR4_PSE         (1 << 4)    // Page Size Extensions
 
+#define EFLAGS_IF       (1 << 9)    // Interrupt enable
+
 #ifndef __ASSEMBLER__
 
 #include <stdint.h>
@@ -15,6 +17,15 @@ static inline void
 cr3_set(uint32_t value)
 {
   asm volatile("movl %0, %%cr3" : : "r" (value));
+}
+
+static inline uint32_t
+eflags_get(void)
+{
+  uint32_t eflags;
+
+  asm volatile("pushfl; popl %0" : "=r" (eflags));
+  return eflags;
 }
 
 #endif  // !__ASSEMBLER__

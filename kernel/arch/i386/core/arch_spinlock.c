@@ -6,21 +6,21 @@
 void
 k_arch_spinlock_acquire(volatile int *locked)
 {
-  // TODO
+  // FIXME: SMP
   *locked = 1;
 }
 
 void
 k_arch_spinlock_release(volatile int *locked)
 {
-  // TODO
+  // FIXME: SMP
   *locked = 0;
 }
 
 void
 k_arch_spinlock_save_callstack(struct KSpinLock *spin)
 {
-  // TODO
+  // FIXME: SMP
   (void) spin;
 }
 
@@ -39,6 +39,6 @@ k_arch_spinlock_save_callstack(struct KSpinLock *spin)
 void
 k_arch_spinlock_print_callstack(struct KSpinLock *spin)
 {
-  // TODO
+  // FIXME: SMP
   (void) spin;
 }

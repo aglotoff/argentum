@@ -17,9 +17,7 @@ ps2_init(struct PS2 *ps2, struct PS2Ops *ops, void *ops_arg, int irq)
   ps2->ops     = ops;
   ps2->ops_arg = ops_arg;
 
-  (void) irq;
-
- // interrupt_attach_thread(irq, ps2_kbd_irq_thread, ps2);
+  interrupt_attach_thread(irq, ps2_kbd_irq_thread, ps2);
 
   return 0;
 }

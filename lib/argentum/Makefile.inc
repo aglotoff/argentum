@@ -140,3 +140,8 @@ if HAVE_LIBC_MACHINE_ARM
   libc_a_SOURCES += \
     %D%/machine/arm/sigstub.S
 endif
+
+if HAVE_LIBC_MACHINE_I386
+  libc_a_SOURCES += \
+    %D%/machine/i386/sigstub.S
+endif

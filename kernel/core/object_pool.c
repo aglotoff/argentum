@@ -291,11 +291,11 @@ k_free(void *ptr)
  */
 static int
 k_object_pool_init(struct KObjectPool *pool,
-                 const char *name,
-                 size_t size,
-                 size_t align,
-                 void (*ctor)(void *, size_t),
-                 void (*dtor)(void *, size_t))
+                   const char *name,
+                   size_t size,
+                   size_t align,
+                   void (*ctor)(void *, size_t),
+                   void (*dtor)(void *, size_t))
 {
   size_t wastage, block_size;
   unsigned slab_page_order, slab_capacity;
@@ -303,7 +303,7 @@ k_object_pool_init(struct KObjectPool *pool,
 
   if (size < align)
     return -EINVAL;
-  if ((PAGE_SIZE % align) != 0)
+  if (align && (PAGE_SIZE % align) != 0)
     return -EINVAL;
 
   align = align ? ROUND_UP(align, sizeof(uintptr_t)) : sizeof(uintptr_t);

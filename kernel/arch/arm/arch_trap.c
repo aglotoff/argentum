@@ -58,7 +58,7 @@ trap(struct TrapFrame *tf)
     k_irq_disable();
     break;
   case T_IRQ:
-    interrupt_dispatch();
+    interrupt_dispatch(tf);
     break;
   case T_UNDEF:
     if ((tf->psr & PSR_M_MASK) == PSR_M_USR) {

@@ -1,6 +1,27 @@
 #ifndef __ARCH_I386_TRAP_H__
 #define __ARCH_I386_TRAP_H__
 
+#define T_DE      0     // Divide error
+#define T_DB      1     // Reserved
+#define T_NMI     2     // NMI Interrupt
+#define T_BP      3     // Breakpoint
+#define T_OF      4     // Overflow
+#define T_BR      5     // BOUND Range Exceeded
+#define T_UD      6     // Undefined Opcode
+#define T_NM      7     // No Math Coprocessor
+#define T_DF      8     // Double Fault
+#define T_CSS     9     // Coprocessor Segment Overrun
+#define T_TS      10    // Invalid TSS
+#define T_NP      11    // Segment Not Present
+#define T_SS      12    // Stack-Segment Fault
+#define T_GP      13    // General Protection Fault
+#define T_PF      14    // Page Fault
+#define T_MF      16    // Math Fault
+#define T_AC      17    // Alignment Check
+#define T_MC      18    // Machine Check
+#define T_XF      19    // SIMD Floating-Point Exception
+#define T_IRQ0    32    // User Defined
+
 #ifndef __ASSEMBLER__
 
 #include <stdint.h>
@@ -10,7 +31,7 @@ struct TrapFrame {
   uint32_t edi;
   uint32_t esi;
   uint32_t ebp;
-  uint32_t oesp;
+  uint32_t _esp;
   uint32_t ebx;
   uint32_t edx;
   uint32_t ecx;
@@ -24,9 +45,9 @@ struct TrapFrame {
   uint16_t padding3;
   uint16_t ds;
   uint16_t padding4;
-  uint32_t trapno;
 
-  uint32_t err;
+  uint32_t trapno;
+  uint32_t error;
   uint32_t eip;
   uint16_t cs;
   uint16_t padding5;

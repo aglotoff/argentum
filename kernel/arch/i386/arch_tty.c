@@ -14,7 +14,7 @@ struct I8042 i8042;
 void
 arch_tty_init_system(void)
 {
-  i8042_init(&i8042, 0);
+  i8042_init(&i8042, 1);
   vga_init(&vga, (void *) 0x800B8000, &screens[0]);
 }
 

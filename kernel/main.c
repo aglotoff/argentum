@@ -47,6 +47,14 @@ mp_main(void)
   k_sched_start();
 }
 
+void
+test_thread(void *arg)
+{
+  for (;;) {
+    cprintf("%s", arg);
+  }
+}
+
 /**
  * Main kernel function.
  *
@@ -67,19 +75,26 @@ main(void)
   arch_init_devices();
 
   // Initialize the remaining kernel services
-  buf_init();           // Buffer cache
-  file_init();          // File table
-  vm_space_init();      // Virtual memory manager
-  pipe_init();          // Pipes
-  process_init();       // Process table
-  net_init();           // Networking
+  //buf_init();           // Buffer cache
+  //file_init();          // File table
+  //vm_space_init();      // Virtual memory manager
+  //pipe_init();          // Pipes
+  //process_init();       // Process table
+  //net_init();           // Networking
 
   // ipc_init();
 
-  time_init();
+  //time_init();
 
   // Unblock other CPUs
   bsp_started = 1;
+
+  // struct KThread *t1, *t2;
+
+  // t1 = k_thread_create(NULL, test_thread, "AAAA", 1);
+  // t2 = k_thread_create(NULL, test_thread, "BBBB", 1);
+ // k_thread_resume(t1);
+ // k_thread_resume(t2);
 
   mp_main();
 }

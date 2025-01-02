@@ -1,16 +1,13 @@
 #include <string.h>
 
+#include <kernel/core/irq.h>
+#include <kernel/core/tick.h>
 
 #include <kernel/vm.h>
 #include <kernel/page.h>
 #include <kernel/interrupt.h>
 #include <kernel/console.h>
 #include <kernel/tty.h>
-
-void kernel_main(void) 
-{
-	for (;;);
-}
 
 void main(void);
 void mp_main(void);
@@ -22,22 +19,36 @@ arch_init(void)
 	arch_vm_init();
 	page_init_high();
 
-	tty_init();
+  arch_interrupt_init();
 
-  for (int i = 0; i < 3; i++)
-    cprintf("Hello World  %d\n", i);
+  main();
+}
 
-  panic("fff");
+int
+timer_irq(int, void *)
+{
+  //truct Process *my_process = process_current();
 
-  kernel_main();
+  // if (my_process != NULL) {
+  //   if ((my_process->thread->tf->psr & PSR_M_MASK) != PSR_M_USR) {
+  //     process_update_times(my_process, 0, 1);
+  //   } else {
+  //     process_update_times(my_process, 1, 0);
+  //   }
+  // }
+
+  k_tick();
+
+  //time_tick();
+
+  return 1;
 }
 
 void
 arch_init_devices(void)
 {
-  // TODO
+  interrupt_attach(0, timer_irq, NULL);
 }
-
 
 void
 arch_mp_init(void)

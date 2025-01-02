@@ -3,6 +3,7 @@
 #include <kernel/mm/memlayout.h>
 #include <kernel/vm.h>
 #include <kernel/page.h>
+#include <kernel/console.h>
 
 #include <arch/i386/mmu.h>
 #include <arch/i386/regs.h>
@@ -24,6 +25,19 @@ entry_pgdir[PGDIR_NR_ENTRIES] = {
 
 // Master kernel page directory
 static void *kernel_pgdir;
+
+static struct SegDesc gdt[] = {
+  [GD_NULL]        = SEG_NULL,
+  [GD_KERNEL_CODE] = SEG(0, 0xFFFFFFFF, SEG_TYPE_CODE | SEG_TYPE_R, PL_KERNEL),
+  [GD_KERNEL_DATA] = SEG(0, 0xFFFFFFFF, SEG_TYPE_DATA | SEG_TYPE_W, PL_KERNEL),
+  [GD_USER_CODE]   = SEG(0, 0xFFFFFFFF, SEG_TYPE_CODE | SEG_TYPE_R, PL_USER),
+  [GD_USER_DATA]   = SEG(0, 0xFFFFFFFF, SEG_TYPE_DATA | SEG_TYPE_W, PL_USER)
+};
+
+static struct PseudoDesc gdtr = {
+  .limit = sizeof gdt  - 1,
+  .base  = (uintptr_t) gdt,
+};
 
 void
 arch_vm_load(void *pgdir)
@@ -204,7 +218,18 @@ arch_vm_init(void)
 void
 arch_vm_init_percpu(void)
 {
-  // TODO
+  arch_vm_load_kernel();
+
+  lgdt(&gdtr);
+
+  asm volatile("movw %%ax,%%gs" :: "a" (0));
+	asm volatile("movw %%ax,%%fs" :: "a" (0));
+
+	asm volatile("movw %%ax,%%es" :: "a" (SEG_KERNEL_DATA));
+	asm volatile("movw %%ax,%%ds" :: "a" (SEG_KERNEL_DATA));
+	asm volatile("movw %%ax,%%ss" :: "a" (SEG_KERNEL_DATA));
+
+	asm volatile("ljmp %0,$1f\n 1:\n" :: "i" (SEG_KERNEL_CODE));
 }
 
 void *

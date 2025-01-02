@@ -64,9 +64,9 @@ interrupt_attach_thread(int irq, interrupt_handler_t handler, void *handler_arg)
 }
 
 void
-interrupt_dispatch(void)
+interrupt_dispatch(struct TrapFrame *tf)
 {
-  int irq = arch_interrupt_id();
+  int irq = arch_interrupt_id(tf);
   int should_unmask;
 
   k_irq_handler_begin();

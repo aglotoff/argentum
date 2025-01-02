@@ -117,10 +117,19 @@ __syscall_r(uint8_t num, uint32_t a1, uint32_t a2, uint32_t a3, uint32_t a4,
 {
   int32_t ret;
 
+  // FIXME: add support for 6 arguments
+  (void) a6;
+
   asm volatile("int %1\n"
 		: "=a" (ret)
-		: "i" (0x80)
-    : "cc", "memory");
+		: "i" (0x80),
+		  "a" (num),
+		  "d" (a1),
+		  "c" (a2),
+		  "b" (a3),
+		  "D" (a4),
+		  "S" (a5)
+		: "cc", "memory");
 
   return ret;
 }
