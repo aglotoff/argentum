@@ -75,16 +75,16 @@ main(void)
   arch_init_devices();
 
   // Initialize the remaining kernel services
-  //buf_init();           // Buffer cache
-  //file_init();          // File table
-  //vm_space_init();      // Virtual memory manager
-  //pipe_init();          // Pipes
-  //process_init();       // Process table
+  buf_init();           // Buffer cache
+  file_init();          // File table
+  vm_space_init();      // Virtual memory manager
+  pipe_init();          // Pipes
+  process_init();       // Process table
   //net_init();           // Networking
 
   // ipc_init();
 
-  //time_init();
+  time_init();
 
   // Unblock other CPUs
   bsp_started = 1;

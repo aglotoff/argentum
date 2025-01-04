@@ -21,6 +21,7 @@
 #define VM_PAGE       (1 << 6)
 
 struct Page;
+struct Process;
 
 void        *arch_vm_create(void);
 void         arch_vm_destroy(void *);
@@ -35,6 +36,7 @@ void         arch_vm_init(void);
 void         arch_vm_init_percpu(void);
 void         arch_vm_load_kernel(void);
 void         arch_vm_load(void *);
+void         arch_vm_switch(struct Process *);
 
 struct Page *vm_page_lookup(void *, uintptr_t, int *);
 int          vm_page_insert(void *, struct Page *, uintptr_t, int);

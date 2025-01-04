@@ -81,8 +81,10 @@ k_sched_switch(struct KThread *thread)
 {
   struct KCpu *my_cpu = _k_cpu();
 
-  if (thread->process != NULL)
+  if (thread->process != NULL) {
+    arch_vm_switch(thread->process);
     arch_vm_load(thread->process->vm->pgtab);
+  }
 
   thread->state = THREAD_STATE_RUNNING;
 

@@ -9,6 +9,8 @@
 #include <kernel/console.h>
 #include <kernel/tty.h>
 
+#include <arch/i386/ide.h>
+
 void main(void);
 void mp_main(void);
 
@@ -48,6 +50,7 @@ void
 arch_init_devices(void)
 {
   interrupt_attach(0, timer_irq, NULL);
+  ide_init();
 }
 
 void

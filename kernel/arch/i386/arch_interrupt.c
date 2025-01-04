@@ -85,6 +85,8 @@ extern void trap_irq13(void);
 extern void trap_irq14(void);
 extern void trap_irq15(void);
 
+extern void trap_syscall(void);
+
 void
 arch_interrupt_init(void)
 {
@@ -122,6 +124,8 @@ arch_interrupt_init(void)
   idt[T_IRQ0 + 13] = IDT_GATE(SEG_TYPE_IG32, trap_irq13, SEG_KERNEL_CODE, PL_KERNEL);
   idt[T_IRQ0 + 14] = IDT_GATE(SEG_TYPE_IG32, trap_irq14, SEG_KERNEL_CODE, PL_KERNEL);
   idt[T_IRQ0 + 15] = IDT_GATE(SEG_TYPE_IG32, trap_irq15, SEG_KERNEL_CODE, PL_KERNEL);
+
+  idt[T_SYSCALL] = IDT_GATE(SEG_TYPE_TG32, trap_syscall, SEG_KERNEL_CODE, PL_USER);
 
   i8259_init(T_IRQ0, IRQ_CASCADE);
 

@@ -23,6 +23,12 @@ _start(int argc, char **argv, char **envp)
   asm volatile("mov r11, #0");
 #endif
 
+#if defined(__i386__)
+  // Clear the frame pointer register (EBP) so that stack backtraces will be
+  // terminated properly.
+  asm volatile("movl $0,%ebp");
+#endif
+
   if ((argc > 0) && (argv[0] != NULL))
     __progname = argv[0];
 

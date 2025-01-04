@@ -1,9 +1,11 @@
 #include <sys/mman.h>
 
 #include <kernel/mm/memlayout.h>
+#include <kernel/core/irq.h>
 #include <kernel/vm.h>
 #include <kernel/page.h>
 #include <kernel/console.h>
+#include <kernel/process.h>
 
 #include <arch/i386/mmu.h>
 #include <arch/i386/regs.h>
@@ -27,17 +29,38 @@ entry_pgdir[PGDIR_NR_ENTRIES] = {
 static void *kernel_pgdir;
 
 static struct SegDesc gdt[] = {
-  [GD_NULL]        = SEG_NULL,
-  [GD_KERNEL_CODE] = SEG(0, 0xFFFFFFFF, SEG_TYPE_CODE | SEG_TYPE_R, PL_KERNEL),
-  [GD_KERNEL_DATA] = SEG(0, 0xFFFFFFFF, SEG_TYPE_DATA | SEG_TYPE_W, PL_KERNEL),
-  [GD_USER_CODE]   = SEG(0, 0xFFFFFFFF, SEG_TYPE_CODE | SEG_TYPE_R, PL_USER),
-  [GD_USER_DATA]   = SEG(0, 0xFFFFFFFF, SEG_TYPE_DATA | SEG_TYPE_W, PL_USER)
+  [GD_NULL]        = SEG_DESC_NULL,
+  [GD_KERNEL_CODE] = SEG_DESC_32(0, 0xFFFFFFFF, SEG_TYPE_CODE | SEG_TYPE_R, PL_KERNEL),
+  [GD_KERNEL_DATA] = SEG_DESC_32(0, 0xFFFFFFFF, SEG_TYPE_DATA | SEG_TYPE_W, PL_KERNEL),
+  [GD_USER_CODE]   = SEG_DESC_32(0, 0xFFFFFFFF, SEG_TYPE_CODE | SEG_TYPE_R, PL_USER),
+  [GD_USER_DATA]   = SEG_DESC_32(0, 0xFFFFFFFF, SEG_TYPE_DATA | SEG_TYPE_W, PL_USER),
+  [GD_TSS]         = SEG_DESC_NULL,
+  // FIXME: SMP
 };
 
 static struct PseudoDesc gdtr = {
   .limit = sizeof gdt  - 1,
   .base  = (uintptr_t) gdt,
 };
+
+// FIXME: per-CPU
+struct TaskState tss;
+
+void
+arch_vm_switch(struct Process *process)
+{
+  k_irq_state_save();
+
+  gdt[GD_TSS] = SEG_DESC_16(&tss, sizeof tss - 1, SEG_TYPE_TSS32A, PL_KERNEL);
+  tss.esp0 = (uintptr_t) process->thread->kstack + PAGE_SIZE;
+  tss.ss0 = SEG_KERNEL_DATA;
+
+  ltr(SEG_TSS);
+
+  //cprintf("switch to %d\n", process->pid);
+
+  k_irq_state_restore();
+}
 
 void
 arch_vm_load(void *pgdir)
@@ -122,6 +145,7 @@ arch_vm_lookup(void *pgtab, uintptr_t va, int alloc)
 
   pgdir = (pde_t *) pgtab;
   pde = &pgdir[PGDIR_IDX(va)];
+
   if (!(*pde & PDE_P)) {
     struct Page *page;
     physaddr_t pa;
@@ -134,7 +158,7 @@ arch_vm_lookup(void *pgtab, uintptr_t va, int alloc)
     pa = page2pa(page);
 
     *pde = pa | PTE_U | PTE_W | PTE_P;
-  } else if (*pte & PDE_PS) {
+  } else if (*pde & PDE_PS) {
     // trying to remap a fixed section
     panic("not a page table");
   }
@@ -235,13 +259,48 @@ arch_vm_init_percpu(void)
 void *
 arch_vm_create(void)
 {
-  // TODO
-  return NULL;
+  struct Page *page;
+  pde_t *pgdir;
+  int idx;
+
+  if ((page = page_alloc_one(PAGE_ALLOC_ZERO, PAGE_TAG_PGTAB)) == NULL)
+    return NULL;
+
+  pgdir = (pde_t *) page2kva(page);
+  page->ref_count++;
+  
+  for (idx = PGDIR_IDX(VIRT_KERNEL_BASE); idx < PGDIR_NR_ENTRIES; idx++)
+    pgdir[idx] = ((pde_t *) kernel_pgdir)[idx];
+
+  return pgdir;
 }
 
 void
 arch_vm_destroy(void *pgtab)
 {
-  // TODO
-  (void) pgtab;
+  struct Page *page;
+  unsigned long i, j;
+  pde_t *pgdir = (pde_t *) pgtab;
+
+  for (i = 0; i < PGDIR_IDX(VIRT_KERNEL_BASE); i++) {
+    pte_t *pte;
+
+    if (!pgdir[i])
+      continue;
+
+    page = pa2page(PDE_BASE(pgdir[i]));
+    pte   = (pte_t *) page2kva(page);
+
+    // Check that the caller has removed all mappings
+    for (j = 0; j < PGTAB_NR_ENTRIES; j++)
+      if (arch_vm_pte_valid(&pte[j]))
+        panic("pte still in use");
+
+    if (--page->ref_count == 0)
+      page_free_one(page);
+  }
+
+  page = kva2page(pgdir);
+  if (--page->ref_count == 0)
+    page_free_one(page);
 }

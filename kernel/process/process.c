@@ -182,7 +182,7 @@ process_load_binary(struct Process *proc, const void *binary)
   if (addr != (VIRT_USTACK_TOP - USTACK_SIZE))
     return (int) addr;
 
-  return arch_trap_frame_init(proc->thread->tf, elf->entry, 0, 0, 0, VIRT_USTACK_TOP);
+  return arch_trap_frame_init(proc, elf->entry, 0, 0, 0, VIRT_USTACK_TOP);
 }
 
 int

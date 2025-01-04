@@ -21,6 +21,7 @@
 #define T_MC      18    // Machine Check
 #define T_XF      19    // SIMD Floating-Point Exception
 #define T_IRQ0    32    // User Defined
+#define T_SYSCALL 0x80
 
 #define IRQ_PIT       0
 #define IRQ_KEYBOARD  1

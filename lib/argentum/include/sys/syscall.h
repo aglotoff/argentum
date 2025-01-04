@@ -112,7 +112,7 @@ __syscall_r(uint8_t num, uint32_t a1, uint32_t a2, uint32_t a3, uint32_t a4,
 #elif defined(__i386__)
 
 static inline int32_t
-__syscall_r(uint8_t num, uint32_t a1, uint32_t a2, uint32_t a3, uint32_t a4,
+__syscall_r(uint32_t num, uint32_t a1, uint32_t a2, uint32_t a3, uint32_t a4,
             uint32_t a5, uint32_t a6)
 {
   int32_t ret;

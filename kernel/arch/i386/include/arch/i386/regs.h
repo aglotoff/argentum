@@ -13,6 +13,15 @@
 
 #include <stdint.h>
 
+static inline uint32_t
+cr2_get(void)
+{
+  uint32_t value;
+
+  asm volatile("movl %%cr2, %0" : "=r" (value));
+  return value;
+}
+
 static inline void
 cr3_set(uint32_t value)
 {
@@ -26,6 +35,15 @@ eflags_get(void)
 
   asm volatile("pushfl; popl %0" : "=r" (eflags));
   return eflags;
+}
+
+static inline uint32_t
+ebp_get(void)
+{
+	uint32_t ebp;
+
+	asm volatile("movl %%ebp,%0" : "=r" (ebp));
+	return ebp;
 }
 
 #endif  // !__ASSEMBLER__

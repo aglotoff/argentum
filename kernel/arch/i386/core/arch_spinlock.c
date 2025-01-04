@@ -3,18 +3,30 @@
 #include <kernel/spinlock.h>
 #include <kernel/types.h>
 
+static inline int
+xchg(volatile int *p, int new_value)
+{
+	int old_value;
+
+	asm volatile("lock\n\t"
+               "xchgl %0, %1" :
+			         "+m" (*p), "=a" (old_value) :
+		           "1" (new_value) :
+			         "cc");
+	return old_value;
+}
+
 void
 k_arch_spinlock_acquire(volatile int *locked)
 {
-  // FIXME: SMP
-  *locked = 1;
+  while (xchg(locked, 1) != 0)
+    ;
 }
 
 void
 k_arch_spinlock_release(volatile int *locked)
 {
-  // FIXME: SMP
-  *locked = 0;
+  xchg(locked, 0);
 }
 
 void

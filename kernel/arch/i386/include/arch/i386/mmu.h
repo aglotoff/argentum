@@ -1,6 +1,8 @@
 #ifndef __ARCH_I386_MMU_H__
 #define __ARCH_I386_MMU_H__
 
+#define PGTAB_NR_ENTRIES  1024
+
 #define PGDIR_NR_ENTRIES  1024
 #define PGDIR_SIZE        (PGDIR_NR_ENTRIES * 4)
 
@@ -33,6 +35,7 @@
 
 #define LARGE_PAGE_SIZE   (PAGE_SIZE * PGDIR_NR_ENTRIES)
 
+#define PL_MASK         3
 #define PL_KERNEL       0
 #define PL_USER         3
 
@@ -41,11 +44,13 @@
 #define GD_KERNEL_DATA  2
 #define GD_USER_CODE    3
 #define GD_USER_DATA    4
+#define GD_TSS          5
 
 #define SEG_KERNEL_CODE ((GD_KERNEL_CODE << 3) | PL_KERNEL)
 #define SEG_KERNEL_DATA ((GD_KERNEL_DATA << 3) | PL_KERNEL)
 #define SEG_USER_CODE   ((GD_USER_CODE << 3) | PL_USER)
 #define SEG_USER_DATA   ((GD_USER_DATA << 3) | PL_USER)
+#define SEG_TSS         ((GD_TSS << 3) | PL_KERNEL)
 
 #ifndef __ASSEMBLER__
 
@@ -81,24 +86,40 @@ struct PseudoDesc {
   uint32_t base;
 } __attribute__((__packed__));
 
-#define SEG_NULL  ((struct SegDesc) { \
+#define SEG_DESC_NULL  ((struct SegDesc) { \
   .limit_15_00 = 0,                   \
 })
 
-#define SEG(base, limit, t, d) ((struct SegDesc) {      \
-  .limit_15_00 = (((size_t) (limit)) >> 12) & 0xFFFF,   \
-  .base_15_00  = ((uintptr_t) (base)) & 0xFFFF,         \
-  .base_23_16  = (((uintptr_t) (base)) >> 16) & 0xFF,   \
-  .type        = (t) & 0xF,                             \
-  .s           = 1,                                     \
-  .dpl         = (d) & 0x3,                             \
-  .p           = 1,                                     \
-  .limit_19_16 = (((size_t) (limit)) >> 28) & 0xF,      \
-  .avl         = 0,                                     \
-  .zero        = 0,                                     \
-  .db          = 1,                                     \
-  .g           = 1,                                     \
-  .base_31_24  = (((uintptr_t) (base)) >> 24) & 0xFF    \
+#define SEG_DESC_32(base, limit, t, d) ((struct SegDesc) {  \
+  .limit_15_00 = (((size_t) (limit)) >> 12) & 0xFFFF,       \
+  .base_15_00  = ((uintptr_t) (base)) & 0xFFFF,             \
+  .base_23_16  = (((uintptr_t) (base)) >> 16) & 0xFF,       \
+  .type        = (t) & 0xF,                                 \
+  .s           = 1,                                         \
+  .dpl         = (d) & 0x3,                                 \
+  .p           = 1,                                         \
+  .limit_19_16 = (((size_t) (limit)) >> 28) & 0xF,          \
+  .avl         = 0,                                         \
+  .zero        = 0,                                         \
+  .db          = 1,                                         \
+  .g           = 1,                                         \
+  .base_31_24  = (((uintptr_t) (base)) >> 24) & 0xFF        \
+})
+
+#define SEG_DESC_16(base, limit, t, d) ((struct SegDesc) {  \
+  .limit_15_00 = ((size_t) (limit)) & 0xFFFF,       \
+  .base_15_00  = ((uintptr_t) (base)) & 0xFFFF,             \
+  .base_23_16  = (((uintptr_t) (base)) >> 16) & 0xFF,       \
+  .type        = (t) & 0xF,                                 \
+  .s           = 0,                                         \
+  .dpl         = (d) & 0x3,                                 \
+  .p           = 1,                                         \
+  .limit_19_16 = (((size_t) (limit)) >> 16) & 0xF,          \
+  .avl         = 0,                                         \
+  .zero        = 0,                                         \
+  .db          = 1,                                         \
+  .g           = 0,                                         \
+  .base_31_24  = (((uintptr_t) (base)) >> 24) & 0xFF        \
 })
 
 #define SEG_TYPE_DATA   (0 << 3)    // Data
@@ -155,6 +176,52 @@ struct IDTGate {
   .p            = 1,                                    \
   .offset_31_16 = (((uintptr_t) (off)) >> 16) & 0xFFFF  \
 })
+
+struct TaskState {
+	uint32_t link;	// Old ts selector
+	uintptr_t esp0;	// Stack pointers and segment selectors
+	uint16_t ss0;	//   after an increase in privilege level
+	uint16_t padding1;
+	uintptr_t esp1;
+	uint16_t ss1;
+	uint16_t padding2;
+	uintptr_t esp2;
+	uint16_t ss2;
+	uint16_t padding3;
+	uint32_t cr3;	// Page directory base
+	uintptr_t eip;	// Saved state from last task switch
+	uint32_t eflags;
+	uint32_t eax;	// More saved state (registers)
+	uint32_t ecx;
+	uint32_t edx;
+	uint32_t ebx;
+	uintptr_t esp;
+	uintptr_t ebp;
+	uint32_t esi;
+	uint32_t edi;
+	uint16_t es;		// Even more saved state (segment selectors)
+	uint16_t padding4;
+	uint16_t cs;
+	uint16_t padding5;
+	uint16_t ss;
+	uint16_t padding6;
+	uint16_t ds;
+	uint16_t padding7;
+	uint16_t fs;
+	uint16_t padding8;
+	uint16_t gs;
+	uint16_t padding9;
+	uint16_t ldt;
+	uint16_t padding10;
+	uint16_t t;		// Trap on task switch
+	uint16_t iomb;	// I/O map base address
+};
+
+static inline void
+ltr(uint16_t sel)
+{
+	asm volatile("ltr %0" : : "r" (sel));
+}
 
 #endif  // !__ASSEMBLER__
 

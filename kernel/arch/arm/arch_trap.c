@@ -202,15 +202,15 @@ timer_irq(int, void *)
 }
 
 int 
-arch_trap_frame_init(struct TrapFrame *tf, uintptr_t entry, uintptr_t arg1,
+arch_trap_frame_init(struct Process *process, uintptr_t entry, uintptr_t arg1,
                      uintptr_t arg2, uintptr_t arg3, uintptr_t sp)
 {
-  tf->r0  = arg1;              // argc
-  tf->r1  = arg2;              // argv
-  tf->r2  = arg3;              // environ
-  tf->sp  = sp;                // stack pointer
-  tf->psr = PSR_M_USR | PSR_F; // user mode, interrupts enabled
-  tf->pc  = entry;             // process entry point
+  process->thread->tf->r0  = arg1;              // argc
+  process->thread->tf->r1  = arg2;              // argv
+  process->thread->tf->r2  = arg3;              // environ
+  process->thread->tf->sp  = sp;                // stack pointer
+  process->thread->tf->psr = PSR_M_USR | PSR_F; // user mode, interrupts enabled
+  process->thread->tf->pc  = entry;             // process entry point
   return arg1;
 }
 

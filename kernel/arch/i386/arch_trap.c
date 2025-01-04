@@ -14,16 +14,77 @@
 #include <kernel/time.h>
 #include <kernel/signal.h>
 
+#include <arch/i386/mmu.h>
+#include <arch/i386/regs.h>
+
+
+// Handle data or prefetch abort
+static void
+trap_handle_pgfault(struct TrapFrame *tf)
+{
+  uint32_t address;
+  struct Process *process;
+
+  address = cr2_get();
+
+  // If abort happened in kernel mode, print the trap frame and panic
+  if ((tf->cs & PL_MASK) != PL_USER) {
+    print_trapframe(tf);
+    panic("kernel fault va %p", address);
+  }
+
+  process = process_current();
+  assert(process != NULL);
+
+  // Try to handle VM fault first (it may be caused by copy-on-write pages)
+  if (vm_handle_fault(process->vm->pgtab, address) == 0)
+    return;
+
+  // If unsuccessfull, kill the process
+  print_trapframe(tf);
+  panic("[%d %s]: user fault va %p\n", process->pid, process->name, address);
+
+  // TODO: SEGV_MAPERR or SEGV_ACCERR
+  if (signal_generate(process->pid, SIGSEGV, 0) != 0)
+    panic("sending SIGSEGV failed");
+}
+
 void
 trap(struct TrapFrame *tf)
 {
+  // struct KThread *my_thread = k_thread_current();
+  // struct Process *my_process = my_thread ? my_thread->process : NULL;
+
+  //cprintf("traps %d\n", my_process ? my_process->pid : -1);
+
   if ((tf->trapno >= T_IRQ0) && (tf->trapno < (T_IRQ0 + 16))) {
     interrupt_dispatch(tf);
     return;
   }
 
-  print_trapframe(tf);
-  panic("unhandled trap");
+  switch (tf->trapno) {
+  case T_PF:
+    trap_handle_pgfault(tf);
+    break;
+  case T_SYSCALL:
+    //print_trapframe(tf);
+    tf->eax = sys_dispatch();
+    break;
+  default:
+    print_trapframe(tf);
+    panic("unhandled trap in kernel");
+  }
+
+  // if ((tf->cs & PL_MASK) == PL_USER) {
+  //   signal_deliver_pending();
+
+  //   while (my_process->state != PROCESS_STATE_ACTIVE) {
+  //     k_thread_suspend();
+  //     signal_deliver_pending();
+  //   }
+  // }
+
+  //cprintf("returns to %d\n", my_process ? my_process->pid : -1);
 }
 
 // Returns a human-readable name for the given trap number
@@ -73,7 +134,8 @@ print_trapframe(struct TrapFrame *tf)
   cprintf("  _esp   0x%08x    ebp    0x%08x\n", tf->_esp, tf->ebp);
   cprintf("  esi    0x%08x    edi    0x%08x\n", tf->esi, tf->edi);
   
-  // TODO: ss, esp
+  if ((tf->cs & PL_MASK) == PL_USER)
+    cprintf("  ss     0x%08x    esp    0x%08x\n", tf->ss, tf->esp);
 }
 
 int
@@ -84,22 +146,42 @@ ipi_irq(int, void *)
 }
 
 int 
-arch_trap_frame_init(struct TrapFrame *tf, uintptr_t entry, uintptr_t arg1,
+arch_trap_frame_init(struct Process *process, uintptr_t entry, uintptr_t arg1,
                      uintptr_t arg2, uintptr_t arg3, uintptr_t sp)
 {
-  // TODO
-  (void) tf;
-  (void) entry;
-  (void) arg1;
-  (void) arg2;
-  (void) arg3;
-  (void) sp;
-  return -1;
+  sp -= 4;
+  vm_copy_out(process->vm->pgtab, &arg1, sp, sizeof arg1);
+  sp -= 4;
+  vm_copy_out(process->vm->pgtab, &arg2, sp, sizeof arg2);
+  sp -= 4;
+  vm_copy_out(process->vm->pgtab, &arg3, sp, sizeof arg3);
+  sp -= 4;
+
+  process->thread->tf->cs = SEG_USER_CODE;
+  process->thread->tf->eip = entry;
+  process->thread->tf->es = SEG_USER_DATA;
+  process->thread->tf->ds = SEG_USER_DATA;
+  process->thread->tf->ss = SEG_USER_DATA;
+  process->thread->tf->esp = sp;
+  process->thread->tf->gs = 0;
+  process->thread->tf->fs = 0;
+  process->thread->tf->eflags = EFLAGS_IF;
+
+  return 0;
 }
 
 void
 arch_trap_frame_pop(struct TrapFrame *tf)
 {
-  // TODO:
-  (void) tf;
+  asm volatile("movl %0,%%esp\n"
+		"\tpopal\n"
+    "\tpopl %%gs\n"
+		"\tpopl %%fs\n"
+		"\tpopl %%es\n"
+		"\tpopl %%ds\n"
+		"\taddl $0x8,%%esp\n"
+		"\tiret"
+		: : "g" (tf) : "memory");
+	
+  panic("failed");  /* mostly to placate the compiler */
 }
