@@ -25,11 +25,11 @@ trap_common:
 	pushl		%fs
 	pushl		%gs
 
+	pusha
+
 	movw    $SEG_KERNEL_DATA, %ax
 	movw    %ax, %ds
 	movw    %ax, %es
-
-	pusha
 
 	pushl %esp
   call 	trap
