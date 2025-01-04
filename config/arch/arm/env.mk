@@ -1,1 +1,1 @@
-HOST := arm-none-argentum
+export HOST := arm-none-argentum

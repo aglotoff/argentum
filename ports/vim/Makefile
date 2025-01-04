@@ -11,7 +11,7 @@ all: config
 config: $(SRC_DIR)/Makefile
 
 install: all
-	make -C $(SRC_DIR) STRIP=arm-none-argentum-strip DESTDIR=$(SYSROOT) install
+	make -C $(SRC_DIR) STRIP=$(HOST)-strip DESTDIR=$(SYSROOT) install
 
 $(TARBALL_FILE):
 	wget "https://github.com/vim/vim/archive/v9.1.0405/${TARBALL_NAME}" -O $@
@@ -30,7 +30,7 @@ $(SRC_DIR)/Makefile: | $(SRC_DIR)
 							vim_cv_toupper_broken="set" \
 							vim_cv_terminfo="set" \
 							vim_cv_tgetent=zero \
-							./configure --host=arm-none-argentum \
+							./configure --host=$(HOST) \
 							            --with-tlib=ncurses \
 													--with-features=normal \
 													--disable-gui \

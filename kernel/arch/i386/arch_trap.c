@@ -52,15 +52,15 @@ trap_handle_pgfault(struct TrapFrame *tf)
 void
 trap(struct TrapFrame *tf)
 {
-  // struct KThread *my_thread = k_thread_current();
-  // struct Process *my_process = my_thread ? my_thread->process : NULL;
-
-  //cprintf("traps %d\n", my_process ? my_process->pid : -1);
+  //struct KThread *my_thread = k_thread_current();
+  //struct Process *my_process = my_thread ? my_thread->process : NULL;
 
   if ((tf->trapno >= T_IRQ0) && (tf->trapno < (T_IRQ0 + 16))) {
     interrupt_dispatch(tf);
     return;
   }
+
+  //cprintf("traps %d\n", my_process ? my_process->pid : -1);
 
   switch (tf->trapno) {
   case T_PF:
@@ -150,11 +150,11 @@ arch_trap_frame_init(struct Process *process, uintptr_t entry, uintptr_t arg1,
                      uintptr_t arg2, uintptr_t arg3, uintptr_t sp)
 {
   sp -= 4;
-  vm_copy_out(process->vm->pgtab, &arg1, sp, sizeof arg1);
+  vm_copy_out(process->vm->pgtab, &arg3, sp, sizeof arg3);
   sp -= 4;
   vm_copy_out(process->vm->pgtab, &arg2, sp, sizeof arg2);
   sp -= 4;
-  vm_copy_out(process->vm->pgtab, &arg3, sp, sizeof arg3);
+  vm_copy_out(process->vm->pgtab, &arg1, sp, sizeof arg1);
   sp -= 4;
 
   process->thread->tf->cs = SEG_USER_CODE;

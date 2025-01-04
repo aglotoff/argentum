@@ -24,7 +24,7 @@ $(SRC_DIR): $(TARBALL_FILE)
 	cd $@ && patch -p1 -i ../$(PATCH_FILE)
 
 $(SRC_DIR)/Makefile: | $(SRC_DIR)
-	cd $(@D) && ./configure --host=arm-none-argentum \
+	cd $(@D) && ./configure --host=$(HOST) \
 	                        --build=$(shell $(SRC_DIR)/support/config.guess) \
 	                        --prefix=/usr \
 													--without-bash-malloc \
