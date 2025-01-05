@@ -1,6 +1,6 @@
 diff -ruN old/config.sub new/config.sub
 --- old/config.sub	2023-07-27 11:13:03.000000000 +0300
-+++ new/config.sub	2024-02-07 22:06:40.629308259 +0300
++++ new/config.sub	2025-01-05 12:11:40.371514477 +0300
 @@ -1749,7 +1749,7 @@
  	     | onefs* | tirtos* | phoenix* | fuchsia* | redox* | bme* \
  	     | midnightbsd* | amdhsa* | unleashed* | emscripten* | wasi* \
@@ -12,7 +12,7 @@ diff -ruN old/config.sub new/config.sub
  	sco3.2v2 | sco3.2v[4-9]* | sco5v6*)
 diff -ruN old/fixincludes/mkfixinc.sh new/fixincludes/mkfixinc.sh
 --- old/fixincludes/mkfixinc.sh	2023-07-27 11:13:03.000000000 +0300
-+++ new/fixincludes/mkfixinc.sh	2024-02-07 22:06:40.629308259 +0300
++++ new/fixincludes/mkfixinc.sh	2025-01-05 12:11:40.371514477 +0300
 @@ -11,6 +11,8 @@
  
  # Check for special fix rules for particular targets
@@ -24,7 +24,7 @@ diff -ruN old/fixincludes/mkfixinc.sh new/fixincludes/mkfixinc.sh
      x86_64-*-mingw32* | \
 diff -ruN old/gcc/config/argentum.h new/gcc/config/argentum.h
 --- old/gcc/config/argentum.h	1970-01-01 03:00:00.000000000 +0300
-+++ new/gcc/config/argentum.h	2024-02-07 22:11:58.479195327 +0300
++++ new/gcc/config/argentum.h	2025-01-05 12:11:40.371514477 +0300
 @@ -0,0 +1,10 @@
 +#ifndef CONFIG_ARGENTUM_H
 +#define CONFIG_ARGENTUM_H
@@ -38,7 +38,7 @@ diff -ruN old/gcc/config/argentum.h new/gcc/config/argentum.h
 +#endif /* CONFIG_ARGENTUM_H */
 diff -ruN old/gcc/config.gcc new/gcc/config.gcc
 --- old/gcc/config.gcc	2023-07-27 11:13:04.000000000 +0300
-+++ new/gcc/config.gcc	2024-02-07 22:13:05.779165752 +0300
++++ new/gcc/config.gcc	2025-01-05 12:11:40.371514477 +0300
 @@ -962,6 +962,11 @@
    d_target_objs="${d_target_objs} openbsd-d.o"
    target_has_targetdm=yes
@@ -65,9 +65,22 @@ diff -ruN old/gcc/config.gcc new/gcc/config.gcc
  arm*-*-phoenix*)
  	tm_file="elfos.h arm/unknown-elf.h arm/elf.h arm/bpabi.h"
  	tm_file="${tm_file} newlib-stdint.h phoenix.h"
+@@ -1891,6 +1903,12 @@
+ x86_64-*-freebsd*)
+ 	tm_file="${tm_file} i386/unix.h i386/att.h elfos.h ${fbsd_tm_file} i386/x86-64.h i386/freebsd.h i386/freebsd64.h"
+ 	;;
++i[34567]86-*-argentum*)
++  tm_file="${tm_file} i386/unix.h i386/att.h elfos.h newlib-stdint.h i386/i386elf.h argentum.h"
++  ;;
++x86_64-*-argentum*)
++  tm_file="${tm_file} i386/unix.h i386/att.h elfos.h newlib-stdint.h i386/i386elf.h i386/x86-64.h argentum.h"
++  ;;
+ i[34567]86-*-netbsdelf*)
+ 	tm_file="${tm_file} i386/unix.h i386/att.h elfos.h ${nbsd_tm_file} i386/netbsd-elf.h"
+ 	extra_options="${extra_options} netbsd.opt netbsd-elf.opt"
 diff -ruN old/gcc/config.host new/gcc/config.host
 --- old/gcc/config.host	2023-07-27 11:13:04.000000000 +0300
-+++ new/gcc/config.host	2024-02-07 22:06:40.629308259 +0300
++++ new/gcc/config.host	2025-01-05 12:11:40.371514477 +0300
 @@ -108,7 +108,8 @@
  	;;
      esac
@@ -78,9 +91,21 @@ diff -ruN old/gcc/config.host new/gcc/config.host
      case ${target} in
        arm*-*-*)
  	host_extra_gcc_objs="driver-arm.o"
+diff -ruN old/libcpp/lex.cc new/libcpp/lex.cc
+--- old/libcpp/lex.cc	2023-07-27 11:13:07.000000000 +0300
++++ new/libcpp/lex.cc	2025-01-05 12:12:55.361506755 +0300
+@@ -273,7 +273,7 @@
+    extensions used, so SSE4.2 executables cannot run on machines that
+    don't support that extension.  */
+ 
+-#if (GCC_VERSION >= 4005) && (__GNUC__ >= 5 || !defined(__PIC__)) && (defined(__i386__) || defined(__x86_64__)) && !(defined(__sun__) && defined(__svr4__))
++#if (GCC_VERSION >= 4005) && (__GNUC__ >= 5 || !defined(__PIC__)) && (defined(__i386__) || defined(__x86_64__)) && !(defined(__sun__) && defined(__svr4__)) && !defined(__ARGENTUM__)
+ 
+ /* Replicated character data to be shared between implementations.
+    Recall that outside of a context with vector support we can't
 diff -ruN old/libgcc/config.host new/libgcc/config.host
 --- old/libgcc/config.host	2023-07-27 11:13:07.000000000 +0300
-+++ new/libgcc/config.host	2024-02-07 22:06:40.629308259 +0300
++++ new/libgcc/config.host	2025-01-05 12:11:40.371514477 +0300
 @@ -520,6 +520,13 @@
  	unwind_header=config/arm/unwind-arm.h
  	extra_parts="$extra_parts crti.o crtn.o"
@@ -95,3 +120,18 @@ diff -ruN old/libgcc/config.host new/libgcc/config.host
  arm*-*-phoenix*)
  	tmake_file="t-hardfp t-softfp arm/t-arm arm/t-elf arm/t-softfp arm/t-phoenix"
  	tmake_file="${tmake_file} arm/t-bpabi"
+@@ -723,6 +730,14 @@
+ 	tmake_file="${tmake_file} i386/t-dragonfly i386/t-crtstuff"
+ 	md_unwind_header=i386/dragonfly-unwind.h
+ 	;;
++i[34567]86-*-argentum*)
++	extra_parts="$extra_parts crti.o crtbegin.o crtend.o crtn.o"
++	tmake_file="$tmake_file i386/t-crtstuff t-crtstuff-pic t-libgcc-pic"
++	;;
++x86_64-*-argentum*)
++	extra_parts="$extra_parts crti.o crtbegin.o crtend.o crtn.o"
++	tmake_file="$tmake_file i386/t-crtstuff t-crtstuff-pic t-libgcc-pic"
++	;;
+ i[34567]86-*-freebsd*)
+ 	tmake_file="${tmake_file} i386/t-freebsd i386/t-crtstuff"
+ 	md_unwind_header=i386/freebsd-unwind.h

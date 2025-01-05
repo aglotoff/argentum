@@ -27,7 +27,7 @@ $(BUILD_DIR)/Makefile: $(SRC_DIR)
 	mkdir -p $(@D)
 	cd $(@D) && ../$(SRC_DIR)/configure --prefix=/usr \
 	                                    --build=$(shell $(SRC_DIR)/config.guess) \
-																			--host=arm-none-argentum \
+																			--host=$(HOST) \
 																		  --disable-nls \
                                       --disable-werror \
 																		  --disable-shared \

@@ -110,7 +110,7 @@ ide_start_transfer(struct Buf *buf)
   assert(buf->block_size % IDE_BLOCK_LEN == 0);
 
   nsectors = buf->block_size / IDE_BLOCK_LEN;
-  if (nsectors > 7) panic("too many blocks");
+  //if (nsectors > 7) panic("too many blocks");
 
   int sector = buf->block_no * nsectors;
   int read_cmd = (nsectors == 1) ? IDE_CMD_READ : IDE_CMD_RDMUL;

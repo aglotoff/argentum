@@ -31,16 +31,19 @@ $(SRC_DIR): $(TARBALL_FILE)
 	cd $@/mpc && patch -p1 -i ../../$(MPC_PATCH_FILE)
 	cd $@/isl && patch -p1 -i ../../$(ISL_PATCH_FILE)
 
+EXTRA_OPTIONS :=
+
+ifeq $(HOST) "arm-none-argentum"
+EXTRA_OPTIONS := --with-cpu=cortex-a9 --with-float=hard --with-fpu=vfp
+endif
+
 $(BUILD_DIR)/Makefile: $(SRC_DIR)
 	mkdir -p $(@D)
 	cd $(@D) && ../$(SRC_DIR)/configure --prefix=/usr \
 	                                    --build=$(shell $(SRC_DIR)/config.guess) \
-																			--host=arm-none-argentum \
-																			--target=arm-none-argentum \
+																			--host=$(HOST) \
+																			--target=$(HOST) \
 																		  --with-build-sysroot=$(SYSROOT) \
-																			--with-cpu=cortex-a9 \
-																			--with-float=hard \
-																			--with-fpu=vfp \
 																			--with-newlib \
 																			--enable-languages=c,c++ \
 																			--disable-nls \
@@ -55,7 +58,8 @@ $(BUILD_DIR)/Makefile: $(SRC_DIR)
 																			--disable-libstdcxx-pch \
 																			--disable-shared \
 																			--disable-threads \
-																			--disable-tls
+																			--disable-tls \
+																			$(EXTRA_OPTIONS)
 
 clean:
 	rm -rf $(SRC_DIR) $(BUILD_DIR)

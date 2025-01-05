@@ -1,5 +1,5 @@
 # QEMU executable
-QEMU := qemu-system-i386
+QEMU := qemu-system-x86_64
 
 QEMUOPTS := -m 256
 QEMUOPTS += -kernel $(KERNEL)
