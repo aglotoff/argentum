@@ -106,10 +106,10 @@ ext2_inode_alloc(struct Ext2SuperblockData *sb, mode_t mode, dev_t rdev, dev_t d
 
     table = gd->inode_table;
 
+    inum += 1 + (g + gi) * sb->inodes_per_group;
+
     buf->flags |= BUF_DIRTY;
     buf_release(buf);
-
-    inum += 1 + (g + gi) * sb->inodes_per_group;
 
     ext2_inode_init(sb, dev, table, inum, mode, rdev);
 
@@ -121,11 +121,12 @@ ext2_inode_alloc(struct Ext2SuperblockData *sb, mode_t mode, dev_t rdev, dev_t d
 
   // Scan all group descriptors for a free inode
   for (g = 0; g < sb->inodes_count / sb->inodes_per_group; g += gds_per_block) {
-    if ((buf = buf_read(2 + (g / gds_per_block), sb->block_size, dev)) == NULL)
+    if ((buf = buf_read(gd_start + (g / gds_per_block), sb->block_size, dev)) == NULL)
       panic("cannot read the group descriptor table");
 
     for (gi = 0; gi < gds_per_block; gi++) {
       gd = (struct Ext2BlockGroup *) buf->data + gi;
+
       if (ext2_inode_group_alloc(sb, gd, dev, &inum) == 0) {
         uint32_t table;
 
@@ -166,7 +167,7 @@ ext2_inode_free(struct Ext2SuperblockData *sb, dev_t dev, uint32_t ino)
   uint32_t gd_start = sb->block_size > 1024U ? 1 : 2;
 
   gds_per_block = sb->block_size / sizeof(struct Ext2BlockGroup);
-  gd_idx = ino / sb->inodes_per_group;
+  gd_idx = (ino - 1) / sb->inodes_per_group;
   g  = gd_idx / gds_per_block;
   gi = gd_idx % gds_per_block;
 

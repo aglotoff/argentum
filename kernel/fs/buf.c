@@ -198,6 +198,9 @@ buf_read(unsigned block_no, size_t block_size, dev_t dev)
 {
   struct Buf *buf;
 
+  if (block_no == (unsigned) -1)
+    panic("bad block_no");
+
   if ((buf = buf_get(block_no, block_size, dev)) == NULL)
     return NULL;
 

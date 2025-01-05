@@ -3,6 +3,7 @@
 
 #include <kernel/fs/buf.h>
 #include <kernel/types.h>
+#include <kernel/console.h>
 
 #include "ext2.h"
 
@@ -103,7 +104,7 @@ ext2_bitmap_free(struct Ext2SuperblockData *sb, uint32_t bstart, dev_t dev, uint
   bmap = (uint32_t *) buf->data;
 
   if (!bit_test(bmap, bi))
-    panic("bit not allocated");
+    panic("bit %d %d %d not allocated", bstart, buf->block_no, bit_no);
 
   bit_clear(bmap, bi);
   buf->flags |= BUF_DIRTY;
