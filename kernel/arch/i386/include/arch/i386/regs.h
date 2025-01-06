@@ -1,13 +1,18 @@
 #ifndef __ARCH_I386_REGS_H__
 #define __ARCH_I386_REGS_H__
 
-#define CR0_PE          (1 << 0)    // Protection Enable
-#define CR0_WP          (1 << 16)   // Write Protect
-#define CR0_PG          (1 << 31)   // Paging
+#define CR0_PE            (1 << 0)    // Protection Enable
+#define CR0_WP            (1 << 16)   // Write Protect
+#define CR0_PG            (1 << 31)   // Paging
 
-#define CR4_PSE         (1 << 4)    // Page Size Extensions
+#define CR4_PSE           (1 << 4)    // Page Size Extensions
 
-#define EFLAGS_IF       (1 << 9)    // Interrupt enable
+#define EFLAGS_IF         (1 << 9)    // Interrupt enable
+#define EFLAGS_IOPL_MASK  (3 << 12)   // I/O privilege level field
+#define EFLAGS_IOPL_0     (0 << 12)
+#define EFLAGS_IOPL_1     (1 << 12)
+#define EFLAGS_IOPL_2     (2 << 12)
+#define EFLAGS_IOPL_3     (3 << 12)
 
 #ifndef __ASSEMBLER__
 

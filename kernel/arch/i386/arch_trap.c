@@ -52,39 +52,33 @@ trap_handle_pgfault(struct TrapFrame *tf)
 void
 trap(struct TrapFrame *tf)
 {
-  //struct KThread *my_thread = k_thread_current();
-  //struct Process *my_process = my_thread ? my_thread->process : NULL;
+  struct KThread *my_thread = k_thread_current();
+  struct Process *my_process = my_thread ? my_thread->process : NULL;
 
   if ((tf->trapno >= T_IRQ0) && (tf->trapno < (T_IRQ0 + 16))) {
     interrupt_dispatch(tf);
-    return;
+  } else {
+    switch (tf->trapno) {
+    case T_PF:
+      trap_handle_pgfault(tf);
+      break;
+    case T_SYSCALL:
+      tf->eax = sys_dispatch();
+      break;
+    default:
+      print_trapframe(tf);
+      panic("unhandled trap in kernel");
+    }
   }
 
-  //cprintf("traps %d\n", my_process ? my_process->pid : -1);
+  if ((tf->cs & PL_MASK) == PL_USER) {
+    signal_deliver_pending();
 
-  switch (tf->trapno) {
-  case T_PF:
-    trap_handle_pgfault(tf);
-    break;
-  case T_SYSCALL:
-    //print_trapframe(tf);
-    tf->eax = sys_dispatch();
-    break;
-  default:
-    print_trapframe(tf);
-    panic("unhandled trap in kernel");
+    while (my_process->state != PROCESS_STATE_ACTIVE) {
+      k_thread_suspend();
+      signal_deliver_pending();
+    }
   }
-
-  // if ((tf->cs & PL_MASK) == PL_USER) {
-  //   signal_deliver_pending();
-
-  //   while (my_process->state != PROCESS_STATE_ACTIVE) {
-  //     k_thread_suspend();
-  //     signal_deliver_pending();
-  //   }
-  // }
-
-  //cprintf("returns to %d\n", my_process ? my_process->pid : -1);
 }
 
 // Returns a human-readable name for the given trap number

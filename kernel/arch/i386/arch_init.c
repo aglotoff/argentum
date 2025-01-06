@@ -29,7 +29,7 @@ arch_init(void)
 int
 timer_irq(int, void *)
 {
-  //truct Process *my_process = process_current();
+  // struct Process *my_process = process_current();
 
   // if (my_process != NULL) {
   //   if ((my_process->thread->tf->psr & PSR_M_MASK) != PSR_M_USR) {

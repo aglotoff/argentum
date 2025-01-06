@@ -291,21 +291,19 @@ _signal_state_change_to_parent(struct Process *process)
 }
 
 int
-signal_return(uintptr_t va)
+signal_return(void)
 {
   struct Process *current = process_current();
   struct SignalFrame frame;
-  int r;
-
-  if ((r = vm_copy_in(current->vm->pgtab, &frame, va, sizeof frame)) != 0)
-    return r;
+  int r, ret;
 
   process_lock();
 
+  if ((r = arch_signal_return(current, &frame, &ret)) != 0)
+    return r;
+
   current->signal_mask = frame.ucontext.uc_sigmask;
   sigdelset(&current->signal_mask, SIGKILL);
-
-  r = arch_signal_return(current, &frame);
 
   process_unlock();
 

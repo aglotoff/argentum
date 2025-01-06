@@ -3,7 +3,6 @@
     {
       "name": "argentum",
       "defines": [
-        "__ARGENTUM__",
         "__ARGENTUM_KERNEL__"
       ],
       "includePath": [
@@ -14,7 +13,7 @@
         "./kernel/net/lwip/include"
       ],
       "intelliSenseMode": "linux-gcc-x64",
-      "compilerPath": "/usr/local/bin/arm-none-argentum-gcc",
+      "compilerPath": "/usr/local/bin/i386-pc-argentum-gcc",
       "cStandard": "gnu11",
       "cppStandard": "c++11"
     }

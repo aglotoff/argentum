@@ -98,8 +98,12 @@ sys_dispatch(void)
 {
   int num;
 
-  if ((num = sys_arch_get_num()) < 0)
+  if ((num = sys_arch_get_num()) < 0) {
+    panic("AAAA");
     return num;
+  }
+
+  
 
   if ((num < (int) ARRAY_SIZE(syscalls)) && syscalls[num]) {
     int r = syscalls[num]();
@@ -1429,13 +1433,7 @@ out1:
 int32_t
 sys_sigreturn(void)
 {
-  uintptr_t ctx_va;
-  int r;
-
-  if ((r = sys_arg_ptr(0, &ctx_va, VM_READ, 0)) < 0)
-    return r;
-
-  return signal_return(ctx_va);
+  return signal_return();
 }
 
 int32_t

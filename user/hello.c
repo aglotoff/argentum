@@ -3,17 +3,18 @@
 #include <signal.h>		/* for signal */
 #include <stdio.h>
 #include <stdlib.h>
+#include <ucontext.h>
 
 #define INTERVAL 1000		/* number of milliseconds to go off */
 
 /* function prototype */
-void DoStuff(int);
+void DoStuff(int code, siginfo_t *info, void *ctx);
 
 int main(void) {
   struct sigaction sa;
   sa.sa_mask = 0;
   sa.sa_flags = 0;
-  sa.sa_handler = DoStuff;
+  sa.sa_sigaction = DoStuff;
   struct itimerval it_val;	/* for setting itimer */
 
   /* Upon SIGALRM, call DoStuff().
@@ -39,6 +40,7 @@ int main(void) {
 /*
  * DoStuff
  */
-void DoStuff(int) {
-  printf("Timer went off.\n");
+void DoStuff(int code, siginfo_t *info, void *ctx) {
+  ucontext_t *uc = (ucontext_t *) ctx;
+  printf("Timer went off %d %d %lx %lx\n", code, info->si_signo, uc->uc_mcontext.eip, uc->uc_mcontext.cs);
 }
