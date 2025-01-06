@@ -73,7 +73,7 @@ $(OBJ)/fs.img: $(SYSROOT) $(USER_APPS)
 	@echo "+ GEN $@"
 	$(V)mkdir -p $@.d/{,dev,etc,home/{,root,guest},tmp}
 	$(V)cp -afRd $(SYSROOT)/* $@.d/
-	$(V)genext2fs -B 4096 -b 137072 -d $@.d -P -U $@
+	$(V)genext2fs -B 4096 -b 131072 -d $@.d -P -U $@
 
 ifndef CPUS
   CPUS := 2

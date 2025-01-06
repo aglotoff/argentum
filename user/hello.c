@@ -42,5 +42,5 @@ int main(void) {
  */
 void DoStuff(int code, siginfo_t *info, void *ctx) {
   ucontext_t *uc = (ucontext_t *) ctx;
-  printf("Timer went off %d %d %lx %lx\n", code, info->si_signo, uc->uc_mcontext.eip, uc->uc_mcontext.cs);
+  printf("Timer went off %d %d %p\n", code, info->si_signo, uc);
 }

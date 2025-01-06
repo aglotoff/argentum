@@ -29,8 +29,13 @@ arch_signal_prepare(struct Process *process, struct SignalFrame *frame)
 }
 
 int
-arch_signal_return(struct Process *process, const struct SignalFrame *ctx)
+arch_signal_return(struct Process *process, struct SignalFrame *ctx, int *ret)
 {
+  int r;
+
+  if ((r = vm_copy_in(process->vm->pgtab, ctx, process->thread->tf->sp, sizeof *ctx) < 0))
+    return r;
+
   // Prevent malicious users from executing in kernel mode
   if ((ctx->ucontext.uc_mcontext.psr & PSR_M_MASK) != PSR_M_USR)
     return -EINVAL;
@@ -43,5 +48,7 @@ arch_signal_return(struct Process *process, const struct SignalFrame *ctx)
   process->thread->tf->pc  = ctx->ucontext.uc_mcontext.pc;
   process->thread->tf->psr = ctx->ucontext.uc_mcontext.psr;
 
-  return process->thread->tf->r0;;
+  *ret = process->thread->tf->r0;
+
+  return 0;
 }

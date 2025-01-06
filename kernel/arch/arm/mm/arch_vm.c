@@ -60,6 +60,12 @@ static void *kernel_pgtab;
 
 #define L2_TABLES_PER_PAGE  2
 
+void
+arch_vm_switch(struct Process *)
+{
+  
+}
+
 /**
  * Load a page table.
  *
