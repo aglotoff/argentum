@@ -5,6 +5,7 @@
 #include <kernel/fs/fs.h>
 #include <kernel/object_pool.h>
 #include <kernel/console.h>
+#include <kernel/dev.h>
 
 #include "devfs.h"
 
@@ -23,6 +24,7 @@ static struct DevfsNode {
   { 7, "tty4", S_IFCHR | 0666, 0x0104 },
   { 8, "tty5", S_IFCHR | 0666, 0x0105 },
   { 9, "zero", S_IFCHR | 0666, 0x0202 },
+  { 10, "null", S_IFCHR | 0666, 0x0203 },
 };
 
 #define NDEV  (sizeof(devices) / sizeof devices[0])
@@ -220,6 +222,47 @@ struct FSOps devfs_ops = {
   .lookup       = devfs_lookup,
 };
 
+int
+special_ioctl(dev_t, int, int)
+{
+  return -ENOSYS;
+}
+
+ssize_t
+special_read(dev_t dev, uintptr_t, size_t)
+{
+  switch (dev & 0xFF) {
+  case 3:
+    return 0;
+  default:
+    return -ENOSYS;
+  }
+}
+
+ssize_t
+special_write(dev_t dev, uintptr_t, size_t)
+{
+  switch (dev & 0xFF) {
+  case 3:
+    return 0;
+  default:
+    return -ENOSYS;
+  }
+}
+
+int
+special_select(dev_t, struct timeval *)
+{
+  return -ENOSYS;
+}
+
+struct CharDev special_device = {
+  .ioctl = special_ioctl,
+  .read = special_read,
+  .write = special_write,
+  .select = special_select,
+};
+
 struct Inode *
 devfs_mount(dev_t dev)
 {
@@ -232,6 +275,8 @@ devfs_mount(dev_t dev)
   devfs->dev   = dev;
   devfs->extra = NULL;
   devfs->ops   = &devfs_ops;
+
+  dev_register_char(0x02, &special_device);
 
   return devfs_inode_get(devfs, 2);
 }

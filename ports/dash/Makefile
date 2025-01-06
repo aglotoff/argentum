@@ -22,7 +22,7 @@ $(SRC_DIR): $(TARBALL_FILE)
 	tar xf $<
 
 $(SRC_DIR)/Makefile: | $(SRC_DIR)
-	cd $(@D) && ./configure --host=arm-none-argentum \
+	cd $(@D) && ./configure --host=$(HOST) \
 	                        --prefix=/usr
 
 clean:

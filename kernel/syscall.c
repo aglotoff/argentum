@@ -98,12 +98,8 @@ sys_dispatch(void)
 {
   int num;
 
-  if ((num = sys_arch_get_num()) < 0) {
-    panic("AAAA");
+  if ((num = sys_arch_get_num()) < 0)
     return num;
-  }
-
-  
 
   if ((num < (int) ARRAY_SIZE(syscalls)) && syscalls[num]) {
     int r = syscalls[num]();
