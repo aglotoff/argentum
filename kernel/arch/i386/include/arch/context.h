@@ -8,8 +8,7 @@
  * See https://wiki.osdev.org/Calling_Conventions
  */
 struct Context {
-  // TODO: floating-point
-
+  // Below is floating-point context aligned on 16-byte boundary
   uint32_t edi;
   uint32_t esi;
   uint32_t ebx;
