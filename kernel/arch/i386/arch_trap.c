@@ -179,3 +179,9 @@ arch_trap_frame_pop(struct TrapFrame *tf)
 	
   panic("failed");  /* mostly to placate the compiler */
 }
+
+int
+arch_trap_is_user(struct TrapFrame *tf)
+{
+  return (tf->cs & PL_MASK) == PL_USER;
+}

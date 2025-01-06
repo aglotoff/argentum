@@ -8,6 +8,7 @@
 #include <kernel/interrupt.h>
 #include <kernel/console.h>
 #include <kernel/tty.h>
+#include <kernel/trap.h>
 
 #include <arch/i386/ide.h>
 
@@ -24,26 +25,6 @@ arch_init(void)
   arch_interrupt_init();
 
   main();
-}
-
-int
-timer_irq(int, void *)
-{
-  // struct Process *my_process = process_current();
-
-  // if (my_process != NULL) {
-  //   if ((my_process->thread->tf->psr & PSR_M_MASK) != PSR_M_USR) {
-  //     process_update_times(my_process, 0, 1);
-  //   } else {
-  //     process_update_times(my_process, 1, 0);
-  //   }
-  // }
-
-  k_tick();
-
-  //time_tick();
-
-  return 1;
 }
 
 void

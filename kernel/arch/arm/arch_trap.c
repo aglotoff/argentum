@@ -181,26 +181,6 @@ ipi_irq(int, void *)
   return 1;
 }
 
-int
-timer_irq(int, void *)
-{
-  struct Process *my_process = process_current();
-
-  if (my_process != NULL) {
-    if ((my_process->thread->tf->psr & PSR_M_MASK) != PSR_M_USR) {
-      process_update_times(my_process, 0, 1);
-    } else {
-      process_update_times(my_process, 1, 0);
-    }
-  }
-
-  k_tick();
-
-  time_tick();
-
-  return 1;
-}
-
 int 
 arch_trap_frame_init(struct Process *process, uintptr_t entry, uintptr_t arg1,
                      uintptr_t arg2, uintptr_t arg3, uintptr_t sp)
@@ -224,4 +204,10 @@ arch_trap_frame_pop(struct TrapFrame *tf)
     : "r" (tf)
     : "memory"
   );
+}
+
+int
+arch_trap_is_user(struct TrapFrame *tf)
+{
+  return (tf->psr & PSR_M_MASK) == PSR_M_USR;
 }
