@@ -104,8 +104,8 @@ sys_dispatch(void)
   if ((num < (int) ARRAY_SIZE(syscalls)) && syscalls[num]) {
     int r = syscalls[num]();
 
-    // if (r < 0)
-    //   cprintf("syscall(%d) -> %d\n", num, r);
+    if (r < 0)
+       cprintf("syscall(%d) -> %d\n", num, r);
 
     return r;
   }
@@ -565,10 +565,14 @@ sys_open(void)
   if ((r = sys_arg_ulong(2, &mode)) < 0)
     goto out2;
 
-  if ((r = fs_open(path, oflag, mode, &file)) < 0)
+  if ((r = fs_open(path, oflag, mode, &file)) < 0) {
+    cprintf("[k] failed open %s\n", path);
     goto out2;
+  }
 
   r = fd_alloc(process_current(), file, 0);
+
+  //cprintf("[k] opened %s -> %d\n", path, r);
 
   file_put(file);
 out2:
@@ -795,7 +799,11 @@ sys_close(void)
   if ((r = sys_arg_int(0, &fd)) < 0)
     return r;
 
-  return fd_close(process_current(), fd);
+  r = fd_close(process_current(), fd);
+
+  //cprintf("[k] close %d -> %d\n", fd, r);
+
+  return r;
 }
 
 int32_t
@@ -860,8 +868,12 @@ sys_fcntl(void)
   if ((r = sys_arg_int(2, &arg)) < 0)
     return r;
 
-  if ((file = fd_lookup(process_current(), fd)) == NULL)
+  if ((file = fd_lookup(process_current(), fd)) == NULL) {
+    //cprintf("[k] fcntl failed %d\n", fd);
     return -EBADF;
+  }
+
+  //cprintf("[k] fcntl succeeded %d\n", fd);
 
   switch (cmd) {
   case F_DUPFD:

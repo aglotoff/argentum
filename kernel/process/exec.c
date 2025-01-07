@@ -143,7 +143,7 @@ resolve_inode(struct Inode *inode, char *p, struct ExecContext *ctx, char **pp)
 {
   char buf[1024];
   off_t off;
-  int i, r;
+  int i, r, start;
 
   if (!S_ISREG(inode->mode))
     return -ENOENT;
@@ -160,7 +160,17 @@ resolve_inode(struct Inode *inode, char *p, struct ExecContext *ctx, char **pp)
     return 0;
   }
 
-  for (i = 2; i < r; i++)
+  // Skip whitespace
+  for (start = 2; start < r; start++)
+    if ((buf[start] != ' ') && (buf[start] != '\t'))
+      break;
+
+  if (start == r || buf[start] == '\n') {
+    *pp = NULL;
+    return 0;
+  }
+
+  for (i = start ; i < r; i++)
     if ((buf[i] == ' ') || (buf[i] == '\t') || (buf[i] == '\n'))
       break;
   buf[i] = '\0';
@@ -176,10 +186,10 @@ resolve_inode(struct Inode *inode, char *p, struct ExecContext *ctx, char **pp)
   ctx->argv[1] = ctx->sp_va;
   ctx->argc++;
 
-  if ((p = k_malloc(strlen(&buf[2]) + 1)) == NULL)
+  if ((p = k_malloc(strlen(&buf[start]) + 1)) == NULL)
     return -ENOMEM;
 
-  strncpy(p, &buf[2], strlen(&buf[2]) + 1);
+  strncpy(p, &buf[start], strlen(&buf[start]) + 1);
 
   *pp = p;
 

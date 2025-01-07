@@ -8,6 +8,7 @@ KERNEL_SRCFILES += \
 	kernel/arch/${ARCH}/drivers/i8253.c \
 	kernel/arch/${ARCH}/drivers/i8259.c \
 	kernel/arch/${ARCH}/drivers/ide.c \
+	kernel/arch/${ARCH}/drivers/rs232.c \
 	kernel/arch/${ARCH}/drivers/vga.c \
 	kernel/arch/${ARCH}/mm/arch_vm.c \
 	kernel/arch/$(ARCH)/process/arch_process.c \

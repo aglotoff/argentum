@@ -70,6 +70,15 @@ fs_open(const char *path, int oflag, mode_t mode, struct File **file_store)
   struct Inode *inode;
   int r;
 
+  // TODO: O_NONBLOCK
+
+  if (oflag & O_SEARCH) panic("O_SEARCH %s", path);
+  if (oflag & O_EXEC) panic("O_EXEC %s", path);
+  if (oflag & O_NOFOLLOW) panic("O_NOFOLLOW %s", path);
+  if (oflag & O_NOCTTY) panic("O_NOCTTY %s", path);
+  if (oflag & O_SYNC) panic("O_SYNC %s", path);
+  if (oflag & O_DIRECT) panic("O_DIRECT %s", path);
+
   // TODO: ENFILE
   if ((r = file_alloc(&file)) != 0)
     return r;
@@ -93,6 +102,7 @@ fs_open(const char *path, int oflag, mode_t mode, struct File **file_store)
 
     if ((r = fs_create(path, S_IFREG | mode, 0, &path_node)) < 0)
       goto out1;
+
     inode = fs_path_inode(path_node);
   } else {
     inode = fs_path_inode(path_node);
@@ -102,15 +112,17 @@ fs_open(const char *path, int oflag, mode_t mode, struct File **file_store)
       r = -EEXIST;
       goto out2;
     }
+
+    if ((oflag & O_DIRECTORY) && !S_ISDIR(inode->mode)) {
+      r = -ENOTDIR;
+      goto out2;
+    }
   }
 
   if (S_ISDIR(inode->mode) && (oflag & O_WRONLY)) {
     r = -ENOTDIR;
     goto out2;
   }
-
-  // TODO: O_NOCTTY
-  // TODO: O_NONBLOCK
 
   // TODO: ENXIO
   // TODO: EROFS
