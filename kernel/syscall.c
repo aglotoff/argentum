@@ -105,7 +105,7 @@ sys_dispatch(void)
   if ((num < (int) ARRAY_SIZE(syscalls)) && syscalls[num]) {
     int r = syscalls[num]();
 
-    // if (r < 0 || process_current()->pid == 4)
+    // if (r < 0 && process_current()->pid > 3)
     //    cprintf("syscall(%d) -> %d\n", num, r);
 
     return r;
@@ -542,8 +542,12 @@ sys_chmod(void)
   mode_t mode;
   int r;
 
-  if ((r = sys_arg_str(0, PATH_MAX, VM_READ, &path)) < 0)
+  if ((r = sys_arg_str(0, PATH_MAX, VM_READ, &path)) < 0) {
+    cprintf("%s\n", process_current()->name);
+    panic("bub\n");
     goto out1;
+  }
+
   if ((r = sys_arg_ulong(1, &mode)) < 0)
     goto out2;
 
@@ -896,6 +900,11 @@ sys_fcntl(void)
     break;
   case F_SETFD:
     r = fd_set_flags(process_current(), fd, arg);
+    break;
+  case F_DUPFD_CLOEXEC:
+    r = fd_alloc(process_current(), file, arg);
+    if (r >= 0)
+      fd_set_flags(process_current(), r, FD_CLOEXEC);
     break;
 
   case F_GETOWN:

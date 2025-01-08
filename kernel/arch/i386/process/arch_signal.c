@@ -54,7 +54,5 @@ arch_signal_return(struct Process *process, struct SignalFrame *ctx, int *ret)
 
   *ret = process->thread->tf->eax;
 
-  //cprintf("restoring ret value of %d\n", *ret);
-
   return 0;
 }

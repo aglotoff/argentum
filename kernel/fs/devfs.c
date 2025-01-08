@@ -247,11 +247,13 @@ special_read(dev_t dev, uintptr_t, size_t)
 }
 
 ssize_t
-special_write(dev_t dev, uintptr_t, size_t)
+special_write(dev_t dev, uintptr_t va, size_t n)
 {
+  (void) va;
+
   switch (dev & 0xFF) {
   case 3:
-    return 0;
+    return n;
   default:
     return -ENOSYS;
   }

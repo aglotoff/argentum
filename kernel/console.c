@@ -1,5 +1,7 @@
 #include <stdio.h>
 
+#include <kernel/core/irq.h>
+
 #include <kernel/console.h>
 #include <kernel/tty.h>
 #include <kernel/monitor.h>
@@ -7,8 +9,6 @@
 
 static struct KSpinLock lock = K_SPINLOCK_INITIALIZER("cprintf");
 static int locking = 1;
-
-
 
 /**
  * Return the next input character from the console. Polls for any pending
@@ -89,6 +89,8 @@ void
 __panic(const char *file, int line, const char *format, ...)
 {
   va_list ap;
+
+  k_irq_disable();
 
   if (!panicstr) {
     panicstr = format;

@@ -4,5 +4,5 @@
 int
 fchmod(int fildes, mode_t mode)
 {
-  return __syscall2(__SYS_CHMOD, fildes, mode);
+  return __syscall2(__SYS_FCHMOD, fildes, mode);
 }

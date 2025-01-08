@@ -33,7 +33,11 @@ struct utsname utsname = {
   .nodename = "localhost",
   .release = "0.1.0",
   .version = __DATE__ " " __TIME__,
+#if defined __arm__
   .machine = "arm",
+#elif defined __i386__
+  .machine = "i386",
+#endif
 };
 
 void arch_init_devices(void);
