@@ -307,7 +307,7 @@ signal_return(void)
 
   process_unlock();
 
-  return r;
+  return ret;
 }
 
 int

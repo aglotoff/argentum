@@ -12,6 +12,9 @@
 
 static struct KObjectPool *pipe_cache;
 
+static const size_t PIPE_BUF_ORDER = 1;
+static const size_t PIPE_BUF_SIZE  = (PAGE_SIZE << PIPE_BUF_ORDER);
+
 void
 pipe_init(void)
 {
@@ -33,7 +36,7 @@ pipe_open(struct File **read_store, struct File **write_store)
     goto fail1;
   }
 
-  if ((page = page_alloc_one(0, PAGE_TAG_PIPE)) == NULL) {
+  if ((page = page_alloc_block(PIPE_BUF_ORDER, 0, PAGE_TAG_PIPE)) == NULL) {
     r = -ENOMEM;
     goto fail2;
   }
@@ -75,7 +78,7 @@ fail4:
   file_put(read);
 fail3:
   page->ref_count--;
-  page_free_one(page);
+  page_free_block(page, PIPE_BUF_ORDER);
 fail2:
   k_object_pool_put(pipe_cache, pipe);
 fail1:
@@ -115,7 +118,7 @@ pipe_close(struct File *file)
 
   page = kva2page(pipe->data);
   page->ref_count--;
-  page_free_one(page);
+  page_free_block(page, PIPE_BUF_ORDER);
 
   k_object_pool_put(pipe_cache, pipe);
 
@@ -149,7 +152,7 @@ pipe_read(struct File *file, uintptr_t va, size_t n)
 
     r = vm_space_copy_out(&pipe->data[pipe->read_pos++], va + i, 1);
 
-    if (pipe->read_pos == PAGE_SIZE)
+    if (pipe->read_pos == PIPE_BUF_SIZE)
       pipe->read_pos = 0;
 
     if (r < 0) {
@@ -174,7 +177,7 @@ pipe_write(struct File *file, uintptr_t va, size_t n)
 
   if (file->type != FD_PIPE)
     return -EBADF;
-  
+
   k_spinlock_acquire(&pipe->lock);
 
   // TODO: could copy all available data in one or two steps
@@ -182,7 +185,7 @@ pipe_write(struct File *file, uintptr_t va, size_t n)
   for (i = 0; i < n; i++) {
     int r;
 
-    while (pipe->read_open && (pipe->size == PAGE_SIZE)) {
+    while (pipe->read_open && (pipe->size == PIPE_BUF_SIZE)) {
       if ((r = k_waitqueue_sleep(&pipe->write_queue, &pipe->lock)) < 0) {
         k_spinlock_release(&pipe->lock);
         return r;
@@ -191,7 +194,7 @@ pipe_write(struct File *file, uintptr_t va, size_t n)
 
     r = vm_space_copy_in(&pipe->data[pipe->write_pos++], va + i, 1);
   
-    if (pipe->write_pos == PAGE_SIZE)
+    if (pipe->write_pos == PIPE_BUF_SIZE)
       pipe->write_pos = 0;
 
     if (pipe->size++ == 0)

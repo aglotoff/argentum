@@ -182,6 +182,31 @@ fs_inode_unlock(struct Inode *ip)
   k_mutex_unlock(&ip->mutex);
 }
 
+int
+fs_inode_open_locked(struct Inode *inode, int oflag, mode_t mode)
+{
+  int ret;
+
+  if (!fs_inode_holding(inode))
+    panic("not locked");
+
+  // TODO: check perm
+
+  if (S_ISCHR(inode->mode) || S_ISBLK(inode->mode)) {
+    struct CharDev *d = dev_lookup_char(inode->rdev);
+
+    if (d == NULL)
+      return -ENODEV;
+
+    fs_inode_unlock(inode);
+    ret = d->open(inode->rdev, oflag, mode);
+    fs_inode_lock(inode);
+    return ret;
+  }
+
+  return 0;
+}
+
 ssize_t
 fs_inode_read_locked(struct Inode *ip, uintptr_t va, size_t nbyte, off_t *off)
 {

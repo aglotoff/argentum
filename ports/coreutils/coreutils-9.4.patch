@@ -1,6 +1,6 @@
 diff -ruN old/build-aux/config.sub new/build-aux/config.sub
 --- old/build-aux/config.sub	2023-08-11 16:01:01.000000000 +0300
-+++ new/build-aux/config.sub	2024-06-29 16:58:02.324643650 +0300
++++ new/build-aux/config.sub	2025-01-08 12:10:00.081230822 +0300
 @@ -1736,7 +1736,7 @@
  	     | onefs* | tirtos* | phoenix* | fuchsia* | redox* | bme* \
  	     | midnightbsd* | amdhsa* | unleashed* | emscripten* | wasi* \
@@ -12,7 +12,7 @@ diff -ruN old/build-aux/config.sub new/build-aux/config.sub
  	sco3.2v2 | sco3.2v[4-9]* | sco5v6*)
 diff -ruN old/configure new/configure
 --- old/configure	2023-08-29 16:37:00.000000000 +0300
-+++ new/configure	2024-06-29 16:59:26.824629322 +0300
++++ new/configure	2025-01-08 12:10:00.081230822 +0300
 @@ -63291,6 +63291,9 @@
              # Guess no on native Windows.
            mingw* | windows*)
@@ -25,7 +25,7 @@ diff -ruN old/configure new/configure
              gl_cv_func_nanosleep="$gl_cross_guess_normal" ;;
 diff -ruN old/src/ls.c new/src/ls.c
 --- old/src/ls.c	2023-08-29 14:39:27.000000000 +0300
-+++ new/src/ls.c	2024-06-29 16:58:02.324643650 +0300
++++ new/src/ls.c	2025-01-08 12:10:00.091230822 +0300
 @@ -4268,7 +4268,12 @@
        return MAX (0, len);
      }
@@ -40,3 +40,129 @@ diff -ruN old/src/ls.c new/src/ls.c
  }
  
  /* Return the number of columns that format_user will print.  */
+diff -ruN old/src/sort.c new/src/sort.c
+--- old/src/sort.c	2023-08-29 14:39:27.000000000 +0300
++++ new/src/sort.c	2025-01-08 12:10:19.371246305 +0300
+@@ -3343,7 +3343,10 @@
+   root->parent = nullptr;
+   root->level = MERGE_END;
+   root->queued = false;
++
++#ifndef __ARGENTUM__
+   pthread_mutex_init (&root->lock, nullptr);
++#endif
+ 
+   init_node (root, root + 1, dest, nthreads, nlines, false);
+   return merge_tree;
+@@ -3358,7 +3361,9 @@
+ 
+   while (n_nodes--)
+     {
++#ifndef __ARGENTUM__
+       pthread_mutex_destroy (&node->lock);
++#endif
+       node++;
+     }
+ 
+@@ -3394,7 +3399,9 @@
+   node->parent = parent;
+   node->level = parent->level + 1;
+   node->queued = false;
++#ifndef __ARGENTUM__
+   pthread_mutex_init (&node->lock, nullptr);
++#endif
+ 
+   if (nthreads > 1)
+     {
+@@ -3433,7 +3440,9 @@
+ static inline void
+ lock_node (struct merge_node *node)
+ {
++#ifndef __ARGENTUM__
+   pthread_mutex_lock (&node->lock);
++#endif
+ }
+ 
+ /* Unlock a merge tree NODE. */
+@@ -3441,7 +3450,9 @@
+ static inline void
+ unlock_node (struct merge_node *node)
+ {
++#ifndef __ARGENTUM__
+   pthread_mutex_unlock (&node->lock);
++#endif
+ }
+ 
+ /* Destroy merge QUEUE. */
+@@ -3450,8 +3461,10 @@
+ queue_destroy (struct merge_node_queue *queue)
+ {
+   heap_free (queue->priority_queue);
++#ifndef __ARGENTUM__
+   pthread_cond_destroy (&queue->cond);
+   pthread_mutex_destroy (&queue->mutex);
++#endif
+ }
+ 
+ /* Initialize merge QUEUE, allocating space suitable for a maximum of
+@@ -3464,8 +3477,10 @@
+      time, the heap should accommodate all of them.  Counting a null
+      dummy head for the heap, reserve 2 * NTHREADS nodes.  */
+   queue->priority_queue = heap_alloc (compare_nodes, 2 * nthreads);
++#ifndef __ARGENTUM__
+   pthread_mutex_init (&queue->mutex, nullptr);
+   pthread_cond_init (&queue->cond, nullptr);
++#endif
+ }
+ 
+ /* Insert NODE into QUEUE.  The caller either holds a lock on NODE, or
+@@ -3474,11 +3489,15 @@
+ static void
+ queue_insert (struct merge_node_queue *queue, struct merge_node *node)
+ {
++#ifndef __ARGENTUM__
+   pthread_mutex_lock (&queue->mutex);
++#endif
+   heap_insert (queue->priority_queue, node);
+   node->queued = true;
++#ifndef __ARGENTUM__
+   pthread_cond_signal (&queue->cond);
+   pthread_mutex_unlock (&queue->mutex);
++#endif
+ }
+ 
+ /* Pop the top node off the priority QUEUE, lock the node, return it.  */
+@@ -3487,10 +3506,15 @@
+ queue_pop (struct merge_node_queue *queue)
+ {
+   struct merge_node *node;
++#ifndef __ARGENTUM__
+   pthread_mutex_lock (&queue->mutex);
+   while (! (node = heap_remove_top (queue->priority_queue)))
+     pthread_cond_wait (&queue->cond, &queue->mutex);
+   pthread_mutex_unlock (&queue->mutex);
++#else
++  while (! (node = heap_remove_top (queue->priority_queue)))
++    ;
++#endif
+   lock_node (node);
+   node->queued = false;
+   return node;
+@@ -3735,6 +3759,7 @@
+   struct thread_args args = {lines, lo_threads, total_lines,
+                              node->lo_child, queue, tfp, temp_output};
+ 
++#ifndef __ARGENTUM__
+   if (nthreads > 1 && SUBTHREAD_LINES_HEURISTIC <= nlines
+       && pthread_create (&thread, nullptr, sortlines_thread, &args) == 0)
+     {
+@@ -3743,7 +3768,9 @@
+       pthread_join (thread, nullptr);
+     }
+   else
++#endif
+     {
++      
+       /* Nthreads = 1, this is a leaf NODE, or pthread_create failed.
+          Sort with 1 thread. */
+       size_t nlo = node->nlo;

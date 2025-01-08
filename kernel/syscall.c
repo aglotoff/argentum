@@ -26,6 +26,7 @@
 #include <kernel/core/irq.h>
 #include <kernel/time.h>
 #include <kernel/signal.h>
+#include <kernel/monitor.h>
 
 #include <lwip/sockets.h>
 
@@ -104,8 +105,8 @@ sys_dispatch(void)
   if ((num < (int) ARRAY_SIZE(syscalls)) && syscalls[num]) {
     int r = syscalls[num]();
 
-    if (r < 0)
-       cprintf("syscall(%d) -> %d\n", num, r);
+    // if (r < 0 || process_current()->pid == 4)
+    //    cprintf("syscall(%d) -> %d\n", num, r);
 
     return r;
   }
@@ -301,7 +302,7 @@ sys_fork(void)
 
   if ((r = sys_arg_int(0, &shared)) < 0)
     return r;
-
+  
   return process_copy(0);
 }
 
@@ -318,6 +319,8 @@ sys_exec(void)
     goto out2;
   if ((r = sys_arg_va(2, &envp, 1, 0, 0)) < 0)
     goto out2;
+
+  //cprintf("Running %s\n", path);
 
   r = process_exec(path, argv, envp);
 
@@ -369,6 +372,8 @@ sys_wait(void)
 
   if ((r = process_wait(pid, &stat, options)) < 0)
     return r;
+
+  //cprintf("waited %d\n", r);
 
   if (!stat_va)
     return r;
@@ -566,7 +571,7 @@ sys_open(void)
     goto out2;
 
   if ((r = fs_open(path, oflag, mode, &file)) < 0) {
-    cprintf("[k] failed open %s\n", path);
+    //cprintf("[k] failed open %s\n", path);
     goto out2;
   }
 
@@ -868,12 +873,13 @@ sys_fcntl(void)
   if ((r = sys_arg_int(2, &arg)) < 0)
     return r;
 
-  if ((file = fd_lookup(process_current(), fd)) == NULL) {
-    //cprintf("[k] fcntl failed %d\n", fd);
-    return -EBADF;
-  }
+  // if (fd > 10) {
+  //   k_irq_disable();
+  //   monitor(process_current()->thread->tf);
+  // }
 
-  //cprintf("[k] fcntl succeeded %d\n", fd);
+  if ((file = fd_lookup(process_current(), fd)) == NULL)
+    return -EBADF;
 
   switch (cmd) {
   case F_DUPFD:
@@ -902,6 +908,7 @@ sys_fcntl(void)
     break;
 
   default:
+    cprintf("TODOddd: fcntl(%d)\n", cmd);
     r = -EINVAL;
     break;
   }
@@ -1051,6 +1058,8 @@ sys_ioctl(void)
 
   if ((file = fd_lookup(process_current(), fd)) == NULL)
     return -EBADF;
+
+ //cprintf("[k] ioctl %s\n", file->node->name);
 
   r = file_ioctl(file, request, arg);
   

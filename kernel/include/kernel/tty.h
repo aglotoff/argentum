@@ -51,6 +51,7 @@ void arch_tty_erase(struct Tty *);
 
 void    tty_init(void);
 void    tty_process_input(struct Tty *, char *);
+int     tty_open(dev_t, int, mode_t);
 ssize_t tty_read(dev_t, uintptr_t, size_t);
 ssize_t tty_write(dev_t, uintptr_t, size_t);
 int     tty_ioctl(dev_t, int, int);

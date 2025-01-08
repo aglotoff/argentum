@@ -93,6 +93,9 @@ struct Process {
   /** Lock protecting the file descriptors */
   struct KSpinLock      fd_lock;
 
+  /** Controlling terminal */
+  dev_t                 ctty;
+
   struct {
     struct itimerval value;
     struct KTimer    timer;

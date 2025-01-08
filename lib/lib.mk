@@ -28,6 +28,7 @@ LIB_SRCFILES := \
 	lib/argentum/include/sys/ioctl.h \
 	lib/argentum/include/sys/mman.h \
 	lib/argentum/include/sys/mount.h \
+	lib/argentum/include/sys/param.h \
 	lib/argentum/include/sys/resource.h \
 	lib/argentum/include/sys/socket.h \
 	lib/argentum/include/sys/syscall.h \

@@ -109,6 +109,7 @@ process_alloc(void)
   process->parent = NULL;
   process->state = PROCESS_STATE_ACTIVE;
   process->flags = 0;
+  process->ctty  = 0;
 
   memset(process->name, 0, 64);
 
@@ -273,8 +274,8 @@ process_destroy(int status)
   struct Process *child, *current = process_current();
   int has_zombies;
 
-  if(status)
-    cprintf("[k] process #%d destroyed with code 0x%x\n", current->pid, status);
+  // if(status)
+  //   cprintf("[k] process #%d destroyed with code 0x%x\n", current->pid, status);
 
   // Remove the pid hash link
   // TODO: place this code somewhere else?
@@ -354,6 +355,7 @@ process_copy(int share_vm)
   child->egid  = current->egid;
   child->cmask = current->cmask;
   child->cwd   = fs_path_duplicate(current->cwd);
+  child->ctty  = current->ctty;
 
   k_list_add_back(&__process_list, &child->link);
   k_list_add_back(&current->children, &child->sibling_link);

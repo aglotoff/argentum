@@ -25,6 +25,7 @@ static struct DevfsNode {
   { 8, "tty5", S_IFCHR | 0666, 0x0105 },
   { 9, "zero", S_IFCHR | 0666, 0x0202 },
   { 10, "null", S_IFCHR | 0666, 0x0203 },
+  { 11, "tty", S_IFCHR | 0666, 0x0300 },
 };
 
 #define NDEV  (sizeof(devices) / sizeof devices[0])
@@ -223,9 +224,15 @@ struct FSOps devfs_ops = {
 };
 
 int
+special_open(dev_t, int, mode_t)
+{
+  return 0;
+}
+
+int
 special_ioctl(dev_t, int, int)
 {
-  return -ENOSYS;
+  return 0;
 }
 
 ssize_t
@@ -257,9 +264,10 @@ special_select(dev_t, struct timeval *)
 }
 
 struct CharDev special_device = {
-  .ioctl = special_ioctl,
-  .read = special_read,
-  .write = special_write,
+  .open   = special_open,
+  .ioctl  = special_ioctl,
+  .read   = special_read,
+  .write  = special_write,
   .select = special_select,
 };
 

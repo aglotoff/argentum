@@ -117,6 +117,7 @@ int           fs_inode_lookup_locked(struct Inode *, const char *, int, struct I
 
 ssize_t       fs_inode_read_locked(struct Inode *, uintptr_t, size_t, off_t *);
 ssize_t       fs_inode_read_dir_locked(struct Inode *, uintptr_t, size_t, off_t *);
+int           fs_inode_open_locked(struct Inode *, int, mode_t);
 ssize_t       fs_inode_write_locked(struct Inode *, uintptr_t, size_t, off_t *);
 ssize_t       fs_inode_getdents(struct Inode *, void *, size_t, off_t *);
 int           fs_inode_stat_locked(struct Inode *, struct stat *);

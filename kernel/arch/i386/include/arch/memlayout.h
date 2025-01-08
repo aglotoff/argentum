@@ -11,7 +11,7 @@
 
 /** Size of a user-mode process stack in bytes */
 // TODO: keep in sync with rlimit
-#define USTACK_SIZE       (PAGE_SIZE * 16)
+#define USTACK_SIZE       (PAGE_SIZE * 32)
 
 /** Physical address the kernel executable is loaded at */
 #define PHYS_KERNEL_LOAD  0x00100000

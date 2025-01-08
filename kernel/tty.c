@@ -3,6 +3,7 @@
 #include <stdio.h>
 #include <sys/ioctl.h>
 #include <string.h>
+#include <fcntl.h>
 
 #include <kernel/mm/memlayout.h>
 #include <kernel/vm.h>
@@ -20,6 +21,7 @@
 #include <kernel/drivers/kbd.h>
 
 static struct CharDev tty_device = {
+  .open   = tty_open,
   .read   = tty_read,
   .write  = tty_write,
   .ioctl  = tty_ioctl,
@@ -27,7 +29,6 @@ static struct CharDev tty_device = {
 };
 
 #define NTTYS       6   // The total number of virtual ttys
-
 
 static struct Tty ttys[NTTYS];
 struct Tty *tty_current;
@@ -83,6 +84,7 @@ tty_init(void)
   arch_tty_switch(tty_current);
 
   dev_register_char(0x01, &tty_device);
+  dev_register_char(0x03, &tty_device);
 }
 
 static void
@@ -290,8 +292,38 @@ tty_from_dev(dev_t dev)
 {
   // No need to lock since rdev cannot change once we obtain an inode ref
   // TODO: are we sure?
-  int minor = dev & 0xFF;
-  return minor < NTTYS ? &ttys[minor] : NULL;
+  int major = (dev >> 8) & 0xFF;
+  
+  if (major == 0x01) {
+    int minor = dev & 0xFF;
+    return minor < NTTYS ? &ttys[minor] : NULL;
+  }
+
+  if (major == 0x03) {
+    struct Process *process = process_current();
+
+    if (((process->ctty >> 8) & 0xFF) == 0x01) {
+      int minor = dev & 0xFF;
+      return minor < NTTYS ? &ttys[minor] : NULL;
+    }
+  }
+
+  return NULL;
+}
+
+int
+tty_open(dev_t dev, int oflag, mode_t)
+{
+  struct Tty *tty = tty_from_dev(dev);
+  struct Process *my_process = process_current();
+
+  if (tty == NULL)
+    return -ENODEV;
+
+  if (!(oflag & O_NOCTTY) && (my_process->ctty == 0))
+    my_process->ctty = dev;
+
+  return 0;
 }
 
 /**

@@ -72,10 +72,9 @@ fs_open(const char *path, int oflag, mode_t mode, struct File **file_store)
 
   // TODO: O_NONBLOCK
 
-  if (oflag & O_SEARCH) panic("O_SEARCH %s", path);
-  if (oflag & O_EXEC) panic("O_EXEC %s", path);
-  if (oflag & O_NOFOLLOW) panic("O_NOFOLLOW %s", path);
-  if (oflag & O_NOCTTY) panic("O_NOCTTY %s", path);
+  //if (oflag & O_SEARCH) panic("O_SEARCH %s", path);
+  //if (oflag & O_EXEC) panic("O_EXEC %s", path);
+  //if (oflag & O_NOFOLLOW) panic("O_NOFOLLOW %s", path);
   if (oflag & O_SYNC) panic("O_SYNC %s", path);
   if (oflag & O_DIRECT) panic("O_DIRECT %s", path);
 
@@ -117,6 +116,8 @@ fs_open(const char *path, int oflag, mode_t mode, struct File **file_store)
       r = -ENOTDIR;
       goto out2;
     }
+
+
   }
 
   if (S_ISDIR(inode->mode) && (oflag & O_WRONLY)) {
@@ -132,7 +133,7 @@ fs_open(const char *path, int oflag, mode_t mode, struct File **file_store)
       goto out2;
   }
 
-  file->node = path_node;
+  
 
   if (oflag & O_RDONLY) {
     // TODO: check group and other permissions
@@ -149,6 +150,11 @@ fs_open(const char *path, int oflag, mode_t mode, struct File **file_store)
       goto out2;
     }
   }
+
+  if ((r = fs_inode_open_locked(inode, oflag, mode)) < 0)
+    goto out2;
+
+  file->node = path_node;
 
   if (oflag & O_APPEND)
     file->offset = inode->size;

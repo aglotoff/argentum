@@ -7,6 +7,7 @@ struct Buf;
 struct timeval;
 
 struct CharDev {
+  int     (*open)(dev_t, int, mode_t);
   ssize_t (*read)(dev_t, uintptr_t, size_t);
   ssize_t (*write)(dev_t, uintptr_t, size_t);
   int     (*ioctl)(dev_t, int, int);
