@@ -273,6 +273,7 @@ process_destroy(int status)
   struct KListLink *l;
   struct Process *child, *current = process_current();
   int has_zombies;
+  struct VMSpace *vm;
 
   // if(status)
   //   cprintf("[k] process #%d destroyed with code 0x%x\n", current->pid, status);
@@ -283,14 +284,15 @@ process_destroy(int status)
   HASH_REMOVE(&current->pid_link);
   k_spinlock_release(&pid_hash.lock);
 
-  vm_space_destroy(current->vm);
-
   fd_close_all(current);
   fs_path_put(current->cwd);
 
   assert(init_process != NULL);
 
   process_lock();
+
+  vm = current->vm;
+  current->vm = NULL;
 
   k_timer_fini(&current->itimers[ITIMER_PROF].timer);
   k_timer_fini(&current->itimers[ITIMER_REAL].timer);
@@ -322,6 +324,8 @@ process_destroy(int status)
   _signal_state_change_to_parent(current);
 
   process_unlock();
+
+  vm_space_destroy(vm);
 
   k_thread_exit();
 }

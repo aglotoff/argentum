@@ -204,7 +204,10 @@ page_alloc_block(unsigned order, int flags, int debug_tag)
   if (flags & PAGE_ALLOC_ZERO)
     memset(page2kva(page), 0, PAGE_SIZE << order);
 
-  page->debug_tag = debug_tag;
+  for (o = 0; o < (1U << order); o++) {
+    assert(page[o].debug_tag == 0);
+    page[o].debug_tag = debug_tag;
+  }
 
   return page;
 }
@@ -224,7 +227,9 @@ page_free_block(struct Page *page, unsigned order)
   if (page->ref_count != 0)
     panic("page->ref_count != 0 (%u)", page->ref_count);
 
-  page->debug_tag = 0;
+  for (o = 0; o < (1U << order); o++) {
+    page[o].debug_tag = 0;
+  }
 
   k_spinlock_acquire(&page_lock);
 
@@ -354,4 +359,18 @@ page_k_list_remove(struct Page *page, unsigned order)
 
   map_idx = block_idx / (1U << order);
   page_free_list[order].bitmap[BITMAP_OFFSET(map_idx)] &= ~BITMAP_MASK(map_idx);
+}
+
+void
+page_assert(struct Page *page, unsigned order, int tag)
+{
+  unsigned o;
+
+  for (o = 0; o < (1U << order); o++) {
+    if (page[o].debug_tag != tag)
+      panic("expected %x, have %x", tag, page[o].debug_tag);
+  }
+
+  if (page[0].ref_count == 0)
+    panic("page not allocated");
 }

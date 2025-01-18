@@ -6,6 +6,7 @@
 #include <kernel/page.h>
 #include <kernel/console.h>
 #include <kernel/process.h>
+#include <kernel/vmspace.h>
 
 #include <arch/i386/mmu.h>
 #include <arch/i386/regs.h>
@@ -50,6 +51,8 @@ void
 arch_vm_switch(struct Process *process)
 {
   k_irq_state_save();
+
+  page_assert(kva2page(process->vm->pgtab), 0, PAGE_TAG_VM);
 
   gdt[GD_TSS] = SEG_DESC_16(&tss, sizeof tss - 1, SEG_TYPE_TSS32A, PL_KERNEL);
   tss.esp0 = (uintptr_t) process->thread->kstack + PAGE_SIZE;
@@ -150,7 +153,7 @@ arch_vm_lookup(void *pgtab, uintptr_t va, int alloc)
     struct Page *page;
     physaddr_t pa;
 
-    if (!alloc || (page = page_alloc_one(PAGE_ALLOC_ZERO, PAGE_SIZE)) == NULL)
+    if (!alloc || (page = page_alloc_one(PAGE_ALLOC_ZERO, PAGE_TAG_PGTAB)) == NULL)
       return NULL;
   
     page->ref_count++;
@@ -263,7 +266,7 @@ arch_vm_create(void)
   pde_t *pgdir;
   int idx;
 
-  if ((page = page_alloc_one(PAGE_ALLOC_ZERO, PAGE_TAG_PGTAB)) == NULL)
+  if ((page = page_alloc_one(PAGE_ALLOC_ZERO, PAGE_TAG_VM)) == NULL)
     return NULL;
 
   pgdir = (pde_t *) page2kva(page);
@@ -289,6 +292,8 @@ arch_vm_destroy(void *pgtab)
       continue;
 
     page = pa2page(PDE_BASE(pgdir[i]));
+    page_assert(page, 0, PAGE_TAG_PGTAB);
+
     pte   = (pte_t *) page2kva(page);
 
     // Check that the caller has removed all mappings
@@ -301,6 +306,8 @@ arch_vm_destroy(void *pgtab)
   }
 
   page = kva2page(pgdir);
-  if (--page->ref_count == 0)
-    page_free_one(page);
+  page_assert(page, 0, PAGE_TAG_VM);
+
+  page->ref_count--;
+  page_free_one(page);
 }

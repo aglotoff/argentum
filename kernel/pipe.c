@@ -12,7 +12,7 @@
 
 static struct KObjectPool *pipe_cache;
 
-static const size_t PIPE_BUF_ORDER = 1;
+static const size_t PIPE_BUF_ORDER = 2;
 static const size_t PIPE_BUF_SIZE  = (PAGE_SIZE << PIPE_BUF_ORDER);
 
 void
@@ -77,6 +77,7 @@ pipe_open(struct File **read_store, struct File **write_store)
 fail4:
   file_put(read);
 fail3:
+  page_assert(page, PIPE_BUF_ORDER, PAGE_TAG_PIPE);
   page->ref_count--;
   page_free_block(page, PIPE_BUF_ORDER);
 fail2:
@@ -117,6 +118,8 @@ pipe_close(struct File *file)
   k_spinlock_release(&pipe->lock);
 
   page = kva2page(pipe->data);
+  page_assert(page, PIPE_BUF_ORDER, PAGE_TAG_PIPE);
+
   page->ref_count--;
   page_free_block(page, PIPE_BUF_ORDER);
 
@@ -135,6 +138,8 @@ pipe_read(struct File *file, uintptr_t va, size_t n)
     return -EBADF;
 
   k_spinlock_acquire(&pipe->lock);
+
+  page_assert(kva2page(pipe->data), PIPE_BUF_ORDER, PAGE_TAG_PIPE);
 
   while (pipe->write_open && (pipe->size == 0)) {
     int r;
@@ -179,6 +184,8 @@ pipe_write(struct File *file, uintptr_t va, size_t n)
     return -EBADF;
 
   k_spinlock_acquire(&pipe->lock);
+
+  page_assert(kva2page(pipe->data), PIPE_BUF_ORDER, PAGE_TAG_PIPE);
 
   // TODO: could copy all available data in one or two steps
 

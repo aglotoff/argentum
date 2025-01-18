@@ -81,7 +81,7 @@ k_sched_switch(struct KThread *thread)
 {
   struct KCpu *my_cpu = _k_cpu();
 
-  if (thread->process != NULL) {
+  if (thread->process != NULL && thread->process->state != PROCESS_STATE_ZOMBIE) {
     arch_vm_switch(thread->process);
     arch_vm_load(thread->process->vm->pgtab);
   }
@@ -119,8 +119,9 @@ k_sched_idle(void)
 
     // Free the thread kernel stack
     kstack_page = kva2page(thread->kstack);
+    page_assert(kstack_page, 0, PAGE_TAG_KSTACK);
+
     kstack_page->ref_count--;
-    assert(kstack_page->ref_count == 0);
     page_free_one(kstack_page);
 
     // Free the thread object

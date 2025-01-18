@@ -81,6 +81,7 @@ buf_free_data(void *data, size_t block_size)
     ;
 
   page = kva2page(data);
+  page_assert(page, page_order, PAGE_TAG_BUF);
 
   page->ref_count--;
   page_free_block(page, page_order);
@@ -206,6 +207,17 @@ buf_read(unsigned block_no, size_t block_size, dev_t dev)
 
   k_mutex_lock(&buf->mutex);
 
+  if (block_size >= PAGE_SIZE) {
+    unsigned page_order; 
+    struct Page *page;
+
+    for (page_order = 0; (PAGE_SIZE << page_order) < block_size; page_order++)
+      ;
+
+    page = kva2page(buf->data);
+    page_assert(page, page_order, PAGE_TAG_BUF);
+  }
+
   // If needed, read the block contents.
   // TODO: check for I/O errors
   if (!(buf->flags & BUF_VALID))
@@ -228,6 +240,17 @@ buf_write(struct Buf *buf)
 {
   if (!k_mutex_holding(&buf->mutex))
     panic("not holding buf->mutex");
+
+  if (buf->block_size >= PAGE_SIZE) {
+    unsigned page_order; 
+    struct Page *page;
+
+    for (page_order = 0; (PAGE_SIZE << page_order) < buf->block_size; page_order++)
+      ;
+
+    page = kva2page(buf->data);
+    page_assert(page, page_order, PAGE_TAG_BUF);
+  }
 
   // TODO: check for I/O errors
   buf_request(buf);

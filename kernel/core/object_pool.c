@@ -199,6 +199,7 @@ k_object_pool_put(struct KObjectPool *pool, void *obj)
   k_spinlock_acquire(&pool->lock);
 
   page = kva2page(ROUND_DOWN(obj, PAGE_SIZE << pool->slab_page_order));
+  page_assert(page, pool->slab_page_order, PAGE_TAG_SLAB);
   slab = page->slab;
 
   k_object_pool_slab_put(slab, obj);
@@ -484,6 +485,7 @@ k_object_pool_slab_destroy(struct KObjectSlab *slab)
 
   // Free the page block
   page = kva2page(slab->data);
+  page_assert(page, pool->slab_page_order, PAGE_TAG_SLAB);
 
   for (i = 0; i < (1U << pool->slab_page_order); i++) {
     if (page[i].slab != slab)
@@ -509,6 +511,8 @@ k_object_pool_slab_get(struct KObjectSlab *slab)
 {
   struct KObjectPool *pool = slab->pool;
   struct KObjectTag *tag;
+
+  page_assert(kva2page(slab->data), pool->slab_page_order, PAGE_TAG_SLAB);
 
   // The slab must be on the partial list (even if it is full, the
   // object_pool_alloc function moves it to the partial list before calling this
@@ -544,6 +548,8 @@ k_object_pool_slab_put(struct KObjectSlab *slab, void *obj)
   struct KObjectTag *tag;
   
   assert(slab->used_count > 0);
+
+  page_assert(kva2page(slab->data), pool->slab_page_order, PAGE_TAG_SLAB);
 
   // TODO: panic if the object doesn't belong to this slab
 

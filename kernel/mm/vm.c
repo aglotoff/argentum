@@ -23,6 +23,7 @@ struct KSpinLock vm_lock = K_SPINLOCK_INITIALIZER("vm_lock");
 struct Page *
 vm_page_lookup(void *pgtab, uintptr_t va, int *flags_store)
 {
+  struct Page *page;
   void *pte;
 
   assert(k_spinlock_holding(&vm_lock));
@@ -39,11 +40,11 @@ vm_page_lookup(void *pgtab, uintptr_t va, int *flags_store)
     } else {
       *flags_store = arch_vm_pte_flags(pte);
     }
-
-    
   }
 
-  return pa2page(arch_vm_pte_addr(pte));
+  page = pa2page(arch_vm_pte_addr(pte));
+  page_assert(page, 0, PAGE_TAG_ANON);
+  return page;
 }
 
 /**
@@ -105,6 +106,7 @@ vm_page_remove(void *pgtab, uintptr_t va)
     return 0;
 
   page = pa2page(arch_vm_pte_addr(pte));
+  page_assert(page, 0, PAGE_TAG_ANON);
 
   if (--page->ref_count == 0)
     page_free_one(page);

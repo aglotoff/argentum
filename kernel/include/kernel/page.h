@@ -119,6 +119,7 @@ void         page_init_high(void);
 struct Page *page_alloc_block(unsigned, int, int);
 void         page_free_block(struct Page *, unsigned);
 void         page_free_region(physaddr_t, physaddr_t);
+void         page_assert(struct Page *, unsigned, int);
 
 /**
  * Allocate a single page.
