@@ -101,7 +101,7 @@ devfs_write(struct Inode *inode, uintptr_t va, size_t n, off_t offset)
 }
 
 int
-devfs_rmdir(struct Inode *parent, struct Inode *inode)
+devfs_rmdir(struct Inode *parent, struct Inode *inode, const char *)
 {
   assert(inode->dev == 1);
   (void) parent;
@@ -176,7 +176,7 @@ devfs_link(struct Inode *parent, char *name, struct Inode *inode)
 }
 
 int
-devfs_unlink(struct Inode *parent, struct Inode *inode)
+devfs_unlink(struct Inode *parent, struct Inode *inode, const char *)
 {
   assert(inode->dev == 1);
   (void) parent;

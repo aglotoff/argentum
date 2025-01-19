@@ -25,6 +25,7 @@ libc_a_SOURCES += \
   %D%/signal/sigpending.c \
   %D%/signal/sigprocmask.c \
   %D%/signal/sigsuspend.c \
+  %D%/stdio/_rename.c \
   %D%/stdio/flockfile.c \
   %D%/stdio/funlockfile.c \
   %D%/stdlib/callocr.c \

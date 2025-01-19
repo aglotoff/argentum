@@ -59,6 +59,7 @@ LIB_SRCFILES := \
 	lib/argentum/signal/sigpending.c \
 	lib/argentum/signal/sigprocmask.c \
 	lib/argentum/signal/sigsuspend.c \
+	lib/argentum/stdio/_rename.c \
 	lib/argentum/stdio/flockfile.c \
 	lib/argentum/stdio/funlockfile.c \
 	lib/argentum/stdlib/callocr.c \

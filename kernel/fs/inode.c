@@ -443,6 +443,8 @@ fs_inode_create(struct Inode *dir, char *name, mode_t mode, dev_t dev,
 int
 fs_inode_link(struct Inode *inode, struct Inode *dir, char *name)
 {
+  // FIXME: works only in the same filesystem!
+
   if (!fs_inode_holding(inode))
     panic("inode not locked");
   if (!fs_inode_holding(dir))
@@ -489,7 +491,7 @@ fs_inode_lookup_locked(struct Inode *dir_inode, const char *name, int flags,
 }
 
 int
-fs_inode_unlink(struct Inode *dir, struct Inode *inode)
+fs_inode_unlink(struct Inode *dir, struct Inode *inode, const char *name)
 {
   if (!fs_inode_holding(inode))
     panic("inode not locked");
@@ -505,11 +507,11 @@ fs_inode_unlink(struct Inode *dir, struct Inode *inode)
   if (S_ISDIR(inode->mode))
     return -EPERM;
 
-  return dir->fs->ops->unlink(dir, inode);
+  return dir->fs->ops->unlink(dir, inode, name);
 }
 
 int
-fs_inode_rmdir(struct Inode *dir, struct Inode *inode)
+fs_inode_rmdir(struct Inode *dir, struct Inode *inode, const char *name)
 {
   if (!fs_inode_holding(inode))
     panic("inode not locked");
@@ -526,7 +528,7 @@ fs_inode_rmdir(struct Inode *dir, struct Inode *inode)
   if (!S_ISDIR(inode->mode))
     return -EPERM;
 
-  return dir->fs->ops->rmdir(dir, inode);
+  return dir->fs->ops->rmdir(dir, inode, name);
 }
 
 int
@@ -636,6 +638,92 @@ out1:
 }
 
 int
+fs_rename(char *old, char *new)
+{
+  struct PathNode *old_dir, *new_dir, *old_node, *new_node;
+  struct Inode *inode, *parent_inode;
+  char old_name[NAME_MAX + 1];
+  char new_name[NAME_MAX + 1];
+  int r;
+
+  if ((r = fs_path_lookup(old, old_name, 0, &old_node, &old_dir)) < 0)
+    return r;
+  if (old_node == NULL)
+    return -ENOENT;
+
+  if ((r = fs_path_lookup(new, new_name, 0, &new_node, &new_dir)) < 0)
+    goto out1;
+  if (new_dir == NULL) {
+    r = -ENOENT;
+    goto out1;
+  }
+
+  // TODO: check for the same node?
+  // TODO: lock the namespace manager?
+  // TODO: should be a transaction?
+
+  if (new_node != NULL) {
+    parent_inode = fs_path_inode(new_dir);
+    inode = fs_path_inode(new_node);
+
+    // TODO: lock the namespace manager?
+
+    fs_inode_lock_two(parent_inode, inode);
+    
+    // FIXME: check if is dir
+
+    if ((r = fs_inode_unlink(parent_inode, inode, new_name)) == 0) {
+      fs_path_remove(new_node);
+    }
+
+    fs_inode_unlock_two(parent_inode, inode);
+
+    fs_inode_put(inode);
+    fs_inode_put(parent_inode);
+
+    fs_path_put(new_node);
+
+    if (r != 0)
+      goto out2;
+  }
+
+  inode = fs_path_inode(old_node);
+
+  parent_inode = fs_path_inode(new_dir);
+
+  fs_inode_lock_two(parent_inode, inode);
+  r = fs_inode_link(inode, parent_inode, new_name);
+  fs_inode_unlock_two(parent_inode, inode);
+
+  fs_inode_put(parent_inode);
+
+  if (r < 0)
+    goto out2;
+
+  parent_inode = fs_path_inode(old_dir);
+    
+  fs_inode_lock_two(parent_inode, inode);
+  //cprintf("remove %s\n", );
+  if ((r = fs_inode_unlink(parent_inode, inode, old_name)) == 0) {
+    fs_path_remove(old_node);
+  }
+  fs_inode_unlock_two(parent_inode, inode);
+
+  fs_inode_put(parent_inode);
+
+out2:
+  fs_inode_put(inode);
+
+  fs_path_put(new_dir);
+out1:
+  if (old_dir != NULL)
+    fs_path_put(old_dir);
+  if (old_node != NULL)
+    fs_path_put(old_node);
+  return r;
+}
+
+int
 fs_unlink(const char *path)
 {
   struct PathNode *dir, *pp;
@@ -658,7 +746,7 @@ fs_unlink(const char *path)
 
   fs_inode_lock_two(parent_inode, inode);
   
-  if ((r = fs_inode_unlink(parent_inode, inode)) == 0) {
+  if ((r = fs_inode_unlink(parent_inode, inode, name)) == 0) {
     fs_path_remove(pp);
   }
 
@@ -696,7 +784,7 @@ fs_rmdir(const char *path)
 
   fs_inode_lock_two(parent_inode, inode);
 
-  if ((r = fs_inode_rmdir(parent_inode, inode)) == 0) {
+  if ((r = fs_inode_rmdir(parent_inode, inode, name)) == 0) {
     fs_path_remove(pp);
   }
 

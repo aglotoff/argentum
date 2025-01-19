@@ -322,19 +322,25 @@ ext2_dir_empty(struct Inode *dir)
 }
 
 int
-ext2_unlink(struct Inode *dir, struct Inode *ip)
+ext2_unlink(struct Inode *dir, struct Inode *ip, const char *name)
 {
   struct Ext2DirEntry de;
   off_t off, prev_off;
   size_t rec_len;
+  size_t name_len;
 
   if (dir->ino == ip->ino)
     return -EBUSY;
+
+  name_len = strlen(name);
 
   for (prev_off = off = 0; off < dir->size; prev_off = off, off += de.rec_len) {
     ext2_dirent_read(dir, &de, off);
 
     if (de.inode != ip->ino)
+      continue;
+
+    if ((de.name_len != name_len) || (strncmp(de.name, name, de.name_len) != 0))
       continue;
 
     if (prev_off == off) {
@@ -365,14 +371,14 @@ ext2_unlink(struct Inode *dir, struct Inode *ip)
 }
 
 int
-ext2_rmdir(struct Inode *dir, struct Inode *ip)
+ext2_rmdir(struct Inode *dir, struct Inode *ip, const char *name)
 {
   int r;
 
   if (!ext2_dir_empty(ip))
     return -ENOTEMPTY;
 
-  if ((r = ext2_unlink(dir, ip)) < 0)
+  if ((r = ext2_unlink(dir, ip, name)) < 0)
     return r;
 
   dir->nlink--;

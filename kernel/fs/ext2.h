@@ -179,9 +179,9 @@ int           ext2_create(struct Inode *, char *, mode_t,
                                 struct Inode **);
 struct Inode *ext2_lookup(struct Inode *, const char *);
 int           ext2_link(struct Inode *, char *, struct Inode *);
-int           ext2_unlink(struct Inode *, struct Inode *);
+int           ext2_unlink(struct Inode *, struct Inode *, const char *);
 int           ext2_mkdir(struct Inode *, char *, mode_t, struct Inode **);
-int           ext2_rmdir(struct Inode *, struct Inode *);
+int           ext2_rmdir(struct Inode *, struct Inode *,const char *);
 int           ext2_mknod(struct Inode *, char *, mode_t, dev_t, struct Inode **);
 void          ext2_trunc(struct Inode *, off_t);
 ssize_t       ext2_read(struct Inode *, uintptr_t, size_t, off_t);
