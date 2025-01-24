@@ -74,6 +74,7 @@ struct KThread {
 
   /** Tne process this thread belongs to */
   struct Process   *process;
+  int               stat;
 };
 
 void            arch_thread_init_stack(struct KThread *, void (*)(void));

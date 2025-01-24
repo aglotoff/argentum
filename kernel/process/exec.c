@@ -16,6 +16,8 @@
 #include <kernel/types.h>
 #include <kernel/core/irq.h>
 
+#include "process_private.h"
+
 #define STACK_BOTTOM  (VIRT_USTACK_TOP - USTACK_SIZE)
 #define STACK_PROT    (PROT_READ | PROT_WRITE | VM_USER)
 
@@ -400,10 +402,15 @@ process_exec(const char *path, uintptr_t argv_va, uintptr_t envp_va)
 
   strncpy(proc->name, path, 63);
 
+  process_lock();
+
   old_vm = proc->vm;
   proc->vm = ctx.vm;
 
   arch_vm_load(ctx.vm->pgtab);
+
+  process_unlock();
+
   vm_space_destroy(old_vm);
 
   return arch_trap_frame_init(proc, ctx.entry_va, ctx.argc,

@@ -1,0 +1,11 @@
+diff -ruN old/build-aux/config.sub new/build-aux/config.sub
+--- old/build-aux/config.sub	2024-09-16 08:54:27.000000000 +0300
++++ new/build-aux/config.sub	2025-01-24 09:12:35.325797352 +0300
+@@ -1972,6 +1972,7 @@
+ 	| android* \
+ 	| aof* \
+ 	| aos* \
++	| argentum* \
+ 	| aros* \
+ 	| atheos* \
+ 	| auroraux* \

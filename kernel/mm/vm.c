@@ -7,6 +7,7 @@
 #include <string.h>
 #include <sys/mman.h>
 #include <kernel/fs/fs.h>
+#include <kernel/process.h>
 
 struct KSpinLock vm_lock = K_SPINLOCK_INITIALIZER("vm_lock");
 
@@ -35,11 +36,7 @@ vm_page_lookup(void *pgtab, uintptr_t va, int *flags_store)
     return NULL;
 
   if (flags_store) {
-    if (va == 0x8cb8) {
-      *flags_store = *(int *) pte;
-    } else {
-      *flags_store = arch_vm_pte_flags(pte);
-    }
+    *flags_store = arch_vm_pte_flags(pte);
   }
 
   page = pa2page(arch_vm_pte_addr(pte));

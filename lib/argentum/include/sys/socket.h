@@ -60,6 +60,11 @@ struct sockaddr {
   char        sa_data[14];
 };
 
+struct linger {
+  int	l_onoff;
+  int	l_linger;
+};
+
 int     accept(int, struct sockaddr *, socklen_t *);
 int     bind(int, const struct sockaddr *, socklen_t);
 int     connect(int, const struct sockaddr *, socklen_t);

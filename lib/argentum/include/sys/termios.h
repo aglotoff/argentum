@@ -56,16 +56,17 @@ struct termios {
 #define PARENB		0x0040	/* enable parity on output */
 #define PARODD		0x0080
 
-#define ECHO        0x0001
-#define ECHOE	    	0x0002
-#define ECHOK		    0x0004	/* echo KILL */
-#define ECHONL      0x0008	/* echo NL */
+#define ECHO      0x0001
+#define ECHOE     0x0002
+#define ECHOK		  0x0004	/* echo KILL */
+#define ECHONL    0x0008	/* echo NL */
 #define ICANON		0x0010
 #define IEXTEN		0x0020	/* enable extended functions */
-#define ISIG		0x0040
-#define NOFLSH   0x0080
-#define ECHOCTL 0x0100
-#define ECHOKE  0x0200
+#define ISIG		  0x0040
+#define NOFLSH    0x0080
+#define ECHOCTL   0x0100
+#define ECHOKE    0x0200
+#define TOSTOP		0x00400000
 
 int     tcgetattr(int, struct termios *);
 int     tcsetattr(int, int, const struct termios *);

@@ -52,6 +52,10 @@ arch_vm_switch(struct Process *process)
 {
   k_irq_state_save();
 
+  if (process->vm == NULL) {
+    panic("Bad process: pid=%d state=%d flags=%x status=%x stat=%d\n", process->pid, process->state, process->flags, process->status, process->thread->stat);
+  }
+
   page_assert(kva2page(process->vm->pgtab), 0, PAGE_TAG_VM);
 
   gdt[GD_TSS] = SEG_DESC_16(&tss, sizeof tss - 1, SEG_TYPE_TSS32A, PL_KERNEL);

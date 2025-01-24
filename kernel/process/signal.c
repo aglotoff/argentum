@@ -374,8 +374,10 @@ signal_generate_one(struct Process *process, int signo, int code)
   process->signal_pending[SIGNAL_INDEX(signo)] = signal;
 
   // Blocked signals remain pending
-  if (!signal_is_blocked(process, signo))
+  if (!signal_is_blocked(process, signo)) {
+    assert(process->flags != 0);
     k_thread_interrupt(process->thread);
+  }
 
   return 0;
 }

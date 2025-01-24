@@ -12,7 +12,7 @@
 
 static struct KObjectPool *pipe_cache;
 
-static const size_t PIPE_BUF_ORDER = 2;
+static const size_t PIPE_BUF_ORDER = 4;
 static const size_t PIPE_BUF_SIZE  = (PAGE_SIZE << PIPE_BUF_ORDER);
 
 void
@@ -188,6 +188,7 @@ pipe_write(struct File *file, uintptr_t va, size_t n)
   page_assert(kva2page(pipe->data), PIPE_BUF_ORDER, PAGE_TAG_PIPE);
 
   // TODO: could copy all available data in one or two steps
+  
 
   for (i = 0; i < n; i++) {
     int r;

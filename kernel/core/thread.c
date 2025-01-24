@@ -133,6 +133,7 @@ k_thread_create(struct Process *process, void (*entry)(void *), void *arg,
   thread->arg            = arg;
   thread->err            = 0;
   thread->process        = process;
+  thread->stat           = 0;
   
   thread->kstack         = stack;
   thread->tf             = NULL;

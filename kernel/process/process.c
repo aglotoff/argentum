@@ -293,6 +293,7 @@ process_destroy(int status)
 
   vm = current->vm;
   current->vm = NULL;
+  current->flags |= 0x2000000;
 
   k_timer_fini(&current->itimers[ITIMER_PROF].timer);
   k_timer_fini(&current->itimers[ITIMER_REAL].timer);
@@ -345,6 +346,7 @@ process_copy(int share_vm)
 
   process_lock();
 
+  child->flags |= 0x80000;
   child->parent         = current;
 
   arch_process_copy(current, child);
@@ -586,6 +588,7 @@ _process_continue(struct Process *process)
 
   if (process->state == PROCESS_STATE_STOPPED) {
     process->state = PROCESS_STATE_ACTIVE;
+    assert(process->flags != 0);
     k_thread_interrupt(process->thread);
 
     _signal_state_change_to_parent(process);
