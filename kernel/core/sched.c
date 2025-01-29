@@ -47,6 +47,8 @@ k_sched_init(void)
 void
 _k_sched_enqueue(struct KThread *th)
 {
+  assert(th->stat > 0);
+
   if (!k_spinlock_holding(&_k_sched_spinlock))
     panic("scheduler not locked");
 
@@ -86,7 +88,6 @@ k_sched_switch(struct KThread *thread)
     arch_vm_load(thread->process->vm->pgtab);
   }
 
-  thread->stat++;
   thread->state = THREAD_STATE_RUNNING;
 
   thread->cpu = my_cpu;

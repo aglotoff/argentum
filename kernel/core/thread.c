@@ -25,7 +25,7 @@ static void k_thread_run(void);
  * @param thread The kernel thread to resume execution
  */
 int
-k_thread_resume(struct KThread *thread)
+k_thread_resume(struct KThread *thread, int init)
 {
   _k_sched_lock();
 
@@ -33,6 +33,9 @@ k_thread_resume(struct KThread *thread)
     _k_sched_unlock();
     return -EINVAL;
   }
+
+  if (init)
+    thread->stat++;
 
   _k_sched_enqueue(thread);
   _k_sched_may_yield(thread);

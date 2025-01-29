@@ -190,7 +190,7 @@ sys_thread_new(const char *name, void (*thread)(void *), void *arg,
   (void) stacksize;
 
   task = k_thread_create(NULL, thread, arg, 0);
-  k_thread_resume(task);
+  k_thread_resume(task, 1);
 
   return task;
 }

@@ -44,7 +44,7 @@ user_stack_put_string(struct VMSpace *vm, const char *s, uintptr_t *va_p)
   return user_stack_put(vm, s, strlen(s) + 1, va_p);
 }
 
-#define VEC_MAX 31
+#define VEC_MAX 63
 
 static int
 user_stack_put_strings(struct VMSpace *vm, char *const args[],
