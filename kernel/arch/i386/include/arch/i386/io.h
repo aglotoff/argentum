@@ -11,6 +11,14 @@ inb(int port)
 	return data;
 }
 
+static inline uint16_t
+inw(int port)
+{
+	uint16_t data;
+	asm volatile("inw %w1,%0" : "=a" (data) : "d" (port));
+	return data;
+}
+
 static inline uint32_t
 inl(int port)
 {
@@ -23,6 +31,12 @@ static inline void
 outb(int port, uint8_t data)
 {
 	asm volatile("outb %0,%w1" : : "a" (data), "d" (port));
+}
+
+static inline void
+outw(int port, uint16_t data)
+{
+	asm volatile("outw %0,%w1" : : "a" (data), "d" (port));
 }
 
 static inline void

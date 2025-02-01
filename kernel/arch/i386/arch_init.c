@@ -28,66 +28,109 @@ arch_init(void)
   main();
 }
 
-uint32_t
-pci_config_read(uint32_t bus, uint8_t slot, uint8_t func, uint8_t offset) {
-  uint32_t address;
-  uint32_t lbus  = (uint32_t)bus;
-  uint32_t lslot = (uint32_t)slot;
-  uint32_t lfunc = (uint32_t)func;
+enum {
+  PCI_CONFIG_ADDRESS = 0xCF8,
+  PCI_CONFIG_DATA    = 0xCFC,
+};
 
-  // Create configuration address as per Figure 1
-  address = (uint32_t)((lbus << 16) | (lslot << 11) |
-            (lfunc << 8) | (offset & 0xFC) | ((uint32_t)0x80000000));
+enum {
+  PCI_VENDOR_ID    = 0x00,
+  PCI_COMMAND      = 0x04,
+  PCI_SUBCLASS     = 0x0A,
+  PCI_CLASS        = 0x0B,
+  PCI_HEADER_TYPE  = 0x0E,
+  PCI_BAR0         = 0x10,
+  PCI_BAR1         = 0x14,
+  PCI_BAR2         = 0x18,
+  PCI_BAR3         = 0x1C,
+  PCI_BAR4         = 0x20,
+};
 
-  // Write out the address
-  outl(0xCF8, address);
+enum {
+  PCI_HEADER_TYPE_MASK      = 0x7f,
+  PCI_HEADER_TYPE_MULTIFUNC = (1 << 7),
+};
 
-  // Read in the data
-  // (offset & 2) * 8) = 0 will choose the first word of the 32-bit register
-  return inl(0xCFC);
-}
+enum {
+  PCI_CLASS_MASS_STORAGE = 0x1,
+};
 
-void
-pci_config_write(uint32_t bus, uint8_t slot, uint8_t func, uint8_t offset, uint32_t data) {
-  uint32_t address;
-  uint32_t lbus  = (uint32_t)bus;
-  uint32_t lslot = (uint32_t)slot;
-  uint32_t lfunc = (uint32_t)func;
+enum {
+  PCI_SUBCLASS_IDE = 0x1,
+};
 
-  // Create configuration address as per Figure 1
-  address = (uint32_t)((lbus << 16) | (lslot << 11) |
-            (lfunc << 8) | (offset & 0xFC) | ((uint32_t)0x80000000));
+enum {
+  PCI_COMMAND_IO         = (1 << 0),
+  PCI_COMMAND_MEMORY     = (1 << 1),
+  PCI_COMMAND_BUS_MASTER = (1 << 2),
+};
 
-  // Write out the address
-  outl(0xCF8, address);
-
-  // Read in the data
-  // (offset & 2) * 8) = 0 will choose the first word of the 32-bit register
-  outl(0xCFC, data);
-}
-
-void
-pci_function_check(uint8_t bus, uint8_t device, uint8_t function)
+static void
+pci_config_set_address(unsigned bus, unsigned dev, unsigned func, unsigned off)
 {
-  uint32_t data;
+  outl(PCI_CONFIG_ADDRESS,
+       (1U << 31) |
+       ((bus & 0xFF) << 16) |
+       ((dev & 0x1F) << 11) |
+       ((func & 0x7) << 8) |
+       ((off & 0xFC)));
+}
+
+uint8_t
+pci_config_read8(unsigned bus, unsigned dev, unsigned func, unsigned off)
+{
+  pci_config_set_address(bus, dev, func, off & ~0x3);
+  return inb(PCI_CONFIG_DATA + (off & 0x3));
+}
+
+uint16_t
+pci_config_read16(unsigned bus, unsigned dev, unsigned func, unsigned off)
+{
+  pci_config_set_address(bus, dev, func, off & ~0x3);
+  return inw(PCI_CONFIG_DATA + (off & 0x2));
+}
+
+uint32_t
+pci_config_read32(unsigned bus, unsigned dev, unsigned func, unsigned off)
+{
+  pci_config_set_address(bus, dev, func, off);
+  return inl(PCI_CONFIG_DATA);
+}
+
+void
+pci_config_write16(unsigned bus, unsigned dev, unsigned func, unsigned off,
+                   uint16_t data)
+{
+  pci_config_set_address(bus, dev, func, off & ~0x3);
+  outw(PCI_CONFIG_DATA + (off & 0x2), data);
+}
+
+static void
+pci_function_enable(unsigned bus, unsigned dev, unsigned func)
+{
+  pci_config_write16(bus, dev, func, PCI_COMMAND, PCI_COMMAND_IO |
+                                                  PCI_COMMAND_MEMORY |
+                                                  PCI_COMMAND_BUS_MASTER);
+}
+
+void
+pci_function_check(unsigned bus, unsigned dev, unsigned func)
+{
   uint8_t class_code, subclass;
 
-  data = pci_config_read(bus, device, function, 0x8);
-  class_code = (data >> 24) & 0xFF;
-  subclass = (data >> 16) & 0xFF;
+  class_code = pci_config_read8(bus, dev, func, PCI_CLASS);
+  subclass = pci_config_read8(bus, dev, func, PCI_SUBCLASS);
 
   switch (class_code) {
-  case 0x1:
+  case PCI_CLASS_MASS_STORAGE:
     switch (subclass) {
-      case 0x1:
-        data = pci_config_read(bus, device, function, 0x4);
-        pci_config_write(bus, device, function, 0x4, data | 0x4);
-
-        ide_init(pci_config_read(bus, device, function, 0x10),
-                 pci_config_read(bus, device, function, 0x14),
-                 pci_config_read(bus, device, function, 0x18),
-                 pci_config_read(bus, device, function, 0x1c),
-                 pci_config_read(bus, device, function, 0x20));
+      case PCI_SUBCLASS_IDE:
+        pci_function_enable(bus, dev, func);
+        ide_init(pci_config_read32(bus, dev, func, PCI_BAR0),
+                 pci_config_read32(bus, dev, func, PCI_BAR1),
+                 pci_config_read32(bus, dev, func, PCI_BAR2),
+                 pci_config_read32(bus, dev, func, PCI_BAR3),
+                 pci_config_read32(bus, dev, func, PCI_BAR4));
         break;
       default:
         break;
@@ -99,24 +142,27 @@ pci_function_check(uint8_t bus, uint8_t device, uint8_t function)
 }
 
 void
-pci_device_check(uint8_t bus, uint8_t device) {
-  uint16_t vendor_id;
+pci_device_check(unsigned bus, unsigned dev)
+{
   uint8_t header_type;
   
-  if ((vendor_id = pci_config_read(bus, device, 0, 0)) == 0xFFFF)
+  if (pci_config_read16(bus, dev, 0, PCI_VENDOR_ID) == 0xFFFF)
     return;
 
-  pci_function_check(bus, device, 0);
+  header_type = pci_config_read8(bus, dev, 0, PCI_HEADER_TYPE);
+  if ((header_type & PCI_HEADER_TYPE_MASK) != 0)
+    return; // TODO
 
-  header_type = (pci_config_read(bus, device, 0, 0xC) >> 16) & 0xFF;
-  if (header_type & 0x80) {
-    uint8_t f;
+  pci_function_check(bus, dev, 0);
+  
+  if (header_type & PCI_HEADER_TYPE_MULTIFUNC) {
+    uint8_t func;
 
-    for (f = 1; f < 8; f++) {
-      if ((vendor_id = pci_config_read(bus, device, 0, 0)) == 0xFFFF)
+    for (func = 1; func < 8; func++) {
+      if (pci_config_read16(bus, dev, func, PCI_VENDOR_ID) == 0xFFFF)
         continue;
 
-      pci_function_check(bus, device, f);
+      pci_function_check(bus, dev, func);
     }
   }
 }
