@@ -86,10 +86,11 @@ process_init(void)
   signal_init_system();
 }
 
+pid_t next_pid;
+
 struct Process *
 process_alloc(void)
 {
-  static pid_t next_pid;
   struct Process *process;
 
   if ((process = (struct Process *) k_object_pool_get(process_cache)) == NULL)
@@ -106,6 +107,7 @@ process_alloc(void)
   k_list_null(&process->link);
   k_list_null(&process->sibling_link);
 
+  process->vm     = NULL;
   process->parent = NULL;
   process->state = PROCESS_STATE_ACTIVE;
   process->flags = 0;
@@ -212,7 +214,7 @@ process_create(const void *binary, struct Process **pstore)
   k_list_add_back(&__process_list, &proc->link);
   process_unlock();
 
-  k_thread_resume(proc->thread, 1);
+  k_thread_resume(proc->thread);
 
   if (pstore != NULL)
     *pstore = proc;
@@ -292,8 +294,7 @@ process_destroy(int status)
   process_lock();
 
   vm = current->vm;
-  current->vm = NULL;
-  current->flags |= 0x2000000;
+  current->thread->process = NULL;
 
   k_timer_fini(&current->itimers[ITIMER_PROF].timer);
   k_timer_fini(&current->itimers[ITIMER_REAL].timer);
@@ -346,8 +347,7 @@ process_copy(int share_vm)
 
   process_lock();
 
-  child->flags |= 0x80000;
-  child->parent         = current;
+  child->parent = current;
 
   arch_process_copy(current, child);
 
@@ -370,7 +370,7 @@ process_copy(int share_vm)
 
   // cprintf("[k] process #%x created\n", child->pid);
 
-  k_thread_resume(child->thread, 1);
+  k_thread_resume(child->thread);
 
   return child->pid;
 }
@@ -583,7 +583,7 @@ process_update_times(struct Process *process, clock_t user, clock_t system)
 void
 _process_continue(struct Process *process)
 {
-  assert(process != NULL);
+  assert((process != NULL) && (process->vm != NULL));
   assert(k_spinlock_holding(&__process_lock));
 
   if (process->state == PROCESS_STATE_STOPPED) {
@@ -598,7 +598,7 @@ _process_continue(struct Process *process)
 void
 _process_stop(struct Process *process)
 {
-  assert(process != NULL);
+  assert((process != NULL) && (process->vm != NULL));
   assert(k_spinlock_holding(&__process_lock));
 
   if (process->state != PROCESS_STATE_STOPPED) {

@@ -375,7 +375,6 @@ signal_generate_one(struct Process *process, int signo, int code)
 
   // Blocked signals remain pending
   if (!signal_is_blocked(process, signo)) {
-    assert(process->flags != 0);
     k_thread_interrupt(process->thread);
   }
 
@@ -419,6 +418,8 @@ signal_deliver_pending(void)
   } else if (sa->sa_handler == SIG_IGN) {
     panic("ignored signals should not be delivered");
   } else {
+    if (process->pid == 200)
+      cprintf("delivering signal %d %p\n", signal->info.si_signo, sa->sa_handler);
     exit_code = signal_action_custom(process, signal, sa);
   }
 

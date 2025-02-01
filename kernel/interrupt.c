@@ -60,7 +60,7 @@ interrupt_attach_thread(int irq, interrupt_handler_t handler, void *handler_arg)
 
   interrupt_attach(irq, interrupt_thread_notify, isr);
 
-  k_thread_resume(thread, 1);
+  k_thread_resume(thread);
 }
 
 void

@@ -47,8 +47,6 @@ k_sched_init(void)
 void
 _k_sched_enqueue(struct KThread *th)
 {
-  assert(th->stat > 0);
-
   if (!k_spinlock_holding(&_k_sched_spinlock))
     panic("scheduler not locked");
 
@@ -83,7 +81,9 @@ k_sched_switch(struct KThread *thread)
 {
   struct KCpu *my_cpu = _k_cpu();
 
-  if (thread->process != NULL && thread->process->state != PROCESS_STATE_ZOMBIE) {
+  if (thread->process != NULL) {
+    assert(thread->process->thread == thread);
+
     arch_vm_switch(thread->process);
     arch_vm_load(thread->process->vm->pgtab);
   }
@@ -333,8 +333,6 @@ _k_sched_wakeup_one_locked(struct KListLink *queue, int result)
 
   thread = KLIST_CONTAINER(queue->next, struct KThread, link);
 
-
-
   _k_sched_resume(thread, result);
 
   return thread;
@@ -350,8 +348,6 @@ _k_sched_may_yield(struct KThread *thread)
 
   if (!k_spinlock_holding(&_k_sched_spinlock))
     panic("scheduler not locked");
-
-
 
   my_cpu = _k_cpu();
   my_thread = my_cpu->thread;

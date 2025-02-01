@@ -74,7 +74,6 @@ struct KThread {
 
   /** Tne process this thread belongs to */
   struct Process   *process;
-  int               stat;
 };
 
 void            arch_thread_init_stack(struct KThread *, void (*)(void));
@@ -83,7 +82,7 @@ void            arch_thread_idle(void);
 struct KThread *k_thread_current(void);
 struct KThread *k_thread_create(struct Process *, void (*)(void *), void *, int);
 void            k_thread_exit(void);
-int             k_thread_resume(struct KThread *, int);
+int             k_thread_resume(struct KThread *);
 void            k_thread_suspend(void);
 void            k_thread_yield(void);
 void            thread_cleanup(struct KThread *);

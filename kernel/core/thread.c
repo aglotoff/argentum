@@ -25,7 +25,7 @@ static void k_thread_run(void);
  * @param thread The kernel thread to resume execution
  */
 int
-k_thread_resume(struct KThread *thread, int init)
+k_thread_resume(struct KThread *thread)
 {
   _k_sched_lock();
 
@@ -34,8 +34,7 @@ k_thread_resume(struct KThread *thread, int init)
     return -EINVAL;
   }
 
-  if (init)
-    thread->stat++;
+  assert(k_list_is_null(&thread->link));
 
   _k_sched_enqueue(thread);
   _k_sched_may_yield(thread);
@@ -86,7 +85,6 @@ k_thread_interrupt(struct KThread *thread)
   _k_sched_lock();
 
   // TODO: if thread is running, send an SGI
-
   _k_sched_resume(thread, -EINTR);
 
   _k_sched_unlock();
@@ -136,8 +134,7 @@ k_thread_create(struct Process *process, void (*entry)(void *), void *arg,
   thread->arg            = arg;
   thread->err            = 0;
   thread->process        = process;
-  thread->stat           = 0;
-  
+
   thread->kstack         = stack;
   thread->tf             = NULL;
 
