@@ -41,7 +41,7 @@ pipe_open(struct File **read_store, struct File **write_store)
     goto fail2;
   }
 
-  pipe->data = (char *) page2kva(page);
+  pipe->buf = (char *) page2kva(page);
   page->ref_count++;
 
   if ((r = file_alloc(&read)) < 0)
@@ -56,6 +56,7 @@ pipe_open(struct File **read_store, struct File **write_store)
   pipe->read_pos   = 0;
   pipe->write_pos  = 0;
   pipe->size       = 0;
+  pipe->max_size   = PIPE_BUF_SIZE;
   k_waitqueue_init(&pipe->read_queue);
   k_waitqueue_init(&pipe->write_queue);
 
@@ -117,7 +118,7 @@ pipe_close(struct File *file)
 
   k_spinlock_release(&pipe->lock);
 
-  page = kva2page(pipe->data);
+  page = kva2page(pipe->buf);
   page_assert(page, PIPE_BUF_ORDER, PAGE_TAG_PIPE);
 
   page->ref_count--;
@@ -139,7 +140,7 @@ pipe_read(struct File *file, uintptr_t va, size_t n)
 
   k_spinlock_acquire(&pipe->lock);
 
-  page_assert(kva2page(pipe->data), PIPE_BUF_ORDER, PAGE_TAG_PIPE);
+  page_assert(kva2page(pipe->buf), PIPE_BUF_ORDER, PAGE_TAG_PIPE);
 
   while (pipe->write_open && (pipe->size == 0)) {
     int r;
@@ -152,23 +153,32 @@ pipe_read(struct File *file, uintptr_t va, size_t n)
   
   // TODO: could copy all available data in one or two steps
 
-  for (i = 0; (i < n) && (pipe->size > 0); i++, pipe->size--) {
+  for (i = 0; (i < n) && (pipe->size > 0); ) {
+    size_t nread;
     int r;
 
-    r = vm_space_copy_out(&pipe->data[pipe->read_pos++], va + i, 1);
+    nread = MIN(pipe->size, n - i);
+    if (pipe->read_pos + nread > pipe->max_size)
+      // Prevent overflow
+      nread = pipe->max_size - pipe->read_pos;
 
-    if (pipe->read_pos == PIPE_BUF_SIZE)
-      pipe->read_pos = 0;
-
+    r = vm_space_copy_out(&pipe->buf[pipe->read_pos], va + i, nread);
     if (r < 0) {
       k_waitqueue_wakeup_all(&pipe->write_queue);
       k_spinlock_release(&pipe->lock);
+
       return r;
     }
+
+    pipe->read_pos += nread;
+    i += nread;
+    pipe->size -= nread;
+
+    if (pipe->read_pos == pipe->max_size)
+      pipe->read_pos = 0;
   }
 
   k_waitqueue_wakeup_all(&pipe->write_queue);
-
   k_spinlock_release(&pipe->lock);
 
   return i;
@@ -185,33 +195,39 @@ pipe_write(struct File *file, uintptr_t va, size_t n)
 
   k_spinlock_acquire(&pipe->lock);
 
-  page_assert(kva2page(pipe->data), PIPE_BUF_ORDER, PAGE_TAG_PIPE);
+  page_assert(kva2page(pipe->buf), PIPE_BUF_ORDER, PAGE_TAG_PIPE);
 
-  // TODO: could copy all available data in one or two steps
-  
-
-  for (i = 0; i < n; i++) {
+  for (i = 0; i < n; ) {
+    size_t nwrite;
     int r;
 
-    while (pipe->read_open && (pipe->size == PIPE_BUF_SIZE)) {
+    while (pipe->read_open && (pipe->size == pipe->max_size)) {
       if ((r = k_waitqueue_sleep(&pipe->write_queue, &pipe->lock)) < 0) {
         k_spinlock_release(&pipe->lock);
         return r;
       }
     }
 
-    r = vm_space_copy_in(&pipe->data[pipe->write_pos++], va + i, 1);
-  
-    if (pipe->write_pos == PIPE_BUF_SIZE)
-      pipe->write_pos = 0;
+    nwrite = MIN(pipe->max_size - pipe->size, n - i);
+    if (pipe->write_pos + nwrite > pipe->max_size)
+      // Prevent overflow
+      nwrite = pipe->max_size - pipe->write_pos;
 
-    if (pipe->size++ == 0)
-      k_waitqueue_wakeup_all(&pipe->read_queue);
-
+    r = vm_space_copy_in(&pipe->buf[pipe->write_pos], va + i, nwrite);
     if (r < 0) {
       k_spinlock_release(&pipe->lock);
       return r;
     }
+
+    if (pipe->size == 0)
+      k_waitqueue_wakeup_all(&pipe->read_queue);
+
+    i += nwrite;
+    pipe->size += nwrite;
+    pipe->write_pos += nwrite;
+
+    if (pipe->write_pos == pipe->max_size)
+      pipe->write_pos = 0;
   }
 
   k_spinlock_release(&pipe->lock);

@@ -6,12 +6,13 @@
 
 struct Pipe {
   struct KSpinLock lock;
-  char              *data;
+  char              *buf;
   int                read_open;
   int                write_open;
   size_t             read_pos;
   size_t             write_pos;
   size_t             size;
+  size_t             max_size;
   struct KWaitQueue read_queue;
   struct KWaitQueue write_queue;
 };
