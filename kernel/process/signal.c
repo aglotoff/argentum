@@ -66,6 +66,28 @@ signal_init(struct Process *process)
   }
 }
 
+void
+signal_reset(struct Process *process)
+{
+  struct KListLink *link;
+  int i;
+
+  // process->signal_queue initialized in process_ctor
+  sigemptyset(&process->signal_mask);
+
+  for (i = 0; i < NSIG; i++) {
+    process->signal_actions[i].sa_handler = SIG_DFL;  
+    process->signal_pending[i] = NULL;
+  }
+
+  KLIST_FOREACH(&process->signal_queue, link) {
+    struct Signal *signal = KLIST_CONTAINER(link, struct Signal, link);
+
+    k_list_remove(&signal->link);
+    signal_free(signal);
+  }
+}
+
 // TODO: reorder parent and child?
 void
 signal_clone(struct Process *parent, struct Process *child)
@@ -418,8 +440,6 @@ signal_deliver_pending(void)
   } else if (sa->sa_handler == SIG_IGN) {
     panic("ignored signals should not be delivered");
   } else {
-    if (process->pid == 200)
-      cprintf("delivering signal %d %p\n", signal->info.si_signo, sa->sa_handler);
     exit_code = signal_action_custom(process, signal, sa);
   }
 

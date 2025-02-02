@@ -15,6 +15,7 @@
 #include <kernel/vmspace.h>
 #include <kernel/types.h>
 #include <kernel/core/irq.h>
+#include <kernel/signal.h>
 
 #include "process_private.h"
 
@@ -80,9 +81,9 @@ user_stack_put_vector(struct VMSpace *vm, uintptr_t *vec, int count,
 struct ExecContext {
   struct Inode   *inode;
   struct VMSpace *vm;
-  uintptr_t       argv[VEC_MAX + 1];
+  uintptr_t      *argv;
   int             argc;
-  uintptr_t       envp[VEC_MAX + 1];
+  uintptr_t      *envp;
   int             envc;
   uintptr_t       argv_va;
   uintptr_t       env_va;
@@ -367,6 +368,11 @@ process_exec(const char *path, uintptr_t argv_va, uintptr_t envp_va)
 
   char **argv, **envp;
 
+  if ((ctx.argv = k_malloc((sizeof ctx.argv[0]) * VEC_MAX + 1)) == NULL)
+    panic("out of memory");
+  if ((ctx.envp = k_malloc((sizeof ctx.envp[0]) * VEC_MAX + 1)) == NULL)
+    panic("out of memory");
+
   if ((ctx.vm = vm_space_create()) == NULL) {
     r = -ENOMEM;
     goto out1;
@@ -407,11 +413,16 @@ process_exec(const char *path, uintptr_t argv_va, uintptr_t envp_va)
   old_vm = proc->vm;
   proc->vm = ctx.vm;
 
+  signal_reset(proc);
+
   arch_vm_load(ctx.vm->pgtab);
 
   process_unlock();
 
   vm_space_destroy(old_vm);
+
+  k_free(ctx.envp);
+  k_free(ctx.argv);
 
   return arch_trap_frame_init(proc, ctx.entry_va, ctx.argc,
                               ctx.argv_va, 
@@ -428,5 +439,7 @@ out3:
 out2:
   vm_space_destroy(ctx.vm);
 out1:
+  k_free(ctx.envp);
+  k_free(ctx.argv);
   return r;
 }

@@ -32,5 +32,6 @@ int  signal_return(void);
 int  signal_pending(sigset_t *);
 int  signal_mask_change(int, const sigset_t *, sigset_t *);
 int  signal_suspend(const sigset_t *);
+void signal_reset(struct Process *);
 
 #endif // !__KERNEL_INCLUDE_KERNEL_SIGNAL_H__

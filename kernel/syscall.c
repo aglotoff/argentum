@@ -107,7 +107,7 @@ sys_dispatch(void)
     int r = syscalls[num]();
 
     // if (r < 0 && process_current()->pid > 3)
-    //    cprintf("syscall(%d) -> %d\n", num, r);
+    //   cprintf("[%s] syscall(%d) -> %d\n", process_current()->name, num, r);
 
     return r;
   }
