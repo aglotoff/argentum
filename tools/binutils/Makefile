@@ -25,7 +25,7 @@ $(SRC_DIR): $(TARBALL_FILE)
 $(BUILD_DIR)/Makefile: $(SRC_DIR)
 	mkdir -p $(@D)
 	cd $(@D) && ../$(SRC_DIR)/configure --prefix=/usr/local \
-	                                    --target=arm-none-argentum \
+	                                    --target=$(HOST) \
 	                                    --with-sysroot=$(SYSROOT) \
 																		  --disable-nls \
                                       --disable-werror

@@ -28,14 +28,17 @@ $(SRC_DIR): $(TARBALL_FILE)
 	tar xf $<
 	cd $@ && patch -p1 -i ../$(PATCH_FILE) && ./contrib/download_prerequisites
 
+EXTRA_OPTIONS :=
+
+ifeq ($(HOST), arm-none-argentum)
+EXTRA_OPTIONS := --with-cpu=cortex-a9 --with-float=hard --with-fpu=vfp
+endif
+
 $(BUILD_DIR)/Makefile: $(SRC_DIR)
 	mkdir -p $(@D)
 	cd $(@D) && ../$(SRC_DIR)/configure --prefix=/usr/local \
-																			--target=arm-none-argentum \
+																			--target=$(HOST) \
 																		  --with-sysroot=$(SYSROOT) \
-																			--with-cpu=cortex-a9 \
-																			--with-float=hard \
-																			--with-fpu=vfp \
 																			--with-newlib \
 																			--enable-languages=c,c++ \
 																			--disable-nls \
@@ -50,7 +53,8 @@ $(BUILD_DIR)/Makefile: $(SRC_DIR)
 																			--disable-libstdcxx-pch \
 																			--disable-shared \
 																			--disable-threads \
-																			--disable-tls
+																			--disable-tls \
+																			$(EXTRA_OPTIONS)
 
 clean:
 	rm -rf $(SRC_DIR) $(BUILD_DIR)

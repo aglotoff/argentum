@@ -33,7 +33,7 @@ $(SRC_DIR): $(TARBALL_FILE)
 
 EXTRA_OPTIONS :=
 
-ifeq ($(HOST), 'arm-none-argentum')
+ifeq ($(HOST), arm-none-argentum)
 EXTRA_OPTIONS := --with-cpu=cortex-a9 --with-float=hard --with-fpu=vfp
 endif
 
