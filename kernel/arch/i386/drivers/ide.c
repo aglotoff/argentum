@@ -65,7 +65,7 @@ enum {
 };
 
 struct KListLink ide_queue;
-struct KSpinLock ide_lock;
+struct KMutex ide_mutex;
 
 static int  ide_irq_thread(int, void *);
 static void ide_start_transfer(struct Buf *);
@@ -119,7 +119,7 @@ ide_init(uint32_t bar0, uint32_t bar1, uint32_t bar2, uint32_t bar3, uint32_t ba
   (void) bar3;
 
   k_list_init(&ide_queue);
-  k_spinlock_init(&ide_lock, "ide_queue");
+  k_mutex_init(&ide_mutex, "ide_queue");
 
   if ((prd_page = page_alloc_one(PAGE_ALLOC_ZERO, 0)) == NULL)
     panic("cannot allocate PRD");
@@ -163,7 +163,7 @@ ide_request(struct Buf *buf)
   if (buf->block_size % IDE_BLOCK_LEN != 0)
     panic("block size must be a multiple of %u", IDE_BLOCK_LEN);
 
-  k_spinlock_acquire(&ide_lock);
+  k_mutex_lock(&ide_mutex);
 
   // Add buffer to the queue.
   k_list_add_back(&ide_queue, &buf->queue_link);
@@ -176,9 +176,9 @@ ide_request(struct Buf *buf)
   // Wait for the R/W operation to finish.
   // TODO: deal with errors!
   while ((buf->flags & (BUF_DIRTY | BUF_VALID)) != BUF_VALID)
-    k_waitqueue_sleep(&buf->wait_queue, &ide_lock);
+    k_condvar_wait(&buf->wait_cond, &ide_mutex);
 
-  k_spinlock_release(&ide_lock);
+  k_mutex_unlock(&ide_mutex);
 }
 
 volatile uint8_t *test = (uint8_t *) VIRT_KERNEL_BASE;
@@ -188,7 +188,7 @@ ide_start_transfer(struct Buf *buf)
 {
   size_t nsectors;
 
-  assert(k_spinlock_holding(&ide_lock));
+  assert(k_mutex_holding(&ide_mutex));
   assert(buf->queue_link.prev == &ide_queue);
   assert(buf->block_size % IDE_BLOCK_LEN == 0);
 
@@ -279,7 +279,7 @@ ide_irq_thread(int irq, void *arg)
   (void) irq;
   (void) arg;
 
-  k_spinlock_acquire(&ide_lock);
+  k_mutex_lock(&ide_mutex);
 
   if (k_list_is_empty(&ide_queue))
     panic("queue is empty");
@@ -321,9 +321,9 @@ ide_irq_thread(int irq, void *arg)
     ide_start_transfer(next_buf);
   }
 
-  k_waitqueue_wakeup_all(&buf->wait_queue);
+  k_condvar_broadcast(&buf->wait_cond);
 
-  k_spinlock_release(&ide_lock);
+  k_mutex_unlock(&ide_mutex);
 
   return 1;
 }

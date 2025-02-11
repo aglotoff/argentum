@@ -4,7 +4,7 @@
 #include <stdint.h>
 
 #include <kernel/core/list.h>
-#include <kernel/spinlock.h>
+#include <kernel/mutex.h>
 
 #define SD_BLOCKLEN               512         // Single block length in bytes
 #define SD_BLOCKLEN_LOG           9           // log2 of SD_BLOCKLEN
@@ -29,9 +29,9 @@ struct SDOps {
 
 struct SD {
   struct KListLink queue;
-  struct KSpinLock lock;
-  struct SDOps *ops;
-  void *ctx;
+  struct KMutex    mutex;
+  struct SDOps    *ops;
+  void            *ctx;
 };
 
 int  sd_init(struct SD *, struct SDOps *, void *, int);

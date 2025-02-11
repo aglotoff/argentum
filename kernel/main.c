@@ -5,6 +5,7 @@
 
 #include <kernel/console.h>
 #include <kernel/core/cpu.h>
+#include <kernel/core/condvar.h>
 #include <kernel/tty.h>
 #include <kernel/fs/buf.h>
 #include <kernel/fs/file.h>
@@ -69,6 +70,7 @@ main(void)
 {
   // Initialize core services
   k_object_pool_system_init();
+  k_condvar_system_init();
   k_mutex_system_init();
   k_semaphore_system_init();
   k_mailbox_system_init();

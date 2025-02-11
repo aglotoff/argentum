@@ -6,7 +6,6 @@
 #include <kernel/object_pool.h>
 #include <kernel/page.h>
 #include <kernel/pipe.h>
-#include <kernel/waitqueue.h>
 #include <kernel/process.h>
 #include <kernel/vmspace.h>
 
@@ -50,15 +49,15 @@ pipe_open(struct File **read_store, struct File **write_store)
   if ((r = file_alloc(&write)) < 0)
     goto fail4;
 
-  k_spinlock_init(&pipe->lock, "pipe");
+  k_mutex_init(&pipe->mutex, "pipe");
   pipe->read_open  = 1;
   pipe->write_open = 1;
   pipe->read_pos   = 0;
   pipe->write_pos  = 0;
   pipe->size       = 0;
   pipe->max_size   = PIPE_BUF_SIZE;
-  k_waitqueue_init(&pipe->read_queue);
-  k_waitqueue_init(&pipe->write_queue);
+  k_condvar_init(&pipe->read_cond);
+  k_condvar_init(&pipe->write_cond);
 
   read->type  = FD_PIPE;
   read->pipe  = pipe;
@@ -97,32 +96,36 @@ pipe_close(struct File *file)
   if (file->type != FD_PIPE)
     return -EBADF;
 
-  k_spinlock_acquire(&pipe->lock);
+  k_mutex_lock(&pipe->mutex);
 
   if (write) {
     pipe->write_open = 0;
     if (pipe->read_open) {
-      k_waitqueue_wakeup_all(&pipe->read_queue);
+      k_condvar_broadcast(&pipe->read_cond);
     }
   } else {
     pipe->read_open = 0;
     if (pipe->write_open) {
-      k_waitqueue_wakeup_all(&pipe->write_queue);
+      k_condvar_broadcast(&pipe->write_cond);
     }
   }
 
   if (pipe->read_open || pipe->write_open) {
-    k_spinlock_release(&pipe->lock);
+    k_mutex_unlock(&pipe->mutex);
     return 0;
   }
 
-  k_spinlock_release(&pipe->lock);
+  k_mutex_unlock(&pipe->mutex);
 
   page = kva2page(pipe->buf);
   page_assert(page, PIPE_BUF_ORDER, PAGE_TAG_PIPE);
 
   page->ref_count--;
   page_free_block(page, PIPE_BUF_ORDER);
+
+  k_mutex_fini(&pipe->mutex);
+  k_condvar_fini(&pipe->read_cond);
+  k_condvar_fini(&pipe->write_cond);
 
   k_object_pool_put(pipe_cache, pipe);
 
@@ -138,15 +141,15 @@ pipe_read(struct File *file, uintptr_t va, size_t n)
   if (file->type != FD_PIPE)
     return -EBADF;
 
-  k_spinlock_acquire(&pipe->lock);
+  k_mutex_lock(&pipe->mutex);
 
   page_assert(kva2page(pipe->buf), PIPE_BUF_ORDER, PAGE_TAG_PIPE);
 
   while (pipe->write_open && (pipe->size == 0)) {
     int r;
 
-    if ((r = k_waitqueue_sleep(&pipe->read_queue, &pipe->lock)) < 0) {
-      k_spinlock_release(&pipe->lock);
+    if ((r = k_condvar_wait(&pipe->read_cond, &pipe->mutex)) < 0) {
+      k_mutex_unlock(&pipe->mutex);
       return r;
     }
   }
@@ -164,8 +167,8 @@ pipe_read(struct File *file, uintptr_t va, size_t n)
 
     r = vm_space_copy_out(&pipe->buf[pipe->read_pos], va + i, nread);
     if (r < 0) {
-      k_waitqueue_wakeup_all(&pipe->write_queue);
-      k_spinlock_release(&pipe->lock);
+      k_condvar_broadcast(&pipe->write_cond);
+      k_mutex_unlock(&pipe->mutex);
 
       return r;
     }
@@ -178,8 +181,8 @@ pipe_read(struct File *file, uintptr_t va, size_t n)
       pipe->read_pos = 0;
   }
 
-  k_waitqueue_wakeup_all(&pipe->write_queue);
-  k_spinlock_release(&pipe->lock);
+  k_condvar_broadcast(&pipe->write_cond);
+  k_mutex_unlock(&pipe->mutex);
 
   return i;
 }
@@ -193,7 +196,7 @@ pipe_write(struct File *file, uintptr_t va, size_t n)
   if (file->type != FD_PIPE)
     return -EBADF;
 
-  k_spinlock_acquire(&pipe->lock);
+  k_mutex_lock(&pipe->mutex);
 
   page_assert(kva2page(pipe->buf), PIPE_BUF_ORDER, PAGE_TAG_PIPE);
 
@@ -202,8 +205,8 @@ pipe_write(struct File *file, uintptr_t va, size_t n)
     int r;
 
     while (pipe->read_open && (pipe->size == pipe->max_size)) {
-      if ((r = k_waitqueue_sleep(&pipe->write_queue, &pipe->lock)) < 0) {
-        k_spinlock_release(&pipe->lock);
+      if ((r = k_condvar_wait(&pipe->write_cond, &pipe->mutex)) < 0) {
+        k_mutex_unlock(&pipe->mutex);
         return r;
       }
     }
@@ -215,12 +218,12 @@ pipe_write(struct File *file, uintptr_t va, size_t n)
 
     r = vm_space_copy_in(&pipe->buf[pipe->write_pos], va + i, nwrite);
     if (r < 0) {
-      k_spinlock_release(&pipe->lock);
+      k_mutex_unlock(&pipe->mutex);
       return r;
     }
 
     if (pipe->size == 0)
-      k_waitqueue_wakeup_all(&pipe->read_queue);
+      k_condvar_broadcast(&pipe->read_cond);
 
     i += nwrite;
     pipe->size += nwrite;
@@ -230,7 +233,7 @@ pipe_write(struct File *file, uintptr_t va, size_t n)
       pipe->write_pos = 0;
   }
 
-  k_spinlock_release(&pipe->lock);
+  k_mutex_unlock(&pipe->mutex);
 
   return i;
 }
@@ -243,7 +246,7 @@ pipe_stat(struct File *file, struct stat *buf)
   if (file->type != FD_PIPE)
     return -EBADF;
   
-  k_spinlock_acquire(&pipe->lock);
+  k_mutex_lock(&pipe->mutex);
 
   // TODO: use meaningful values
   buf->st_dev          = 255;
@@ -263,7 +266,7 @@ pipe_stat(struct File *file, struct stat *buf)
   buf->st_blocks       = 0;
   buf->st_blksize      = 0;
 
-  k_spinlock_release(&pipe->lock);
+  k_mutex_unlock(&pipe->mutex);
 
   return 0;
 }

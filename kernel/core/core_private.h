@@ -23,6 +23,8 @@ void            _k_sched_recalc_priority(struct KThread *);
 void            _k_sched_tick(void);
 void            _k_sched_update_effective_priority(void);
 
+int             _k_mutex_timed_lock(struct KMutex *, unsigned long);
+void            _k_mutex_unlock(struct KMutex *);
 int             _k_mutex_get_highest_priority(struct KListLink *);
 void            _k_mutex_may_raise_priority(struct KMutex *, int);
 

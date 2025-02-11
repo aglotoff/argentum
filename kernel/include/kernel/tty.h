@@ -15,6 +15,8 @@
 #include <sys/types.h>
 #include <sys/termios.h>
 
+#include <kernel/mutex.h>
+#include <kernel/core/condvar.h>
 #include <kernel/spinlock.h>
 #include <kernel/waitqueue.h>
 #include <kernel/drivers/screen.h>
@@ -27,13 +29,13 @@ struct Tty {
     size_t              size;
     size_t              read_pos;
     size_t              write_pos;
-    struct KSpinLock    lock;
-    struct KWaitQueue   queue;
+    struct KMutex       mutex;
+    struct KCondVar     cond;
   } in;
   struct {
     struct Screen      *screen;
     int                 stopped;
-    struct KSpinLock    lock;
+    struct KMutex       mutex;
   } out;
   struct termios        termios;
   pid_t                 pgrp;

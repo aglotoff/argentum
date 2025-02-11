@@ -1,20 +1,20 @@
 #ifndef __KERNEL_INCLUDE_KERNEL_PIPE_H__
 #define __KERNEL_INCLUDE_KERNEL_PIPE_H__
 
-#include <kernel/waitqueue.h>
-#include <kernel/spinlock.h>
+#include <kernel/core/condvar.h>
+#include <kernel/mutex.h>
 
 struct Pipe {
-  struct KSpinLock lock;
-  char              *buf;
-  int                read_open;
-  int                write_open;
-  size_t             read_pos;
-  size_t             write_pos;
-  size_t             size;
-  size_t             max_size;
-  struct KWaitQueue read_queue;
-  struct KWaitQueue write_queue;
+  struct KMutex   mutex;
+  char           *buf;
+  int             read_open;
+  int             write_open;
+  size_t          read_pos;
+  size_t          write_pos;
+  size_t          size;
+  size_t          max_size;
+  struct KCondVar read_cond;
+  struct KCondVar write_cond;
 };
 
 void    pipe_init(void);

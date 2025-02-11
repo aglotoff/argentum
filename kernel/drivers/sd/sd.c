@@ -72,7 +72,7 @@ sd_init(struct SD *sd, struct SDOps *ops, void *ctx, int irq)
 
   // Initialize the buffer queue
   k_list_init(&sd->queue);
-  k_spinlock_init(&sd->lock, "sd_queue");
+  k_mutex_init(&sd->mutex, "sd_queue");
 
   // Enable interrupts
   sd->ops->irq_enable(sd->ctx);
@@ -88,7 +88,7 @@ sd_request(struct SD *sd, struct Buf *buf)
   if (buf->block_size % SD_BLOCKLEN != 0)
     panic("block size must be a multiple of %u", SD_BLOCKLEN);
 
-  k_spinlock_acquire(&sd->lock);
+  k_mutex_lock(&sd->mutex);
 
   // Add buffer to the queue.
   k_list_add_back(&sd->queue, &buf->queue_link);
@@ -101,9 +101,9 @@ sd_request(struct SD *sd, struct Buf *buf)
   // Wait for the R/W operation to finish.
   // TODO: deal with errors!
   while ((buf->flags & (BUF_DIRTY | BUF_VALID)) != BUF_VALID)
-    k_waitqueue_sleep(&buf->wait_queue, &sd->lock);
+    k_condvar_wait(&buf->wait_cond, &sd->mutex);
 
-  k_spinlock_release(&sd->lock);
+  k_mutex_unlock(&sd->mutex);
 }
 
 // Send the data transfer request to the hardware.
@@ -113,7 +113,7 @@ sd_start_transfer(struct SD *sd, struct Buf *buf)
   uint32_t cmd, arg;
   size_t nblocks;
 
-  assert(k_spinlock_holding(&sd->lock));
+  assert(k_mutex_holding(&sd->mutex));
   assert(buf->queue_link.prev == &sd->queue);
   assert(buf->block_size % SD_BLOCKLEN == 0);
 
@@ -144,7 +144,7 @@ sd_irq_thread(int irq, void *arg)
 
   (void) irq;
 
-  k_spinlock_acquire(&sd->lock);
+  k_mutex_lock(&sd->mutex);
 
   if (k_list_is_empty(&sd->queue))
     panic("queue is empty");
@@ -181,9 +181,9 @@ sd_irq_thread(int irq, void *arg)
   }
 
   // Resume the task waiting for the buf data.
-  k_waitqueue_wakeup_all(&buf->wait_queue);
+  k_condvar_broadcast(&buf->wait_cond);
 
-  k_spinlock_release(&sd->lock);
+  k_mutex_unlock(&sd->mutex);
 
   return 1;
 }

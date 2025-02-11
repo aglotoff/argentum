@@ -17,6 +17,7 @@
 #include <kernel/time.h>
 #include <kernel/dev.h>
 #include <kernel/signal.h>
+#include <kernel/core/condvar.h>
 
 #include <kernel/drivers/kbd.h>
 
@@ -50,11 +51,10 @@ tty_init(void)
   for (i = 0; i < NTTYS; i++) {
     struct Tty *tty = &ttys[i];
 
-    k_spinlock_init(&tty->in.lock, "tty.in");
-    k_waitqueue_init(&tty->in.queue);
+    k_mutex_init(&tty->in.mutex, "tty.in");
+    k_condvar_init(&tty->in.cond);
 
-    k_spinlock_init(&tty->out.lock, "screen");
-    
+    k_mutex_init(&tty->out.mutex, "tty.out");
     tty->out.stopped = 0;
 
     arch_tty_init(tty, i);
@@ -90,10 +90,10 @@ tty_init(void)
 static void
 tty_echo(struct Tty *tty, char c)
 {
-  k_spinlock_acquire(&tty->out.lock);
+  k_mutex_lock(&tty->out.mutex);
   arch_tty_out_char(tty, c);
   arch_tty_flush(tty);
-  k_spinlock_release(&tty->out.lock);
+  k_mutex_unlock(&tty->out.mutex);
 }
 
 void
@@ -115,12 +115,12 @@ tty_signal(struct Tty *tty, int signo)
   if (tty->pgrp <= 1)
     return;
 
-  k_spinlock_release(&tty->in.lock);
+  k_mutex_unlock(&tty->in.mutex);
 
   if (signal_generate(-tty->pgrp, signo, 0) != 0)
     panic("cannot generate signal");
 
-  k_spinlock_acquire(&tty->in.lock);
+  k_mutex_lock(&tty->in.mutex);
 }
 
 static int
@@ -130,9 +130,9 @@ tty_erase_input(struct Tty *tty)
     return 0;
 
   if (tty->termios.c_lflag & ECHOE) {
-    k_spinlock_acquire(&tty->out.lock);
+    k_mutex_lock(&tty->out.mutex);
     arch_tty_erase(tty);
-    k_spinlock_release(&tty->out.lock);
+    k_mutex_unlock(&tty->out.mutex);
   }
 
   tty->in.size--;
@@ -159,7 +159,7 @@ tty_process_input(struct Tty *tty, char *buf)
 {
   int c, status = 0;
 
-  k_spinlock_acquire(&tty->in.lock);
+  k_mutex_lock(&tty->in.mutex);
 
   while ((c = *buf++) != 0) {
     if (c == '\0')
@@ -213,9 +213,9 @@ tty_process_input(struct Tty *tty, char *buf)
     // Handle flow control characters
     if (tty->termios.c_iflag & (IXON | IXOFF)) {
       if (c == tty->termios.c_cc[VSTOP]) {
-        k_spinlock_acquire(&tty->out.lock);
+        k_mutex_lock(&tty->out.mutex);
         tty->out.stopped = 1;
-        k_spinlock_release(&tty->out.lock);
+        k_mutex_unlock(&tty->out.mutex);
 
         if (tty->termios.c_iflag & IXOFF)
           tty_echo(tty, c);
@@ -224,9 +224,9 @@ tty_process_input(struct Tty *tty, char *buf)
       }
 
       if ((c == tty->termios.c_cc[VSTART]) || (tty->termios.c_iflag & IXANY)) {
-        k_spinlock_acquire(&tty->out.lock);
+        k_mutex_lock(&tty->out.mutex);
         tty->out.stopped = 0;
-        k_spinlock_release(&tty->out.lock);
+        k_mutex_unlock(&tty->out.mutex);
 
         if (c == tty->termios.c_cc[VSTART]) {
           if (tty->termios.c_iflag & IXOFF)
@@ -280,9 +280,9 @@ tty_process_input(struct Tty *tty, char *buf)
   }
 
   if ((status & (IN_EOF | IN_EOL)) || !(tty->termios.c_lflag & ICANON))
-    k_waitqueue_wakeup_all(&tty->in.queue);
+    k_condvar_broadcast(&tty->in.cond);
 
-  k_spinlock_release(&tty->in.lock);
+  k_mutex_unlock(&tty->in.mutex);
 }
 
 // Use the device minor number to select the virtual console corresponding to
@@ -344,7 +344,7 @@ tty_read(dev_t dev, uintptr_t buf, size_t nbytes)
   if (tty == NULL)
     return -ENODEV;
 
-  k_spinlock_acquire(&tty->in.lock);
+  k_mutex_lock(&tty->in.mutex);
 
   while (i < nbytes) {
     char c;
@@ -352,8 +352,8 @@ tty_read(dev_t dev, uintptr_t buf, size_t nbytes)
 
     // Wait for input
     while (tty->in.size == 0) {
-      if ((r = k_waitqueue_sleep(&tty->in.queue, &tty->in.lock)) < 0) {
-        k_spinlock_release(&tty->in.lock);
+      if ((r = k_condvar_wait(&tty->in.cond, &tty->in.mutex)) < 0) {
+        k_mutex_unlock(&tty->in.mutex);
         return r;
       }
     }
@@ -369,7 +369,7 @@ tty_read(dev_t dev, uintptr_t buf, size_t nbytes)
         break;
 
       if ((r = vm_space_copy_out(&c, buf++, 1)) < 0) {
-        k_spinlock_release(&tty->in.lock);
+        k_mutex_unlock(&tty->in.mutex);
         return r;
       }
       i++;
@@ -379,7 +379,7 @@ tty_read(dev_t dev, uintptr_t buf, size_t nbytes)
         break;
     } else {
       if ((r = vm_space_copy_out(&c, buf++, 1)) < 0) {
-        k_spinlock_release(&tty->in.lock);
+        k_mutex_unlock(&tty->in.mutex);
         return r;
       }
       i++;
@@ -389,7 +389,7 @@ tty_read(dev_t dev, uintptr_t buf, size_t nbytes)
     }
   }
 
-  k_spinlock_release(&tty->in.lock);
+  k_mutex_unlock(&tty->in.mutex);
 
   return i;
 }
@@ -403,7 +403,7 @@ tty_write(dev_t dev, uintptr_t buf, size_t nbytes)
   if (tty == NULL)
     return -ENODEV;
 
-  k_spinlock_acquire(&tty->out.lock);
+  k_mutex_lock(&tty->out.mutex);
 
   if (!tty->out.stopped) {
     // TODO: unlock periodically to not block the entire system?
@@ -411,7 +411,7 @@ tty_write(dev_t dev, uintptr_t buf, size_t nbytes)
       int c, r;
 
       if ((r = vm_space_copy_in(&c, buf + i, 1)) < 0) {
-        k_spinlock_release(&tty->out.lock);
+        k_mutex_unlock(&tty->out.mutex);
         return r;
       }
 
@@ -421,7 +421,7 @@ tty_write(dev_t dev, uintptr_t buf, size_t nbytes)
     arch_tty_flush(tty);
   }
 
-  k_spinlock_release(&tty->out.lock);
+  k_mutex_unlock(&tty->out.mutex);
   
   return i;
 }
@@ -500,24 +500,24 @@ tty_select(dev_t dev, struct timeval *timeout)
   if (tty == NULL)
     return -ENODEV;
 
-  k_spinlock_acquire(&tty->in.lock);
+  k_mutex_lock(&tty->in.mutex);
 
   while ((r = tty_try_select(tty)) == 0) {
     unsigned long t = 0;
 
     if (timeout != NULL) {
       t = timeval2ticks(timeout);
-      k_spinlock_release(&tty->in.lock);
+      k_mutex_unlock(&tty->in.mutex);
       return 0;
     }
 
-    if ((r = k_waitqueue_timed_sleep(&tty->in.queue, &tty->in.lock, t)) < 0) {
-      k_spinlock_release(&tty->in.lock);
+    if ((r = k_condvar_timed_wait(&tty->in.cond, &tty->in.mutex, t)) < 0) {
+      k_mutex_unlock(&tty->in.mutex);
       return r;
     }
   }
 
-  k_spinlock_release(&tty->in.lock);
+  k_mutex_unlock(&tty->in.mutex);
 
   return r;
 }

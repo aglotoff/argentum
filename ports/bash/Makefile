@@ -16,7 +16,6 @@ install: all
 	mkdir -p $(SYSROOT)/etc
 	cp profile.template $(SYSROOT)/etc/profile
 	ln -f $(SYSROOT)/usr/bin/bash $(SYSROOT)/bin/bash
-	ln -f $(SYSROOT)/usr/bin/bash $(SYSROOT)/bin/sh
 
 $(TARBALL_FILE):
 	wget "https://ftp.gnu.org/gnu/bash/${TARBALL_NAME}" -O $@

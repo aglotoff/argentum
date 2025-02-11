@@ -15,6 +15,7 @@ ifdef PROCESS_NAME
 endif
 
 KERNEL_SRCFILES := \
+  kernel/core/condvar.c \
  	kernel/core/cpu.c \
 	kernel/core/irq.c \
 	kernel/core/mutex.c \

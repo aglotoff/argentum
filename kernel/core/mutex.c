@@ -157,17 +157,10 @@ k_mutex_try_lock(struct KMutex *mutex)
  * @param lock A pointer to the mutex to be acquired.
  */
 int
-k_mutex_timed_lock(struct KMutex *mutex, unsigned long timeout)
+_k_mutex_timed_lock(struct KMutex *mutex, unsigned long timeout)
 {
   struct KThread *my_task = k_thread_current();
   int r;
-
-  if (my_task == NULL)
-    panic("current task is NULL");
-  if ((mutex == NULL) || (mutex->type != K_MUTEX_TYPE))
-    panic("bad mutex pointer");
-
-  _k_sched_lock();
 
   while ((r = k_mutex_try_lock_locked(mutex)) != 0) {
     if (r != -EAGAIN)
@@ -183,9 +176,32 @@ k_mutex_timed_lock(struct KMutex *mutex, unsigned long timeout)
       break;
   }
 
+  return r;
+}
+
+/**
+ * Acquire the mutex.
+ * 
+ * @param lock A pointer to the mutex to be acquired.
+ */
+int
+k_mutex_timed_lock(struct KMutex *mutex, unsigned long timeout)
+{
+  struct KThread *my_task = k_thread_current();
+  int r;
+
+  if (my_task == NULL)
+    panic("current task is NULL");
+  if ((mutex == NULL) || (mutex->type != K_MUTEX_TYPE))
+    panic("bad mutex pointer");
+
+  _k_sched_lock();
+
+  r = _k_mutex_timed_lock(mutex, timeout);
+
   _k_sched_unlock();
 
-  return 0;
+  return r;
 }
 
 int
@@ -218,6 +234,18 @@ _k_mutex_recalc_priority(struct KMutex *mutex)
   }
 }
 
+void
+_k_mutex_unlock(struct KMutex *mutex)
+{
+  k_list_remove(&mutex->link);
+  mutex->owner = NULL;
+  
+  _k_sched_wakeup_one_locked(&mutex->queue, 0);
+
+  _k_mutex_recalc_priority(mutex);
+  _k_sched_update_effective_priority();
+}
+
 /**
  * Release the mutex.
  * 
@@ -231,13 +259,7 @@ k_mutex_unlock(struct KMutex *mutex)
 
   _k_sched_lock();
 
-  k_list_remove(&mutex->link);
-  mutex->owner = NULL;
-  
-  _k_sched_wakeup_one_locked(&mutex->queue, 0);
-
-  _k_mutex_recalc_priority(mutex);
-  _k_sched_update_effective_priority();
+  _k_mutex_unlock(mutex);
 
   _k_sched_unlock();
 
