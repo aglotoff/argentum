@@ -3,7 +3,7 @@
 
 #include <kernel/core/cpu.h>
 #include <kernel/core/semaphore.h>
-#include <kernel/thread.h>
+#include <kernel/task.h>
 #include <kernel/object_pool.h>
 
 #include "core_private.h"
@@ -118,7 +118,7 @@ k_semaphore_timed_get(struct KSemaphore *semaphore, unsigned long timeout)
       break;
 
     r = _k_sched_sleep(&semaphore->queue,
-                       THREAD_STATE_SLEEP,
+                       K_TASK_STATE_SLEEP,
                        timeout,
                        &semaphore->lock);
     if (r < 0)

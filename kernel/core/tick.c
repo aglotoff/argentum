@@ -3,14 +3,14 @@
  * Kernel ticks
  * 
  * Kernel time is tracked in "ticks" - internal counts in which the kernel
- * processes timeouts and performs thread switch.
+ * processes timeouts and performs task switch.
  */
 
 #include <kernel/core/cpu.h>
 #include <kernel/core/timer.h>
 #include <kernel/core/tick.h>
 #include <kernel/spinlock.h>
-#include <kernel/thread.h>
+#include <kernel/task.h>
 
 #include "core_private.h"
 

@@ -2,7 +2,7 @@
 #include <kernel/tty.h>
 #include <kernel/interrupt.h>
 
-static int uart_irq_thread(int, void *);
+static int uart_irq_task(int, void *);
 
 int
 uart_init(struct Uart *uart, struct UartOps *ops, void *ctx, int irq)
@@ -10,7 +10,7 @@ uart_init(struct Uart *uart, struct UartOps *ops, void *ctx, int irq)
   uart->ops = ops;
   uart->ctx = ctx;
 
-  interrupt_attach_thread(irq, uart_irq_thread, uart);
+  interrupt_attach_task(irq, uart_irq_task, uart);
 
   return 0;
 }
@@ -42,7 +42,7 @@ uart_putc(struct Uart *uart, int c)
 }
 
 static int
-uart_irq_thread(int irq, void *arg)
+uart_irq_task(int irq, void *arg)
 {
   struct Uart *uart = (struct Uart *) arg;
 

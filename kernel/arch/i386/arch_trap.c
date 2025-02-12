@@ -52,8 +52,8 @@ trap_handle_pgfault(struct TrapFrame *tf)
 void
 trap(struct TrapFrame *tf)
 {
-  struct KThread *my_thread = k_thread_current();
-  struct Process *my_process = my_thread ? my_thread->process : NULL;
+  struct KTask *my_task = k_task_current();
+  struct Process *my_process = my_task ? my_task->process : NULL;
 
   if ((tf->trapno >= T_IRQ0) && (tf->trapno < (T_IRQ0 + 16))) {
     interrupt_dispatch(tf);
@@ -75,7 +75,7 @@ trap(struct TrapFrame *tf)
     signal_deliver_pending();
 
     while (my_process->state != PROCESS_STATE_ACTIVE) {
-      k_thread_suspend();
+      k_task_suspend();
       signal_deliver_pending();
     }
   }
@@ -151,15 +151,15 @@ arch_trap_frame_init(struct Process *process, uintptr_t entry, uintptr_t arg1,
   vm_copy_out(process->vm->pgtab, &arg1, sp, sizeof arg1);
   sp -= 4;
 
-  process->thread->tf->cs = SEG_USER_CODE;
-  process->thread->tf->eip = entry;
-  process->thread->tf->es = SEG_USER_DATA;
-  process->thread->tf->ds = SEG_USER_DATA;
-  process->thread->tf->ss = SEG_USER_DATA;
-  process->thread->tf->esp = sp;
-  process->thread->tf->gs = 0;
-  process->thread->tf->fs = 0;
-  process->thread->tf->eflags = EFLAGS_IF;
+  process->task->tf->cs = SEG_USER_CODE;
+  process->task->tf->eip = entry;
+  process->task->tf->es = SEG_USER_DATA;
+  process->task->tf->ds = SEG_USER_DATA;
+  process->task->tf->ss = SEG_USER_DATA;
+  process->task->tf->esp = sp;
+  process->task->tf->gs = 0;
+  process->task->tf->fs = 0;
+  process->task->tf->eflags = EFLAGS_IF;
 
   return 0;
 }

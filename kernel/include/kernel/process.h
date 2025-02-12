@@ -17,7 +17,7 @@
 #include <kernel/core/list.h>
 #include <kernel/core/timer.h>
 #include <kernel/vm.h>
-#include <kernel/thread.h>
+#include <kernel/task.h>
 #include <kernel/trap.h>
 #include <kernel/waitqueue.h>
 
@@ -42,7 +42,7 @@ struct Process {
   struct VMSpace        *vm;
 
   /** Main process thread */
-  struct KThread        *thread;
+  struct KTask          *task;
 
   /** Unique thread identifier */
   pid_t                 pid;
@@ -116,7 +116,7 @@ enum {
 static inline struct Process *
 process_current(void)
 {
-  struct KThread *task = k_thread_current();
+  struct KTask *task = k_task_current();
   return task != NULL ? task->process : NULL;
 }
 

@@ -28,8 +28,8 @@ trap(struct TrapFrame *tf)
 {
   extern char *panicstr;
 
-  struct KThread *my_thread = k_thread_current();
-  struct Process *my_process = my_thread ? my_thread->process : NULL;
+  struct KTask *my_task = k_task_current();
+  struct Process *my_process = my_task ? my_task->process : NULL;
 
   // Halt if some other CPU already has called panic().
   if (panicstr) {
@@ -38,12 +38,12 @@ trap(struct TrapFrame *tf)
     }
   }
 
-  if (my_thread && (uintptr_t) (my_thread->kstack) >= (uintptr_t) tf)
-    panic("stack underflow %p %p", my_thread->kstack, tf);
+  if (my_task && (uintptr_t) (my_task->kstack) >= (uintptr_t) tf)
+    panic("stack underflow %p %p", my_task->kstack, tf);
 
   // User-mode trap frame address should never change, there's logic in the
   // kernel that relies on this!
-  if (((tf->psr & PSR_M_MASK) == PSR_M_USR) && (my_process->thread->tf != tf))
+  if (((tf->psr & PSR_M_MASK) == PSR_M_USR) && (my_process->task->tf != tf))
     panic("user-mode trap frame address unexpectedly changed");
 
   // Dispatch based on what type of trap occured.
@@ -77,7 +77,7 @@ trap(struct TrapFrame *tf)
     signal_deliver_pending();
 
     while (my_process->state != PROCESS_STATE_ACTIVE) {
-      k_thread_suspend();
+      k_task_suspend();
       signal_deliver_pending();
     }
   }
@@ -185,12 +185,12 @@ int
 arch_trap_frame_init(struct Process *process, uintptr_t entry, uintptr_t arg1,
                      uintptr_t arg2, uintptr_t arg3, uintptr_t sp)
 {
-  process->thread->tf->r0  = arg1;              // argc
-  process->thread->tf->r1  = arg2;              // argv
-  process->thread->tf->r2  = arg3;              // environ
-  process->thread->tf->sp  = sp;                // stack pointer
-  process->thread->tf->psr = PSR_M_USR | PSR_F; // user mode, interrupts enabled
-  process->thread->tf->pc  = entry;             // process entry point
+  process->task->tf->r0  = arg1;              // argc
+  process->task->tf->r1  = arg2;              // argv
+  process->task->tf->r2  = arg3;              // environ
+  process->task->tf->sp  = sp;                // stack pointer
+  process->task->tf->psr = PSR_M_USR | PSR_F; // user mode, interrupts enabled
+  process->task->tf->pc  = entry;             // process entry point
   return arg1;
 }
 

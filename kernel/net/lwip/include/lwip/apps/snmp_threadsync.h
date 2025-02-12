@@ -54,7 +54,7 @@ typedef void (*snmp_threadsync_synchronizer_fn)(snmp_threadsync_called_fn fn, vo
 
 
 /** Thread sync runtime data. For internal usage only. */
-struct KThreadsync_data
+struct threadsync_data
 {
   union {
     snmp_err_t err;
@@ -78,7 +78,7 @@ struct snmp_threadsync_instance
   sys_sem_t                       sem;
   sys_mutex_t                     sem_usage_mutex;
   snmp_threadsync_synchronizer_fn sync_fn;
-  struct KThreadsync_data          data;
+  struct threadsync_data          data;
 };
 
 /** SNMP thread sync proxy leaf node */

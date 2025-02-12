@@ -9,7 +9,7 @@
 #include <kernel/drivers/ps2.h>
 #include <kernel/drivers/kbd.h>
 
-int ps2_kbd_irq_thread(int, void *);
+int ps2_kbd_irq_task(int, void *);
 
 int
 ps2_init(struct PS2 *ps2, struct PS2Ops *ops, void *ops_arg, int irq)
@@ -17,7 +17,7 @@ ps2_init(struct PS2 *ps2, struct PS2Ops *ops, void *ops_arg, int irq)
   ps2->ops     = ops;
   ps2->ops_arg = ops_arg;
 
-  interrupt_attach_thread(irq, ps2_kbd_irq_thread, ps2);
+  interrupt_attach_task(irq, ps2_kbd_irq_task, ps2);
 
   return 0;
 }
@@ -41,7 +41,7 @@ static char *key_sequences[KEY_MAX] = {
  * Get data and store it into the console buffer.
  */
 int
-ps2_kbd_irq_thread(int irq, void *arg)
+ps2_kbd_irq_task(int irq, void *arg)
 {
   struct PS2 *ps2 = (struct PS2 *) arg;
   char buf[2];

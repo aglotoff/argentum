@@ -53,7 +53,7 @@ mp_main(void)
 }
 
 void
-test_thread(void *arg)
+test_task(void *arg)
 {
   for (;;) {
     cprintf("%s", arg);
@@ -95,12 +95,12 @@ main(void)
   // Unblock other CPUs
   bsp_started = 1;
 
-  // struct KThread *t1, *t2;
+  // struct KTask *t1, *t2;
 
-  // t1 = k_thread_create(NULL, test_thread, "AAAA", 1);
-  // t2 = k_thread_create(NULL, test_thread, "BBBB", 1);
- // k_thread_resume(t1);
- // k_thread_resume(t2);
+  // t1 = k_task_create(NULL, test_task, "AAAA", 1);
+  // t2 = k_task_create(NULL, test_task, "BBBB", 1);
+ // k_task_resume(t1);
+ // k_task_resume(t2);
 
   mp_main();
 }

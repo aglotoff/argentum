@@ -3,17 +3,17 @@
 #include <kernel/trap.h>
 #include <kernel/core/cpu.h>
 #include <kernel/core/irq.h>
-#include <kernel/thread.h>
+#include <kernel/task.h>
 #include <kernel/object_pool.h>
 
 static int  interrupt_handler_call(int);
-static void interrupt_thread_entry(void *);
-static int  interrupt_thread_notify(int, void *);
+static void interrupt_task_entry(void *);
+static int  interrupt_task_notify(int, void *);
 
 // TODO: should be architecture-specific?
 #define INTERRUPT_HANDLER_MAX       64
 
-struct InterruptThread {
+struct InterruptTask {
   interrupt_handler_t handler;
   void               *handler_arg;
   int                 irq;
@@ -42,25 +42,25 @@ interrupt_attach(int irq, interrupt_handler_t handler, void *handler_arg)
 }
 
 void
-interrupt_attach_thread(int irq, interrupt_handler_t handler, void *handler_arg)
+interrupt_attach_task(int irq, interrupt_handler_t handler, void *handler_arg)
 {
-  struct InterruptThread *isr;
-  struct KThread *thread;
+  struct InterruptTask *isr;
+  struct KTask *task;
 
-  if ((isr = k_malloc(sizeof(struct InterruptThread))) == NULL)
-    panic("cannot allocate IRQ thread strucure");
+  if ((isr = k_malloc(sizeof(struct InterruptTask))) == NULL)
+    panic("cannot allocate IRQ task strucure");
 
-  if ((thread = k_thread_create(NULL, interrupt_thread_entry, isr, 0)) == NULL)
-    panic("cannot create IRQ thread");
+  if ((task = k_task_create(NULL, interrupt_task_entry, isr, 0)) == NULL)
+    panic("cannot create IRQ task");
 
   k_semaphore_init(&isr->semaphore, 0);
   isr->irq         = irq;
   isr->handler     = handler;
   isr->handler_arg = handler_arg;
 
-  interrupt_attach(irq, interrupt_thread_notify, isr);
+  interrupt_attach(irq, interrupt_task_notify, isr);
 
-  k_thread_resume(thread);
+  k_task_resume(task);
 }
 
 void
@@ -95,9 +95,9 @@ interrupt_handler_call(int irq)
 }
 
 static void
-interrupt_thread_entry(void *arg)
+interrupt_task_entry(void *arg)
 {
-  struct InterruptThread *isr = (struct InterruptThread *) arg;
+  struct InterruptTask *isr = (struct InterruptTask *) arg;
 
   for (;;) {
     int should_unmask;
@@ -113,14 +113,14 @@ interrupt_thread_entry(void *arg)
 }
 
 static int
-interrupt_thread_notify(int irq, void *arg)
+interrupt_task_notify(int irq, void *arg)
 {
-  struct InterruptThread *isr = (struct InterruptThread *) arg;
+  struct InterruptTask *isr = (struct InterruptTask *) arg;
 
   (void) irq;
   k_semaphore_put(&isr->semaphore);
 
-  // Do not re-enable the interrupt now, the handler thread will do it
+  // Do not re-enable the interrupt now, the handler task will do it
   return 0;
 }
 

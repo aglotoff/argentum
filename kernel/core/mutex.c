@@ -3,7 +3,7 @@
 
 #include <kernel/mutex.h>
 #include <kernel/object_pool.h>
-#include <kernel/thread.h>
+#include <kernel/task.h>
 #include <kernel/console.h>
 
 #include "core_private.h"
@@ -59,7 +59,7 @@ static void
 k_mutex_init_common(struct KMutex *mutex, const char *name)
 {
   mutex->name     = name;
-  mutex->priority = THREAD_MAX_PRIORITIES;
+  mutex->priority = K_TASK_MAX_PRIORITIES;
 }
 
 void
@@ -109,7 +109,7 @@ _k_mutex_may_raise_priority(struct KMutex *mutex, int priority)
     
     // Temporarily raise the owner's priority
     // If the owner is waiting for another mutex, this may lead to
-    // priority recalculation for other mutexes and threads
+    // priority recalculation for other mutexes and tasks
     if (mutex->owner->priority > priority)
       _k_sched_raise_priority(mutex->owner, priority);
   }
@@ -118,14 +118,14 @@ _k_mutex_may_raise_priority(struct KMutex *mutex, int priority)
 static int
 k_mutex_try_lock_locked(struct KMutex *mutex)
 {
-  struct KThread *current = k_thread_current();
+  struct KTask *current = k_task_current();
 
   // TODO: assert holding sched
 
   if (mutex->owner != NULL)
     return (mutex->owner == current) ? -EDEADLK : -EAGAIN;
   
-  // The highest-priority thread always locks the mutex first
+  // The highest-priority task always locks the mutex first
   assert(current->priority <= mutex->priority);
 
   mutex->owner = current;
@@ -139,7 +139,7 @@ k_mutex_try_lock(struct KMutex *mutex)
 {
   int r;
 
-  if (k_thread_current() == NULL)
+  if (k_task_current() == NULL)
     panic("current task is NULL");
   if ((mutex == NULL) || (mutex->type != K_MUTEX_TYPE))
     panic("bad mutex pointer");
@@ -159,7 +159,7 @@ k_mutex_try_lock(struct KMutex *mutex)
 int
 _k_mutex_timed_lock(struct KMutex *mutex, unsigned long timeout)
 {
-  struct KThread *my_task = k_thread_current();
+  struct KTask *my_task = k_task_current();
   int r;
 
   while ((r = k_mutex_try_lock_locked(mutex)) != 0) {
@@ -169,7 +169,7 @@ _k_mutex_timed_lock(struct KMutex *mutex, unsigned long timeout)
     _k_mutex_may_raise_priority(mutex, my_task->priority);
 
     my_task->sleep_on_mutex = mutex;
-    r = _k_sched_sleep(&mutex->queue, THREAD_STATE_MUTEX, timeout, NULL);
+    r = _k_sched_sleep(&mutex->queue, K_TASK_STATE_MUTEX, timeout, NULL);
     my_task->sleep_on_mutex = NULL;
 
     if (r < 0)
@@ -187,7 +187,7 @@ _k_mutex_timed_lock(struct KMutex *mutex, unsigned long timeout)
 int
 k_mutex_timed_lock(struct KMutex *mutex, unsigned long timeout)
 {
-  struct KThread *my_task = k_thread_current();
+  struct KTask *my_task = k_task_current();
   int r;
 
   if (my_task == NULL)
@@ -210,7 +210,7 @@ _k_mutex_get_highest_priority(struct KListLink *mutex_list)
   struct KListLink *link;
   int max_priority;
 
-  max_priority = THREAD_MAX_PRIORITIES;
+  max_priority = K_TASK_MAX_PRIORITIES;
   KLIST_FOREACH(mutex_list, link) {
     struct KMutex *mutex = KLIST_CONTAINER(link, struct KMutex, link);
 
@@ -225,12 +225,12 @@ void
 _k_mutex_recalc_priority(struct KMutex *mutex)
 {
   if (k_list_is_empty(&mutex->queue)) {
-    mutex->priority = THREAD_MAX_PRIORITIES;
+    mutex->priority = K_TASK_MAX_PRIORITIES;
   } else {
-    struct KThread *thread;
+    struct KTask *task;
 
-    thread = KLIST_CONTAINER(mutex->queue.next, struct KThread, link);
-    mutex->priority = thread->priority;
+    task = KLIST_CONTAINER(mutex->queue.next, struct KTask, link);
+    mutex->priority = task->priority;
   }
 }
 
@@ -275,7 +275,7 @@ k_mutex_unlock(struct KMutex *mutex)
 int
 k_mutex_holding(struct KMutex *mutex)
 {
-  struct KThread *owner;
+  struct KTask *owner;
 
   if ((mutex == NULL) || (mutex->type != K_MUTEX_TYPE))
     panic("bad mutex pointer");
@@ -284,7 +284,7 @@ k_mutex_holding(struct KMutex *mutex)
   owner = mutex->owner;
   _k_sched_unlock();
 
-  return (owner != NULL) && (owner == k_thread_current());
+  return (owner != NULL) && (owner == k_task_current());
 }
 
 static void

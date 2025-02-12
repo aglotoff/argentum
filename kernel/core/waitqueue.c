@@ -1,4 +1,4 @@
-#include <kernel/thread.h>
+#include <kernel/task.h>
 #include <kernel/spinlock.h>
 #include <kernel/waitqueue.h>
 
@@ -25,13 +25,13 @@ k_waitqueue_init(struct KWaitQueue *chan)
 int
 k_waitqueue_sleep(struct KWaitQueue *chan, struct KSpinLock *lock)
 {
-  return _k_sched_sleep(&chan->head, THREAD_STATE_SLEEP, 0, lock);
+  return _k_sched_sleep(&chan->head, K_TASK_STATE_SLEEP, 0, lock);
 }
 
 int
 k_waitqueue_timed_sleep(struct KWaitQueue *chan, struct KSpinLock *lock, unsigned long timeout)
 {
-  return _k_sched_sleep(&chan->head, THREAD_STATE_SLEEP, timeout, lock);
+  return _k_sched_sleep(&chan->head, K_TASK_STATE_SLEEP, timeout, lock);
 }
 
 /**

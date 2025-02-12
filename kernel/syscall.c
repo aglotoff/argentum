@@ -900,7 +900,7 @@ sys_fcntl(void)
 
   // if (fd > 10) {
   //   k_irq_disable();
-  //   monitor(process_current()->thread->tf);
+  //   monitor(process_current()->task->tf);
   // }
 
   if ((file = fd_lookup(process_current(), fd)) == NULL)

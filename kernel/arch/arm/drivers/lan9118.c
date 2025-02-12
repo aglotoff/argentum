@@ -103,7 +103,7 @@
 #define MAC_MII_DATA        7
 #define MAC_FLOW            8
 
-static int eth_irq_thread(int, void *);
+static int eth_irq_task(int, void *);
 
 // Read from a MAC register
 uint32_t
@@ -239,7 +239,7 @@ lan9118_init(struct Lan9118 *lan9118)
   // Enable interrupts
   lan9118->base[INT_EN] |= RSFL_INT;
 
-  interrupt_attach_thread(IRQ_ETH, eth_irq_thread, lan9118);
+  interrupt_attach_task(IRQ_ETH, eth_irq_task, lan9118);
 }
 
 static void
@@ -285,7 +285,7 @@ eth_rx(struct Lan9118 *lan9118)
 }
 
 static int
-eth_irq_thread(int irq, void *arg)
+eth_irq_task(int irq, void *arg)
 {
   struct Lan9118 *lan9118 = (struct Lan9118 *) arg;
   uint32_t status;

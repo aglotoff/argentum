@@ -36,7 +36,7 @@ enum {
   OCR_BUSY     = (1 << 31),     // Card power up status bit
 };
 
-static int  sd_irq_thread(int, void *);
+static int  sd_irq_task(int, void *);
 static void sd_start_transfer(struct SD *, struct Buf *);
 
 int
@@ -77,7 +77,7 @@ sd_init(struct SD *sd, struct SDOps *ops, void *ctx, int irq)
   // Enable interrupts
   sd->ops->irq_enable(sd->ctx);
 
-  interrupt_attach_thread(irq, sd_irq_thread, sd);
+  interrupt_attach_task(irq, sd_irq_task, sd);
 
   return 0;
 }
@@ -136,7 +136,7 @@ sd_start_transfer(struct SD *sd, struct Buf *buf)
 // Handle the SD card interrupts. Complete the current data transfer operation
 // and wake up the corresponding task.
 static int
-sd_irq_thread(int irq, void *arg)
+sd_irq_task(int irq, void *arg)
 {
   struct SD *sd = (struct SD *) arg;
   struct KListLink *link;

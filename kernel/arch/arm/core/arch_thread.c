@@ -1,31 +1,31 @@
 #include <string.h>
 
-#include <kernel/thread.h>
+#include <kernel/task.h>
 #include <kernel/page.h>
 
 #include <arch/trap.h>
 
 void
-arch_thread_init_stack(struct KThread *thread, void (*entry)(void))
+arch_task_init_stack(struct KTask *task, void (*entry)(void))
 {
-  uint8_t *sp = (uint8_t *) thread->kstack + PAGE_SIZE;
+  uint8_t *sp = (uint8_t *) task->kstack + PAGE_SIZE;
 
   // Allocate space for user-mode trap frame
-  if (thread->process != NULL) {
+  if (task->process != NULL) {
     sp -= sizeof(struct TrapFrame);
-    thread->tf = (struct TrapFrame *) sp;
-    memset(thread->tf, 0, sizeof(struct TrapFrame));
+    task->tf = (struct TrapFrame *) sp;
+    memset(task->tf, 0, sizeof(struct TrapFrame));
   }
 
-  // Initialize the kernel-mode thread context
+  // Initialize the kernel-mode task context
   sp -= sizeof(struct Context);
-  thread->context = (struct Context *) sp;
-  memset(thread->context, 0, sizeof(struct Context));
-  thread->context->lr = (uint32_t) entry;
+  task->context = (struct Context *) sp;
+  memset(task->context, 0, sizeof(struct Context));
+  task->context->lr = (uint32_t) entry;
 }
 
 void
-arch_thread_idle(void)
+arch_task_idle(void)
 {
   asm volatile("wfi");
 }

@@ -3,7 +3,7 @@
 
 #include <kernel/core/semaphore.h>
 
-struct KThread;
+struct KTask;
 struct TrapFrame;
 
 void arch_interrupt_init(void);
@@ -18,7 +18,7 @@ void arch_interrupt_eoi(int);
 typedef int (*interrupt_handler_t)(int, void *);
 
 void interrupt_attach(int, interrupt_handler_t, void *);
-void interrupt_attach_thread(int, interrupt_handler_t, void *);
+void interrupt_attach_task(int, interrupt_handler_t, void *);
 void interrupt_dispatch(struct TrapFrame *);
 
 static inline void

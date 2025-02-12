@@ -6,7 +6,7 @@ int
 sys_arch_get_num(void)
 {
   struct Process *current = process_current();
-  return current->thread->tf->eax;
+  return current->task->tf->eax;
 }
 
 int32_t
@@ -16,15 +16,15 @@ sys_arch_get_arg(int n)
   
   switch (n) {
   case 0:
-    return current->thread->tf->edx;
+    return current->task->tf->edx;
   case 1:
-    return current->thread->tf->ecx;
+    return current->task->tf->ecx;
   case 2:
-    return current->thread->tf->ebx;
+    return current->task->tf->ebx;
   case 3:
-    return current->thread->tf->edi;
+    return current->task->tf->edi;
   case 4:
-    return current->thread->tf->esi;
+    return current->task->tf->esi;
   case 5:
     panic("not implemented");
     // fall through

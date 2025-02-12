@@ -6,7 +6,7 @@
 /** Log2 of PAGE_SIZE. */
 #define PAGE_SHIFT        12
 
-/** Size of a kernel-mode thread stack in bytes */
+/** Size of a kernel-mode task stack in bytes */
 #define KSTACK_SIZE       PAGE_SIZE
 
 /** Size of a user-mode process stack in bytes */

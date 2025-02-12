@@ -67,7 +67,7 @@ enum {
 struct KListLink ide_queue;
 struct KMutex ide_mutex;
 
-static int  ide_irq_thread(int, void *);
+static int  ide_irq_task(int, void *);
 static void ide_start_transfer(struct Buf *);
 
 struct PRD {
@@ -146,7 +146,7 @@ ide_init(uint32_t bar0, uint32_t bar1, uint32_t bar2, uint32_t bar3, uint32_t ba
 
   //outb(ide_dma_base + 0x2, BM_STATUS_DRVDMA);
 
-  interrupt_attach_thread(IRQ_ATA1, ide_irq_thread, NULL);
+  interrupt_attach_task(IRQ_ATA1, ide_irq_task, NULL);
 
   dev_register_block(0, &storage_dev);
 
@@ -271,7 +271,7 @@ ide_start_transfer(struct Buf *buf)
 }
 
 static int
-ide_irq_thread(int irq, void *arg)
+ide_irq_task(int irq, void *arg)
 {
   struct KListLink *link;
   struct Buf *buf, *next_buf;

@@ -4,7 +4,7 @@
 #include <kernel/core/cpu.h>
 #include <kernel/core/condvar.h>
 #include <kernel/mutex.h>
-#include <kernel/thread.h>
+#include <kernel/task.h>
 #include <kernel/object_pool.h>
 
 #include "core_private.h"
@@ -103,7 +103,7 @@ k_condvar_timed_wait(struct KCondVar *cond, struct KMutex *mutex, unsigned long 
 
   _k_mutex_unlock(mutex);
 
-  r = _k_sched_sleep(&cond->queue, THREAD_STATE_SLEEP, timeout, NULL);
+  r = _k_sched_sleep(&cond->queue, K_TASK_STATE_SLEEP, timeout, NULL);
 
   _k_mutex_timed_lock(mutex, 0);
 

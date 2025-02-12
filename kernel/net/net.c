@@ -2,7 +2,7 @@
 #include <kernel/fs/file.h>
 #include <kernel/page.h>
 #include <kernel/net.h>
-#include <kernel/thread.h>
+#include <kernel/task.h>
 #include <kernel/object_pool.h>
 #include <kernel/vmspace.h>
 #include <netdb.h>

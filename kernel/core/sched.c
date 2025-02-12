@@ -5,7 +5,7 @@
 #include <kernel/console.h>
 #include <kernel/core/cpu.h>
 #include <kernel/core/irq.h>
-#include <kernel/thread.h>
+#include <kernel/task.h>
 #include <kernel/mutex.h>
 #include <kernel/spinlock.h>
 #include <kernel/process.h>
@@ -20,42 +20,42 @@
 void k_arch_switch(struct Context **, struct Context *);
 
 KLIST_DECLARE(_k_sched_timeouts);
-KLIST_DECLARE(threads_to_destroy);
-static struct KListLink sched_queue[THREAD_MAX_PRIORITIES];
+KLIST_DECLARE(_k_tasks_to_destroy);
+static struct KListLink sched_queue[K_TASK_MAX_PRIORITIES];
 struct KSpinLock _k_sched_spinlock = K_SPINLOCK_INITIALIZER("sched");
 
 /**
  * Initialize the scheduler data structures.
  * 
- * This function must be called prior to creating any kernel threads.
+ * This function must be called prior to creating any kernel tasks.
  */
 void
 k_sched_init(void)
 {
   int i;
 
-  thread_cache = k_object_pool_create("thread_cache", sizeof(struct KThread), 0,
+  k_task_cache = k_object_pool_create("k_task_cache", sizeof(struct KTask), 0,
                                    NULL, NULL);
-  if (thread_cache == NULL)
-    panic("cannot allocate thread cache");
+  if (k_task_cache == NULL)
+    panic("cannot allocate task cache");
 
-  for (i = 0; i < THREAD_MAX_PRIORITIES; i++)
+  for (i = 0; i < K_TASK_MAX_PRIORITIES; i++)
     k_list_init(&sched_queue[i]);
 }
 
-// Add the specified thread to the run queue with the corresponding priority
+// Add the specified task to the run queue with the corresponding priority
 void
-_k_sched_enqueue(struct KThread *th)
+_k_sched_enqueue(struct KTask *th)
 {
   if (!k_spinlock_holding(&_k_sched_spinlock))
     panic("scheduler not locked");
 
-  th->state = THREAD_STATE_READY;
+  th->state = K_TASK_STATE_READY;
   k_list_add_back(&sched_queue[th->priority], &th->link);
 }
 
-// Retrieve the highest-priority thread from the run queue
-static struct KThread *
+// Retrieve the highest-priority task from the run queue
+static struct KTask *
 k_sched_dequeue(void)
 {
   struct KListLink *link;
@@ -64,12 +64,12 @@ k_sched_dequeue(void)
   if (!k_spinlock_holding(&_k_sched_spinlock))
     panic("scheduler not locked");
 
-  for (i = 0; i < THREAD_MAX_PRIORITIES; i++) {
+  for (i = 0; i < K_TASK_MAX_PRIORITIES; i++) {
     if (!k_list_is_empty(&sched_queue[i])) {
       link = sched_queue[i].next;
       k_list_remove(link);
 
-      return KLIST_CONTAINER(link, struct KThread, link);
+      return KLIST_CONTAINER(link, struct KTask, link);
     }
   }
 
@@ -77,57 +77,57 @@ k_sched_dequeue(void)
 }
 
 static void
-k_sched_switch(struct KThread *thread)
+k_sched_switch(struct KTask *task)
 {
   struct KCpu *my_cpu = _k_cpu();
 
-  if (thread->process != NULL) {
-    assert(thread->process->thread == thread);
+  if (task->process != NULL) {
+    assert(task->process->task == task);
 
-    arch_vm_switch(thread->process);
-    arch_vm_load(thread->process->vm->pgtab);
+    arch_vm_switch(task->process);
+    arch_vm_load(task->process->vm->pgtab);
   }
 
-  thread->state = THREAD_STATE_RUNNING;
+  task->state = K_TASK_STATE_RUNNING;
 
-  thread->cpu = my_cpu;
-  my_cpu->thread = thread;
+  task->cpu = my_cpu;
+  my_cpu->task = task;
 
-  k_arch_switch(&my_cpu->sched_context, thread->context);
+  k_arch_switch(&my_cpu->sched_context, task->context);
 
-  if ((intptr_t) thread->context - (intptr_t) thread->kstack < 64)
-    panic("stack underflow %p %p", thread->context, thread->kstack);
+  if ((intptr_t) task->context - (intptr_t) task->kstack < 64)
+    panic("stack underflow %p %p", task->context, task->kstack);
 
-  my_cpu->thread = NULL;
-  thread->cpu = NULL;
+  my_cpu->task = NULL;
+  task->cpu = NULL;
 
-  if (thread->process != NULL)
+  if (task->process != NULL)
     arch_vm_load_kernel();
 }
 
 static void
 k_sched_idle(void)
 {
-  // Cleanup destroyed threads
-  while (!k_list_is_empty(&threads_to_destroy)) {
-    struct KThread *thread;
+  // Cleanup destroyed tasks
+  while (!k_list_is_empty(&_k_tasks_to_destroy)) {
+    struct KTask *task;
     struct Page *kstack_page;
     
-    thread = KLIST_CONTAINER(threads_to_destroy.next, struct KThread, link);
+    task = KLIST_CONTAINER(_k_tasks_to_destroy.next, struct KTask, link);
 
-    k_list_remove(&thread->link);
+    k_list_remove(&task->link);
 
     _k_sched_unlock();
 
-    // Free the thread kernel stack
-    kstack_page = kva2page(thread->kstack);
+    // Free the task kernel stack
+    kstack_page = kva2page(task->kstack);
     page_assert(kstack_page, 0, PAGE_TAG_KSTACK);
 
     kstack_page->ref_count--;
     page_free_one(kstack_page);
 
-    // Free the thread object
-    k_object_pool_put(thread_cache, thread);
+    // Free the task object
+    k_object_pool_put(k_task_cache, task);
 
     _k_sched_lock();
   }
@@ -136,7 +136,7 @@ k_sched_idle(void)
 
   k_irq_enable();
   
-  arch_thread_idle();
+  arch_task_idle();
 
   _k_sched_lock();
 }
@@ -150,10 +150,10 @@ k_sched_start(void)
   _k_sched_lock();
 
   for (;;) {
-    struct KThread *next = k_sched_dequeue();
+    struct KTask *next = k_sched_dequeue();
 
     if (next != NULL) {
-      assert(next->state == THREAD_STATE_READY);
+      assert(next->state == K_TASK_STATE_READY);
       k_sched_switch(next);
     } else {
       k_sched_idle();
@@ -161,7 +161,7 @@ k_sched_start(void)
   }
 }
 
-// Switch back from the current thread context back to the scheduler loop
+// Switch back from the current task context back to the scheduler loop
 void
 _k_sched_yield_locked(void)
 {
@@ -171,29 +171,29 @@ _k_sched_yield_locked(void)
     panic("scheduler not locked");
 
   irq_flags = _k_cpu()->irq_flags;
-  k_arch_switch(&k_thread_current()->context, _k_cpu()->sched_context);
+  k_arch_switch(&k_task_current()->context, _k_cpu()->sched_context);
   _k_cpu()->irq_flags = irq_flags;
 }
 
 void
-_k_sched_add(struct KListLink *queue, struct KThread *thread)
+_k_sched_add(struct KListLink *queue, struct KTask *task)
 {
   struct KListLink *l;
-  struct KThread *other_thread;
+  struct KTask *other_task;
 
   for (l = queue->next; l != queue; l = l->next) {
-    other_thread = KLIST_CONTAINER(l, struct KThread, link);
-    if (_k_sched_priority_cmp(thread, other_thread) > 0)
+    other_task = KLIST_CONTAINER(l, struct KTask, link);
+    if (_k_sched_priority_cmp(task, other_task) > 0)
       break;
   }
 
-  k_list_add_back(l, &thread->link);
+  k_list_add_back(l, &task->link);
 }
 
 /**
- * Put the current thread into sleep.
+ * Put the current task into sleep.
  *
- * @param queue An optional queue to insert the thread into.
+ * @param queue An optional queue to insert the task into.
  * @param state The state indicating a kind of sleep.
  * @param lock  An optional spinlock to release while going to sleep.
  */
@@ -202,7 +202,7 @@ _k_sched_sleep(struct KListLink *queue, int state, unsigned long timeout,
                struct KSpinLock *lock)
 {
   struct KCpu *my_cpu;
-  struct KThread *my_thread;
+  struct KTask *my_task;
 
   if (lock != NULL) {
     _k_sched_lock();
@@ -213,27 +213,27 @@ _k_sched_sleep(struct KListLink *queue, int state, unsigned long timeout,
     panic("scheduler not locked");
 
   my_cpu = _k_cpu();
-  my_thread = my_cpu->thread;
+  my_task = my_cpu->task;
 
   if (my_cpu->lock_count > 0)
     panic("called from an IRQ context");
-  if (my_cpu->thread == NULL)
-    panic("called not by a thread");
+  if (my_cpu->task == NULL)
+    panic("called not by a task");
 
   if (timeout != 0) {
-    _k_timeout_enqueue(&_k_sched_timeouts, &my_thread->timer, timeout);
+    _k_timeout_enqueue(&_k_sched_timeouts, &my_task->timer, timeout);
   }
 
-  my_thread->state = state;
+  my_task->state = state;
 
   if (queue != NULL)
-    _k_sched_add(queue, my_thread);
+    _k_sched_add(queue, my_task);
 
   _k_sched_yield_locked();
 
   if (timeout != 0) {
-    if (my_thread->timer.link.next != NULL) {
-      _k_timeout_dequeue(&_k_sched_timeouts, &my_thread->timer);
+    if (my_task->timer.link.next != NULL) {
+      _k_timeout_dequeue(&_k_sched_timeouts, &my_task->timer);
     }
   }
 
@@ -243,31 +243,31 @@ _k_sched_sleep(struct KListLink *queue, int state, unsigned long timeout,
     k_spinlock_acquire(lock);
   }
 
-  return my_thread->sleep_result;
+  return my_task->sleep_result;
 }
 
 void
-_k_sched_raise_priority(struct KThread *thread, int priority)
+_k_sched_raise_priority(struct KTask *task, int priority)
 {
   assert(k_spinlock_holding(&_k_sched_spinlock));
-  assert(thread->priority > priority);
+  assert(task->priority > priority);
 
-  thread->priority = priority;
+  task->priority = priority;
 
   // TODO: change priorities for all owned mutexes
 
-  switch (thread->state) {
-  case THREAD_STATE_READY:
+  switch (task->state) {
+  case K_TASK_STATE_READY:
     // Move into another run queue
-    k_list_remove(&thread->link);
-    _k_sched_enqueue(thread);
+    k_list_remove(&task->link);
+    _k_sched_enqueue(task);
     break;
-  case THREAD_STATE_MUTEX:
+  case K_TASK_STATE_MUTEX:
     // Re-insert to update priority
-    k_list_remove(&thread->link);
-    _k_sched_add(&thread->sleep_on_mutex->queue, thread);
+    k_list_remove(&task->link);
+    _k_sched_add(&task->sleep_on_mutex->queue, task);
   
-    _k_mutex_may_raise_priority(thread->sleep_on_mutex, thread->priority);
+    _k_mutex_may_raise_priority(task->sleep_on_mutex, task->priority);
     break;
   default:
     break;
@@ -275,17 +275,17 @@ _k_sched_raise_priority(struct KThread *thread, int priority)
 }
 
 void
-_k_sched_resume(struct KThread *thread, int result)
+_k_sched_resume(struct KTask *task, int result)
 {
   if (!k_spinlock_holding(&_k_sched_spinlock))
     panic("sched not locked");
 
-  switch (thread->state) {
-  case THREAD_STATE_SLEEP:
-    k_list_remove(&thread->link);
+  switch (task->state) {
+  case K_TASK_STATE_SLEEP:
+    k_list_remove(&task->link);
     break;
-  case THREAD_STATE_MUTEX:
-    k_list_remove(&thread->link);
+  case K_TASK_STATE_MUTEX:
+    k_list_remove(&task->link);
   
     // TODO: this may lead to decreasing mutex priority
 
@@ -294,15 +294,15 @@ _k_sched_resume(struct KThread *thread, int result)
     return;
   }
 
-  k_list_remove(&thread->link);
+  k_list_remove(&task->link);
 
-  thread->sleep_result = result;
+  task->sleep_result = result;
 
-  _k_sched_enqueue(thread);
-  _k_sched_may_yield(thread);
+  _k_sched_enqueue(task);
+  _k_sched_may_yield(task);
 }
 
-// Resume all threads waiting on the given queue
+// Resume all tasks waiting on the given queue
 // The caller must be holding the scheduler lock
 void
 _k_sched_wakeup_all_locked(struct KListLink *queue, int result)
@@ -312,18 +312,18 @@ _k_sched_wakeup_all_locked(struct KListLink *queue, int result)
 
   while (!k_list_is_empty(queue)) {
     struct KListLink *link = queue->next;
-    struct KThread *thread = KLIST_CONTAINER(link, struct KThread, link);
+    struct KTask *task = KLIST_CONTAINER(link, struct KTask, link);
 
-    _k_sched_resume(thread, result);
+    _k_sched_resume(task, result);
   }
 }
 
-// Resume and return the highest priority thread waiting on the given queue
+// Resume and return the highest priority task waiting on the given queue
 // The caller must be holding the scheduler lock
-struct KThread *
+struct KTask *
 _k_sched_wakeup_one_locked(struct KListLink *queue, int result)
 {
-  struct KThread *thread;
+  struct KTask *task;
 
   if (!k_spinlock_holding(&_k_sched_spinlock))
     panic("sched not locked");
@@ -331,50 +331,50 @@ _k_sched_wakeup_one_locked(struct KListLink *queue, int result)
   if (k_list_is_empty(queue))
     return NULL;
 
-  thread = KLIST_CONTAINER(queue->next, struct KThread, link);
+  task = KLIST_CONTAINER(queue->next, struct KTask, link);
 
-  _k_sched_resume(thread, result);
+  _k_sched_resume(task, result);
 
-  return thread;
+  return task;
 }
 
 // Check whether a reschedule is required (taking into account the priority
-// of a thread most recently added to the run queue)
+// of a task most recently added to the run queue)
 void
-_k_sched_may_yield(struct KThread *thread)
+_k_sched_may_yield(struct KTask *task)
 {
   struct KCpu *my_cpu;
-  struct KThread *my_thread;
+  struct KTask *my_task;
 
   if (!k_spinlock_holding(&_k_sched_spinlock))
     panic("scheduler not locked");
 
   my_cpu = _k_cpu();
-  my_thread = my_cpu->thread;
+  my_task = my_cpu->task;
 
-  if ((my_thread != NULL) && (_k_sched_priority_cmp(thread, my_thread) > 0)) {
+  if ((my_task != NULL) && (_k_sched_priority_cmp(task, my_task) > 0)) {
     if (my_cpu->lock_count > 0) {
       // Cannot yield right now, delay until the last call to k_irq_handler_end()
-      // or thread_unlock().
-      my_thread->flags |= THREAD_FLAG_RESCHEDULE;
+      // or task_unlock().
+      my_task->flags |= K_TASK_FLAG_RESCHEDULE;
     } else {
-      _k_sched_enqueue(my_thread);
+      _k_sched_enqueue(my_task);
       _k_sched_yield_locked();
     }
   }
 }
 
 void
-k_thread_timeout_callback(struct KTimeout *entry)
+k_task_timeout_callback(struct KTimeout *entry)
 {
-  struct KThread *thread = KLIST_CONTAINER(entry, struct KThread, timer);
+  struct KTask *task = KLIST_CONTAINER(entry, struct KTask, timer);
 
-  switch (thread->state) {
-  case THREAD_STATE_MUTEX:
+  switch (task->state) {
+  case K_TASK_STATE_MUTEX:
     // TODO
     // fall through
-  case THREAD_STATE_SLEEP:
-    _k_sched_resume(thread, -ETIMEDOUT);
+  case K_TASK_STATE_SLEEP:
+    _k_sched_resume(task, -ETIMEDOUT);
     break;
   }
 }
@@ -382,19 +382,19 @@ k_thread_timeout_callback(struct KTimeout *entry)
 void
 _k_sched_tick(void)
 {
-  struct KThread *current_task = k_thread_current();
+  struct KTask *current_task = k_task_current();
 
   // Tell the scheduler that the current task has used up its time slice
   // TODO: add support for other sheduling policies
   if (current_task != NULL) {
     _k_sched_lock();
-    current_task->flags |= THREAD_FLAG_RESCHEDULE;
+    current_task->flags |= K_TASK_FLAG_RESCHEDULE;
     _k_sched_unlock();
   }
 
   if (k_cpu_id() == 0) {
     _k_sched_lock();
-    _k_timeout_process_queue(&_k_sched_timeouts, k_thread_timeout_callback);
+    _k_timeout_process_queue(&_k_sched_timeouts, k_task_timeout_callback);
     _k_sched_unlock();
   }
 }
@@ -402,14 +402,14 @@ _k_sched_tick(void)
 void
 _k_sched_update_effective_priority(void)
 {
-  struct KThread *thread = k_thread_current();
+  struct KTask *task = k_task_current();
   int new_priority, max_mutex_priority;
 
-  new_priority = thread->saved_priority;
+  new_priority = task->saved_priority;
 
-  max_mutex_priority = _k_mutex_get_highest_priority(&thread->owned_mutexes);
+  max_mutex_priority = _k_mutex_get_highest_priority(&task->owned_mutexes);
   if (max_mutex_priority < new_priority)
     new_priority = max_mutex_priority;
 
-  thread->priority = new_priority;
+  task->priority = new_priority;
 }

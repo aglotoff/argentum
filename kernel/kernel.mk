@@ -23,7 +23,7 @@ KERNEL_SRCFILES := \
 	kernel/core/mailbox.c \
 	kernel/core/object_pool.c \
 	kernel/core/timer.c \
-	kernel/core/thread.c \
+	kernel/core/task.c \
 	kernel/core/sched.c \
 	kernel/core/spinlock.c \
 	kernel/core/tick.c \

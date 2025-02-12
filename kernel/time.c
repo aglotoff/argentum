@@ -109,7 +109,7 @@ timer_irq(int, void *)
   struct Process *my_process = process_current();
 
   if (my_process != NULL) {
-    if (arch_trap_is_user(my_process->thread->tf)) {
+    if (arch_trap_is_user(my_process->task->tf)) {
       process_update_times(my_process, 1, 0);
     } else {
       process_update_times(my_process, 0, 1);

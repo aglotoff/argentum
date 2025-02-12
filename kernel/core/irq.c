@@ -67,14 +67,14 @@ k_irq_handler_end(void)
     panic("lock_count <= 0");
 
   if (--my_cpu->lock_count == 0) {
-    struct KThread *my_thread = my_cpu->thread;
+    struct KTask *my_task = my_cpu->task;
 
-    // Before resuming the current thread, check whether it must give up the CPU
+    // Before resuming the current task, check whether it must give up the CPU
     // or exit.
-    if ((my_thread != NULL) && (my_thread->flags & THREAD_FLAG_RESCHEDULE)) {
-      my_thread->flags &= ~THREAD_FLAG_RESCHEDULE;
+    if ((my_task != NULL) && (my_task->flags & K_TASK_FLAG_RESCHEDULE)) {
+      my_task->flags &= ~K_TASK_FLAG_RESCHEDULE;
 
-      _k_sched_enqueue(my_thread);
+      _k_sched_enqueue(my_task);
       _k_sched_yield_locked();
     }
   }

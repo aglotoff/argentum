@@ -29,7 +29,7 @@
 #include "process_private.h"
 
 struct KObjectPool *process_cache;
-struct KObjectPool *thread_cache;
+struct KObjectPool *k_task_cache;
 
 // Size of PID hash table
 #define NBUCKET   256
@@ -96,8 +96,8 @@ process_alloc(void)
   if ((process = (struct Process *) k_object_pool_get(process_cache)) == NULL)
     return NULL;
 
-  process->thread = k_thread_create(process, process_run, process, NZERO);
-  if (process->thread == NULL) {
+  process->task = k_task_create(process, process_run, process, NZERO);
+  if (process->task == NULL) {
     k_object_pool_put(process_cache, process);
     return NULL;
   }
@@ -214,7 +214,7 @@ process_create(const void *binary, struct Process **pstore)
   k_list_add_back(&__process_list, &proc->link);
   process_unlock();
 
-  k_thread_resume(proc->thread);
+  k_task_resume(proc->task);
 
   if (pstore != NULL)
     *pstore = proc;
@@ -294,7 +294,7 @@ process_destroy(int status)
   process_lock();
 
   vm = current->vm;
-  current->thread->process = NULL;
+  current->task->process = NULL;
 
   k_timer_fini(&current->itimers[ITIMER_PROF].timer);
   k_timer_fini(&current->itimers[ITIMER_REAL].timer);
@@ -329,7 +329,7 @@ process_destroy(int status)
 
   vm_space_destroy(vm);
 
-  k_thread_exit();
+  k_task_exit();
 }
 
 pid_t
@@ -370,7 +370,7 @@ process_copy(int share_vm)
 
   // cprintf("[k] process #%x created\n", child->pid);
 
-  k_thread_resume(child->thread);
+  k_task_resume(child->task);
 
   return child->pid;
 }
@@ -506,7 +506,7 @@ process_run(void *arg)
   k_irq_disable();
 
   // "Return" to the user space.
-  arch_trap_frame_pop(process->thread->tf);
+  arch_trap_frame_pop(process->task->tf);
 }
 
 void *
@@ -589,7 +589,7 @@ _process_continue(struct Process *process)
   if (process->state == PROCESS_STATE_STOPPED) {
     process->state = PROCESS_STATE_ACTIVE;
     assert(process->flags != 0);
-    k_thread_interrupt(process->thread);
+    k_task_interrupt(process->task);
 
     _signal_state_change_to_parent(process);
   }

@@ -7,7 +7,7 @@
 #include <kernel/process.h>
 #include <kernel/signal.h>
 #include <kernel/vmspace.h>
-#include <kernel/thread.h>
+#include <kernel/task.h>
 #include <kernel/console.h>
 
 #include "process_private.h"
@@ -397,7 +397,7 @@ signal_generate_one(struct Process *process, int signo, int code)
 
   // Blocked signals remain pending
   if (!signal_is_blocked(process, signo)) {
-    k_thread_interrupt(process->thread);
+    k_task_interrupt(process->task);
   }
 
   return 0;

@@ -3,7 +3,7 @@
 
 #include <kernel/core/cpu.h>
 #include <kernel/core/mailbox.h>
-#include <kernel/thread.h>
+#include <kernel/task.h>
 #include <kernel/types.h>
 #include <kernel/console.h>
 #include <kernel/object_pool.h>
@@ -152,7 +152,7 @@ k_mailbox_timed_receive(struct KMailBox *mailbox,
       break;
 
     r = _k_sched_sleep(&mailbox->receivers,
-                       THREAD_STATE_SLEEP,
+                       K_TASK_STATE_SLEEP,
                        timeout,
                        &mailbox->lock);
     if (r < 0)
@@ -216,7 +216,7 @@ k_mailbox_timed_send(struct KMailBox *mailbox,
       break;
 
     r = _k_sched_sleep(&mailbox->senders,
-                       THREAD_STATE_SLEEP,
+                       K_TASK_STATE_SLEEP,
                        timeout,
                        &mailbox->lock);
     if (r < 0)

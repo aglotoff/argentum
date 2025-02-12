@@ -10,7 +10,7 @@
 #include <kernel/core/list.h>
 #include <kernel/spinlock.h>
 
-struct KThread;
+struct KTask;
 
 /**
  * Mutex is a sleeping lock, i.e. when a task tries to acquire a mutex that
@@ -23,12 +23,12 @@ struct KMutex {
   int               type;
   int               flags;
   /** The task currently holding the mutex. */
-  struct KThread   *owner;
-  /** Link into the list of all mutexes owned by the same thread. */
+  struct KTask   *owner;
+  /** Link into the list of all mutexes owned by the same task. */
   struct KListLink  link;
   /** List of tasks waiting for this mutex to be released. */
   struct KListLink  queue;
-  /** Priority of the highest thread in the queue. */
+  /** Priority of the highest task in the queue. */
   int               priority;
   /** Mutex name (for debugging purposes). */
   const char       *name;

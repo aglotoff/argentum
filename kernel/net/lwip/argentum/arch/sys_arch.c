@@ -4,7 +4,7 @@
 #include <kernel/mutex.h>
 #include <kernel/core/mailbox.h>
 #include <kernel/core/semaphore.h>
-#include <kernel/thread.h>
+#include <kernel/task.h>
 #include <kernel/time.h>
 #include <kernel/types.h>
 #include <lwip/sys.h>
@@ -182,15 +182,15 @@ sys_thread_t
 sys_thread_new(const char *name, void (*thread)(void *), void *arg,
                int stacksize, int prio)
 {
-  struct KThread *task;
+  struct KTask *task;
 
   // TODO: priority!
   (void) name;
   (void) prio;
   (void) stacksize;
 
-  task = k_thread_create(NULL, thread, arg, 0);
-  k_thread_resume(task);
+  task = k_task_create(NULL, thread, arg, 0);
+  k_task_resume(task);
 
   return task;
 }
@@ -198,7 +198,7 @@ sys_thread_new(const char *name, void (*thread)(void *), void *arg,
 int *
 __errno(void)
 {
-  return &k_thread_current()->err;
+  return &k_task_current()->err;
 }
 
 void

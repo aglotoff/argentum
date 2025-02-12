@@ -10,7 +10,7 @@
 #include <kernel/tty.h>
 #include <kernel/trap.h>
 #include <kernel/process.h>
-#include <kernel/thread.h>
+#include <kernel/task.h>
 #include <kernel/vmspace.h>
 #include <kernel/fs/fs.h>
 #include <kernel/console.h>
