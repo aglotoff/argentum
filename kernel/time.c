@@ -1,6 +1,7 @@
 #include <sys/types.h>
 #include <errno.h>
 
+#include <kernel/assert.h>
 #include <kernel/core/semaphore.h>
 #include <kernel/core/tick.h>
 #include <kernel/process.h>
@@ -109,7 +110,9 @@ timer_irq(int, void *)
   struct Process *my_process = process_current();
 
   if (my_process != NULL) {
-    if (arch_trap_is_user(my_process->task->tf)) {
+    assert(my_process->thread != NULL);
+
+    if (arch_trap_is_user(my_process->thread->task->tf)) {
       process_update_times(my_process, 1, 0);
     } else {
       process_update_times(my_process, 0, 1);

@@ -33,16 +33,25 @@ struct FileDesc {
   int          flags;
 };
 
+struct Thread {
+  struct Process  *process;
+  struct KTask    *task;
+
+  struct Signal   *signal_pending[NSIG];
+  struct KListLink signal_queue;
+  sigset_t         signal_mask;
+};
+
 /**
  * Process descriptor.
  */
 struct Process {
-  struct KListLink       link;
+  struct KListLink      link;
   /** The process' address space */
-  struct VMSpace        *vm;
+  struct VMSpace       *vm;
 
   /** Main process thread */
-  struct KTask          *task;
+  struct Thread        *thread;
 
   /** Unique thread identifier */
   pid_t                 pid;
@@ -70,9 +79,6 @@ struct Process {
 
   uintptr_t             signal_stub;
   struct sigaction      signal_actions[NSIG];
-  struct Signal        *signal_pending[NSIG];
-  struct KListLink      signal_queue;
-  sigset_t              signal_mask;
 
   /** Real user ID */
   uid_t                 ruid;
@@ -113,11 +119,18 @@ enum {
   PROCESS_STATUS_AVAILABLE = (1 << 0),
 };
 
+static inline struct Thread *
+thread_current(void)
+{
+  struct KTask *task = k_task_current();
+  return task != NULL ? task->thread : NULL;
+}
+
 static inline struct Process *
 process_current(void)
 {
-  struct KTask *task = k_task_current();
-  return task != NULL ? task->process : NULL;
+  struct Thread *thread = thread_current();
+  return thread != NULL ? thread->process : NULL;
 }
 
 int arch_process_copy(struct Process *, struct Process *);

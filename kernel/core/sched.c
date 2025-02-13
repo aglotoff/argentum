@@ -81,11 +81,11 @@ k_sched_switch(struct KTask *task)
 {
   struct KCpu *my_cpu = _k_cpu();
 
-  if (task->process != NULL) {
-    assert(task->process->task == task);
+  if (task->thread != NULL) {
+    assert(task->thread->task == task);
 
-    arch_vm_switch(task->process);
-    arch_vm_load(task->process->vm->pgtab);
+    arch_vm_switch(task->thread->process);
+    arch_vm_load(task->thread->process->vm->pgtab);
   }
 
   task->state = K_TASK_STATE_RUNNING;
@@ -101,7 +101,7 @@ k_sched_switch(struct KTask *task)
   my_cpu->task = NULL;
   task->cpu = NULL;
 
-  if (task->process != NULL)
+  if (task->thread != NULL)
     arch_vm_load_kernel();
 }
 

@@ -31,7 +31,7 @@ enum {
 struct KObjectPool;
 extern struct KObjectPool *k_task_cache;
 
-struct Process;
+struct Thread;
 struct KMutex;
 
 /**
@@ -73,14 +73,14 @@ struct KTask {
   int               err;
 
   /** Tne process this task belongs to */
-  struct Process   *process;
+  struct Thread    *thread;
 };
 
 void            arch_task_init_stack(struct KTask *, void (*)(void));
 void            arch_task_idle(void);
 
 struct KTask *k_task_current(void);
-struct KTask *k_task_create(struct Process *, void (*)(void *), void *, int);
+struct KTask *k_task_create(struct Thread *, void (*)(void *), void *, int);
 void            k_task_exit(void);
 int             k_task_resume(struct KTask *);
 void            k_task_suspend(void);

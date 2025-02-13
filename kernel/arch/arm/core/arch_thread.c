@@ -11,7 +11,7 @@ arch_task_init_stack(struct KTask *task, void (*entry)(void))
   uint8_t *sp = (uint8_t *) task->kstack + PAGE_SIZE;
 
   // Allocate space for user-mode trap frame
-  if (task->process != NULL) {
+  if (task->thread != NULL) {
     sp -= sizeof(struct TrapFrame);
     task->tf = (struct TrapFrame *) sp;
     memset(task->tf, 0, sizeof(struct TrapFrame));

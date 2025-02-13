@@ -28,8 +28,7 @@ trap(struct TrapFrame *tf)
 {
   extern char *panicstr;
 
-  struct KTask *my_task = k_task_current();
-  struct Process *my_process = my_task ? my_task->process : NULL;
+  struct Process *my_process = process_current();
 
   // Halt if some other CPU already has called panic().
   if (panicstr) {
@@ -38,12 +37,9 @@ trap(struct TrapFrame *tf)
     }
   }
 
-  if (my_task && (uintptr_t) (my_task->kstack) >= (uintptr_t) tf)
-    panic("stack underflow %p %p", my_task->kstack, tf);
-
   // User-mode trap frame address should never change, there's logic in the
   // kernel that relies on this!
-  if (((tf->psr & PSR_M_MASK) == PSR_M_USR) && (my_process->task->tf != tf))
+  if (((tf->psr & PSR_M_MASK) == PSR_M_USR) && (my_process->thread->task->tf != tf))
     panic("user-mode trap frame address unexpectedly changed");
 
   // Dispatch based on what type of trap occured.
@@ -185,12 +181,12 @@ int
 arch_trap_frame_init(struct Process *process, uintptr_t entry, uintptr_t arg1,
                      uintptr_t arg2, uintptr_t arg3, uintptr_t sp)
 {
-  process->task->tf->r0  = arg1;              // argc
-  process->task->tf->r1  = arg2;              // argv
-  process->task->tf->r2  = arg3;              // environ
-  process->task->tf->sp  = sp;                // stack pointer
-  process->task->tf->psr = PSR_M_USR | PSR_F; // user mode, interrupts enabled
-  process->task->tf->pc  = entry;             // process entry point
+  process->thread->task->tf->r0  = arg1;              // argc
+  process->thread->task->tf->r1  = arg2;              // argv
+  process->thread->task->tf->r2  = arg3;              // environ
+  process->thread->task->tf->sp  = sp;                // stack pointer
+  process->thread->task->tf->psr = PSR_M_USR | PSR_F; // user mode, interrupts enabled
+  process->thread->task->tf->pc  = entry;             // process entry point
   return arg1;
 }
 

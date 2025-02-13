@@ -29,6 +29,7 @@
 #include "process_private.h"
 
 struct KObjectPool *process_cache;
+struct KObjectPool *thread_cache;
 struct KObjectPool *k_task_cache;
 
 // Size of PID hash table
@@ -61,13 +62,24 @@ process_ctor(void *buf, size_t)
 
   k_waitqueue_init(&proc->wait_queue);
   k_list_init(&proc->children);
-  k_list_init(&proc->signal_queue);
+}
+
+static void
+thread_ctor(void *buf, size_t)
+{
+  struct Thread *thread = (struct Thread *) buf;
+
+  k_list_init(&thread->signal_queue);
 }
 
 void
 process_init(void)
 {
   extern uint8_t _binary_obj_user_init_start[];
+
+  thread_cache = k_object_pool_create("thread_cache", sizeof(struct Thread), 0, thread_ctor, NULL);
+  if (thread_cache == NULL)
+    panic("cannot allocate thread_cache");
 
   process_cache = k_object_pool_create("process_cache", sizeof(struct Process), 0, process_ctor, NULL);
   if (process_cache == NULL)
@@ -92,12 +104,22 @@ struct Process *
 process_alloc(void)
 {
   struct Process *process;
+  struct Thread *thread;
 
-  if ((process = (struct Process *) k_object_pool_get(process_cache)) == NULL)
+  if ((thread = (struct Thread *) k_object_pool_get(thread_cache)) == NULL)
     return NULL;
 
-  process->task = k_task_create(process, process_run, process, NZERO);
-  if (process->task == NULL) {
+  if ((process = (struct Process *) k_object_pool_get(process_cache)) == NULL) {
+    k_object_pool_put(thread_cache, thread);
+    return NULL;
+  }
+
+  process->thread = thread;
+  thread->process = process;
+
+  thread->task = k_task_create(thread, process_run, process, NZERO);
+  if (thread->task == NULL) {
+    k_object_pool_put(thread_cache, thread);
     k_object_pool_put(process_cache, process);
     return NULL;
   }
@@ -214,7 +236,7 @@ process_create(const void *binary, struct Process **pstore)
   k_list_add_back(&__process_list, &proc->link);
   process_unlock();
 
-  k_task_resume(proc->task);
+  k_task_resume(proc->thread->task);
 
   if (pstore != NULL)
     *pstore = proc;
@@ -246,6 +268,7 @@ process_free(struct Process *process)
   k_spinlock_release(&pid_hash.lock);
 
   // Return the process descriptor to the cache
+  assert(process->thread == NULL);
   k_object_pool_put(process_cache, process);
 }
 
@@ -294,7 +317,6 @@ process_destroy(int status)
   process_lock();
 
   vm = current->vm;
-  current->task->process = NULL;
 
   k_timer_fini(&current->itimers[ITIMER_PROF].timer);
   k_timer_fini(&current->itimers[ITIMER_REAL].timer);
@@ -324,6 +346,10 @@ process_destroy(int status)
   current->status = status;
 
   _signal_state_change_to_parent(current);
+
+  current->thread->task->thread = NULL;
+  k_object_pool_put(thread_cache, current->thread);
+  current->thread = NULL;
 
   process_unlock();
 
@@ -370,7 +396,8 @@ process_copy(int share_vm)
 
   // cprintf("[k] process #%x created\n", child->pid);
 
-  k_task_resume(child->task);
+  assert(child->thread != NULL);
+  k_task_resume(child->thread->task);
 
   return child->pid;
 }
@@ -506,7 +533,8 @@ process_run(void *arg)
   k_irq_disable();
 
   // "Return" to the user space.
-  arch_trap_frame_pop(process->task->tf);
+  assert(process->thread != NULL);
+  arch_trap_frame_pop(process->thread->task->tf);
 }
 
 void *
@@ -589,7 +617,8 @@ _process_continue(struct Process *process)
   if (process->state == PROCESS_STATE_STOPPED) {
     process->state = PROCESS_STATE_ACTIVE;
     assert(process->flags != 0);
-    k_task_interrupt(process->task);
+    assert(process->thread != NULL);
+    k_task_interrupt(process->thread->task);
 
     _signal_state_change_to_parent(process);
   }

@@ -104,7 +104,7 @@ k_task_interrupt(struct KTask *task)
  * @return 0 on success.
  */
 struct KTask *
-k_task_create(struct Process *process, void (*entry)(void *), void *arg,
+k_task_create(struct Thread *thread, void (*entry)(void *), void *arg,
                 int priority)
 {
   struct Page *stack_page;
@@ -133,7 +133,7 @@ k_task_create(struct Process *process, void (*entry)(void *), void *arg,
   task->entry          = entry;
   task->arg            = arg;
   task->err            = 0;
-  task->process        = process;
+  task->thread         = thread;
 
   task->kstack         = stack;
   task->tf             = NULL;

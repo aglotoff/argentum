@@ -8,7 +8,7 @@ sys_arch_get_num(void)
 {
   struct Process *current = process_current();
 
-  int *pc = (int *) (current->task->tf->pc - 4);
+  int *pc = (int *) (current->thread->task->tf->pc - 4);
   int r;
 
   if ((r = vm_user_check_buf(current->vm->pgtab, (uintptr_t) pc, sizeof(int), VM_READ)) < 0)
@@ -26,17 +26,17 @@ sys_arch_get_arg(int n)
 
   switch (n) {
   case 0:
-    return current->task->tf->r0;
+    return current->thread->task->tf->r0;
   case 1:
-    return current->task->tf->r1;
+    return current->thread->task->tf->r1;
   case 2:
-    return current->task->tf->r2;
+    return current->thread->task->tf->r2;
   case 3:
-    return current->task->tf->r3;
+    return current->thread->task->tf->r3;
   case 4:
-    return current->task->tf->r4;
+    return current->thread->task->tf->r4;
   case 5:
-    return current->task->tf->r5;
+    return current->thread->task->tf->r5;
   default:
     panic("Invalid argument number: %d", n);
     return 0;

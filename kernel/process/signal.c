@@ -56,13 +56,15 @@ signal_init(struct Process *process)
 {
   int i;
 
+  assert(process->thread != NULL);
+
   // process->signal_queue initialized in process_ctor
   process->signal_stub = 0;
-  sigemptyset(&process->signal_mask);
+  sigemptyset(&process->thread->signal_mask);
 
   for (i = 0; i < NSIG; i++) {
     process->signal_actions[i].sa_handler = SIG_DFL;  
-    process->signal_pending[i] = NULL;
+    process->thread->signal_pending[i] = NULL;
   }
 }
 
@@ -72,15 +74,17 @@ signal_reset(struct Process *process)
   struct KListLink *link;
   int i;
 
+  assert(process->thread != NULL);
+
   // process->signal_queue initialized in process_ctor
-  sigemptyset(&process->signal_mask);
+  sigemptyset(&process->thread->signal_mask);
 
   for (i = 0; i < NSIG; i++) {
     process->signal_actions[i].sa_handler = SIG_DFL;  
-    process->signal_pending[i] = NULL;
+    process->thread->signal_pending[i] = NULL;
   }
 
-  KLIST_FOREACH(&process->signal_queue, link) {
+  KLIST_FOREACH(&process->thread->signal_queue, link) {
     struct Signal *signal = KLIST_CONTAINER(link, struct Signal, link);
 
     k_list_remove(&signal->link);
@@ -94,16 +98,18 @@ signal_clone(struct Process *parent, struct Process *child)
 {
   int i;
 
+  assert(parent->thread != NULL);
+
   if (!k_spinlock_holding(&__process_lock))
     panic("process_lock not acquired");
 
   // process->signal_queue initialized in process_ctor
   child->signal_stub = parent->signal_stub;
-  child->signal_mask = parent->signal_mask;
+  child->thread->signal_mask = parent->thread->signal_mask;
 
   for (i = 0; i < NSIG; i++) {
     child->signal_actions[i] = parent->signal_actions[i];
-    child->signal_pending[i] = NULL;
+    child->thread->signal_pending[i] = NULL;
   }
 }
 
@@ -141,9 +147,11 @@ signal_can_be_ignored(int signo)
 static void
 signal_discard(struct Process *process, int signo)
 {
-  struct Signal *s = process->signal_pending[SIGNAL_INDEX(signo)];
+  assert(process->thread != NULL);
+
+  struct Signal *s = process->thread->signal_pending[SIGNAL_INDEX(signo)];
   if (s != NULL) {
-    process->signal_pending[SIGNAL_INDEX(signo)] = NULL;
+    process->thread->signal_pending[SIGNAL_INDEX(signo)] = NULL;
     k_list_remove(&s->link);
   }
 }
@@ -151,9 +159,11 @@ signal_discard(struct Process *process, int signo)
 static int
 signal_is_blocked(struct Process *process, int signo)
 {
+  assert(process->thread != NULL);
+
   if (!signal_can_be_ignored(signo))
     return 0;
-  return sigismember(&process->signal_mask, signo);
+  return sigismember(&process->thread->signal_mask, signo);
 }
 
 int
@@ -209,9 +219,11 @@ signal_pending(sigset_t *set)
   sigemptyset(set);
 
   process_lock();
+
+  assert(process->thread != NULL);
   
   for (i = 1; i <= NSIG; i++)
-    if (process->signal_pending[SIGNAL_INDEX(i)] != NULL)
+    if (process->thread->signal_pending[SIGNAL_INDEX(i)] != NULL)
       sigaddset(set, i);
 
   process_unlock();
@@ -225,8 +237,10 @@ signal_mask_change(int how, const sigset_t *set, sigset_t *old_set)
   struct Process *process = process_current();
   int r = 0, i;
 
+  assert(process->thread != NULL);
+
   if (old_set != NULL)
-    *old_set = process->signal_mask;
+    *old_set = process->thread->signal_mask;
 
   if (set == NULL)
     return r;
@@ -235,20 +249,20 @@ signal_mask_change(int how, const sigset_t *set, sigset_t *old_set)
 
   switch (how) {
   case SIG_SETMASK:
-    process->signal_mask = *set;
-    sigdelset(&process->signal_mask, SIGKILL);
+    process->thread->signal_mask = *set;
+    sigdelset(&process->thread->signal_mask, SIGKILL);
     break;
 
   case SIG_BLOCK:
     for (i = 1; i <= NSIG; i++)
       if ((i != SIGKILL) && sigismember(set, i))
-        sigaddset(&process->signal_mask, i);
+        sigaddset(&process->thread->signal_mask, i);
     break;
 
   case SIG_UNBLOCK:
     for (i = 1; i <= NSIG; i++)
       if (sigismember(set, i))
-        sigdelset(&process->signal_mask, i);
+        sigdelset(&process->thread->signal_mask, i);
     break;
 
   default:
@@ -274,15 +288,17 @@ signal_suspend(const sigset_t *mask)
 
   process_lock();
 
-  saved_mask = process->signal_mask;
+  assert(process->thread != NULL);
 
-  process->signal_mask = *mask;
-  sigdelset(&process->signal_mask, SIGKILL);
+  saved_mask = process->thread->signal_mask;
+
+  process->thread->signal_mask = *mask;
+  sigdelset(&process->thread->signal_mask, SIGKILL);
 
   k_waitqueue_init(&wait_chan);
   r = k_waitqueue_sleep(&wait_chan, &__process_lock);
 
-  process->signal_mask = saved_mask;
+  process->thread->signal_mask = saved_mask;
 
   process_unlock();
 
@@ -321,11 +337,13 @@ signal_return(void)
 
   process_lock();
 
+  assert(current->thread != NULL);
+
   if ((r = arch_signal_return(current, &frame, &ret)) != 0)
     return r;
 
-  current->signal_mask = frame.ucontext.uc_sigmask;
-  sigdelset(&current->signal_mask, SIGKILL);
+  current->thread->signal_mask = frame.ucontext.uc_sigmask;
+  sigdelset(&current->thread->signal_mask, SIGKILL);
 
   process_unlock();
 
@@ -348,6 +366,9 @@ signal_generate(pid_t pid, int signo, int code)
 
     if (signo == 0)
       continue;
+      
+    if (process->thread == NULL)
+      continue;
 
     if ((r = signal_generate_one(process, signo, code)) != 0)
       break;
@@ -369,7 +390,7 @@ signal_generate_one(struct Process *process, int signo, int code)
   // TODO: check for permissions
 
   // Do not queue subsequent occurences of the same signal
-  if (process->signal_pending[SIGNAL_INDEX(signo)])
+  if (process->thread->signal_pending[SIGNAL_INDEX(signo)])
     return 0;
 
   // If a stop signal is generated, discard all pending continue signals (and
@@ -392,12 +413,12 @@ signal_generate_one(struct Process *process, int signo, int code)
   if ((signal = signal_create(signo, code, 0)) == NULL)
     return -ENOMEM;
 
-  k_list_add_back(&process->signal_queue, &signal->link);
-  process->signal_pending[SIGNAL_INDEX(signo)] = signal;
+  k_list_add_back(&process->thread->signal_queue, &signal->link);
+  process->thread->signal_pending[SIGNAL_INDEX(signo)] = signal;
 
   // Blocked signals remain pending
   if (!signal_is_blocked(process, signo)) {
-    k_task_interrupt(process->task);
+    k_task_interrupt(process->thread->task);
   }
 
   return 0;
@@ -457,7 +478,7 @@ signal_dequeue(struct Process *process)
 {
   struct KListLink *link;
 
-  KLIST_FOREACH(&process->signal_queue, link) {
+  KLIST_FOREACH(&process->thread->signal_queue, link) {
     struct Signal *signal = KLIST_CONTAINER(link, struct Signal, link);
     int signo = signal->info.si_signo;
 
@@ -472,7 +493,7 @@ signal_dequeue(struct Process *process)
       continue;
 
     k_list_remove(&signal->link);
-    process->signal_pending[SIGNAL_INDEX(signo)] = NULL;
+    process->thread->signal_pending[SIGNAL_INDEX(signo)] = NULL;
 
     return signal;
   }
@@ -550,12 +571,12 @@ signal_action_custom(struct Process *process,
 
   frame.info = signal->info;
   frame.handler = (uintptr_t) sa->sa_handler;
-  frame.ucontext.uc_sigmask = process->signal_mask;
+  frame.ucontext.uc_sigmask = process->thread->signal_mask;
 
   if (arch_signal_prepare(process, &frame) != 0)
     return SIGKILL;
     
-  process->signal_mask |= sa->sa_mask;
+  process->thread->signal_mask |= sa->sa_mask;
 
   if (sa->sa_flags & SA_RESETHAND)
     sa->sa_handler = SIG_DFL;
