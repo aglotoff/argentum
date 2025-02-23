@@ -8,6 +8,7 @@
 #include <kernel/pipe.h>
 #include <kernel/process.h>
 #include <kernel/vmspace.h>
+#include <kernel/time.h>
 
 static struct KObjectPool *pipe_cache;
 
@@ -130,6 +131,37 @@ pipe_close(struct File *file)
   k_object_pool_put(pipe_cache, pipe);
 
   return 0;
+}
+
+int
+pipe_select(struct File *file, struct timeval *timeout)
+{
+  struct Pipe *pipe = file->pipe;
+  int r;
+
+  if (file->type != FD_PIPE)
+    return -EBADF;
+
+  k_mutex_lock(&pipe->mutex);
+
+  while (pipe->size == 0) {
+    unsigned long t = 0;
+
+    if (timeout != NULL) {
+      t = timeval2ticks(timeout);
+      k_mutex_unlock(&pipe->mutex);
+      return 0;
+    }
+
+    if ((r = k_condvar_timed_wait(&pipe->read_cond, &pipe->mutex, t)) < 0) {
+      k_mutex_unlock(&pipe->mutex);
+      return r;
+    }
+  }
+
+  k_mutex_unlock(&pipe->mutex);
+
+  return 1;
 }
 
 ssize_t

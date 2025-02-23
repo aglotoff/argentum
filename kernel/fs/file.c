@@ -57,7 +57,8 @@ file_dup(struct File *file)
   return file;
 }
 
-#define STATUS_MASK (O_APPEND | O_NONBLOCK | O_SYNC)
+// FIXME: this is a random guess
+#define STATUS_MASK (O_APPEND | O_NONBLOCK | O_SYNC | O_RDONLY | O_RDWR | O_WRONLY)
 
 int
 file_get_flags(struct File *file)
@@ -117,7 +118,7 @@ file_put(struct File *file)
 off_t
 file_seek(struct File *file, off_t offset, int whence)
 {
-  if ((whence != SEEK_SET) && (whence != SEEK_CUR) && (whence != SEEK_SET))
+  if ((whence != SEEK_SET) && (whence != SEEK_CUR) && (whence != SEEK_END))
     return -EINVAL;
 
   switch (file->type) {
@@ -273,7 +274,7 @@ file_select(struct File *file, struct timeval *timeout)
   case FD_SOCKET:
     return net_select(file, timeout);
   case FD_PIPE:
-    return -EBADF;
+    return pipe_select(file, timeout);
   default:
     panic("bad file type");
     return -EBADF;

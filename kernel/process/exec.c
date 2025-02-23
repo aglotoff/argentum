@@ -45,7 +45,7 @@ user_stack_put_string(struct VMSpace *vm, const char *s, uintptr_t *va_p)
   return user_stack_put(vm, s, strlen(s) + 1, va_p);
 }
 
-#define VEC_MAX 63
+#define VEC_MAX 255
 
 static int
 user_stack_put_strings(struct VMSpace *vm, char *const args[],
@@ -409,6 +409,8 @@ process_exec(const char *path, uintptr_t argv_va, uintptr_t envp_va)
   strncpy(proc->name, path, 63);
 
   process_lock();
+
+  assert(ctx.vm != NULL);
 
   old_vm = proc->vm;
   proc->vm = ctx.vm;

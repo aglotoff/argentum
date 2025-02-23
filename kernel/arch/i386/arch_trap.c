@@ -41,8 +41,8 @@ trap_handle_pgfault(struct TrapFrame *tf)
     return;
 
   // If unsuccessfull, kill the process
-  print_trapframe(tf);
-  panic("[%d %s]: user fault va %p\n", process->pid, process->name, address);
+  //print_trapframe(tf);
+  cprintf("[%d %s]: user fault va %p\n", process->pid, process->name, address);
 
   // TODO: SEGV_MAPERR or SEGV_ACCERR
   if (signal_generate(process->pid, SIGSEGV, 0) != 0)

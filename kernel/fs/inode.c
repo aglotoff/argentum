@@ -50,7 +50,6 @@ fs_inode_get(ino_t ino, dev_t dev)
     ip = KLIST_CONTAINER(l, struct Inode, cache_link);
     if ((ip->ino == ino) && (ip->dev == dev) && (ip->ref_count > 0)) {
       ip->ref_count++;
-      // cprintf("[got %d, %d]\n", ino, ip->ref_count);
 
       k_spinlock_release(&inode_cache.lock);
 
@@ -68,14 +67,12 @@ fs_inode_get(ino_t ino, dev_t dev)
     empty->fs        = NULL;
     empty->flags     = 0;
 
-    // cprintf("[inode create %d]\n", ino);
-
     k_spinlock_release(&inode_cache.lock);
 
     return empty;
   }
 
-  // k_spinlock_release(&inode_cache.lock);
+  k_spinlock_release(&inode_cache.lock);
 
   panic("out of inodes\n");
 
@@ -175,6 +172,10 @@ fs_inode_unlock(struct Inode *ip)
     panic("inode not valid");
 
   if (ip->flags & FS_INODE_DIRTY) {
+    if ((ip->dev != 1) && (ip->mtime < 100000 || ip->atime < 100000 || ip->ctime < 100000)) {
+      panic("bad inode time: ino=%d, ctime=%d mtime=%d atime=%d", 
+             ip->ino, ip->ctime, ip->mtime, ip->atime);
+    }
     ip->fs->ops->inode_write(ip);
     ip->flags &= ~FS_INODE_DIRTY;
   }
@@ -956,7 +957,7 @@ fs_inode_select_locked(struct Inode *inode, struct timeval *timeout)
     return ret;
   }
 
-  return 0;
+  return 1;
 }
 
 int

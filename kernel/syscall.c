@@ -106,8 +106,8 @@ sys_dispatch(void)
   if ((num < (int) ARRAY_SIZE(syscalls)) && syscalls[num]) {
     int r = syscalls[num]();
 
-    // if (r < 0 && process_current()->pid > 3)
-    //   cprintf("[%s] syscall(%d) -> %d\n", process_current()->name, num, r);
+    //if (process_current()->pid >= 270)
+    //  cprintf("[%s] syscall(%d) -> %d\n", process_current()->name, num, r);
 
     return r;
   }
@@ -1026,6 +1026,8 @@ sys_select(void)
   int r, fd, nfds;
   fd_set *readfds, *writefds, *errorfds;
   struct timeval *timeout;
+
+  //cprintf("sys_select()\n");
 
   if ((r = sys_arg_int(0, &nfds)) < 0)
     goto out1;

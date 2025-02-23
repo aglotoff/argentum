@@ -6,8 +6,11 @@
 #include <kernel/object_pool.h>
 #include <kernel/console.h>
 #include <kernel/dev.h>
+#include <kernel/time.h>
 
 #include "devfs.h"
+
+static time_t devfs_time;
 
 static struct DevfsNode {
   ino_t ino;
@@ -57,9 +60,9 @@ devfs_inode_read(struct Inode *inode)
     inode->uid   = 0;
     inode->gid   = 0;
     inode->size  = inode->ino == 2 ? NDEV : 0;
-    inode->atime = 0;
-    inode->mtime = 0;
-    inode->ctime = 0;
+    inode->atime = devfs_time;
+    inode->mtime = devfs_time;
+    inode->ctime = devfs_time;
 
     return 0;
   }
@@ -285,6 +288,8 @@ devfs_mount(dev_t dev)
   devfs->dev   = dev;
   devfs->extra = NULL;
   devfs->ops   = &devfs_ops;
+
+  //devfs_time = time_get_seconds();
 
   dev_register_char(0x02, &special_device);
 
