@@ -71,7 +71,6 @@ signal_init(struct Process *process)
 void
 signal_reset(struct Process *process)
 {
-  struct KListLink *link;
   int i;
 
   assert(process->thread != NULL);
@@ -84,8 +83,8 @@ signal_reset(struct Process *process)
     process->thread->signal_pending[i] = NULL;
   }
 
-  KLIST_FOREACH(&process->thread->signal_queue, link) {
-    struct Signal *signal = KLIST_CONTAINER(link, struct Signal, link);
+  while (!k_list_is_empty(&process->thread->signal_queue)) {
+    struct Signal *signal = KLIST_CONTAINER(process->thread->signal_queue.next, struct Signal, link);
 
     k_list_remove(&signal->link);
     signal_free(signal);

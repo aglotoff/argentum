@@ -70,6 +70,7 @@ int
 ext2_block_alloc(struct Ext2SuperblockData *sb, dev_t dev, uint32_t *bstore)
 {
   struct Process *my_process = process_current();
+  int r;
   
   uint32_t gd_start      = sb->block_size > 1024U ? 1 : 2;
   uint32_t gds_total     = sb->block_count / sb->blocks_per_group;
@@ -77,7 +78,8 @@ ext2_block_alloc(struct Ext2SuperblockData *sb, dev_t dev, uint32_t *bstore)
 
   uint32_t g, gi;
 
-  k_mutex_lock(&sb->mutex);
+  if ((r = k_mutex_lock(&sb->mutex)) < 0)
+    return r;
   
   if (sb->free_blocks_count == 0) {
     k_mutex_unlock(&sb->mutex);
@@ -131,7 +133,9 @@ ext2_block_alloc(struct Ext2SuperblockData *sb, dev_t dev, uint32_t *bstore)
     buf_release(buf);
   }
 
-  k_mutex_lock(&sb->mutex);
+  if ((r = k_mutex_lock(&sb->mutex)) < 0)
+    panic("TODO");
+
   sb->free_blocks_count++;
   k_mutex_unlock(&sb->mutex);
 
@@ -168,7 +172,8 @@ ext2_block_free(struct Ext2SuperblockData *sb, dev_t dev, uint32_t bno)
 
   buf_release(buf);
 
-  k_mutex_lock(&sb->mutex);
+  if (k_mutex_lock(&sb->mutex) < 0)
+    panic("TODO");
   sb->free_blocks_count++;
   k_mutex_unlock(&sb->mutex);
 }

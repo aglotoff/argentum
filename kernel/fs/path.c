@@ -189,7 +189,8 @@ fs_fs_path_node_lock(struct PathNode *node)
 {
   if ((node->ref_count == 1) && (node->parent != NULL))
     panic("bad path node reference");
-  k_mutex_lock(&node->mutex);
+  if (k_mutex_lock(&node->mutex) < 0)
+    panic("TODO");
 }
 
 void

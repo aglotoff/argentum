@@ -93,11 +93,13 @@ pipe_close(struct File *file)
   struct Page *page;
   struct Pipe *pipe = file->pipe;
   int write = (file->flags & O_ACCMODE) != O_RDONLY;
+  int r;
 
   if (file->type != FD_PIPE)
     return -EBADF;
 
-  k_mutex_lock(&pipe->mutex);
+  if ((r = k_mutex_lock(&pipe->mutex)) < 0)
+    return r;
 
   if (write) {
     pipe->write_open = 0;
@@ -142,7 +144,8 @@ pipe_select(struct File *file, struct timeval *timeout)
   if (file->type != FD_PIPE)
     return -EBADF;
 
-  k_mutex_lock(&pipe->mutex);
+  if ((r = k_mutex_lock(&pipe->mutex)) < 0)
+    return r;
 
   while (pipe->size == 0) {
     unsigned long t = 0;
@@ -169,11 +172,13 @@ pipe_read(struct File *file, uintptr_t va, size_t n)
 {
   size_t i;
   struct Pipe *pipe = file->pipe;
+  int r;
 
   if (file->type != FD_PIPE)
     return -EBADF;
 
-  k_mutex_lock(&pipe->mutex);
+  if ((r = k_mutex_lock(&pipe->mutex)) < 0)
+    return r;
 
   page_assert(kva2page(pipe->buf), PIPE_BUF_ORDER, PAGE_TAG_PIPE);
 
@@ -224,11 +229,13 @@ pipe_write(struct File *file, uintptr_t va, size_t n)
 {
   size_t i;
   struct Pipe *pipe = file->pipe;
+  int r;
 
   if (file->type != FD_PIPE)
     return -EBADF;
 
-  k_mutex_lock(&pipe->mutex);
+  if ((r = k_mutex_lock(&pipe->mutex)) < 0)
+    return r;
 
   page_assert(kva2page(pipe->buf), PIPE_BUF_ORDER, PAGE_TAG_PIPE);
 
@@ -274,11 +281,13 @@ int
 pipe_stat(struct File *file, struct stat *buf)
 {
   struct Pipe *pipe = file->pipe;
+  int r;
 
   if (file->type != FD_PIPE)
     return -EBADF;
   
-  k_mutex_lock(&pipe->mutex);
+  if ((r = k_mutex_lock(&pipe->mutex)) < 0)
+    return r;
 
   // TODO: use meaningful values
   buf->st_dev          = 255;

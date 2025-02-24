@@ -84,8 +84,10 @@ k_task_interrupt(struct KTask *task)
 {
   _k_sched_lock();
 
-  // TODO: if task is running, send an SGI
-  _k_sched_resume(task, -EINTR);
+  if (!task->sleep_on_mutex) {
+    // TODO: if task is running, send an SGI
+    _k_sched_resume(task, -EINTR);
+  }
 
   _k_sched_unlock();
 }

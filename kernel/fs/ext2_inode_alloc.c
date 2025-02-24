@@ -119,6 +119,8 @@ ext2_inode_alloc(struct Ext2SuperblockData *sb, mode_t mode, dev_t rdev, dev_t d
     return 0;
   }
 
+  buf_release(buf);
+
   // Scan all group descriptors for a free inode
   for (g = 0; g < sb->inodes_count / sb->inodes_per_group; g += gds_per_block) {
     if ((buf = buf_read(gd_start + (g / gds_per_block), sb->block_size, dev)) == NULL)

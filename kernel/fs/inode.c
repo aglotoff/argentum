@@ -104,7 +104,10 @@ fs_inode_duplicate(struct Inode *inode)
 void
 fs_inode_put(struct Inode *inode)
 {   
-  k_mutex_lock(&inode->mutex);
+  int r;
+
+  if ((r = k_mutex_lock(&inode->mutex)) < 0)
+    panic("TODO %d", r);
 
   if (inode->flags & FS_INODE_DIRTY)
     panic("inode dirty");
@@ -152,7 +155,8 @@ fs_inode_holding(struct Inode *ip)
 void
 fs_inode_lock(struct Inode *ip)
 {
-  k_mutex_lock(&ip->mutex);
+  if (k_mutex_lock(&ip->mutex) < 0)
+    panic("TODO");
 
   if (ip->flags & FS_INODE_VALID)
     return;
@@ -1003,11 +1007,15 @@ fs_inode_readlink(struct Inode *inode, char *buf, size_t bufsize)
   
   fs_inode_lock(inode);
 
-  if (!fs_permission(inode, FS_PERM_READ, 0))
+  if (!fs_permission(inode, FS_PERM_READ, 0)) {
+    fs_inode_unlock(inode);
     return -EPERM;
+  }
 
-  if (!S_ISLNK(inode->mode))
+  if (!S_ISLNK(inode->mode)) {
+    fs_inode_unlock(inode);
     return -EINVAL;
+  }
 
   r = inode->fs->ops->readlink(inode, buf, bufsize);
 

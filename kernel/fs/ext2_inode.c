@@ -330,7 +330,6 @@ ext2_read(struct Inode *inode, uintptr_t va, size_t nbyte, off_t off)
       struct Buf *buf;
 
       if ((buf = buf_read(block_id, sb->block_size, inode->dev)) == NULL) {
-        buf_release(buf);
         return -EIO;
       }
 
@@ -362,7 +361,6 @@ ext2_write(struct Inode *inode, uintptr_t va, size_t nbyte, off_t off)
       return -ENOMEM;
 
     if ((buf = buf_read(block_id, sb->block_size, inode->dev)) == NULL) {
-      buf_release(buf);
       return -EIO;
     }
 

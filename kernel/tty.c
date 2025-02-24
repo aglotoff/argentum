@@ -90,9 +90,12 @@ tty_init(void)
 static void
 tty_echo(struct Tty *tty, char c)
 {
-  k_mutex_lock(&tty->out.mutex);
+  if (k_mutex_lock(&tty->out.mutex) < 0)
+    return; // TODO: return?
+
   arch_tty_out_char(tty, c);
   arch_tty_flush(tty);
+
   k_mutex_unlock(&tty->out.mutex);
 }
 
@@ -120,6 +123,7 @@ tty_signal(struct Tty *tty, int signo)
   if (signal_generate(-tty->pgrp, signo, 0) != 0)
     panic("cannot generate signal");
 
+  // TODO: return
   k_mutex_lock(&tty->in.mutex);
 }
 

@@ -415,7 +415,8 @@ ext2_sb_sync(struct Ext2SuperblockData *sb, dev_t dev)
   struct Ext2Superblock *raw;
   struct Buf *buf;
 
-  k_mutex_lock(&sb->mutex);
+  if (k_mutex_lock(&sb->mutex) < 0)
+    panic("TODO");
 
   sb->wtime = time_get_seconds();
 

@@ -163,7 +163,8 @@ ide_request(struct Buf *buf)
   if (buf->block_size % IDE_BLOCK_LEN != 0)
     panic("block size must be a multiple of %u", IDE_BLOCK_LEN);
 
-  k_mutex_lock(&ide_mutex);
+  if (k_mutex_lock(&ide_mutex) < 0)
+    panic("TODO: error");
 
   // Add buffer to the queue.
   k_list_add_back(&ide_queue, &buf->queue_link);

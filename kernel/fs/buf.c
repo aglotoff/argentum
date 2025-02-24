@@ -198,6 +198,7 @@ struct Buf *
 buf_read(unsigned block_no, size_t block_size, dev_t dev)
 {
   struct Buf *buf;
+  int r;
 
   if (block_no == (unsigned) -1)
     panic("bad block_no");
@@ -205,7 +206,10 @@ buf_read(unsigned block_no, size_t block_size, dev_t dev)
   if ((buf = buf_get(block_no, block_size, dev)) == NULL)
     return NULL;
 
-  k_mutex_lock(&buf->mutex);
+  if ((r = k_mutex_lock(&buf->mutex)) < 0) {
+    panic("TODO %d", r);
+    return NULL;
+  }
 
   if (block_size >= PAGE_SIZE) {
     unsigned page_order; 

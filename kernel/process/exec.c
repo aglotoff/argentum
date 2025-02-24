@@ -410,8 +410,6 @@ process_exec(const char *path, uintptr_t argv_va, uintptr_t envp_va)
 
   process_lock();
 
-  assert(ctx.vm != NULL);
-
   old_vm = proc->vm;
   proc->vm = ctx.vm;
 
