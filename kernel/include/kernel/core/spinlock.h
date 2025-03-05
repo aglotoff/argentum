@@ -1,11 +1,7 @@
 #ifndef __KERNEL_INCLUDE_KERNEL_SPINLOCK_H__
 #define __KERNEL_INCLUDE_KERNEL_SPINLOCK_H__
 
-#ifndef __ARGENTUM_KERNEL__
-#error "This is a kernel header; user programs should not #include it"
-#endif
-
-#include <stdint.h>
+#include <kernel/core/config.h>
 
 struct KCpu;
 
@@ -25,7 +21,7 @@ struct KSpinLock {
   volatile int  locked;
 
   /** The CPU holding this spinlock */
-  struct KCpu   *cpu;
+  struct KCpu  *cpu;
   /** Spinlock name (for debugging purposes) */
   const char   *name;
   /** Saved call stack (an array of program counters) that locked the lock */
@@ -38,10 +34,10 @@ struct KSpinLock {
  * @param name The name of the spinlock
  */
 #define K_SPINLOCK_INITIALIZER(spin_name) { \
-  .locked = 0,                        \
-  .cpu    = NULL,                     \
-  .name   = (spin_name),              \
-  .pcs    = { 0 }                     \
+  .locked = 0,                              \
+  .cpu    = NULL,                           \
+  .name   = (spin_name),                    \
+  .pcs    = { 0 }                           \
 }
 
 void k_spinlock_init(struct KSpinLock *, const char *);

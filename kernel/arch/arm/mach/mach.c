@@ -1,4 +1,4 @@
-#include <kernel/assert.h>
+#include <kernel/core/assert.h>
 #include <arch/arm/mach.h>
 
 // These symbols are defined by the linker script kernel.ld
@@ -18,5 +18,5 @@ mach_init(uint32_t mach_type)
     }
   }
   
-  panic("unknown machine type %x", mach_type);
+  k_panic("unknown machine type %x", mach_type);
 }

@@ -1,4 +1,4 @@
-#include <kernel/assert.h>
+#include <kernel/core/assert.h>
 #include <lwip/sio.h>
 
 sio_fd_t
@@ -6,7 +6,7 @@ sio_open(u8_t devnum)
 {
   (void) devnum;
 
-  panic("sio_open");
+  k_panic("sio_open");
   return 0;
 }
 
@@ -16,7 +16,7 @@ sio_send(u8_t c, sio_fd_t fd)
   (void) c;
   (void) fd;
 
-  panic("sio_send");
+  k_panic("sio_send");
 }
 
 u8_t
@@ -24,7 +24,7 @@ sio_recv(sio_fd_t fd)
 {
   (void) fd;
 
-  panic("sio_recv");
+  k_panic("sio_recv");
   return 0;
 }
 
@@ -35,7 +35,7 @@ sio_read(sio_fd_t fd, u8_t *data, u32_t len)
   (void) data;
   (void) len;
 
-  panic("sio_read");
+  k_panic("sio_read");
   return 0;
 }
 
@@ -46,6 +46,6 @@ sio_tryread(sio_fd_t fd, u8_t *data, u32_t len)
   (void) data;
   (void) len;
 
-  panic("sio_tryread");
+  k_panic("sio_tryread");
   return 0;
 }

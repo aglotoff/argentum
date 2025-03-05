@@ -1,4 +1,4 @@
-#include <kernel/assert.h>
+#include <kernel/core/assert.h>
 #include <errno.h>
 #include <string.h>
 
@@ -22,7 +22,7 @@ ext2_block_zero(struct Ext2SuperblockData *sb, uint32_t block_id, uint32_t dev)
   struct Buf *buf;
   
   if ((buf = buf_read(block_id, sb->block_size, dev)) == NULL)
-    panic("cannot read block %d", block_id);
+    k_panic("cannot read block %d", block_id);
 
   memset(buf->data, 0, sb->block_size);
   buf->flags |= BUF_DIRTY;
@@ -47,7 +47,7 @@ ext2_block_group_alloc(struct Ext2SuperblockData *sb, struct Ext2BlockGroup *gd,
                         bstore) < 0)
     // If free_blocks_count isn't zero, but we couldn't find a free block, the
     // filesystem is corrupted.
-    panic("no free blocks");
+    k_panic("no free blocks");
 
   gd->free_blocks_count--;
 
@@ -108,7 +108,7 @@ ext2_block_alloc(struct Ext2SuperblockData *sb, dev_t dev, uint32_t *bstore)
 
     if ((buf = buf_read(gd_start + (g / gds_per_block), sb->block_size, dev)) == NULL)
       // TODO: recover from I/O errors
-      panic("cannot read the group descriptor table");
+      k_panic("cannot read the group descriptor table");
 
     for (gi = 0; gi < MIN(gds_per_block, gds_total - g); gi++) {
       struct Ext2BlockGroup *gd = (struct Ext2BlockGroup *) buf->data + gi;
@@ -134,7 +134,7 @@ ext2_block_alloc(struct Ext2SuperblockData *sb, dev_t dev, uint32_t *bstore)
   }
 
   if ((r = k_mutex_lock(&sb->mutex)) < 0)
-    panic("TODO");
+    k_panic("TODO");
 
   sb->free_blocks_count++;
   k_mutex_unlock(&sb->mutex);
@@ -173,7 +173,7 @@ ext2_block_free(struct Ext2SuperblockData *sb, dev_t dev, uint32_t bno)
   buf_release(buf);
 
   if (k_mutex_lock(&sb->mutex) < 0)
-    panic("TODO");
+    k_panic("TODO");
   sb->free_blocks_count++;
   k_mutex_unlock(&sb->mutex);
 }

@@ -1,13 +1,13 @@
 #include <stddef.h>
 #include <string.h>
 
-#include <kernel/assert.h>
+#include <kernel/core/assert.h>
 #include <kernel/console.h>
 #include <kernel/core/cpu.h>
 #include <kernel/core/irq.h>
 #include <kernel/kdebug.h>
 #include <kernel/process.h>
-#include <kernel/spinlock.h>
+#include <kernel/core/spinlock.h>
 
 #include "core_private.h"
 
@@ -35,7 +35,7 @@ k_spinlock_acquire(struct KSpinLock *spin)
 {
   if (k_spinlock_holding(spin)) {
     k_arch_spinlock_print_callstack(spin);
-    panic("CPU %x is already holding %s", k_cpu_id(), spin->name);
+    k_panic("CPU %x is already holding %s", k_cpu_id(), spin->name);
   }
 
   // Disable interrupts to avoid deadlocks
@@ -57,7 +57,7 @@ k_spinlock_release(struct KSpinLock *spin)
 {
   if (!k_spinlock_holding(spin)) {
     k_arch_spinlock_print_callstack(spin);
-    panic("CPU %d cannot release %s: held by %d\n",
+    k_panic("CPU %d cannot release %s: held by %d\n",
           k_cpu_id(), spin->name, spin->cpu);
   }
 

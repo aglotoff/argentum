@@ -1,4 +1,4 @@
-#include <kernel/assert.h>
+#include <kernel/core/assert.h>
 #include <errno.h>
 #include <string.h>
 #include <sys/stat.h>
@@ -27,7 +27,7 @@ ext2_inode_get(struct FS *fs, ino_t inum)
   if (inode != NULL && inode->fs == NULL) {
     inode->fs = fs;
     if ((inode->extra = k_malloc(sizeof(struct Ext2InodeExtra))) == NULL)
-      panic("TODO");
+      k_panic("TODO");
   }
 
   return inode;
@@ -53,7 +53,7 @@ ext2_inode_create(struct Inode *dirp, char *name, mode_t mode, dev_t rdev,
   ip->gid = dirp->gid;
 
   if ((r = ext2_link(dirp, name, ip)))
-    panic("Cannot create link");
+    k_panic("Cannot create link");
 
   ip->ctime = ip->mtime = time_get_seconds();
   ip->flags |= FS_INODE_DIRTY;
@@ -76,7 +76,7 @@ ext2_create(struct Inode *dirp, char *name, mode_t mode,
   ip->nlink = 1;
   ip->flags |= FS_INODE_DIRTY;
 
-  assert(istore != NULL);
+  k_assert(istore != NULL);
   *istore = ip;
 
   dirp->atime = dirp->ctime = dirp->mtime = time_get_seconds();
@@ -100,20 +100,20 @@ ext2_mkdir(struct Inode *dirp, char *name, mode_t mode,
 
   // Create the "." entry
   if (ext2_link(ip, ".", ip) < 0)
-    panic("Cannot create .");
+    k_panic("Cannot create .");
 
   ip->nlink = 1;
   ip->flags |= FS_INODE_DIRTY;
 
   // Create the ".." entry
   if (ext2_link(ip, "..", dirp) < 0)
-    panic("Cannot create ..");
+    k_panic("Cannot create ..");
 
   dirp->nlink++;
   dirp->atime = dirp->ctime = dirp->mtime = time_get_seconds();
   dirp->flags |= FS_INODE_DIRTY;
 
-  assert(istore != NULL);
+  k_assert(istore != NULL);
   *istore = ip;
 
   return 0;
@@ -133,7 +133,7 @@ ext2_mknod(struct Inode *dirp, char *name, mode_t mode, dev_t dev,
   ip->rdev = dev;
   ip->flags |= FS_INODE_DIRTY;
 
-  assert(istore != NULL);
+  k_assert(istore != NULL);
   *istore = ip;
 
   dirp->atime = dirp->ctime = dirp->mtime = time_get_seconds();
@@ -151,11 +151,11 @@ ext2_dirent_read(struct Inode *dir, struct Ext2DirEntry *de, off_t off)
 
   ret = ext2_read(dir, (uintptr_t) de, DE_NAME_OFFSET, off);
   if (ret != DE_NAME_OFFSET)
-    panic("Cannot read directory");
+    k_panic("Cannot read directory");
 
   ret = ext2_read(dir, (uintptr_t) de->name, de->name_len, off + ret);
   if (ret != de->name_len)
-    panic("Cannot read directory");
+    k_panic("Cannot read directory");
 
   dir->atime  = time_get_seconds();
   dir->flags |= FS_INODE_DIRTY;
@@ -170,7 +170,7 @@ ext2_dirent_write(struct Inode *dir, struct Ext2DirEntry *de, off_t off)
 
   ret = ext2_write(dir, (uintptr_t) de, DE_NAME_OFFSET + de->name_len, off);
   if (ret != (DE_NAME_OFFSET + de->name_len))
-    panic("Cannot read directory");
+    k_panic("Cannot read directory");
 
   return 0;
 }
@@ -183,7 +183,7 @@ ext2_lookup(struct Inode *dirp, const char *name)
   size_t name_len;
 
   if (!S_ISDIR(dirp->mode))
-    panic("not a directory");
+    k_panic("not a directory");
 
   name_len = strlen(name);
 
@@ -283,7 +283,7 @@ ext2_link(struct Inode *dir, char *name, struct Inode *inode)
     }
   }
 
-  assert(off % sb->block_size == 0);
+  k_assert(off % sb->block_size == 0);
 
   new_de.rec_len = sb->block_size;
   dir->size = off + sb->block_size;
@@ -416,12 +416,12 @@ ext2_sb_sync(struct Ext2SuperblockData *sb, dev_t dev)
   struct Buf *buf;
 
   if (k_mutex_lock(&sb->mutex) < 0)
-    panic("TODO");
+    k_panic("TODO");
 
   sb->wtime = time_get_seconds();
 
   if ((buf = buf_read(1, 1024, dev)) == NULL)
-    panic("cannot read the superblock");
+    k_panic("cannot read the superblock");
 
   raw = (struct Ext2Superblock *) &buf->data[EXT2_SB_OFFSET];
 
@@ -441,7 +441,7 @@ ext2_readdir(struct Inode *dir, void *buf, FillDirFunc filldir, off_t off)
   struct Ext2DirEntry de;
   ssize_t nread;
 
-  assert(S_ISDIR(dir->mode));
+  k_assert(S_ISDIR(dir->mode));
 
   if (off >= dir->size)
     return 0;
@@ -461,7 +461,7 @@ ext2_readlink(struct Inode *inode, char *buf, size_t n)
 {
   struct Ext2InodeExtra *extra = (struct Ext2InodeExtra *) inode->extra;
 
-  assert(S_ISLNK(inode->mode));
+  k_assert(S_ISLNK(inode->mode));
 
   if ((inode->size <= MAX_FAST_SYMLINK_NAMELEN) && (extra->blocks == 0)) {
     ssize_t nread = MIN((size_t) inode->size, n);
@@ -499,14 +499,14 @@ ext2_mount(dev_t dev)
   struct FS *ext2fs;
 
   if ((ext2fs = (struct FS *) k_malloc(sizeof(struct FS))) == NULL)
-    panic("cannot allocate FS");
+    k_panic("cannot allocate FS");
   if ((sb = (struct Ext2SuperblockData *) k_malloc(sizeof(struct Ext2SuperblockData))) == NULL)
-    panic("cannt allocate superblock");
+    k_panic("cannt allocate superblock");
 
   k_mutex_init(&sb->mutex, "ext2_sb_mutex");
   
   if ((buf = buf_read(1, 1024, dev)) == NULL)
-    panic("cannot read the superblock");
+    k_panic("cannot read the superblock");
 
   raw = (struct Ext2Superblock *) &buf->data[EXT2_SB_OFFSET];
 

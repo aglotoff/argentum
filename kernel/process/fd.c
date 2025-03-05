@@ -1,7 +1,7 @@
 #include <errno.h>
 #include <fcntl.h>
 
-#include <kernel/assert.h>
+#include <kernel/core/assert.h>
 #include <kernel/console.h>
 #include <kernel/process.h>
 #include <kernel/fd.h>
@@ -203,7 +203,7 @@ _fd_lookup(struct Process *process, int n)
 static void
 _fd_close(struct FileDesc *fd)
 {
-  assert(fd->file != NULL);
+  k_assert(fd->file != NULL);
   
   file_put(fd->file);
 

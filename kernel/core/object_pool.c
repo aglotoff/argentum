@@ -2,7 +2,7 @@
 #include <stdio.h>
 #include <string.h>
 
-#include <kernel/assert.h>
+#include <kernel/core/assert.h>
 #include <kernel/console.h>
 #include <kernel/object_pool.h>
 #include <kernel/page.h>
@@ -113,7 +113,7 @@ int
 k_object_pool_destroy(struct KObjectPool *pool)
 {
   if (pool == &pool_of_pools)
-    panic("trying to destroy the pool of pools");
+    k_panic("trying to destroy the pool of pools");
 
   k_spinlock_acquire(&pool->lock);
 
@@ -167,7 +167,7 @@ k_object_pool_get(struct KObjectPool *pool)
     // Then try to allocate a new slab
     } else if ((slab = k_object_pool_slab_create(pool)) == NULL) {
       k_spinlock_release(&pool->lock);
-      panic("%s: out of memory\n", pool->name);
+      k_panic("%s: out of memory\n", pool->name);
       return NULL;
     }
 
@@ -220,7 +220,7 @@ k_object_pool_system_init(void)
   // pool of pool descriptors
   if (k_object_pool_init(&pool_of_pools, "pool_of_pools",
                        sizeof(struct KObjectPool), 0, NULL, NULL) < 0)
-    panic("cannot initialize pool_of_pools");
+    k_panic("cannot initialize pool_of_pools");
 
   // Then, initialize the set of anonymous pools used by k_malloc and k_free
   for (i = 0; i < ANON_POOLS_LENGTH; i++) {
@@ -231,7 +231,7 @@ k_object_pool_system_init(void)
 
     anon_pools[i] = k_object_pool_create(name, size, 0, NULL, NULL);
     if (anon_pools[i] == NULL)
-      panic("cannot initialize %s", name);
+      k_panic("cannot initialize %s", name);
   }
 }
 
@@ -272,7 +272,7 @@ k_free(void *ptr)
   // Determine the slab (and the pool) this pointer belongs to
   page = kva2page(ptr);
   if (page->slab == NULL)
-    panic("bad pointer");
+    k_panic("bad pointer");
 
   k_object_pool_put(page->slab->pool, ptr);
 }
@@ -396,7 +396,7 @@ k_object_pool_slab_create(struct KObjectPool *pool)
   uint8_t *data, *end, *p;
   unsigned i;
 
-  assert(k_spinlock_holding(&pool->lock));
+  k_assert(k_spinlock_holding(&pool->lock));
 
   if ((page = page_alloc_block(pool->slab_page_order, 0, PAGE_TAG_SLAB)) == NULL)
     return NULL;
@@ -450,7 +450,7 @@ k_object_pool_slab_create(struct KObjectPool *pool)
 
     p += pool->block_size;
     
-    assert((void *) p <= (void *) end);
+    k_assert((void *) p <= (void *) end);
   }
 
   // Add the newly allocated slab to the full list
@@ -472,8 +472,8 @@ k_object_pool_slab_destroy(struct KObjectSlab *slab)
   struct Page *page;
   unsigned i;
   
-  assert(k_spinlock_holding(&slab->pool->lock));
-  assert(slab->used_count == 0);
+  k_assert(k_spinlock_holding(&slab->pool->lock));
+  k_assert(slab->used_count == 0);
 
   // Call destructor for all objects
   if (slab->pool->obj_dtor != NULL) {
@@ -489,7 +489,7 @@ k_object_pool_slab_destroy(struct KObjectSlab *slab)
 
   for (i = 0; i < (1U << pool->slab_page_order); i++) {
     if (page[i].slab != slab)
-      panic("trying to free a page that doesn't belong to slab");
+      k_panic("trying to free a page that doesn't belong to slab");
     page[i].slab = NULL;
   }
 
@@ -517,8 +517,8 @@ k_object_pool_slab_get(struct KObjectSlab *slab)
   // The slab must be on the partial list (even if it is full, the
   // object_pool_alloc function moves it to the partial list before calling this
   // function)
-  assert(slab->used_count < pool->slab_capacity);
-  assert(slab->free != NULL);
+  k_assert(slab->used_count < pool->slab_capacity);
+  k_assert(slab->free != NULL);
 
   tag = slab->free;
   slab->free = tag->next;
@@ -526,7 +526,7 @@ k_object_pool_slab_get(struct KObjectSlab *slab)
 
   // The slab becomes empty: move it into the corresponding list
   if (slab->used_count == pool->slab_capacity) {
-    assert(slab->free == NULL);
+    k_assert(slab->free == NULL);
 
     k_list_remove(&slab->link);
     k_list_add_back(&pool->slabs_empty, &slab->link);
@@ -547,7 +547,7 @@ k_object_pool_slab_put(struct KObjectSlab *slab, void *obj)
   struct KObjectPool *pool = slab->pool;
   struct KObjectTag *tag;
   
-  assert(slab->used_count > 0);
+  k_assert(slab->used_count > 0);
 
   page_assert(kva2page(slab->data), pool->slab_page_order, PAGE_TAG_SLAB);
 

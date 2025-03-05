@@ -1,13 +1,13 @@
-#include <kernel/assert.h>
-#include <errno.h>
-#include <string.h>
 
-#include <kernel/console.h>
+#include <kernel/core/config.h>
+
+#include <kernel/core/assert.h>
 #include <kernel/core/cpu.h>
 #include <kernel/core/irq.h>
-#include <kernel/task.h>
-#include <kernel/mutex.h>
-#include <kernel/spinlock.h>
+#include <kernel/core/task.h>
+#include <kernel/core/mutex.h>
+#include <kernel/core/spinlock.h>
+
 #include <kernel/process.h>
 #include <kernel/vmspace.h>
 #include <kernel/vm.h>
@@ -37,7 +37,7 @@ k_sched_init(void)
   k_task_cache = k_object_pool_create("k_task_cache", sizeof(struct KTask), 0,
                                    NULL, NULL);
   if (k_task_cache == NULL)
-    panic("cannot allocate task cache");
+    k_panic("cannot allocate task cache");
 
   for (i = 0; i < K_TASK_MAX_PRIORITIES; i++)
     k_list_init(&sched_queue[i]);
@@ -48,7 +48,7 @@ void
 _k_sched_enqueue(struct KTask *th)
 {
   if (!k_spinlock_holding(&_k_sched_spinlock))
-    panic("scheduler not locked");
+    k_panic("scheduler not locked");
 
   th->state = K_TASK_STATE_READY;
   k_list_add_back(&sched_queue[th->priority], &th->link);
@@ -62,7 +62,7 @@ k_sched_dequeue(void)
   int i;
   
   if (!k_spinlock_holding(&_k_sched_spinlock))
-    panic("scheduler not locked");
+    k_panic("scheduler not locked");
 
   for (i = 0; i < K_TASK_MAX_PRIORITIES; i++) {
     if (!k_list_is_empty(&sched_queue[i])) {
@@ -81,11 +81,13 @@ k_sched_switch(struct KTask *task)
 {
   struct KCpu *my_cpu = _k_cpu();
 
-  if (task->thread != NULL) {
-    assert(task->thread->task == task);
+  if (task->ext != NULL) {
+    struct Thread *thread = (struct Thread *) task->ext;
 
-    arch_vm_switch(task->thread->process);
-    arch_vm_load(task->thread->process->vm->pgtab);
+    k_assert(thread->task == task);
+
+    arch_vm_switch(thread->process);
+    arch_vm_load(thread->process->vm->pgtab);
   }
 
   task->state = K_TASK_STATE_RUNNING;
@@ -96,12 +98,12 @@ k_sched_switch(struct KTask *task)
   k_arch_switch(&my_cpu->sched_context, task->context);
 
   if ((intptr_t) task->context - (intptr_t) task->kstack < 64)
-    panic("stack underflow %p %p", task->context, task->kstack);
+    k_panic("stack underflow %p %p", task->context, task->kstack);
 
   my_cpu->task = NULL;
   task->cpu = NULL;
 
-  if (task->thread != NULL)
+  if (task->ext != NULL)
     arch_vm_load_kernel();
 }
 
@@ -153,7 +155,7 @@ k_sched_start(void)
     struct KTask *next = k_sched_dequeue();
 
     if (next != NULL) {
-      assert(next->state == K_TASK_STATE_READY);
+      k_assert(next->state == K_TASK_STATE_READY);
       k_sched_switch(next);
     } else {
       k_sched_idle();
@@ -168,7 +170,7 @@ _k_sched_yield_locked(void)
   int irq_flags;
 
   if (!k_spinlock_holding(&_k_sched_spinlock))
-    panic("scheduler not locked");
+    k_panic("scheduler not locked");
 
   irq_flags = _k_cpu()->irq_flags;
   k_arch_switch(&k_task_current()->context, _k_cpu()->sched_context);
@@ -210,15 +212,15 @@ _k_sched_sleep(struct KListLink *queue, int state, unsigned long timeout,
   }
 
   if (!k_spinlock_holding(&_k_sched_spinlock))
-    panic("scheduler not locked");
+    k_panic("scheduler not locked");
 
   my_cpu = _k_cpu();
   my_task = my_cpu->task;
 
   if (my_cpu->lock_count > 0)
-    panic("called from an IRQ context");
+    k_panic("called from an IRQ context");
   if (my_cpu->task == NULL)
-    panic("called not by a task");
+    k_panic("called not by a task");
 
   if (timeout != 0) {
     _k_timeout_enqueue(&_k_sched_timeouts, &my_task->timer, timeout);
@@ -249,8 +251,8 @@ _k_sched_sleep(struct KListLink *queue, int state, unsigned long timeout,
 void
 _k_sched_raise_priority(struct KTask *task, int priority)
 {
-  assert(k_spinlock_holding(&_k_sched_spinlock));
-  assert(task->priority > priority);
+  k_assert(k_spinlock_holding(&_k_sched_spinlock));
+  k_assert(task->priority > priority);
 
   task->priority = priority;
 
@@ -278,7 +280,7 @@ void
 _k_sched_resume(struct KTask *task, int result)
 {
   if (!k_spinlock_holding(&_k_sched_spinlock))
-    panic("sched not locked");
+    k_panic("sched not locked");
 
   switch (task->state) {
   case K_TASK_STATE_SLEEP:
@@ -308,7 +310,7 @@ void
 _k_sched_wakeup_all_locked(struct KListLink *queue, int result)
 {
   if (!k_spinlock_holding(&_k_sched_spinlock))
-    panic("sched not locked");
+    k_panic("sched not locked");
 
   while (!k_list_is_empty(queue)) {
     struct KListLink *link = queue->next;
@@ -326,7 +328,7 @@ _k_sched_wakeup_one_locked(struct KListLink *queue, int result)
   struct KTask *task;
 
   if (!k_spinlock_holding(&_k_sched_spinlock))
-    panic("sched not locked");
+    k_panic("sched not locked");
 
   if (k_list_is_empty(queue))
     return NULL;
@@ -347,7 +349,7 @@ _k_sched_may_yield(struct KTask *task)
   struct KTask *my_task;
 
   if (!k_spinlock_holding(&_k_sched_spinlock))
-    panic("scheduler not locked");
+    k_panic("scheduler not locked");
 
   my_cpu = _k_cpu();
   my_task = my_cpu->task;

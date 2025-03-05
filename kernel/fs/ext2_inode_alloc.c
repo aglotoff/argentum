@@ -1,4 +1,4 @@
-#include <kernel/assert.h>
+#include <kernel/core/assert.h>
 #include <errno.h>
 #include <string.h>
 
@@ -20,7 +20,7 @@ ext2_inode_group_alloc(struct Ext2SuperblockData *sb, struct Ext2BlockGroup *gd,
   if (ext2_bitmap_alloc(sb, gd->inode_bitmap, sb->inodes_per_group, dev, istore))
     // If free_inodes_count isn't zero, but we cannot find a free inode, the
     // filesystem is corrupted.
-    panic("no free inodes");
+    k_panic("no free inodes");
 
   gd->free_inodes_count--;
 
@@ -41,7 +41,7 @@ ext2_inode_init(struct Ext2SuperblockData *sb, dev_t dev, uint32_t table, uint32
   inode_block_idx  = itab_idx % inodes_per_block;
 
   if ((buf = buf_read(inode_block, sb->block_size, dev)) == NULL)
-    panic("cannot read the inode table");
+    k_panic("cannot read the inode table");
 
   raw = (struct Ext2Inode *) &buf->data[sb->inode_size * inode_block_idx];
   memset(raw, 0, sb->inode_size);
@@ -97,7 +97,7 @@ ext2_inode_alloc(struct Ext2SuperblockData *sb, mode_t mode, dev_t rdev, dev_t d
   g  = g - gi;
 
   if ((buf = buf_read(gd_start + (g / gds_per_block), sb->block_size, dev)) == NULL)
-    panic("cannot read the group descriptor table");
+    k_panic("cannot read the group descriptor table");
 
   gd = (struct Ext2BlockGroup *) buf->data + gi;
 
@@ -124,7 +124,7 @@ ext2_inode_alloc(struct Ext2SuperblockData *sb, mode_t mode, dev_t rdev, dev_t d
   // Scan all group descriptors for a free inode
   for (g = 0; g < sb->inodes_count / sb->inodes_per_group; g += gds_per_block) {
     if ((buf = buf_read(gd_start + (g / gds_per_block), sb->block_size, dev)) == NULL)
-      panic("cannot read the group descriptor table");
+      k_panic("cannot read the group descriptor table");
 
     for (gi = 0; gi < gds_per_block; gi++) {
       gd = (struct Ext2BlockGroup *) buf->data + gi;

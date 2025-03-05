@@ -1,8 +1,8 @@
 #ifndef __CORE_PRIVATE_H
 #define __CORE_PRIVATE_H
 
-#include <kernel/spinlock.h>
-#include <kernel/task.h>
+#include <kernel/core/spinlock.h>
+#include <kernel/core/task.h>
 #include <kernel/console.h>
 #include <kernel/core/cpu.h>
 

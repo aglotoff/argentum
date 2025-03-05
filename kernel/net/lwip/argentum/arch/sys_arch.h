@@ -1,10 +1,10 @@
 #ifndef __LWIP_OSDEV_ARCH_SYS_ARCH_H__
 #define __LWIP_OSDEV_ARCH_SYS_ARCH_H__
 
-#include <kernel/mutex.h>
+#include <kernel/core/mutex.h>
 #include <kernel/core/mailbox.h>
 #include <kernel/core/semaphore.h>
-#include <kernel/task.h>
+#include <kernel/core/task.h>
 
 typedef struct KMailBox *sys_mbox_t;
 typedef struct KMutex *sys_mutex_t;

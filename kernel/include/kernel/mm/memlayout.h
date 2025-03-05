@@ -11,7 +11,7 @@
 
 #ifndef __ASSEMBLER__
 
-#include <kernel/assert.h>
+#include <kernel/core/assert.h>
 #include <stdint.h>
 
 /** Integer type wide enough to represent a physical address. */
@@ -21,7 +21,7 @@ static inline physaddr_t
 __kva2pa(const char *file, int line, void *kva)
 {
   if ((uintptr_t) kva < VIRT_KERNEL_BASE)
-    __panic(file, line, "KVA2PA called with invalid kva %08lx", kva);
+    _panic(file, line, "KVA2PA called with invalid kva %08lx", kva);
   return (physaddr_t) kva - VIRT_KERNEL_BASE;
 }
 
@@ -38,7 +38,7 @@ static inline void *
 __pa2kva(const char *file, int line, physaddr_t pa)
 {
   if (pa >= VIRT_KERNEL_BASE)
-    __panic(file, line, "PA2KVA called with invalid pa %08lx", pa);
+    _panic(file, line, "PA2KVA called with invalid pa %08lx", pa);
   return (void *) (pa + VIRT_KERNEL_BASE);
 }
 

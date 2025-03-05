@@ -15,7 +15,7 @@
 #include <sys/types.h>
 
 #include <kernel/core/list.h>
-#include <kernel/mutex.h>
+#include <kernel/core/mutex.h>
 #include <kernel/core/condvar.h>
 
 /**

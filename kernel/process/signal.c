@@ -7,7 +7,7 @@
 #include <kernel/process.h>
 #include <kernel/signal.h>
 #include <kernel/vmspace.h>
-#include <kernel/task.h>
+#include <kernel/core/task.h>
 #include <kernel/console.h>
 
 #include "process_private.h"
@@ -33,7 +33,7 @@ signal_init_system(void)
                                       signal_ctor,
                                       signal_dtor);
   if (signal_cache == NULL)
-    panic("cannot allocate signal_cache");
+    k_panic("cannot allocate signal_cache");
 }
 
 static void
@@ -47,7 +47,7 @@ static void
 signal_dtor(void *p, size_t)
 {
   struct Signal *signal = (struct Signal *) p;
-  assert(k_list_is_null(&signal->link));
+  k_assert(k_list_is_null(&signal->link));
 }
 
 // Initialize the signal-handling state of a single process.
@@ -56,7 +56,7 @@ signal_init(struct Process *process)
 {
   int i;
 
-  assert(process->thread != NULL);
+  k_assert(process->thread != NULL);
 
   // process->signal_queue initialized in process_ctor
   process->signal_stub = 0;
@@ -73,7 +73,7 @@ signal_reset(struct Process *process)
 {
   int i;
 
-  assert(process->thread != NULL);
+  k_assert(process->thread != NULL);
 
   // process->signal_queue initialized in process_ctor
   sigemptyset(&process->thread->signal_mask);
@@ -97,10 +97,10 @@ signal_clone(struct Process *parent, struct Process *child)
 {
   int i;
 
-  assert(parent->thread != NULL);
+  k_assert(parent->thread != NULL);
 
   if (!k_spinlock_holding(&__process_lock))
-    panic("process_lock not acquired");
+    k_panic("process_lock not acquired");
 
   // process->signal_queue initialized in process_ctor
   child->signal_stub = parent->signal_stub;
@@ -146,7 +146,7 @@ signal_can_be_ignored(int signo)
 static void
 signal_discard(struct Process *process, int signo)
 {
-  assert(process->thread != NULL);
+  k_assert(process->thread != NULL);
 
   struct Signal *s = process->thread->signal_pending[SIGNAL_INDEX(signo)];
   if (s != NULL) {
@@ -158,7 +158,7 @@ signal_discard(struct Process *process, int signo)
 static int
 signal_is_blocked(struct Process *process, int signo)
 {
-  assert(process->thread != NULL);
+  k_assert(process->thread != NULL);
 
   if (!signal_can_be_ignored(signo))
     return 0;
@@ -213,13 +213,13 @@ signal_pending(sigset_t *set)
   int i;
 
   if (set == NULL)
-    panic("set is NULL");
+    k_panic("set is NULL");
 
   sigemptyset(set);
 
   process_lock();
 
-  assert(process->thread != NULL);
+  k_assert(process->thread != NULL);
   
   for (i = 1; i <= NSIG; i++)
     if (process->thread->signal_pending[SIGNAL_INDEX(i)] != NULL)
@@ -236,7 +236,7 @@ signal_mask_change(int how, const sigset_t *set, sigset_t *old_set)
   struct Process *process = process_current();
   int r = 0, i;
 
-  assert(process->thread != NULL);
+  k_assert(process->thread != NULL);
 
   if (old_set != NULL)
     *old_set = process->thread->signal_mask;
@@ -283,11 +283,11 @@ signal_suspend(const sigset_t *mask)
   int r;
 
   if (mask == NULL)
-    panic("mask is NULL");
+    k_panic("mask is NULL");
 
   process_lock();
 
-  assert(process->thread != NULL);
+  k_assert(process->thread != NULL);
 
   saved_mask = process->thread->signal_mask;
 
@@ -309,7 +309,7 @@ _signal_state_change_to_parent(struct Process *process)
 {
   struct Process *parent = process->parent;
 
-  assert(k_spinlock_holding(&__process_lock));
+  k_assert(k_spinlock_holding(&__process_lock));
 
   // TODO: can parent be NULL or itself??
   if ((parent == NULL) || (parent == process))
@@ -336,7 +336,7 @@ signal_return(void)
 
   process_lock();
 
-  assert(current->thread != NULL);
+  k_assert(current->thread != NULL);
 
   if ((r = arch_signal_return(current, &frame, &ret)) != 0)
     return r;
@@ -383,8 +383,8 @@ signal_generate_one(struct Process *process, int signo, int code)
 {
   struct Signal *signal;
 
-  assert((signo > 0) && (signo <= NSIG));
-  assert(k_spinlock_holding(&__process_lock));
+  k_assert((signo > 0) && (signo <= NSIG));
+  k_assert(k_spinlock_holding(&__process_lock));
 
   // TODO: check for permissions
 
@@ -458,7 +458,7 @@ signal_deliver_pending(void)
   if (sa->sa_handler == SIG_DFL) {
     exit_code = signal_action_default(process, signal, sa);
   } else if (sa->sa_handler == SIG_IGN) {
-    panic("ignored signals should not be delivered");
+    k_panic("ignored signals should not be delivered");
   } else {
     exit_code = signal_action_custom(process, signal, sa);
   }
@@ -536,7 +536,7 @@ signal_action_default(struct Process *current,
 
   case SIGCHLD:
   case SIGURG:
-    panic("ignored signals should not be delivered");
+    k_panic("ignored signals should not be delivered");
     break;
 
   case SIGTSTP:
@@ -552,7 +552,7 @@ signal_action_default(struct Process *current,
   case SIGCONT:
     // Continue
     if (current->state == PROCESS_STATE_STOPPED)
-      panic("The process must be already continued");
+      k_panic("The process must be already continued");
     break;
   }
 

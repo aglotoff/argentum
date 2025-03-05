@@ -3,7 +3,7 @@
 #include <kernel/page.h>
 #include <kernel/vm.h>
 #include <kernel/types.h>
-#include <kernel/spinlock.h>
+#include <kernel/core/spinlock.h>
 #include <string.h>
 #include <sys/mman.h>
 #include <kernel/fs/fs.h>
@@ -27,7 +27,7 @@ vm_page_lookup(void *pgtab, uintptr_t va, int *flags_store)
   struct Page *page;
   void *pte;
 
-  assert(k_spinlock_holding(&vm_lock));
+  k_assert(k_spinlock_holding(&vm_lock));
 
   if ((pte = arch_vm_lookup(pgtab, va, 0)) == NULL)
     return NULL;
@@ -61,7 +61,7 @@ vm_page_insert(void *pgtab, struct Page *page, uintptr_t va, int flags)
 {
   void *pte;
 
-  assert(k_spinlock_holding(&vm_lock));
+  k_assert(k_spinlock_holding(&vm_lock));
 
   if ((pte = arch_vm_lookup(pgtab, va, 1)) == NULL)
     return -ENOMEM;
@@ -94,7 +94,7 @@ vm_page_remove(void *pgtab, uintptr_t va)
   struct Page *page;
   void *pte;
 
-  assert(k_spinlock_holding(&vm_lock));
+  k_assert(k_spinlock_holding(&vm_lock));
 
   if ((pte = arch_vm_lookup(pgtab, va, 0)) == NULL)
     return 0;
@@ -119,7 +119,7 @@ vm_page_cow(void *pgtab, uintptr_t va, struct Page *page, int flags)
 {
   struct Page *page_copy;
 
-  assert(flags & VM_COW);
+  k_assert(flags & VM_COW);
 
   flags &= ~VM_COW;
   flags |= VM_WRITE;
@@ -173,16 +173,16 @@ static void
 vm_user_assert(uintptr_t start_va, uintptr_t end_va)
 {
   if ((start_va >= VIRT_KERNEL_BASE) || (end_va < start_va))
-    panic("invalid va range: [%p,%p)", start_va, end_va);
+    k_panic("invalid va range: [%p,%p)", start_va, end_va);
 }
 
 static void
 vm_user_assert_pages(uintptr_t start_va, uintptr_t end_va)
 {
   if ((start_va % PAGE_SIZE) != 0)
-    panic("va not page-aligned %p", start_va);
+    k_panic("va not page-aligned %p", start_va);
   if ((start_va >= VIRT_KERNEL_BASE) || (end_va < start_va))
-    panic("invalid va range: [%p,%p)", start_va, end_va);
+    k_panic("invalid va range: [%p,%p)", start_va, end_va);
 }
 
 int

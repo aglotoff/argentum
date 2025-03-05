@@ -1,14 +1,10 @@
 #ifndef __KERNEL_INCLUDE_KERNEL_MUTEX_H__
 #define __KERNEL_INCLUDE_KERNEL_MUTEX_H__
 
-#ifndef __ARGENTUM_KERNEL__
-#error "This is a kernel header; user programs should not #include it"
-#endif
-
-#include <stdint.h>
+#include <kernel/core/config.h>
 
 #include <kernel/core/list.h>
-#include <kernel/spinlock.h>
+#include <kernel/core/spinlock.h>
 
 struct KTask;
 

@@ -1,4 +1,4 @@
-#include <kernel/assert.h>
+#include <kernel/core/assert.h>
 #include <errno.h>
 #include <limits.h>
 #include <string.h>
@@ -17,7 +17,7 @@
 #include <kernel/page.h>
 #include <kernel/monitor.h>
 #include <kernel/process.h>
-#include <kernel/spinlock.h>
+#include <kernel/core/spinlock.h>
 #include <kernel/vmspace.h>
 #include <kernel/trap.h>
 #include <kernel/core/tick.h>
@@ -79,11 +79,11 @@ process_init(void)
 
   thread_cache = k_object_pool_create("thread_cache", sizeof(struct Thread), 0, thread_ctor, NULL);
   if (thread_cache == NULL)
-    panic("cannot allocate thread_cache");
+    k_panic("cannot allocate thread_cache");
 
   process_cache = k_object_pool_create("process_cache", sizeof(struct Process), 0, process_ctor, NULL);
   if (process_cache == NULL)
-    panic("cannot allocate process_cache");
+    k_panic("cannot allocate process_cache");
   
   HASH_INIT(pid_hash.table);
   k_spinlock_init(&pid_hash.lock, "pid_hash");
@@ -93,7 +93,7 @@ process_init(void)
 
   // Create the init process
   if (process_create(_binary_obj_user_init_start, &init_process) != 0)
-    panic("Cannot create the init process");
+    k_panic("Cannot create the init process");
 
   signal_init_system();
 }
@@ -149,7 +149,7 @@ process_alloc(void)
   k_spinlock_acquire(&pid_hash.lock);
 
   if ((process->pid = ++next_pid) < 0)
-    panic("pid overflow");
+    k_panic("pid overflow");
 
   HASH_PUT(pid_hash.table, &process->pid_link, process->pid);
 
@@ -268,7 +268,7 @@ process_free(struct Process *process)
   k_spinlock_release(&pid_hash.lock);
 
   // Return the process descriptor to the cache
-  assert(process->thread == NULL);
+  k_assert(process->thread == NULL);
   k_object_pool_put(process_cache, process);
 }
 
@@ -312,7 +312,7 @@ process_destroy(int status)
   fd_close_all(current);
   fs_path_put(current->cwd);
 
-  assert(init_process != NULL);
+  k_assert(init_process != NULL);
 
   process_lock();
 
@@ -347,7 +347,7 @@ process_destroy(int status)
 
   _signal_state_change_to_parent(current);
 
-  current->thread->task->thread = NULL;
+  current->thread->task->ext = NULL;
   k_object_pool_put(thread_cache, current->thread);
   current->thread = NULL;
 
@@ -396,7 +396,7 @@ process_copy(int share_vm)
 
   // cprintf("[k] process #%x created\n", child->pid);
 
-  assert(child->thread != NULL);
+  k_assert(child->thread != NULL);
   k_task_resume(child->thread->task);
 
   return child->pid;
@@ -527,20 +527,20 @@ process_run(void *arg)
     fs_init();
 
     if ((process->cwd == NULL) && (fs_lookup("/", 0, &process->cwd) < 0))
-      panic("root not found");
+      k_panic("root not found");
   }
 
   k_irq_disable();
 
   // "Return" to the user space.
-  assert(process->thread != NULL);
-  arch_trap_frame_pop(process->thread->task->tf);
+  k_assert(process->thread != NULL);
+  arch_trap_frame_pop(process->thread->tf);
 }
 
 void *
 process_grow(ptrdiff_t increment)
 {
-  panic("deprecated %d\n", increment);
+  k_panic("deprecated %d\n", increment);
   return NULL;
 }
 
@@ -611,13 +611,13 @@ process_update_times(struct Process *process, clock_t user, clock_t system)
 void
 _process_continue(struct Process *process)
 {
-  assert((process != NULL) && (process->vm != NULL));
-  assert(k_spinlock_holding(&__process_lock));
+  k_assert((process != NULL) && (process->vm != NULL));
+  k_assert(k_spinlock_holding(&__process_lock));
 
   if (process->state == PROCESS_STATE_STOPPED) {
     process->state = PROCESS_STATE_ACTIVE;
-    assert(process->flags != 0);
-    assert(process->thread != NULL);
+    k_assert(process->flags != 0);
+    k_assert(process->thread != NULL);
     k_task_interrupt(process->thread->task);
 
     _signal_state_change_to_parent(process);
@@ -627,8 +627,8 @@ _process_continue(struct Process *process)
 void
 _process_stop(struct Process *process)
 {
-  assert((process != NULL) && (process->vm != NULL));
-  assert(k_spinlock_holding(&__process_lock));
+  k_assert((process != NULL) && (process->vm != NULL));
+  k_assert(k_spinlock_holding(&__process_lock));
 
   if (process->state != PROCESS_STATE_STOPPED) {
     process->state = PROCESS_STATE_STOPPED;

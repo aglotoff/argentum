@@ -1,7 +1,7 @@
 #include <sys/types.h>
 #include <kernel/console.h>
-#include <kernel/spinlock.h>
-#include <kernel/assert.h>
+#include <kernel/core/spinlock.h>
+#include <kernel/core/assert.h>
 #include <kernel/ipc.h>
 #include <kernel/object_pool.h>
 #include <kernel/hash.h>
@@ -61,9 +61,9 @@ static void
 ipc_channel_dtor(void *p, size_t)
 {
   struct Channel *channel = (struct Channel *) p;
-  assert(k_list_is_null(&channel->id_hash_link));
-  assert(k_list_is_empty(&channel->connections));
-  assert(!channel->active);
+  k_assert(k_list_is_null(&channel->id_hash_link));
+  k_assert(k_list_is_empty(&channel->connections));
+  k_assert(!channel->active);
 }
 
 int
@@ -73,7 +73,7 @@ ipc_channel_create(struct Channel **channel_store)
   id_t id;
 
   if ((channel = (struct Channel *) k_object_pool_get(channel_pool)) == NULL)
-    panic("cannot create channel");
+    k_panic("cannot create channel");
 
   channel->active = 1;
   channel->ref_count = 1;
@@ -81,7 +81,7 @@ ipc_channel_create(struct Channel **channel_store)
   k_spinlock_acquire(&channel_id.lock);
 
   if ((channel->id = id = ++channel_id.next) < 0)
-    panic("channel id overflow");
+    k_panic("channel id overflow");
 
   HASH_PUT(channel_id.table, &channel->id_hash_link, channel->id);
   
@@ -146,7 +146,7 @@ ipc_channel_put(struct Channel *channel)
   k_spinlock_release(&ipc_lock);
 
   if (ref_remain == 0) {
-    assert(!channel->active);
+    k_assert(!channel->active);
 
     cprintf("freed channel %d\n", channel->id);
 
@@ -191,7 +191,7 @@ ipc_connect_attach(struct Channel *channel, struct Connection **conn_store)
 
   connection = (struct Connection *) k_object_pool_get(connection_pool);
   if (connection == NULL)
-    panic("cannot create connection");
+    k_panic("cannot create connection");
 
   connection->ref_count = 1;
 
@@ -200,7 +200,7 @@ ipc_connect_attach(struct Channel *channel, struct Connection **conn_store)
   k_spinlock_acquire(&ipc_lock);
 
   if (!channel->active)
-    panic("channel destroyed");
+    k_panic("channel destroyed");
 
   connection->channel = ipc_channel_dup(channel);
   k_list_add_back(&channel->connections, &connection->link);
@@ -214,7 +214,7 @@ ipc_connect_attach(struct Channel *channel, struct Connection **conn_store)
       break;
 
   if (id == CONNECTION_MAX)
-    panic("cannot allocate a connection descriptor");
+    k_panic("cannot allocate a connection descriptor");
 
   connection_desc.table[id] = connection;
 
@@ -242,7 +242,7 @@ ipc_init(void)
                                       ipc_channel_ctor,
                                       ipc_channel_dtor);
   if (channel_pool == NULL)
-    panic("cannot create channel_pool");
+    k_panic("cannot create channel_pool");
 
   connection_pool = k_object_pool_create("connection_pool",
                                          sizeof(struct Connection),
@@ -250,7 +250,7 @@ ipc_init(void)
                                          NULL,
                                          NULL);
   if (connection_pool == NULL)
-    panic("cannot create connection_pool");
+    k_panic("cannot create connection_pool");
 
   HASH_INIT(channel_id.table);
   k_spinlock_init(&channel_id.lock, "channel_id");

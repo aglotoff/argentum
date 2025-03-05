@@ -11,7 +11,7 @@
 #include <kernel/elf.h>
 #include <kernel/core/list.h>
 #include <kernel/vm.h>
-#include <kernel/spinlock.h>
+#include <kernel/core/spinlock.h>
 
 struct Inode;
 struct Page;

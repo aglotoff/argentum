@@ -30,17 +30,12 @@ trap(struct TrapFrame *tf)
 
   struct Process *my_process = process_current();
 
-  // Halt if some other CPU already has called panic().
+  // Halt if some other CPU already has called k_panic().
   if (panicstr) {
     for (;;) {
       asm volatile("wfi");
     }
   }
-
-  // User-mode trap frame address should never change, there's logic in the
-  // kernel that relies on this!
-  if (((tf->psr & PSR_M_MASK) == PSR_M_USR) && (my_process->thread->task->tf != tf))
-    panic("user-mode trap frame address unexpectedly changed");
 
   // Dispatch based on what type of trap occured.
   switch (tf->trapno) {
@@ -60,13 +55,13 @@ trap(struct TrapFrame *tf)
     if ((tf->psr & PSR_M_MASK) == PSR_M_USR) {
       // TODO: ILL_ILLOPC
       if (signal_generate(my_process->pid, SIGILL, 0) != 0)
-        panic("sending SIGILL failed");
+        k_panic("sending SIGILL failed");
       break;
     }
     // fall through
   default:
     print_trapframe(tf);
-    panic("unhandled trap in kernel");
+    k_panic("unhandled trap in kernel");
   }
 
   if ((tf->psr & PSR_M_MASK) == PSR_M_USR) {
@@ -94,11 +89,11 @@ trap_handle_abort(struct TrapFrame *tf)
   // If abort happened in kernel mode, print the trap frame and panic
   if ((tf->psr & PSR_M_MASK) != PSR_M_USR) {
     print_trapframe(tf);
-    panic("kernel fault va %p status %#x", address, status);
+    k_panic("kernel fault va %p status %#x", address, status);
   }
 
   process = process_current();
-  assert(process != NULL);
+  k_assert(process != NULL);
 
   // Try to handle VM fault first (it may be caused by copy-on-write pages)
   if (((status & 0xF) == 0xF) && vm_handle_fault(process->vm->pgtab, address) == 0) {
@@ -107,11 +102,11 @@ trap_handle_abort(struct TrapFrame *tf)
 
   // If unsuccessfull, kill the process
   print_trapframe(tf);
-  panic("[%d %s]: user fault va %p status %#x\n", process->pid, process->name, address, status);
+  k_panic("[%d %s]: user fault va %p status %#x\n", process->pid, process->name, address, status);
 
   // TODO: SEGV_MAPERR or SEGV_ACCERR
   if (signal_generate(process->pid, SIGSEGV, 0) != 0)
-    panic("sending SIGSEGV failed");
+    k_panic("sending SIGSEGV failed");
 }
 
 // Returns a human-readable name for the given trap number
@@ -181,12 +176,12 @@ int
 arch_trap_frame_init(struct Process *process, uintptr_t entry, uintptr_t arg1,
                      uintptr_t arg2, uintptr_t arg3, uintptr_t sp)
 {
-  process->thread->task->tf->r0  = arg1;              // argc
-  process->thread->task->tf->r1  = arg2;              // argv
-  process->thread->task->tf->r2  = arg3;              // environ
-  process->thread->task->tf->sp  = sp;                // stack pointer
-  process->thread->task->tf->psr = PSR_M_USR | PSR_F; // user mode, interrupts enabled
-  process->thread->task->tf->pc  = entry;             // process entry point
+  process->thread->tf->r0  = arg1;              // argc
+  process->thread->tf->r1  = arg2;              // argv
+  process->thread->tf->r2  = arg3;              // environ
+  process->thread->tf->sp  = sp;                // stack pointer
+  process->thread->tf->psr = PSR_M_USR | PSR_F; // user mode, interrupts enabled
+  process->thread->tf->pc  = entry;             // process entry point
   return arg1;
 }
 

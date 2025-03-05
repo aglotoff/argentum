@@ -15,9 +15,9 @@
 #include <sys/types.h>
 #include <sys/termios.h>
 
-#include <kernel/mutex.h>
+#include <kernel/core/mutex.h>
 #include <kernel/core/condvar.h>
-#include <kernel/spinlock.h>
+#include <kernel/core/spinlock.h>
 #include <kernel/waitqueue.h>
 #include <kernel/drivers/screen.h>
 

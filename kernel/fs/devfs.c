@@ -52,7 +52,7 @@ devfs_inode_read(struct Inode *inode)
   if ((inode->ino >= 2) && (inode->ino <= NDEV)) {
     struct DevfsNode *device = &devices[inode->ino - 1];
 
-    assert(inode->dev == 1);
+    k_assert(inode->dev == 1);
 
     inode->mode  = device->mode;
     inode->nlink = 1;
@@ -73,20 +73,20 @@ devfs_inode_read(struct Inode *inode)
 int
 devfs_inode_write(struct Inode *inode)
 {
-  assert(inode->dev == 1);
+  k_assert(inode->dev == 1);
   return -ENOSYS;
 }
 
 void
 devfs_inode_delete(struct Inode *inode)
 {
-  assert(inode->dev == 1);
+  k_assert(inode->dev == 1);
 }
 
 ssize_t
 devfs_read(struct Inode *inode, uintptr_t va, size_t n, off_t offset)
 {
-  assert(inode->dev == 1);
+  k_assert(inode->dev == 1);
   (void) va;
   (void) n;
   (void) offset;
@@ -106,7 +106,7 @@ devfs_write(struct Inode *inode, uintptr_t va, size_t n, off_t offset)
 int
 devfs_rmdir(struct Inode *parent, struct Inode *inode, const char *)
 {
-  assert(inode->dev == 1);
+  k_assert(inode->dev == 1);
   (void) parent;
   return -EROFS;
 }
@@ -116,7 +116,7 @@ devfs_readdir(struct Inode *inode, void *buf, FillDirFunc filldir, off_t offset)
 {
   struct DevfsNode *device = &devices[offset];
 
-  assert(inode->dev == 1);
+  k_assert(inode->dev == 1);
 
   if (inode->ino != 2)
     return -ENOTDIR;
@@ -132,7 +132,7 @@ devfs_readdir(struct Inode *inode, void *buf, FillDirFunc filldir, off_t offset)
 ssize_t
 devfs_readlink(struct Inode *inode, char *buf, size_t n)
 {
-  assert(inode->dev == 1);
+  k_assert(inode->dev == 1);
   (void) buf;
   (void) n;
   return -ENOSYS;
@@ -141,7 +141,7 @@ devfs_readlink(struct Inode *inode, char *buf, size_t n)
 int
 devfs_create(struct Inode *inode, char *name, mode_t mode, struct Inode **store)
 {
-  assert(inode->dev == 1);
+  k_assert(inode->dev == 1);
   (void) name;
   (void) mode;
   (void) store;
@@ -151,7 +151,7 @@ devfs_create(struct Inode *inode, char *name, mode_t mode, struct Inode **store)
 int
 devfs_mkdir(struct Inode *inode, char *name, mode_t mode, struct Inode **store)
 {
-  assert(inode->dev == 1);
+  k_assert(inode->dev == 1);
   (void) name;
   (void) mode;
   (void) store;
@@ -161,7 +161,7 @@ devfs_mkdir(struct Inode *inode, char *name, mode_t mode, struct Inode **store)
 int
 devfs_mknod(struct Inode *inode, char *name, mode_t mode, dev_t dev, struct Inode **store)
 {
-  assert(inode->dev == 1);
+  k_assert(inode->dev == 1);
   (void) name;
   (void) mode;
   (void) dev;
@@ -172,7 +172,7 @@ devfs_mknod(struct Inode *inode, char *name, mode_t mode, dev_t dev, struct Inod
 int
 devfs_link(struct Inode *parent, char *name, struct Inode *inode)
 {
-  assert(inode->dev == 1);
+  k_assert(inode->dev == 1);
   (void) name;
   (void) parent;
   return -EROFS;
@@ -181,7 +181,7 @@ devfs_link(struct Inode *parent, char *name, struct Inode *inode)
 int
 devfs_unlink(struct Inode *parent, struct Inode *inode, const char *)
 {
-  assert(inode->dev == 1);
+  k_assert(inode->dev == 1);
   (void) parent;
   return -EROFS;
 }
@@ -282,7 +282,7 @@ devfs_mount(dev_t dev)
   struct FS *devfs;
 
   if ((devfs = (struct FS *) k_malloc(sizeof(struct FS))) == NULL)
-    panic("cannot allocate FS");
+    k_panic("cannot allocate FS");
   
   devfs->name  = "devfs";
   devfs->dev   = dev;

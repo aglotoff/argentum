@@ -1,4 +1,4 @@
-#include <kernel/assert.h>
+#include <kernel/core/assert.h>
 #include <stddef.h>
 #include <stdint.h>
 #include <sys/utsname.h>
@@ -11,7 +11,7 @@
 #include <kernel/fs/file.h>
 #include <kernel/core/irq.h>
 #include <kernel/core/mailbox.h>
-#include <kernel/mutex.h>
+#include <kernel/core/mutex.h>
 #include <kernel/core/semaphore.h>
 #include <kernel/core/timer.h>
 #include <kernel/object_pool.h>

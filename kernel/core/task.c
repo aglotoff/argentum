@@ -1,12 +1,12 @@
-#include <kernel/assert.h>
+#include <kernel/core/assert.h>
 #include <errno.h>
 #include <string.h>
 
 #include <kernel/console.h>
 #include <kernel/core/cpu.h>
 #include <kernel/core/irq.h>
-#include <kernel/task.h>
-#include <kernel/spinlock.h>
+#include <kernel/core/task.h>
+#include <kernel/core/spinlock.h>
 #include <kernel/process.h>
 #include <kernel/vmspace.h>
 #include <kernel/vm.h>
@@ -34,7 +34,7 @@ k_task_resume(struct KTask *task)
     return -EINVAL;
   }
 
-  assert(k_list_is_null(&task->link));
+  k_assert(k_list_is_null(&task->link));
 
   _k_sched_enqueue(task);
   _k_sched_may_yield(task);
@@ -53,7 +53,7 @@ k_task_yield(void)
   struct KTask *current = k_task_current();
   
   if (current == NULL)
-    panic("no current task");
+    k_panic("no current task");
 
   _k_sched_lock();
 
@@ -106,8 +106,7 @@ k_task_interrupt(struct KTask *task)
  * @return 0 on success.
  */
 struct KTask *
-k_task_create(struct Thread *thread, void (*entry)(void *), void *arg,
-                int priority)
+k_task_create(void *ext, void (*entry)(void *), void *arg, int priority)
 {
   struct Page *stack_page;
   struct KTask *task;
@@ -135,10 +134,8 @@ k_task_create(struct Thread *thread, void (*entry)(void *), void *arg,
   task->entry          = entry;
   task->arg            = arg;
   task->err            = 0;
-  task->thread         = thread;
-
+  task->ext            = ext;
   task->kstack         = stack;
-  task->tf             = NULL;
 
   _k_timeout_init(&task->timer);
 
@@ -157,7 +154,7 @@ k_task_exit(void)
   extern struct KListLink _k_tasks_to_destroy;
 
   if (task == NULL)
-    panic("no current task");
+    k_panic("no current task");
 
   _k_timeout_fini(&task->timer);
 
@@ -171,7 +168,7 @@ k_task_exit(void)
 
   _k_sched_unlock();
 
-  panic("should not return");
+  k_panic("should not return");
 }
 
 void

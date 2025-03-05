@@ -10,7 +10,7 @@
 #include <kernel/tty.h>
 #include <kernel/trap.h>
 #include <kernel/process.h>
-#include <kernel/task.h>
+#include <kernel/core/task.h>
 #include <kernel/vmspace.h>
 #include <kernel/fs/fs.h>
 #include <kernel/console.h>
@@ -121,7 +121,7 @@ tty_signal(struct Tty *tty, int signo)
   k_mutex_unlock(&tty->in.mutex);
 
   if (signal_generate(-tty->pgrp, signo, 0) != 0)
-    panic("cannot generate signal");
+    k_panic("cannot generate signal");
 
   // TODO: return
   k_mutex_lock(&tty->in.mutex);
@@ -476,7 +476,7 @@ tty_ioctl(dev_t dev, int request, int arg)
     // cprintf("ws_ypixel = %d\n", ws.ws_ypixel);
     return 0;
   default:
-    panic("TODO: %p - %d %c %d\n", request, request & 0xFF, (request >> 8) & 0xF, (request >> 16) & 0x1FFF);
+    k_panic("TODO: %p - %d %c %d\n", request, request & 0xFF, (request >> 8) & 0xF, (request >> 16) & 0x1FFF);
     return -EINVAL;
   }
 }

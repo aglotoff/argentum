@@ -3,7 +3,7 @@
 #include <kernel/trap.h>
 #include <kernel/core/cpu.h>
 #include <kernel/core/irq.h>
-#include <kernel/task.h>
+#include <kernel/core/task.h>
 #include <kernel/object_pool.h>
 
 static int  interrupt_handler_call(int);
@@ -29,10 +29,10 @@ void
 interrupt_attach(int irq, interrupt_handler_t handler, void *handler_arg)
 {
   if ((irq < 0) || (irq >= INTERRUPT_HANDLER_MAX))
-    panic("invalid interrupt id %d", irq);
+    k_panic("invalid interrupt id %d", irq);
 
   if (interrupt_handlers[irq].handler != NULL)
-    panic("interrupt handler %d already attached", irq);
+    k_panic("interrupt handler %d already attached", irq);
 
   interrupt_handlers[irq].handler     = handler;
   interrupt_handlers[irq].handler_arg = handler_arg;
@@ -48,10 +48,10 @@ interrupt_attach_task(int irq, interrupt_handler_t handler, void *handler_arg)
   struct KTask *task;
 
   if ((isr = k_malloc(sizeof(struct InterruptTask))) == NULL)
-    panic("cannot allocate IRQ task strucure");
+    k_panic("cannot allocate IRQ task strucure");
 
   if ((task = k_task_create(NULL, interrupt_task_entry, isr, 0)) == NULL)
-    panic("cannot create IRQ task");
+    k_panic("cannot create IRQ task");
 
   k_semaphore_init(&isr->semaphore, 0);
   isr->irq         = irq;
@@ -103,7 +103,7 @@ interrupt_task_entry(void *arg)
     int should_unmask;
 
     if (k_semaphore_get(&isr->semaphore) < 0)
-      panic("k_semaphore_get");
+      k_panic("k_semaphore_get");
 
     should_unmask = isr->handler(isr->irq, isr->handler_arg);
     if (should_unmask) {

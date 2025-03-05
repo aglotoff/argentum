@@ -20,7 +20,7 @@ pipe_init(void)
 {
   pipe_cache = k_object_pool_create("pipe", sizeof(struct Pipe), 0, NULL, NULL);
   if (pipe_cache == NULL)
-    panic("cannot allocate pipe cache");
+    k_panic("cannot allocate pipe cache");
 }
 
 int

@@ -297,7 +297,7 @@ eth_irq_task(int irq, void *arg)
     lan9118->base[BYTE_TEST] = 0xFFFFFFFF;
 
   if (!(lan9118->base[IRQ_CFG] & IRQ_INT))
-    warn("Unexpected IRQ");
+    k_warn("Unexpected IRQ");
 
   status = lan9118->base[INT_STS] & lan9118->base[INT_EN];
 
@@ -307,7 +307,7 @@ eth_irq_task(int irq, void *arg)
   }
 
   if (status & ~(RSFL_INT))
-    panic("Unexpected interupt %x", status & ~(RSFL_INT));
+    k_panic("Unexpected interupt %x", status & ~(RSFL_INT));
 
   return 1;
 }

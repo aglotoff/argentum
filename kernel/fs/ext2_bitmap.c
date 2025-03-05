@@ -1,4 +1,4 @@
-#include <kernel/assert.h>
+#include <kernel/core/assert.h>
 #include <errno.h>
 
 #include <kernel/fs/buf.h>
@@ -52,7 +52,7 @@ ext2_bitmap_alloc(struct Ext2SuperblockData *sb, uint32_t bstart, size_t blen, d
 
     if ((buf = buf_read(bstart + b / bits_per_block, sb->block_size, dev)) == NULL)
       // TODO: recover from I/O errors
-      panic("cannot read the bitmap block %d", bstart + b / bits_per_block);
+      k_panic("cannot read the bitmap block %d", bstart + b / bits_per_block);
 
     bmap = (uint32_t *) buf->data;
 
@@ -99,12 +99,12 @@ ext2_bitmap_free(struct Ext2SuperblockData *sb, uint32_t bstart, dev_t dev, uint
 
   if ((buf = buf_read(bstart + b, sb->block_size, dev)) == NULL)
     // TODO: recover from I/O errors
-    panic("cannot read the bitmap block %d", bstart + b);
+    k_panic("cannot read the bitmap block %d", bstart + b);
 
   bmap = (uint32_t *) buf->data;
 
   if (!bit_test(bmap, bi))
-    panic("bit %d %d %d not allocated", bstart, buf->block_no, bit_no);
+    k_panic("bit %d %d %d not allocated", bstart, buf->block_no, bit_no);
 
   bit_clear(bmap, bi);
   buf->flags |= BUF_DIRTY;

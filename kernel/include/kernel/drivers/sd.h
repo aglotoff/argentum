@@ -4,7 +4,7 @@
 #include <stdint.h>
 
 #include <kernel/core/list.h>
-#include <kernel/mutex.h>
+#include <kernel/core/mutex.h>
 
 #define SD_BLOCKLEN               512         // Single block length in bytes
 #define SD_BLOCKLEN_LOG           9           // log2 of SD_BLOCKLEN

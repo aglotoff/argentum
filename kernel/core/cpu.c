@@ -1,4 +1,4 @@
-#include <kernel/assert.h>
+#include <kernel/core/assert.h>
 #include <kernel/core/cpu.h>
 #include <kernel/core/irq.h>
 
@@ -21,8 +21,6 @@ static struct KCpu _k_cpus[K_CPU_MAX];
 struct KCpu *
 _k_cpu(void)
 {
-  if (k_arch_irq_is_enabled())
-    panic("interruptible");
-
+  k_assert(!k_arch_irq_is_enabled());
   return &_k_cpus[k_cpu_id()];
 }

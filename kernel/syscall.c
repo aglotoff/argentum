@@ -1,4 +1,4 @@
-#include <kernel/assert.h>
+#include <kernel/core/assert.h>
 #include <errno.h>
 #include <limits.h>
 #include <stddef.h>
@@ -545,7 +545,7 @@ sys_chmod(void)
 
   if ((r = sys_arg_str(0, PATH_MAX, VM_READ, &path)) < 0) {
     cprintf("%s\n", process_current()->name);
-    panic("bub\n");
+    k_panic("bub\n");
     goto out1;
   }
 
@@ -1593,7 +1593,7 @@ sys_clock_time(void)
 int32_t
 sys_sbrk(void)
 {
-  panic("deprecated!\n");
+  k_panic("deprecated!\n");
   return -ENOSYS;
 }
 

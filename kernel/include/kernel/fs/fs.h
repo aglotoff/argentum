@@ -11,7 +11,7 @@
 
 #include <kernel/elf.h>
 #include <kernel/core/list.h>
-#include <kernel/mutex.h>
+#include <kernel/core/mutex.h>
 
 #define INODE_CACHE_SIZE  32
 

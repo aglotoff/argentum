@@ -1,4 +1,4 @@
-#include <kernel/assert.h>
+#include <kernel/core/assert.h>
 #include <errno.h>
 #include <fcntl.h>
 #include <stdio.h>
@@ -9,7 +9,7 @@
 #include <kernel/fs/file.h>
 #include <kernel/fs/fs.h>
 #include <kernel/object_pool.h>
-#include <kernel/spinlock.h>
+#include <kernel/core/spinlock.h>
 #include <kernel/net.h>
 #include <kernel/pipe.h>
 
@@ -20,7 +20,7 @@ void
 file_init(void)
 {
   if (!(file_cache = k_object_pool_create("file_cache", sizeof(struct File), 0, NULL, NULL)))
-    panic("Cannot allocate file cache");
+    k_panic("Cannot allocate file cache");
 
   k_spinlock_init(&file_lock, "file_lock");
 }
@@ -89,7 +89,7 @@ file_put(struct File *file)
   k_spinlock_acquire(&file_lock);
 
   if (file->ref_count < 1)
-    panic("bad ref_count %d", ref_count);
+    k_panic("bad ref_count %d", ref_count);
 
   ref_count = --file->ref_count;
 
@@ -109,7 +109,7 @@ file_put(struct File *file)
       net_close(file);
       break;
     default:
-      panic("bad file type");
+      k_panic("bad file type");
   }
 
   k_object_pool_put(file_cache, file);
@@ -128,7 +128,7 @@ file_seek(struct File *file, off_t offset, int whence)
   case FD_SOCKET:
     return -ESPIPE;
   default:
-    panic("bad file type");
+    k_panic("bad file type");
     return -EBADF;
   }
 }
@@ -147,7 +147,7 @@ file_read(struct File *file, uintptr_t va, size_t nbytes)
   case FD_PIPE:
     return pipe_read(file, va, nbytes);
   default:
-    panic("bad file type");
+    k_panic("bad file type");
     return -EBADF;
   }
 }
@@ -166,7 +166,7 @@ file_write(struct File *file, uintptr_t va, size_t nbytes)
   case FD_PIPE:
     return pipe_write(file, va, nbytes);
   default:
-    panic("bad file type");
+    k_panic("bad file type");
     return -EBADF;
   }
 }
@@ -184,7 +184,7 @@ file_getdents(struct File *file, uintptr_t va, size_t nbytes)
   case FD_PIPE:
     return -ENOTDIR;
   default:
-    panic("bad file type");
+    k_panic("bad file type");
     return -EBADF;
   }
 }
@@ -200,7 +200,7 @@ file_stat(struct File *file, struct stat *buf)
   case FD_SOCKET:
     return -EBADF;
   default:
-    panic("bad file type");
+    k_panic("bad file type");
     return -EBADF;
   }
 }
@@ -215,7 +215,7 @@ file_chdir(struct File *file)
   case FD_PIPE:
     return -ENOTDIR;
   default:
-    panic("bad file type");
+    k_panic("bad file type");
     return -EBADF;
   }
 }
@@ -230,7 +230,7 @@ file_chmod(struct File *file, mode_t mode)
   case FD_PIPE:
     return -EBADF;
   default:
-    panic("bad file type");
+    k_panic("bad file type");
     return -EBADF;
   }
 }
@@ -245,7 +245,7 @@ file_chown(struct File *file, uid_t uid, gid_t gid)
   case FD_PIPE:
     return -EBADF;
   default:
-    panic("bad file type");
+    k_panic("bad file type");
     return -EBADF;
   }
 }
@@ -260,7 +260,7 @@ file_ioctl(struct File *file, int request, int arg)
   case FD_PIPE:
     return -EBADF;
   default:
-    panic("bad file type");
+    k_panic("bad file type");
     return -EBADF;
   }
 }
@@ -276,7 +276,7 @@ file_select(struct File *file, struct timeval *timeout)
   case FD_PIPE:
     return pipe_select(file, timeout);
   default:
-    panic("bad file type");
+    k_panic("bad file type");
     return -EBADF;
   }
 }
@@ -294,7 +294,7 @@ file_truncate(struct File *file, off_t length)
   case FD_PIPE:
     return -EBADF;
   default:
-    panic("bad file type");
+    k_panic("bad file type");
     return -EBADF;
   }
 }
@@ -309,7 +309,7 @@ file_sync(struct File *file)
   case FD_PIPE:
     return -EBADF;
   default:
-    panic("bad file type");
+    k_panic("bad file type");
     return -EBADF;
   }
 }

@@ -2,7 +2,7 @@
 #include <kernel/mm/memlayout.h>
 #include <kernel/trap.h>
 #include <kernel/interrupt.h>
-#include <kernel/spinlock.h>
+#include <kernel/core/spinlock.h>
 #include <kernel/fs/buf.h>
 #include <kernel/page.h>
 #include <kernel/dev.h>
@@ -214,7 +214,7 @@ realview_console_init(void)
 
   // Allocate the frame buffer.
   if ((page = page_alloc_block(8, PAGE_ALLOC_ZERO, PAGE_TAG_FB)) == NULL)
-    panic("cannot allocate framebuffer");
+    k_panic("cannot allocate framebuffer");
 
   page->ref_count++;
 

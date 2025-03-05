@@ -215,9 +215,9 @@ arch_vm_lookup(void *pgtab, uintptr_t va, int alloc)
   // Make sure the user and the kernel mappings are modified only in the
   // corresponding page tables
   if ((va >= VIRT_KERNEL_BASE) && (pgtab != kernel_pgtab))
-    panic("user va %p must be below VIRT_KERNEL_BASE", va);
+    k_panic("user va %p must be below VIRT_KERNEL_BASE", va);
   if ((va < VIRT_KERNEL_BASE) && (pgtab == kernel_pgtab))
-    panic("kernel va %p must be above VIRT_KERNEL_BASE", va);
+    k_panic("kernel va %p must be above VIRT_KERNEL_BASE", va);
 
   tt = (l1_desc_t *) pgtab;
   tte = &tt[L1_IDX(va)];
@@ -237,7 +237,7 @@ arch_vm_lookup(void *pgtab, uintptr_t va, int alloc)
     tt[(L1_IDX(va) & ~1) + 1] = (pa + L2_TABLE_SIZE) | L1_DESC_TYPE_TABLE;
   } else if ((*tte & L1_DESC_TYPE_MASK) != L1_DESC_TYPE_TABLE) {
     // trying to remap a fixed section
-    panic("not a page table");
+    k_panic("not a page table");
   }
 
   pte = PA2KVA(L1_DESC_TABLE_BASE(*tte));
@@ -277,9 +277,9 @@ init_section_desc(l1_desc_t *tte, physaddr_t pa, int flags)
 static void
 init_fixed_mapping(uintptr_t va, uint32_t pa, size_t n, int flags)
 { 
-  assert(va % PAGE_SIZE == 0);
-  assert(pa % PAGE_SIZE == 0);
-  assert(n  % PAGE_SIZE == 0);
+  k_assert(va % PAGE_SIZE == 0);
+  k_assert(pa % PAGE_SIZE == 0);
+  k_assert(n  % PAGE_SIZE == 0);
 
   while (n != 0) {
     // Whenever possible, map entire 1MB sections to reduce memory overhead for
@@ -289,7 +289,7 @@ init_fixed_mapping(uintptr_t va, uint32_t pa, size_t n, int flags)
       l1_desc_t *tte = (l1_desc_t *) kernel_pgtab + L1_IDX(va);
 
       if (*tte)
-        panic("TTE for %p already exists", va);
+        k_panic("TTE for %p already exists", va);
 
       init_section_desc(tte, pa, flags);
 
@@ -300,9 +300,9 @@ init_fixed_mapping(uintptr_t va, uint32_t pa, size_t n, int flags)
       l2_desc_t *pte = arch_vm_lookup(kernel_pgtab, va, 1);
 
       if (pte == NULL)
-        panic("cannot allocate PTE for %p", va);
+        k_panic("cannot allocate PTE for %p", va);
       if (arch_vm_pte_valid(pte))
-        panic("PTE for %p already exists", va);
+        k_panic("PTE for %p already exists", va);
 
       arch_vm_pte_set(pte, pa, flags);
 
@@ -326,7 +326,7 @@ arch_vm_init(void)
 
   // Allocate the master translation table
   if ((page = page_alloc_block(2, PAGE_ALLOC_ZERO, PAGE_TAG_KERNEL_VM)) == NULL)
-    panic("cannot allocate kernel page table");
+    k_panic("cannot allocate kernel page table");
 
   kernel_pgtab = page2kva(page);
   page->ref_count++;
@@ -415,7 +415,7 @@ arch_vm_destroy(void *pgtab)
     // Check that the caller has removed all mappings
     for (j = 0; j < L2_NR_ENTRIES * L2_TABLES_PER_PAGE; j++)
       if (arch_vm_pte_valid(&pt[j]))
-        panic("pte still in use");
+        k_panic("pte still in use");
 
     if (--page->ref_count == 0)
       page_free_one(page);

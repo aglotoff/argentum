@@ -1,10 +1,10 @@
-#include <kernel/assert.h>
+#include <kernel/core/assert.h>
 #include <kernel/dev.h>
 #include <kernel/console.h>
 #include <kernel/fs/buf.h>
 #include <kernel/core/list.h>
 #include <kernel/object_pool.h>
-#include <kernel/spinlock.h>
+#include <kernel/core/spinlock.h>
 #include <kernel/page.h>
 
 struct KObjectPool *buf_pool;
@@ -41,7 +41,7 @@ buf_init(void)
                                   buf_ctor,
                                   NULL);
   if (buf_pool == NULL)
-    panic("cannot allocate buf_pool");
+    k_panic("cannot allocate buf_pool");
 
   k_spinlock_init(&buf_cache.lock, "buf_cache");
   k_list_init(&buf_cache.head);
@@ -92,8 +92,8 @@ buf_alloc(size_t block_size)
 {
   struct Buf *buf;
 
-  assert(k_spinlock_holding(&buf_cache.lock));
-  assert(buf_cache.size < BUF_CACHE_MAX_SIZE);
+  k_assert(k_spinlock_holding(&buf_cache.lock));
+  k_assert(buf_cache.size < BUF_CACHE_MAX_SIZE);
 
   if ((buf = (struct Buf *) k_object_pool_get(buf_pool)) == NULL)
     return NULL;
@@ -201,13 +201,13 @@ buf_read(unsigned block_no, size_t block_size, dev_t dev)
   int r;
 
   if (block_no == (unsigned) -1)
-    panic("bad block_no");
+    k_panic("bad block_no");
 
   if ((buf = buf_get(block_no, block_size, dev)) == NULL)
     return NULL;
 
   if ((r = k_mutex_lock(&buf->mutex)) < 0) {
-    panic("TODO %d", r);
+    k_panic("TODO %d", r);
     return NULL;
   }
 
@@ -227,7 +227,7 @@ buf_read(unsigned block_no, size_t block_size, dev_t dev)
   if (!(buf->flags & BUF_VALID))
     buf_request(buf);
 
-  assert(buf->flags & BUF_VALID);
+  k_assert(buf->flags & BUF_VALID);
 
   return buf;
 }
@@ -243,7 +243,7 @@ void
 buf_write(struct Buf *buf)
 {
   if (!k_mutex_holding(&buf->mutex))
-    panic("not holding buf->mutex");
+    k_panic("not holding buf->mutex");
 
   if (buf->block_size >= PAGE_SIZE) {
     unsigned page_order; 
@@ -269,13 +269,13 @@ void
 buf_release(struct Buf *buf)
 { 
   if (!(buf->flags & BUF_VALID))
-    warn("buffer not valid");
+    k_warn("buffer not valid");
 
   if (buf->flags & BUF_DIRTY) {
     buf_write(buf);
 
     if (buf->flags & BUF_DIRTY) {
-      panic("buffer still dirty");
+      k_panic("buffer still dirty");
     }
   }
   
@@ -304,12 +304,12 @@ buf_request(struct Buf *buf)
   struct BlockDev *dev;
 
   if (!k_mutex_holding(&buf->mutex))
-    panic("buf not locked");
+    k_panic("buf not locked");
   if ((buf->flags & (BUF_DIRTY | BUF_VALID)) == BUF_VALID)
-    panic("nothing to do");
+    k_panic("nothing to do");
 
   if ((dev = dev_lookup_block(buf->dev)) == NULL)
-    panic("no block device %d found", buf->dev);
+    k_panic("no block device %d found", buf->dev);
 
   dev->request(buf);
 }

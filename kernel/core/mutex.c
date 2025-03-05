@@ -1,10 +1,7 @@
-#include <kernel/assert.h>
-#include <errno.h>
-
-#include <kernel/mutex.h>
+#include <kernel/core/assert.h>
+#include <kernel/core/mutex.h>
 #include <kernel/object_pool.h>
-#include <kernel/task.h>
-#include <kernel/console.h>
+#include <kernel/core/task.h>
 
 #include "core_private.h"
 
@@ -24,7 +21,7 @@ k_mutex_system_init(void)
                                       k_mutex_ctor,
                                       k_mutex_dtor);
   if (k_mutex_pool == NULL)
-    panic("cannot create the mutex pool");
+    k_panic("cannot create the mutex pool");
 }
 
 /**
@@ -65,10 +62,9 @@ k_mutex_init_common(struct KMutex *mutex, const char *name)
 void
 k_mutex_fini(struct KMutex *mutex)
 {
-  if ((mutex == NULL) || (mutex->type != K_MUTEX_TYPE))
-    panic("bad mutex pointer");
-  if (!(mutex->flags & K_MUTEX_STATIC))
-    panic("cannot fini non-static mutexes");
+  k_assert(mutex != NULL);
+  k_assert(mutex->type == K_MUTEX_TYPE);
+  k_assert(mutex->flags & K_MUTEX_STATIC);
 
   k_mutex_fini_common(mutex);
 }
@@ -76,10 +72,9 @@ k_mutex_fini(struct KMutex *mutex)
 void
 k_mutex_destroy(struct KMutex *mutex)
 {
-  if ((mutex == NULL) || (mutex->type != K_MUTEX_TYPE))
-    panic("bad mutex pointer");
-  if (mutex->flags & K_MUTEX_STATIC)
-    panic("cannot destroy static mutexes");
+  k_assert(mutex != NULL);
+  k_assert(mutex->type == K_MUTEX_TYPE);
+  k_assert(!(mutex->flags & K_MUTEX_STATIC));
 
   k_mutex_fini_common(mutex);
 
@@ -91,10 +86,9 @@ k_mutex_fini_common(struct KMutex *mutex)
 {
   _k_sched_lock();
 
-  if (mutex->owner != NULL)
-    panic("mutex locked");
+  k_assert(mutex->owner == NULL);
 
-  _k_sched_wakeup_all_locked(&mutex->queue, -EINVAL);
+  _k_sched_wakeup_all_locked(&mutex->queue, K_ERR_INVAL);
 
   _k_sched_unlock();
 }
@@ -102,7 +96,7 @@ k_mutex_fini_common(struct KMutex *mutex)
 void
 _k_mutex_may_raise_priority(struct KMutex *mutex, int priority)
 {
-  assert(mutex->owner != NULL);
+  k_assert(mutex->owner != NULL);
 
   if (mutex->priority > priority) {
     mutex->priority = priority;
@@ -123,10 +117,10 @@ k_mutex_try_lock_locked(struct KMutex *mutex)
   // TODO: assert holding sched
 
   if (mutex->owner != NULL)
-    return (mutex->owner == current) ? -EDEADLK : -EAGAIN;
+    return (mutex->owner == current) ? K_ERR_DEADLK : K_ERR_AGAIN;
   
   // The highest-priority task always locks the mutex first
-  assert(current->priority <= mutex->priority);
+  k_assert(current->priority <= mutex->priority);
 
   mutex->owner = current;
   k_list_add_front(&current->owned_mutexes, &mutex->link);
@@ -139,10 +133,10 @@ k_mutex_try_lock(struct KMutex *mutex)
 {
   int r;
 
-  if (k_task_current() == NULL)
-    panic("current task is NULL");
-  if ((mutex == NULL) || (mutex->type != K_MUTEX_TYPE))
-    panic("bad mutex pointer");
+  k_assert(mutex != NULL);
+  k_assert(mutex->type == K_MUTEX_TYPE);
+
+  k_assert(k_task_current() != NULL);
 
   _k_sched_lock();
   r = k_mutex_try_lock_locked(mutex);
@@ -163,7 +157,7 @@ _k_mutex_timed_lock(struct KMutex *mutex, unsigned long timeout)
   int r;
 
   while ((r = k_mutex_try_lock_locked(mutex)) != 0) {
-    if (r != -EAGAIN)
+    if (r != K_ERR_AGAIN)
       break;
 
     _k_mutex_may_raise_priority(mutex, my_task->priority);
@@ -190,10 +184,10 @@ k_mutex_timed_lock(struct KMutex *mutex, unsigned long timeout)
   struct KTask *my_task = k_task_current();
   int r;
 
-  if (my_task == NULL)
-    panic("current task is NULL");
-  if ((mutex == NULL) || (mutex->type != K_MUTEX_TYPE))
-    panic("bad mutex pointer");
+  k_assert(my_task != NULL);
+
+  k_assert(mutex != NULL);
+  k_assert(mutex->type == K_MUTEX_TYPE);
 
   _k_sched_lock();
 
@@ -254,8 +248,7 @@ _k_mutex_unlock(struct KMutex *mutex)
 int
 k_mutex_unlock(struct KMutex *mutex)
 {
-  if (!k_mutex_holding(mutex))
-    panic("not holding");
+  k_assert(k_mutex_holding(mutex));
 
   _k_sched_lock();
 
@@ -277,8 +270,8 @@ k_mutex_holding(struct KMutex *mutex)
 {
   struct KTask *owner;
 
-  if ((mutex == NULL) || (mutex->type != K_MUTEX_TYPE))
-    panic("bad mutex pointer");
+  k_assert(mutex != NULL);
+  k_assert(mutex->type == K_MUTEX_TYPE);
 
   _k_sched_lock();
   owner = mutex->owner;
@@ -305,7 +298,7 @@ k_mutex_dtor(void *p, size_t n)
   struct KMutex *mutex = (struct KMutex *) p;
   (void) n;
 
-  assert(k_list_is_empty(&mutex->queue));
-  assert(k_list_is_null(&mutex->link));
-  assert(mutex->owner == NULL);
+  k_assert(k_list_is_empty(&mutex->queue));
+  k_assert(k_list_is_null(&mutex->link));
+  k_assert(mutex->owner == NULL);
 }

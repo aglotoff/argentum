@@ -1,8 +1,9 @@
 #include <string.h>
 
-#include <kernel/task.h>
+#include <kernel/core/task.h>
 #include <kernel/page.h>
 #include <kernel/console.h>
+#include <kernel/process.h>
 
 #include <arch/trap.h>
 
@@ -12,10 +13,12 @@ arch_task_init_stack(struct KTask *task, void (*entry)(void))
   uint8_t *sp = (uint8_t *) task->kstack + PAGE_SIZE;
 
   // Allocate space for user-mode trap frame
-  if (task->thread != NULL) {
+  if (task->ext != NULL) {
+    struct Thread *thread = (struct Thread *) task->ext;
+
     sp -= sizeof(struct TrapFrame);
-    task->tf = (struct TrapFrame *) sp;
-    memset(task->tf, 0, sizeof(struct TrapFrame));
+    thread->tf = (struct TrapFrame *) sp;
+    memset(thread->tf, 0, sizeof(struct TrapFrame));
   }
 
   // Initialize the kernel-mode task context

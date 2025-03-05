@@ -1,4 +1,4 @@
-#include <kernel/assert.h>
+#include <kernel/core/assert.h>
 #include <dirent.h>
 #include <errno.h>
 #include <fcntl.h>
@@ -74,7 +74,7 @@ fs_inode_get(ino_t ino, dev_t dev)
 
   k_spinlock_release(&inode_cache.lock);
 
-  panic("out of inodes\n");
+  k_panic("out of inodes\n");
 
   return NULL;
 }
@@ -107,10 +107,10 @@ fs_inode_put(struct Inode *inode)
   int r;
 
   if ((r = k_mutex_lock(&inode->mutex)) < 0)
-    panic("TODO %d", r);
+    k_panic("TODO %d", r);
 
   if (inode->flags & FS_INODE_DIRTY)
-    panic("inode dirty");
+    k_panic("inode dirty");
 
   // If the link count reaches zero, delete inode from the filesystem before
   // returning it to the cache
@@ -156,13 +156,13 @@ void
 fs_inode_lock(struct Inode *ip)
 {
   if (k_mutex_lock(&ip->mutex) < 0)
-    panic("TODO");
+    k_panic("TODO");
 
   if (ip->flags & FS_INODE_VALID)
     return;
 
   if (ip->flags & FS_INODE_DIRTY)
-    panic("inode dirty");
+    k_panic("inode dirty");
 
   ip->fs->ops->inode_read(ip);
 
@@ -173,11 +173,11 @@ void
 fs_inode_unlock(struct Inode *ip)
 {  
   if (!(ip->flags & FS_INODE_VALID))
-    panic("inode not valid");
+    k_panic("inode not valid");
 
   if (ip->flags & FS_INODE_DIRTY) {
     if ((ip->dev != 1) && (ip->mtime < 100000 || ip->atime < 100000 || ip->ctime < 100000)) {
-      panic("bad inode time: ino=%d, ctime=%d mtime=%d atime=%d", 
+      k_panic("bad inode time: ino=%d, ctime=%d mtime=%d atime=%d", 
              ip->ino, ip->ctime, ip->mtime, ip->atime);
     }
     ip->fs->ops->inode_write(ip);
@@ -193,7 +193,7 @@ fs_inode_open_locked(struct Inode *inode, int oflag, mode_t mode)
   int ret;
 
   if (!fs_inode_holding(inode))
-    panic("not locked");
+    k_panic("not locked");
 
   // TODO: check perm
 
@@ -218,7 +218,7 @@ fs_inode_read_locked(struct Inode *ip, uintptr_t va, size_t nbyte, off_t *off)
   ssize_t ret;
   
   if (!fs_inode_holding(ip))
-    panic("not locked");
+    k_panic("not locked");
 
   if (!fs_permission(ip, FS_PERM_READ, 0))
     return -EPERM;
@@ -261,7 +261,7 @@ fs_inode_write_locked(struct Inode *ip, uintptr_t va, size_t nbyte, off_t *off)
   ssize_t total;
 
   if (!fs_inode_holding(ip))
-    panic("not locked");
+    k_panic("not locked");
 
   if (!fs_permission(ip, FS_PERM_WRITE, 0))
     return -EPERM;
@@ -324,7 +324,7 @@ fs_inode_read_dir_locked(struct Inode *ip, uintptr_t va, size_t nbyte, off_t *of
   } de;
 
   if (!fs_inode_holding(ip))
-    panic("not locked");
+    k_panic("not locked");
 
   if (!S_ISDIR(ip->mode))
     return -ENOTDIR;
@@ -366,7 +366,7 @@ int
 fs_inode_stat_locked(struct Inode *ip, struct stat *buf)
 {
   if (!fs_inode_holding(ip))
-    panic("not locked");
+    k_panic("not locked");
 
   // TODO: check permissions
 
@@ -394,7 +394,7 @@ int
 fs_inode_truncate_locked(struct Inode *inode, off_t length)
 {
   if (!fs_inode_holding(inode))
-    panic("not locked");
+    k_panic("not locked");
 
   if (length < 0)
     return -EINVAL;
@@ -420,7 +420,7 @@ fs_inode_create(struct Inode *dir, char *name, mode_t mode, dev_t dev,
   struct Inode *inode;
 
   if (!fs_inode_holding(dir))
-    panic("directory not locked");
+    k_panic("directory not locked");
   
   if (!S_ISDIR(dir->mode))
     return -ENOTDIR;
@@ -451,9 +451,9 @@ fs_inode_link(struct Inode *inode, struct Inode *dir, char *name)
   // FIXME: works only in the same filesystem!
 
   if (!fs_inode_holding(inode))
-    panic("inode not locked");
+    k_panic("inode not locked");
   if (!fs_inode_holding(dir))
-    panic("directory not locked");
+    k_panic("directory not locked");
   
   if (!S_ISDIR(dir->mode))
     return -ENOTDIR;
@@ -499,9 +499,9 @@ int
 fs_inode_unlink(struct Inode *dir, struct Inode *inode, const char *name)
 {
   if (!fs_inode_holding(inode))
-    panic("inode not locked");
+    k_panic("inode not locked");
   if (!fs_inode_holding(dir))
-    panic("directory not locked");
+    k_panic("directory not locked");
   
   if (!S_ISDIR(dir->mode))
     return -ENOTDIR;
@@ -519,9 +519,9 @@ int
 fs_inode_rmdir(struct Inode *dir, struct Inode *inode, const char *name)
 {
   if (!fs_inode_holding(inode))
-    panic("inode not locked");
+    k_panic("inode not locked");
   if (!fs_inode_holding(dir))
-    panic("directory not locked");
+    k_panic("directory not locked");
  
   if (!S_ISDIR(dir->mode))
     return -ENOTDIR;
@@ -920,7 +920,7 @@ fs_inode_ioctl_locked(struct Inode *inode, int request, int arg)
   int ret;
 
   if (!fs_inode_holding(inode))
-    panic("not locked");
+    k_panic("not locked");
 
   // TODO: check perm
 
@@ -945,7 +945,7 @@ fs_inode_select_locked(struct Inode *inode, struct timeval *timeout)
   int ret;
 
   if (!fs_inode_holding(inode))
-    panic("not locked");
+    k_panic("not locked");
 
   // TODO: check perm
 
@@ -968,7 +968,7 @@ int
 fs_inode_sync_locked(struct Inode *inode)
 {
   if (!fs_inode_holding(inode))
-    panic("not locked");
+    k_panic("not locked");
 
   // TODO: implement
 

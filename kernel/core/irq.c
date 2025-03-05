@@ -1,14 +1,7 @@
-#include <kernel/assert.h>
-#include <errno.h>
-#include <stddef.h>
-
-#include <kernel/process.h>
+#include <kernel/core/assert.h>
 #include <kernel/core/irq.h>
-#include <kernel/console.h>
 #include <kernel/core/cpu.h>
 #include <kernel/core/timer.h>
-#include <kernel/mm/memlayout.h>
-#include <kernel/vm.h>
 
 #include "core_private.h"
 
@@ -30,14 +23,18 @@ k_irq_state_save(void)
 void
 k_irq_state_restore(void)
 {
-  if (k_arch_irq_is_enabled())
-    panic("interruptible");
+  struct KCpu *cpu;
+  int count;
 
-  if (--_k_cpu()->irq_save_count < 0)
-    panic("interruptible");
+  k_assert(!k_arch_irq_is_enabled());
 
-  if (_k_cpu()->irq_save_count == 0)
-    k_arch_irq_state_restore(_k_cpu()->irq_flags);
+  cpu = _k_cpu();
+  count = --cpu->irq_save_count;
+
+  k_assert(count >= 0);
+
+  if (count == 0)
+    k_arch_irq_state_restore(cpu->irq_flags);
 }
 
 /**
@@ -57,24 +54,25 @@ k_irq_handler_begin(void)
 void
 k_irq_handler_end(void)
 {
-  struct KCpu *my_cpu;
+  struct KCpu *cpu;
+  int count;
 
   _k_sched_lock();
 
-  my_cpu = _k_cpu();
+  cpu = _k_cpu();
+  count = --cpu->lock_count;
 
-  if (my_cpu->lock_count <= 0)
-    panic("lock_count <= 0");
+  k_assert(count >= 0);
 
-  if (--my_cpu->lock_count == 0) {
-    struct KTask *my_task = my_cpu->task;
+  if (count == 0) {
+    struct KTask *task = cpu->task;
 
     // Before resuming the current task, check whether it must give up the CPU
     // or exit.
-    if ((my_task != NULL) && (my_task->flags & K_TASK_FLAG_RESCHEDULE)) {
-      my_task->flags &= ~K_TASK_FLAG_RESCHEDULE;
+    if ((task != NULL) && (task->flags & K_TASK_FLAG_RESCHEDULE)) {
+      task->flags &= ~K_TASK_FLAG_RESCHEDULE;
 
-      _k_sched_enqueue(my_task);
+      _k_sched_enqueue(task);
       _k_sched_yield_locked();
     }
   }

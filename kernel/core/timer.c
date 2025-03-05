@@ -1,9 +1,9 @@
-#include <kernel/assert.h>
+#include <kernel/core/assert.h>
 #include <errno.h>
 
 #include <kernel/console.h>
 #include <kernel/core/timer.h>
-#include <kernel/spinlock.h>
+#include <kernel/core/spinlock.h>
 
 #include "core_private.h"
 
@@ -23,7 +23,7 @@ k_timer_init(struct KTimer *timer,
              int autostart)
 {
   if (timer == NULL)
-    panic("timer is NULL");
+    k_panic("timer is NULL");
 
   _k_timeout_init(&timer->entry);
   
@@ -55,7 +55,7 @@ int
 k_timer_start(struct KTimer *timer)
 {
   if (timer == NULL)
-    panic("timer is NULL");
+    k_panic("timer is NULL");
 
   k_spinlock_acquire(&k_timer_lock);
 
@@ -75,7 +75,7 @@ int
 k_timer_stop(struct KTimer *timer)
 {
   if (timer == NULL)
-    panic("timer is NULL");
+    k_panic("timer is NULL");
 
   k_spinlock_acquire(&k_timer_lock);
 
@@ -113,7 +113,7 @@ _k_timer_timeout(struct KTimeout *entry)
   k_spinlock_acquire(&k_timer_lock);
 
   if (k_timer_current != NULL) {
-    assert(k_timer_current == timer);
+    k_assert(k_timer_current == timer);
 
     if (timer->period != 0)
       k_timer_enqueue(timer, timer->period);
@@ -135,13 +135,13 @@ _k_timer_tick(void)
 static void
 k_timer_enqueue(struct KTimer *timer, unsigned long delay)
 {
-  assert(k_spinlock_holding(&k_timer_lock));
+  k_assert(k_spinlock_holding(&k_timer_lock));
   _k_timeout_enqueue(&k_timer_queue, &timer->entry, delay);
 }
 
 static void
 k_timer_dequeue(struct KTimer *timer)
 {
-  assert(k_spinlock_holding(&k_timer_lock));
+  k_assert(k_spinlock_holding(&k_timer_lock));
   _k_timeout_dequeue(&k_timer_queue, &timer->entry);
 }

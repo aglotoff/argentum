@@ -369,9 +369,9 @@ process_exec(const char *path, uintptr_t argv_va, uintptr_t envp_va)
   char **argv, **envp;
 
   if ((ctx.argv = k_malloc((sizeof ctx.argv[0]) * VEC_MAX + 1)) == NULL)
-    panic("out of memory");
+    k_panic("out of memory");
   if ((ctx.envp = k_malloc((sizeof ctx.envp[0]) * VEC_MAX + 1)) == NULL)
-    panic("out of memory");
+    k_panic("out of memory");
 
   if ((ctx.vm = vm_space_create()) == NULL) {
     r = -ENOMEM;

@@ -7,7 +7,7 @@
 #include <sys/time.h>
 
 
-#include <kernel/assert.h>
+#include <kernel/core/assert.h>
 #include <kernel/console.h>
 
 // FIXME: dirty hack to force compiling on i386
@@ -17,7 +17,7 @@
 
 typedef int sys_prot_t;
 
-#define LWIP_PLATFORM_ASSERT(x) panic(x)
+#define LWIP_PLATFORM_ASSERT(x) k_panic(x)
 
 #define LWIP_RAND() ((u32_t)rand())
 

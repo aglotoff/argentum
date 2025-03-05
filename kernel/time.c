@@ -1,7 +1,7 @@
 #include <sys/types.h>
 #include <errno.h>
 
-#include <kernel/assert.h>
+#include <kernel/core/assert.h>
 #include <kernel/core/semaphore.h>
 #include <kernel/core/tick.h>
 #include <kernel/process.h>
@@ -62,7 +62,7 @@ int
 time_get(clockid_t clock_id, struct timespec *tp)
 {
   if (tp == NULL)
-    panic("tp is null");
+    k_panic("tp is null");
 
   if ((clock_id != CLOCK_REALTIME) && (clock_id != CLOCK_MONOTONIC))
     return -EINVAL;
@@ -110,9 +110,9 @@ timer_irq(int, void *)
   struct Process *my_process = process_current();
 
   if (my_process != NULL) {
-    assert(my_process->thread != NULL);
+    k_assert(my_process->thread != NULL);
 
-    if (arch_trap_is_user(my_process->thread->task->tf)) {
+    if (arch_trap_is_user(my_process->thread->tf)) {
       process_update_times(my_process, 1, 0);
     } else {
       process_update_times(my_process, 0, 1);

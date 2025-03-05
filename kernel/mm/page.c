@@ -2,7 +2,7 @@
 
 #include <kernel/console.h>
 #include <kernel/page.h>
-#include <kernel/spinlock.h>
+#include <kernel/core/spinlock.h>
 #include <kernel/types.h>
 
 /**
@@ -131,7 +131,7 @@ boot_alloc(size_t n)
   void *ret;
 
   if (page_initialized)
-    panic("called after page_init_low");
+    k_panic("called after page_init_low");
 
   // If this is the first time the allocator is invoked, initialize next_free
   if (next_free == NULL)
@@ -146,7 +146,7 @@ boot_alloc(size_t n)
     next_free += n;
 
     if (KVA2PA(next_free) > PHYS_ENTRY_LIMIT)
-      panic("out of memory");
+      k_panic("out of memory");
 
     memset(ret, 0, n);
   }
@@ -177,7 +177,7 @@ page_alloc_block(unsigned order, int flags, int debug_tag)
   if (o > PAGE_ORDER_MAX) {
     // TODO: try to reclaim pages from the slab allocator
     k_spinlock_release(&page_lock);
-    panic("out of memory\n");
+    k_panic("out of memory\n");
     return NULL;
   }
 
@@ -193,8 +193,8 @@ page_alloc_block(unsigned order, int flags, int debug_tag)
     page += (1U << o);
   }
 
-  assert(page->ref_count == 0);
-  assert(!page_list_contains(page, order));
+  k_assert(page->ref_count == 0);
+  k_assert(!page_list_contains(page, order));
 
   // if (high)
   //   cprintf(" %d\n", page_free_count);
@@ -205,7 +205,7 @@ page_alloc_block(unsigned order, int flags, int debug_tag)
     memset(page2kva(page), 0, PAGE_SIZE << order);
 
   for (o = 0; o < (1U << order); o++) {
-    assert(page[o].debug_tag == 0);
+    k_assert(page[o].debug_tag == 0);
     page[o].debug_tag = debug_tag;
   }
 
@@ -225,7 +225,7 @@ page_free_block(struct Page *page, unsigned order)
   unsigned o;
 
   if (page->ref_count != 0)
-    panic("page->ref_count != 0 (%u)", page->ref_count);
+    k_panic("page->ref_count != 0 (%u)", page->ref_count);
 
   for (o = 0; o < (1U << order); o++) {
     page[o].debug_tag = 0;
@@ -330,8 +330,8 @@ page_list_add(struct Page *page, unsigned order)
 
   block_idx = page - pages;
 
-  assert((block_idx % (1U << order)) == 0);
-  assert(!page_list_contains(page, order));
+  k_assert((block_idx % (1U << order)) == 0);
+  k_assert(!page_list_contains(page, order));
 
   k_list_add_front(&page_free_list[order].link, &page->link);
 
@@ -352,8 +352,8 @@ page_k_list_remove(struct Page *page, unsigned order)
 
   block_idx = page - pages;
 
-  assert((block_idx % (1U << order)) == 0);
-  assert(page_list_contains(page, order));
+  k_assert((block_idx % (1U << order)) == 0);
+  k_assert(page_list_contains(page, order));
 
   k_list_remove(&page->link);
 
@@ -368,9 +368,9 @@ page_assert(struct Page *page, unsigned order, int tag)
 
   for (o = 0; o < (1U << order); o++) {
     if (page[o].debug_tag != tag)
-      panic("expected %x, have %x", tag, page[o].debug_tag);
+      k_panic("expected %x, have %x", tag, page[o].debug_tag);
   }
 
   if (page[0].ref_count == 0)
-    panic("page not allocated");
+    k_panic("page not allocated");
 }

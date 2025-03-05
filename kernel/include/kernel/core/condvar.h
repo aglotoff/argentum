@@ -2,7 +2,7 @@
 #define __KERNEL_INCLUDE_KERNEL_CONDVAR_H__
 
 #include <kernel/core/list.h>
-#include <kernel/spinlock.h>
+#include <kernel/core/spinlock.h>
 
 struct KCondVar {
   int              type;

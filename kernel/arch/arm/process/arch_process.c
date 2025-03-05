@@ -1,14 +1,14 @@
 #include <kernel/process.h>
-#include <kernel/assert.h>
+#include <kernel/core/assert.h>
 
 int
 arch_process_copy(struct Process *parent, struct Process *child)
 {
-  assert(parent->thread != NULL);
-  assert(child->thread != NULL);
+  k_assert(parent->thread != NULL);
+  k_assert(child->thread != NULL);
 
-  *child->thread->task->tf = *parent->thread->task->tf;
-  child->thread->task->tf->r0 = 0;
+  *child->thread->tf = *parent->thread->tf;
+  child->thread->tf->r0 = 0;
 
   return 0;
 }

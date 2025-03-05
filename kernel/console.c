@@ -5,7 +5,7 @@
 #include <kernel/console.h>
 #include <kernel/tty.h>
 #include <kernel/monitor.h>
-#include <kernel/spinlock.h>
+#include <kernel/core/spinlock.h>
 
 static struct KSpinLock lock = K_SPINLOCK_INITIALIZER("cprintf");
 static int locking = 1;
@@ -39,8 +39,6 @@ console_putc(char c)
   if (tty_system != NULL)
     arch_console_putc(c);
 }
-
-const char *panicstr;
 
 static int
 cputc(void *arg, int c)
@@ -85,8 +83,10 @@ cprintf(const char *format, ...)
   va_end(ap);
 }
 
+const char *panicstr;
+
 void
-__panic(const char *file, int line, const char *format, ...)
+_panic(const char *file, int line, const char *format, ...)
 {
   va_list ap;
 
@@ -106,12 +106,12 @@ __panic(const char *file, int line, const char *format, ...)
   }
 
   // Never returns.
-  for (;;)
+  while (1)
     monitor(NULL);
 }
 
 void
-__warn(const char *file, int line, const char *format, ...)
+_warn(const char *file, int line, const char *format, ...)
 {
   va_list ap;
 

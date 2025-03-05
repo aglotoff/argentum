@@ -1,9 +1,9 @@
-#include <kernel/assert.h>
+#include <kernel/core/assert.h>
 #include <errno.h>
 
 #include <kernel/core/cpu.h>
 #include <kernel/core/semaphore.h>
-#include <kernel/task.h>
+#include <kernel/core/task.h>
 #include <kernel/object_pool.h>
 
 #include "core_private.h"
@@ -25,7 +25,7 @@ k_semaphore_system_init(void)
                                           k_semaphore_ctor,
                                           k_semaphore_dtor);
   if (k_semaphore_pool == NULL)
-    panic("cannot create the semaphore pool");
+    k_panic("cannot create the semaphore pool");
 }
 
 void
@@ -60,9 +60,9 @@ void
 k_semaphore_fini(struct KSemaphore *semaphore)
 {
   if ((semaphore == NULL) || (semaphore->type != K_SEMAPHORE_TYPE))
-    panic("bad semaphore pointer");
+    k_panic("bad semaphore pointer");
   if (!(semaphore->flags & K_SEMAPHORE_STATIC))
-    panic("cannot fini non-static semaphores");
+    k_panic("cannot fini non-static semaphores");
 
   k_semaphore_fini_common(semaphore);
 }
@@ -71,9 +71,9 @@ void
 k_semaphore_destroy(struct KSemaphore *semaphore)
 {
   if ((semaphore == NULL) || (semaphore->type != K_SEMAPHORE_TYPE))
-    panic("bad semaphore pointer");
+    k_panic("bad semaphore pointer");
   if (semaphore->flags & K_SEMAPHORE_STATIC)
-    panic("cannot destroy static semaphores");
+    k_panic("cannot destroy static semaphores");
 
   k_semaphore_fini_common(semaphore);
 
@@ -94,7 +94,7 @@ k_semaphore_try_get(struct KSemaphore *semaphore)
   int r;
 
   if ((semaphore == NULL) || (semaphore->type != K_SEMAPHORE_TYPE))
-    panic("bad semaphore pointer");
+    k_panic("bad semaphore pointer");
 
   k_spinlock_acquire(&semaphore->lock);
   r = k_semaphore_try_get_locked(semaphore);
@@ -109,7 +109,7 @@ k_semaphore_timed_get(struct KSemaphore *semaphore, unsigned long timeout)
   int r;
 
   if ((semaphore == NULL) || (semaphore->type != K_SEMAPHORE_TYPE))
-    panic("bad semaphore pointer");
+    k_panic("bad semaphore pointer");
 
   k_spinlock_acquire(&semaphore->lock);
 
@@ -133,7 +133,7 @@ k_semaphore_timed_get(struct KSemaphore *semaphore, unsigned long timeout)
 static int
 k_semaphore_try_get_locked(struct KSemaphore *semaphore)
 {
-  assert(semaphore->count >= 0);
+  k_assert(semaphore->count >= 0);
 
   if (semaphore->count == 0)
     return -EAGAIN;
@@ -145,7 +145,7 @@ int
 k_semaphore_put(struct KSemaphore *semaphore)
 {
   if ((semaphore == NULL) || (semaphore->type != K_SEMAPHORE_TYPE))
-    panic("bad semaphore pointer");
+    k_panic("bad semaphore pointer");
   
   k_spinlock_acquire(&semaphore->lock);
   
@@ -175,5 +175,5 @@ k_semaphore_dtor(void *p, size_t n)
   struct KSemaphore *semaphore = (struct KSemaphore *) p;
   (void) n;
 
-  assert(!k_list_is_empty(&semaphore->queue));
+  k_assert(!k_list_is_empty(&semaphore->queue));
 }

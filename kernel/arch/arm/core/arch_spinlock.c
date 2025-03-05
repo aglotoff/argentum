@@ -1,6 +1,6 @@
 #include <kernel/console.h>
 #include <kernel/kdebug.h>
-#include <kernel/spinlock.h>
+#include <kernel/core/spinlock.h>
 #include <kernel/types.h>
 
 #include <arch/arm/regs.h>

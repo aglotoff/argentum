@@ -1,5 +1,5 @@
-#include <kernel/assert.h>
-#include <kernel/spinlock.h>
+#include <kernel/core/assert.h>
+#include <kernel/core/spinlock.h>
 #include <kernel/core/list.h>
 #include <kernel/interrupt.h>
 #include <kernel/dev.h>
@@ -122,7 +122,7 @@ ide_init(uint32_t bar0, uint32_t bar1, uint32_t bar2, uint32_t bar3, uint32_t ba
   k_mutex_init(&ide_mutex, "ide_queue");
 
   if ((prd_page = page_alloc_one(PAGE_ALLOC_ZERO, 0)) == NULL)
-    panic("cannot allocate PRD");
+    k_panic("cannot allocate PRD");
   
   prd = (struct PRD *) page2kva(prd_page);
   prd_page->ref_count++;
@@ -138,7 +138,7 @@ ide_init(uint32_t bar0, uint32_t bar1, uint32_t bar2, uint32_t bar3, uint32_t ba
   // Check if disk 0 is present
 
   if (ide_reg_read(ATA_REG_STATUS) == 0)
-    panic("no disk");
+    k_panic("no disk");
 
   //ide_wait(0);
 
@@ -161,10 +161,10 @@ void
 ide_request(struct Buf *buf)
 {
   if (buf->block_size % IDE_BLOCK_LEN != 0)
-    panic("block size must be a multiple of %u", IDE_BLOCK_LEN);
+    k_panic("block size must be a multiple of %u", IDE_BLOCK_LEN);
 
   if (k_mutex_lock(&ide_mutex) < 0)
-    panic("TODO: error");
+    k_panic("TODO: error");
 
   // Add buffer to the queue.
   k_list_add_back(&ide_queue, &buf->queue_link);
@@ -189,16 +189,16 @@ ide_start_transfer(struct Buf *buf)
 {
   size_t nsectors;
 
-  assert(k_mutex_holding(&ide_mutex));
-  assert(buf->queue_link.prev == &ide_queue);
-  assert(buf->block_size % IDE_BLOCK_LEN == 0);
+  k_assert(k_mutex_holding(&ide_mutex));
+  k_assert(buf->queue_link.prev == &ide_queue);
+  k_assert(buf->block_size % IDE_BLOCK_LEN == 0);
 
   nsectors = buf->block_size / IDE_BLOCK_LEN;
 
   int sector = buf->block_no * nsectors;
   
   if (buf->flags & BUF_DIRTY) {
-  //   panic("TODO");
+  //   k_panic("TODO");
 
   //   // WRITING
   //   ide_wait(0);
@@ -283,7 +283,7 @@ ide_irq_task(int irq, void *arg)
   k_mutex_lock(&ide_mutex);
 
   if (k_list_is_empty(&ide_queue))
-    panic("queue is empty");
+    k_panic("queue is empty");
 
   // Grab the first buffer in the queue to find out whether a read or write
   // operation is happening
@@ -292,8 +292,8 @@ ide_irq_task(int irq, void *arg)
 
   buf = KLIST_CONTAINER(link, struct Buf, queue_link);
 
-  assert((buf->flags & (BUF_DIRTY | BUF_VALID)) != BUF_VALID);
-  assert(buf->block_size % IDE_BLOCK_LEN == 0);
+  k_assert((buf->flags & (BUF_DIRTY | BUF_VALID)) != BUF_VALID);
+  k_assert(buf->block_size % IDE_BLOCK_LEN == 0);
 
 
   if (buf->flags & BUF_DIRTY) {

@@ -12,7 +12,7 @@
 #endif
 
 #include <kernel/core/list.h>
-#include <kernel/spinlock.h>
+#include <kernel/core/spinlock.h>
 
 #define K_OBJECT_POOL_NAME_MAX  64
 

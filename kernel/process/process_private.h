@@ -2,7 +2,7 @@
 #define __PROCESS_PRIVATE_H
 
 #include <kernel/core/list.h>
-#include <kernel/spinlock.h>
+#include <kernel/core/spinlock.h>
 
 struct Process;
 

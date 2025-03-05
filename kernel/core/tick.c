@@ -9,8 +9,8 @@
 #include <kernel/core/cpu.h>
 #include <kernel/core/timer.h>
 #include <kernel/core/tick.h>
-#include <kernel/spinlock.h>
-#include <kernel/task.h>
+#include <kernel/core/spinlock.h>
+#include <kernel/core/task.h>
 
 #include "core_private.h"
 

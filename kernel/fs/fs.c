@@ -72,11 +72,11 @@ fs_open(const char *path, int oflag, mode_t mode, struct File **file_store)
 
   // TODO: O_NONBLOCK
 
-  //if (oflag & O_SEARCH) panic("O_SEARCH %s", path);
-  //if (oflag & O_EXEC) panic("O_EXEC %s", path);
-  //if (oflag & O_NOFOLLOW) panic("O_NOFOLLOW %s", path);
-  if (oflag & O_SYNC) panic("O_SYNC %s", path);
-  if (oflag & O_DIRECT) panic("O_DIRECT %s", path);
+  //if (oflag & O_SEARCH) k_panic("O_SEARCH %s", path);
+  //if (oflag & O_EXEC) k_panic("O_EXEC %s", path);
+  //if (oflag & O_NOFOLLOW) k_panic("O_NOFOLLOW %s", path);
+  if (oflag & O_SYNC) k_panic("O_SYNC %s", path);
+  if (oflag & O_DIRECT) k_panic("O_DIRECT %s", path);
 
   // TODO: ENFILE
   if ((r = file_alloc(&file)) != 0)
@@ -179,7 +179,7 @@ int
 fs_close(struct File *file)
 {
   if (file->type != FD_INODE)
-    panic("not a file");
+    k_panic("not a file");
 
   // TODO: add a comment, when node can be NULL?
   if (file->node != NULL) 
@@ -195,7 +195,7 @@ fs_seek(struct File *file, off_t offset, int whence)
   off_t new_offset;
 
   if (file->type != FD_INODE)
-    panic("not a file");
+    k_panic("not a file");
 
   switch (whence) {
   case SEEK_SET:
@@ -233,7 +233,7 @@ fs_read(struct File *file, uintptr_t va, size_t nbytes)
   ssize_t r;
 
   if (file->type != FD_INODE)
-    panic("not a file");
+    k_panic("not a file");
 
   if ((file->flags & O_ACCMODE) == O_WRONLY)
     return -EBADF;
@@ -256,7 +256,7 @@ fs_write(struct File *file, uintptr_t va, size_t nbytes)
   ssize_t r;
 
   if (file->type != FD_INODE)
-    panic("not a file");
+    k_panic("not a file");
 
   if ((file->flags & O_ACCMODE) == O_RDONLY)
     return -EBADF;
@@ -282,7 +282,7 @@ fs_getdents(struct File *file, uintptr_t va, size_t nbytes)
   ssize_t r;
 
   if (file->type != FD_INODE)
-    panic("not a file");
+    k_panic("not a file");
 
   if ((file->flags & O_ACCMODE) == O_WRONLY)
     return -EBADF;
@@ -305,7 +305,7 @@ fs_fstat(struct File *file, struct stat *buf)
   int r;
   
   if (file->type != FD_INODE)
-    panic("not a file");
+    k_panic("not a file");
 
   inode = fs_path_inode(file->node);
   fs_inode_lock(inode);
@@ -324,7 +324,7 @@ fs_fchdir(struct File *file)
   int r;
 
   if (file->type != FD_INODE)
-    panic("not a file");
+    k_panic("not a file");
 
   if ((r = fs_set_pwd(fs_path_duplicate(file->node))) != 0)
     fs_path_put(file->node);
@@ -339,7 +339,7 @@ fs_fchmod(struct File *file, mode_t mode)
   int r;
 
   if (file->type != FD_INODE)
-    panic("not a file");
+    k_panic("not a file");
 
   inode = fs_path_inode(file->node);
   fs_inode_lock(inode);
@@ -359,7 +359,7 @@ fs_fchown(struct File *file, uid_t uid, gid_t gid)
   int r;
 
   if (file->type != FD_INODE)
-    panic("not a file");
+    k_panic("not a file");
 
   inode = fs_path_inode(file->node);
   fs_inode_lock(inode);
@@ -379,7 +379,7 @@ fs_ioctl(struct File *file, int request, int arg)
   int r;
   
   if (file->type != FD_INODE)
-    panic("not a file");
+    k_panic("not a file");
 
   inode = fs_path_inode(file->node);
   fs_inode_lock(inode);
@@ -399,7 +399,7 @@ fs_select(struct File *file, struct timeval *timeout)
   int r;
   
   if (file->type != FD_INODE)
-    panic("not a file");
+    k_panic("not a file");
 
   inode = fs_path_inode(file->node);
   fs_inode_lock(inode);
@@ -419,7 +419,7 @@ fs_ftruncate(struct File *file, off_t length)
   int r;
   
   if (file->type != FD_INODE)
-    panic("not a file");
+    k_panic("not a file");
 
   inode = fs_path_inode(file->node);
   fs_inode_lock(inode);
@@ -439,7 +439,7 @@ fs_fsync(struct File *file)
   int r;
   
   if (file->type != FD_INODE)
-    panic("not a file");
+    k_panic("not a file");
 
   inode = fs_path_inode(file->node);
   fs_inode_lock(inode);

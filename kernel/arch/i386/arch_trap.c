@@ -30,11 +30,11 @@ trap_handle_pgfault(struct TrapFrame *tf)
   // If abort happened in kernel mode, print the trap frame and panic
   if ((tf->cs & PL_MASK) != PL_USER) {
     print_trapframe(tf);
-    panic("kernel fault va %p", address);
+    k_panic("kernel fault va %p", address);
   }
 
   process = process_current();
-  assert(process != NULL);
+  k_assert(process != NULL);
 
   // Try to handle VM fault first (it may be caused by copy-on-write pages)
   if (vm_handle_fault(process->vm->pgtab, address) == 0)
@@ -46,7 +46,7 @@ trap_handle_pgfault(struct TrapFrame *tf)
 
   // TODO: SEGV_MAPERR or SEGV_ACCERR
   if (signal_generate(process->pid, SIGSEGV, 0) != 0)
-    panic("sending SIGSEGV failed");
+    k_panic("sending SIGSEGV failed");
 }
 
 void
@@ -66,7 +66,7 @@ trap(struct TrapFrame *tf)
       break;
     default:
       print_trapframe(tf);
-      panic("unhandled trap in kernel");
+      k_panic("unhandled trap in kernel");
     }
   }
 
@@ -142,7 +142,7 @@ int
 arch_trap_frame_init(struct Process *process, uintptr_t entry, uintptr_t arg1,
                      uintptr_t arg2, uintptr_t arg3, uintptr_t sp)
 {
-  assert(process->thread != NULL);
+  k_assert(process->thread != NULL);
 
   sp -= 4;
   vm_copy_out(process->vm->pgtab, &arg3, sp, sizeof arg3);
@@ -152,15 +152,15 @@ arch_trap_frame_init(struct Process *process, uintptr_t entry, uintptr_t arg1,
   vm_copy_out(process->vm->pgtab, &arg1, sp, sizeof arg1);
   sp -= 4;
 
-  process->thread->task->tf->cs = SEG_USER_CODE;
-  process->thread->task->tf->eip = entry;
-  process->thread->task->tf->es = SEG_USER_DATA;
-  process->thread->task->tf->ds = SEG_USER_DATA;
-  process->thread->task->tf->ss = SEG_USER_DATA;
-  process->thread->task->tf->esp = sp;
-  process->thread->task->tf->gs = 0;
-  process->thread->task->tf->fs = 0;
-  process->thread->task->tf->eflags = EFLAGS_IF;
+  process->thread->tf->cs = SEG_USER_CODE;
+  process->thread->tf->eip = entry;
+  process->thread->tf->es = SEG_USER_DATA;
+  process->thread->tf->ds = SEG_USER_DATA;
+  process->thread->tf->ss = SEG_USER_DATA;
+  process->thread->tf->esp = sp;
+  process->thread->tf->gs = 0;
+  process->thread->tf->fs = 0;
+  process->thread->tf->eflags = EFLAGS_IF;
 
   return 0;
 }
@@ -178,7 +178,7 @@ arch_trap_frame_pop(struct TrapFrame *tf)
 		"\tiret"
 		: : "g" (tf) : "memory");
 	
-  panic("failed");  /* mostly to placate the compiler */
+  k_panic("failed");  /* mostly to placate the compiler */
 }
 
 int

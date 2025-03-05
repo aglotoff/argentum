@@ -5,13 +5,9 @@
 #error "This is a kernel header; user programs should not #include it"
 #endif
 
-#include <limits.h>
-#include <stdint.h>
-
+#include <kernel/core/list.h>
 #include <kernel/core/tick.h>
 #include <arch/context.h>
-
-#define K_TASK_MAX_PRIORITIES  (2 * NZERO)
 
 enum {
   K_TASK_STATE_NONE = 0,
@@ -31,7 +27,6 @@ enum {
 struct KObjectPool;
 extern struct KObjectPool *k_task_cache;
 
-struct Thread;
 struct KMutex;
 
 /**
@@ -56,8 +51,6 @@ struct KTask {
 
   /** Bottom of the kernel-mode stack */
   void              *kstack;
-  /** Address of the current trap frame on the stack */
-  struct TrapFrame  *tf;
   /** Saved kernel context */
   struct Context    *context;
 
@@ -73,21 +66,21 @@ struct KTask {
   int               err;
 
   /** Tne process this task belongs to */
-  struct Thread    *thread;
+  void             *ext;
 };
 
-void            arch_task_init_stack(struct KTask *, void (*)(void));
-void            arch_task_idle(void);
+void          arch_task_init_stack(struct KTask *, void (*)(void));
+void          arch_task_idle(void);
 
 struct KTask *k_task_current(void);
-struct KTask *k_task_create(struct Thread *, void (*)(void *), void *, int);
-void            k_task_exit(void);
-int             k_task_resume(struct KTask *);
-void            k_task_suspend(void);
-void            k_task_yield(void);
-void            k_task_interrupt(struct KTask *);
+struct KTask *k_task_create(void *, void (*)(void *), void *, int);
+void          k_task_exit(void);
+int           k_task_resume(struct KTask *);
+void          k_task_suspend(void);
+void          k_task_yield(void);
+void          k_task_interrupt(struct KTask *);
 
-void            k_sched_init(void);
-void            k_sched_start(void);
+void          k_sched_init(void);
+void          k_sched_start(void);
 
 #endif  // __KERNEL_INCLUDE_KERNEL_TASK_H__

@@ -1,4 +1,4 @@
-#include <kernel/assert.h>
+#include <kernel/core/assert.h>
 #include <dirent.h>
 #include <errno.h>
 #include <unistd.h>
@@ -39,11 +39,11 @@ fs_path_node_dtor(void *ptr, size_t n)
   struct PathNode *path_node = (struct PathNode *) ptr;
   (void) n;
 
-  assert(path_node->mounted == NULL);
-  assert(path_node->ref_count == 0);
-  assert(k_list_is_empty(&path_node->children));
-  assert(k_list_is_empty(&path_node->siblings));
-  assert(!k_mutex_holding(&path_node->mutex));
+  k_assert(path_node->mounted == NULL);
+  k_assert(path_node->ref_count == 0);
+  k_assert(k_list_is_empty(&path_node->children));
+  k_assert(k_list_is_empty(&path_node->siblings));
+  k_assert(!k_mutex_holding(&path_node->mutex));
 }
 
 struct PathNode *
@@ -94,7 +94,7 @@ int
 fs_path_mount(struct PathNode *path, struct Inode *inode)
 {
   if (path->mounted)
-    panic("already mounted");
+    k_panic("already mounted");
 
   path->mounted = inode;
 
@@ -129,7 +129,7 @@ fs_path_put(struct PathNode *path)
   // cprintf("[put %s %d]\n", path->name, path->ref_count);
 
   if ((path->ref_count == 0) && (path->parent != NULL))
-    panic("path in bad state");
+    k_panic("path in bad state");
 
   // Move up the tree and remove all unused nodes. A node is considered unused
   // in one of two cases:
@@ -144,7 +144,7 @@ fs_path_put(struct PathNode *path)
       break;
 
     if (parent) {
-      assert(path->ref_count == 1);
+      k_assert(path->ref_count == 1);
       k_list_remove(&path->siblings);
       path->ref_count--;
     }
@@ -154,7 +154,7 @@ fs_path_put(struct PathNode *path)
     // cprintf("[drop %s %d]\n", path->name, path->inode->ino);
 
     if (path->mounted != NULL)
-      panic("TODO: drop mountpoint");
+      k_panic("TODO: drop mountpoint");
 
     if (path->inode != NULL)
       fs_inode_put(path->inode);
@@ -188,16 +188,16 @@ void
 fs_fs_path_node_lock(struct PathNode *node)
 {
   if ((node->ref_count == 1) && (node->parent != NULL))
-    panic("bad path node reference");
+    k_panic("bad path node reference");
   if (k_mutex_lock(&node->mutex) < 0)
-    panic("TODO");
+    k_panic("TODO");
 }
 
 void
 fs_path_node_unlock(struct PathNode *node)
 {
   if ((node->ref_count == 1) && (node->parent != NULL))
-    panic("bad path node reference");
+    k_panic("bad path node reference");
   k_mutex_unlock(&node->mutex);
 }
 
@@ -409,10 +409,10 @@ fs_init(void)
                                       fs_path_node_ctor,
                                       fs_path_node_dtor);
   if (fs_path_pool == NULL)
-    panic("cannot allocate fs_path_pool");
+    k_panic("cannot allocate fs_path_pool");
 
   if ((fs_root = fs_path_node_create("/", ext2_mount(FS_ROOT_DEV), NULL)) == NULL)
-    panic("cannot allocate fs root");
+    k_panic("cannot allocate fs root");
 
   fs_root->parent = fs_path_duplicate(fs_root);
 }

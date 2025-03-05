@@ -1,10 +1,10 @@
 #include <kernel/core/cpu.h>
 #include <kernel/object_pool.h>
 #include <kernel/page.h>
-#include <kernel/mutex.h>
+#include <kernel/core/mutex.h>
 #include <kernel/core/mailbox.h>
 #include <kernel/core/semaphore.h>
-#include <kernel/task.h>
+#include <kernel/core/task.h>
 #include <kernel/time.h>
 #include <kernel/types.h>
 #include <lwip/sys.h>

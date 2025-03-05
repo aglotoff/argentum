@@ -13,11 +13,11 @@
 #include <time.h>
 
 #include <kernel/core/cpu.h>
-#include <kernel/spinlock.h>
+#include <kernel/core/spinlock.h>
 #include <kernel/core/list.h>
 #include <kernel/core/timer.h>
 #include <kernel/vm.h>
-#include <kernel/task.h>
+#include <kernel/core/task.h>
 #include <kernel/trap.h>
 #include <kernel/waitqueue.h>
 
@@ -36,6 +36,8 @@ struct FileDesc {
 struct Thread {
   struct Process  *process;
   struct KTask    *task;
+  /** Address of the current trap frame on the stack */
+  struct TrapFrame  *tf;
 
   struct Signal   *signal_pending[NSIG];
   struct KListLink signal_queue;
@@ -123,7 +125,7 @@ static inline struct Thread *
 thread_current(void)
 {
   struct KTask *task = k_task_current();
-  return task != NULL ? task->thread : NULL;
+  return task != NULL ? (struct Thread *) task->ext : NULL;
 }
 
 static inline struct Process *

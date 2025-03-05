@@ -5,14 +5,14 @@
 int
 sys_arch_get_num(void)
 {
-  struct KTask *current = k_task_current();
+  struct Thread *current = thread_current();
   return current->tf->eax;
 }
 
 int32_t
 sys_arch_get_arg(int n)
 {
-  struct KTask *current = k_task_current();
+  struct Thread *current = thread_current();
   
   switch (n) {
   case 0:
@@ -26,7 +26,7 @@ sys_arch_get_arg(int n)
   case 4:
     return current->tf->esi;
   case 5:
-    panic("not implemented");
+    k_panic("not implemented");
     // fall through
   default:
     return -1;

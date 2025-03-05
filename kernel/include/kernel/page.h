@@ -11,7 +11,7 @@
 #error "This is a kernel header; user programs should not #include it"
 #endif
 
-#include <kernel/assert.h>
+#include <kernel/core/assert.h>
 #include <stddef.h>
 
 #include <kernel/core/list.h>
@@ -64,7 +64,7 @@ static inline physaddr_t
 page2pa(struct Page *p)
 {
   if ((p < pages) || (p >= &pages[page_count]))
-    panic("bad page index %u", (p - pages));
+    k_panic("bad page index %u", (p - pages));
 
   return (p - pages) << PAGE_SHIFT;
 }
@@ -91,7 +91,7 @@ static inline struct Page *
 pa2page(physaddr_t pa)
 {
   if ((pa >> PAGE_SHIFT) >= page_count)
-    panic("bad page index %u", pa >> PAGE_SHIFT);
+    k_panic("bad page index %u", pa >> PAGE_SHIFT);
 
   return &pages[pa >> PAGE_SHIFT];
 }

@@ -52,7 +52,7 @@ arch_vm_switch(struct Process *process)
 {
   k_irq_state_save();
 
-  assert(process->thread != NULL);
+  k_assert(process->thread != NULL);
   page_assert(kva2page(process->vm->pgtab), 0, PAGE_TAG_VM);
 
   gdt[GD_TSS] = SEG_DESC_16(&tss, sizeof tss - 1, SEG_TYPE_TSS32A, PL_KERNEL);
@@ -143,9 +143,9 @@ arch_vm_lookup(void *pgtab, uintptr_t va, int alloc)
   // Make sure the user and the kernel mappings are modified only in the
   // corresponding page tables
   if ((va >= VIRT_KERNEL_BASE) && (pgtab != kernel_pgdir))
-    panic("user va %p must be below VIRT_KERNEL_BASE", va);
+    k_panic("user va %p must be below VIRT_KERNEL_BASE", va);
   if ((va < VIRT_KERNEL_BASE) && (pgtab == kernel_pgdir))
-    panic("kernel va %p must be above VIRT_KERNEL_BASE", va);
+    k_panic("kernel va %p must be above VIRT_KERNEL_BASE", va);
 
   pgdir = (pde_t *) pgtab;
   pde = &pgdir[PGDIR_IDX(va)];
@@ -164,7 +164,7 @@ arch_vm_lookup(void *pgtab, uintptr_t va, int alloc)
     *pde = pa | PTE_U | PTE_W | PTE_P;
   } else if (*pde & PDE_PS) {
     // trying to remap a fixed section
-    panic("not a page table");
+    k_panic("not a page table");
   }
 
   pte = PA2KVA(PDE_BASE(*pde));
@@ -186,9 +186,9 @@ init_large_desc(pde_t *pde, physaddr_t pa, int flags)
 static void
 init_fixed_mapping(uintptr_t va, uint32_t pa, size_t n, int flags)
 { 
-  assert(va % PAGE_SIZE == 0);
-  assert(pa % PAGE_SIZE == 0);
-  assert(n  % PAGE_SIZE == 0);
+  k_assert(va % PAGE_SIZE == 0);
+  k_assert(pa % PAGE_SIZE == 0);
+  k_assert(n  % PAGE_SIZE == 0);
 
   while (n != 0) {
     // Whenever possible, map entire 1MB sections to reduce memory overhead for
@@ -198,7 +198,7 @@ init_fixed_mapping(uintptr_t va, uint32_t pa, size_t n, int flags)
       pde_t *pde = (pde_t *) kernel_pgdir + PGDIR_IDX(va);
 
       if (*pde)
-        panic("pde for %p already exists", va);
+        k_panic("pde for %p already exists", va);
 
       init_large_desc(pde, pa, flags);
 
@@ -209,9 +209,9 @@ init_fixed_mapping(uintptr_t va, uint32_t pa, size_t n, int flags)
       pte_t *pte = arch_vm_lookup(kernel_pgdir, va, 1);
 
       if (pte == NULL)
-        panic("cannot allocate PTE for %p", va);
+        k_panic("cannot allocate PTE for %p", va);
       if (arch_vm_pte_valid(pte))
-        panic("PTE for %p already exists", va);
+        k_panic("PTE for %p already exists", va);
 
       arch_vm_pte_set(pte, pa, flags);
 
@@ -231,7 +231,7 @@ arch_vm_init(void)
 
   // Allocate the master translation table
   if ((page = page_alloc_block(2, PAGE_ALLOC_ZERO, PAGE_TAG_KERNEL_VM)) == NULL)
-    panic("cannot allocate kernel page table");
+    k_panic("cannot allocate kernel page table");
 
   kernel_pgdir = page2kva(page);
   page->ref_count++;
@@ -300,7 +300,7 @@ arch_vm_destroy(void *pgtab)
     // Check that the caller has removed all mappings
     for (j = 0; j < PGTAB_NR_ENTRIES; j++)
       if (arch_vm_pte_valid(&pte[j]))
-        panic("pte still in use");
+        k_panic("pte still in use");
 
     if (--page->ref_count == 0)
       page_free_one(page);

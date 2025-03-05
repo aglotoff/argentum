@@ -1,4 +1,4 @@
-#include <kernel/assert.h>
+#include <kernel/core/assert.h>
 #include <kernel/drivers/sd.h>
 #include <kernel/fs/buf.h>
 #include <kernel/interrupt.h>
@@ -86,7 +86,7 @@ void
 sd_request(struct SD *sd, struct Buf *buf)
 {
   if (buf->block_size % SD_BLOCKLEN != 0)
-    panic("block size must be a multiple of %u", SD_BLOCKLEN);
+    k_panic("block size must be a multiple of %u", SD_BLOCKLEN);
 
   k_mutex_lock(&sd->mutex);
 
@@ -113,9 +113,9 @@ sd_start_transfer(struct SD *sd, struct Buf *buf)
   uint32_t cmd, arg;
   size_t nblocks;
 
-  assert(k_mutex_holding(&sd->mutex));
-  assert(buf->queue_link.prev == &sd->queue);
-  assert(buf->block_size % SD_BLOCKLEN == 0);
+  k_assert(k_mutex_holding(&sd->mutex));
+  k_assert(buf->queue_link.prev == &sd->queue);
+  k_assert(buf->block_size % SD_BLOCKLEN == 0);
 
   nblocks = buf->block_size / SD_BLOCKLEN;
 
@@ -130,7 +130,7 @@ sd_start_transfer(struct SD *sd, struct Buf *buf)
   arg = buf->block_no * buf->block_size;
 
   if (sd->ops->send_cmd(sd->ctx, cmd, arg, SD_RESPONSE_R1, NULL) != 0)
-    panic("error sending cmd %d, arg %d", cmd, arg);
+    k_panic("error sending cmd %d, arg %d", cmd, arg);
 }
 
 // Handle the SD card interrupts. Complete the current data transfer operation
@@ -147,7 +147,7 @@ sd_irq_task(int irq, void *arg)
   k_mutex_lock(&sd->mutex);
 
   if (k_list_is_empty(&sd->queue))
-    panic("queue is empty");
+    k_panic("queue is empty");
 
   // Grab the first buffer in the queue to find out whether a read or write
   // operation is happening
@@ -156,17 +156,17 @@ sd_irq_task(int irq, void *arg)
 
   buf = KLIST_CONTAINER(link, struct Buf, queue_link);
 
-  assert((buf->flags & (BUF_DIRTY | BUF_VALID)) != BUF_VALID);
-  assert(buf->block_size % SD_BLOCKLEN == 0);
+  k_assert((buf->flags & (BUF_DIRTY | BUF_VALID)) != BUF_VALID);
+  k_assert(buf->block_size % SD_BLOCKLEN == 0);
 
   // Transfer the data and update the corresponding buffer flags.
   if (buf->flags & BUF_DIRTY) {
     if (sd->ops->send_data(sd->ctx, buf->data, buf->block_size) != 0)
-      panic("error writing block %d", buf->block_no);
+      k_panic("error writing block %d", buf->block_no);
     buf->flags &= ~BUF_DIRTY;
   } else {
     if (sd->ops->receive_data(sd->ctx, buf->data, buf->block_size) != 0)
-      panic("error reading block %d", buf->block_no);
+      k_panic("error reading block %d", buf->block_no);
     buf->flags |= BUF_VALID;
   }
 

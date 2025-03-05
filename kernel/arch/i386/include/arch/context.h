@@ -1,7 +1,7 @@
 #ifndef __ARCH_I386_CONTEXT_H__
 #define __ARCH_I386_CONTEXT_H__
 
-#include <stdint.h>
+#include <kernel/core/config.h>
 
 /**
  * Saved registers for kernel context switches (SP is saved implicitly).

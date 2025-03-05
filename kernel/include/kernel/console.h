@@ -1,9 +1,5 @@
-#ifndef __KERNEL_INCLUDE_KERNEL_CPRINTF_H__
-#define __KERNEL_INCLUDE_KERNEL_CPRINTF_H__
-
-#ifndef __ARGENTUM_KERNEL__
-#error "This is a kernel header; user programs should not #include it"
-#endif
+#ifndef __KERNEL_INCLUDE_KERNEL_CONSOLE_H__
+#define __KERNEL_INCLUDE_KERNEL_CONSOLE_H__
 
 /**
  * @file include/console.h
@@ -18,7 +14,11 @@ void arch_console_putc(char);
 
 void console_putc(char);
 int  console_getc(void);
+
 void vcprintf(const char *, va_list);
 void cprintf(const char *, ...);
 
-#endif // !__KERNEL_INCLUDE_KERNEL_CPRINTF_H__
+void _panic(const char *, int, const char *, ...);
+void _warn(const char *, int, const char *, ...);
+
+#endif // !__KERNEL_INCLUDE_KERNEL_CONSOLE_H__

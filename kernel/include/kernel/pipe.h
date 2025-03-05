@@ -2,7 +2,7 @@
 #define __KERNEL_INCLUDE_KERNEL_PIPE_H__
 
 #include <kernel/core/condvar.h>
-#include <kernel/mutex.h>
+#include <kernel/core/mutex.h>
 
 struct Pipe {
   struct KMutex   mutex;

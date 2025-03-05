@@ -10,22 +10,22 @@
 int
 arch_signal_prepare(struct Process *process, struct SignalFrame *frame)
 {
-  assert(process->thread != NULL);
+  k_assert(process->thread != NULL);
 
-  uintptr_t ctx_va = process->thread->task->tf->sp - sizeof(struct SignalFrame);
+  uintptr_t ctx_va = process->thread->tf->sp - sizeof(struct SignalFrame);
 
-  frame->ucontext.uc_mcontext.r0  = process->thread->task->tf->r0;
-  frame->ucontext.uc_mcontext.sp  = process->thread->task->tf->sp;
-  frame->ucontext.uc_mcontext.lr  = process->thread->task->tf->lr;
-  frame->ucontext.uc_mcontext.pc  = process->thread->task->tf->pc;
-  frame->ucontext.uc_mcontext.psr = process->thread->task->tf->psr;
+  frame->ucontext.uc_mcontext.r0  = process->thread->tf->r0;
+  frame->ucontext.uc_mcontext.sp  = process->thread->tf->sp;
+  frame->ucontext.uc_mcontext.lr  = process->thread->tf->lr;
+  frame->ucontext.uc_mcontext.pc  = process->thread->tf->pc;
+  frame->ucontext.uc_mcontext.psr = process->thread->tf->psr;
 
   if (vm_copy_out(process->vm->pgtab, frame, ctx_va, sizeof *frame) != 0)
     return SIGKILL;
 
-  process->thread->task->tf->r0 = ctx_va;
-  process->thread->task->tf->sp = ctx_va;
-  process->thread->task->tf->pc = process->signal_stub;
+  process->thread->tf->r0 = ctx_va;
+  process->thread->tf->sp = ctx_va;
+  process->thread->tf->pc = process->signal_stub;
 
   return 0;
 }
@@ -35,9 +35,9 @@ arch_signal_return(struct Process *process, struct SignalFrame *ctx, int *ret)
 {
   int r;
 
-  assert(process->thread != NULL);
+  k_assert(process->thread != NULL);
 
-  if ((r = vm_copy_in(process->vm->pgtab, ctx, process->thread->task->tf->sp, sizeof *ctx) < 0))
+  if ((r = vm_copy_in(process->vm->pgtab, ctx, process->thread->tf->sp, sizeof *ctx) < 0))
     return r;
 
   // Prevent malicious users from executing in kernel mode
@@ -46,13 +46,13 @@ arch_signal_return(struct Process *process, struct SignalFrame *ctx, int *ret)
 
   // No need to check other regs - bad values will lead to page faults
 
-  process->thread->task->tf->r0  = ctx->ucontext.uc_mcontext.r0;
-  process->thread->task->tf->sp  = ctx->ucontext.uc_mcontext.sp;
-  process->thread->task->tf->lr  = ctx->ucontext.uc_mcontext.lr;
-  process->thread->task->tf->pc  = ctx->ucontext.uc_mcontext.pc;
-  process->thread->task->tf->psr = ctx->ucontext.uc_mcontext.psr;
+  process->thread->tf->r0  = ctx->ucontext.uc_mcontext.r0;
+  process->thread->tf->sp  = ctx->ucontext.uc_mcontext.sp;
+  process->thread->tf->lr  = ctx->ucontext.uc_mcontext.lr;
+  process->thread->tf->pc  = ctx->ucontext.uc_mcontext.pc;
+  process->thread->tf->psr = ctx->ucontext.uc_mcontext.psr;
 
-  *ret = process->thread->task->tf->r0;
+  *ret = process->thread->tf->r0;
 
   return 0;
 }

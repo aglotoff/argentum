@@ -4,7 +4,7 @@
 #include <stdint.h>
 
 #include <kernel/core/list.h>
-#include <kernel/spinlock.h>
+#include <kernel/core/spinlock.h>
 
 struct KMailBox {
   int               type;

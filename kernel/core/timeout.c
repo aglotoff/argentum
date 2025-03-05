@@ -21,7 +21,7 @@ _k_timeout_enqueue(struct KListLink *queue,
   struct KListLink *next_link;
 
   if (delay == 0)
-    panic("delay must be greater than 0");
+    k_panic("delay must be greater than 0");
 
   timeout->remain = delay;
 
@@ -44,7 +44,7 @@ _k_timeout_dequeue(struct KListLink *queue, struct KTimeout *timeout)
 {
   struct KListLink *next_link = timeout->link.next;
 
-  assert(next_link != NULL);
+  k_assert(next_link != NULL);
 
   k_list_remove(&timeout->link);
 
@@ -67,7 +67,7 @@ _k_timeout_process_queue(struct KListLink *queue,
   link = queue->next;
   timeout = KLIST_CONTAINER(link, struct KTimeout, link);
 
-  assert(timeout->remain != 0);
+  k_assert(timeout->remain != 0);
 
   timeout->remain--;
 
