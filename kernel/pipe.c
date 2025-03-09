@@ -57,8 +57,8 @@ pipe_open(struct File **read_store, struct File **write_store)
   pipe->write_pos  = 0;
   pipe->size       = 0;
   pipe->max_size   = PIPE_BUF_SIZE;
-  k_condvar_init(&pipe->read_cond);
-  k_condvar_init(&pipe->write_cond);
+  k_condvar_create(&pipe->read_cond);
+  k_condvar_create(&pipe->write_cond);
 
   read->type  = FD_PIPE;
   read->pipe  = pipe;
@@ -127,8 +127,8 @@ pipe_close(struct File *file)
   page_free_block(page, PIPE_BUF_ORDER);
 
   k_mutex_fini(&pipe->mutex);
-  k_condvar_fini(&pipe->read_cond);
-  k_condvar_fini(&pipe->write_cond);
+  k_condvar_destroy(&pipe->read_cond);
+  k_condvar_destroy(&pipe->write_cond);
 
   k_object_pool_put(pipe_cache, pipe);
 

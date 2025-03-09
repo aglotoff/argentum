@@ -8,19 +8,12 @@
 #include <kernel/core/mutex.h>
 #include <kernel/core/spinlock.h>
 
-#include <kernel/process.h>
-#include <kernel/vmspace.h>
-#include <kernel/vm.h>
-#include <kernel/vm.h>
-#include <kernel/object_pool.h>
-#include <kernel/page.h>
-
 #include "core_private.h"
 
 void k_arch_switch(struct Context **, struct Context *);
 
 KLIST_DECLARE(_k_sched_timeouts);
-KLIST_DECLARE(_k_tasks_to_destroy);
+
 static struct KListLink sched_queue[K_TASK_MAX_PRIORITIES];
 struct KSpinLock _k_sched_spinlock = K_SPINLOCK_INITIALIZER("sched");
 
@@ -33,11 +26,6 @@ void
 k_sched_init(void)
 {
   int i;
-
-  k_task_cache = k_object_pool_create("k_task_cache", sizeof(struct KTask), 0,
-                                   NULL, NULL);
-  if (k_task_cache == NULL)
-    k_panic("cannot allocate task cache");
 
   for (i = 0; i < K_TASK_MAX_PRIORITIES; i++)
     k_list_init(&sched_queue[i]);
@@ -81,62 +69,35 @@ k_sched_switch(struct KTask *task)
 {
   struct KCpu *my_cpu = _k_cpu();
 
-  if (task->ext != NULL) {
-    struct Thread *thread = (struct Thread *) task->ext;
-
-    k_assert(thread->task == task);
-
-    arch_vm_switch(thread->process);
-    arch_vm_load(thread->process->vm->pgtab);
-  }
-
-  task->state = K_TASK_STATE_RUNNING;
-
   task->cpu = my_cpu;
   my_cpu->task = task;
 
+#ifdef K_ON_TASK_BEFORE_SWITCH
+  K_ON_TASK_BEFORE_SWITCH(task);
+#endif
+
+  task->state = K_TASK_STATE_RUNNING;
+
   k_arch_switch(&my_cpu->sched_context, task->context);
 
-  if ((intptr_t) task->context - (intptr_t) task->kstack < 64)
-    k_panic("stack underflow %p %p", task->context, task->kstack);
+#ifdef K_ON_TASK_AFTER_SWITCH
+  K_ON_TASK_AFTER_SWITCH(task);
+#endif
 
   my_cpu->task = NULL;
   task->cpu = NULL;
-
-  if (task->ext != NULL)
-    arch_vm_load_kernel();
 }
 
 static void
 k_sched_idle(void)
 {
-  // Cleanup destroyed tasks
-  while (!k_list_is_empty(&_k_tasks_to_destroy)) {
-    struct KTask *task;
-    struct Page *kstack_page;
-    
-    task = KLIST_CONTAINER(_k_tasks_to_destroy.next, struct KTask, link);
-
-    k_list_remove(&task->link);
-
-    _k_sched_unlock();
-
-    // Free the task kernel stack
-    kstack_page = kva2page(task->kstack);
-    page_assert(kstack_page, 0, PAGE_TAG_KSTACK);
-
-    kstack_page->ref_count--;
-    page_free_one(kstack_page);
-
-    // Free the task object
-    k_object_pool_put(k_task_cache, task);
-
-    _k_sched_lock();
-  }
-
   _k_sched_unlock();
 
   k_irq_enable();
+
+#ifdef K_ON_TASK_IDLE
+  K_ON_TASK_IDLE();
+#endif
   
   arch_task_idle();
 

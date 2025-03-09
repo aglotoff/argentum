@@ -11,14 +11,10 @@ struct KCondVar {
 };
 
 #define K_CONDVAR_TYPE    0x434F4E44  // {'C','O','N','D'}
-#define K_CONDVAR_STATIC  (1 << 0)
 
 struct KMutex;
 
-void             k_condvar_system_init(void);
-void             k_condvar_init(struct KCondVar *);
-void             k_condvar_fini(struct KCondVar *);
-struct KCondVar *k_condvar_create(void);
+void             k_condvar_create(struct KCondVar *);
 void             k_condvar_destroy(struct KCondVar *);
 int              k_condvar_timed_wait(struct KCondVar *, struct KMutex *, unsigned long);
 int              k_condvar_signal(struct KCondVar *);

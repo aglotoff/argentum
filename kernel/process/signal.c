@@ -417,7 +417,7 @@ signal_generate_one(struct Process *process, int signo, int code)
 
   // Blocked signals remain pending
   if (!signal_is_blocked(process, signo)) {
-    k_task_interrupt(process->thread->task);
+    k_task_interrupt(&process->thread->task);
   }
 
   return 0;

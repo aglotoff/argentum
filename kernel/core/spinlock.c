@@ -2,12 +2,11 @@
 #include <string.h>
 
 #include <kernel/core/assert.h>
-#include <kernel/console.h>
 #include <kernel/core/cpu.h>
 #include <kernel/core/irq.h>
-#include <kernel/kdebug.h>
-#include <kernel/process.h>
 #include <kernel/core/spinlock.h>
+
+#include <kernel/kdebug.h>
 
 #include "core_private.h"
 

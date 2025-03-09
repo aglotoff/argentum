@@ -13,12 +13,8 @@ struct KSemaphore {
 };
 
 #define K_SEMAPHORE_TYPE    0x53454D41  // {'S','E','M','A'}
-#define K_SEMAPHORE_STATIC  (1 << 0)
 
-void               k_semaphore_system_init(void);
-void               k_semaphore_init(struct KSemaphore *, int);
-void               k_semaphore_fini(struct KSemaphore *);
-struct KSemaphore *k_semaphore_create(int);
+void               k_semaphore_create(struct KSemaphore *, int);
 void               k_semaphore_destroy(struct KSemaphore *);
 int                k_semaphore_try_get(struct KSemaphore *);
 int                k_semaphore_timed_get(struct KSemaphore *, unsigned long);

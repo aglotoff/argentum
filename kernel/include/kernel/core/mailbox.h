@@ -22,13 +22,9 @@ struct KMailBox {
 };
 
 #define K_MAILBOX_TYPE    0x4D424F58  // {'M','B','O','X'}
-#define K_MAILBOX_STATIC  (1 << 0)
 
-void             k_mailbox_system_init(void);
-struct KMailBox *k_mailbox_create(size_t, size_t);
-void             k_mailbox_destroy(struct KMailBox *);
-int              k_mailbox_init(struct KMailBox *, size_t, void *, size_t);
-int              k_mailbox_fini(struct KMailBox *);
+int              k_mailbox_create(struct KMailBox *, size_t, void *, size_t);
+int              k_mailbox_destroy(struct KMailBox *);
 int              k_mailbox_try_receive(struct KMailBox *, void *);
 int              k_mailbox_timed_receive(struct KMailBox *, void *, unsigned long);
 int              k_mailbox_try_send(struct KMailBox *, const void *);

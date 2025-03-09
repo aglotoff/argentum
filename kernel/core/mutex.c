@@ -1,28 +1,8 @@
 #include <kernel/core/assert.h>
 #include <kernel/core/mutex.h>
-#include <kernel/object_pool.h>
 #include <kernel/core/task.h>
 
 #include "core_private.h"
-
-static void k_mutex_ctor(void *, size_t);
-static void k_mutex_dtor(void *, size_t);
-static void k_mutex_init_common(struct KMutex *, const char *);
-static void k_mutex_fini_common(struct KMutex *);
-
-static struct KObjectPool *k_mutex_pool;
-
-void
-k_mutex_system_init(void)
-{
-  k_mutex_pool = k_object_pool_create("k_mutex",
-                                      sizeof(struct KMutex),
-                                      0,
-                                      k_mutex_ctor,
-                                      k_mutex_dtor);
-  if (k_mutex_pool == NULL)
-    k_panic("cannot create the mutex pool");
-}
 
 /**
  * Initialize a statically allocated mutex.
@@ -33,30 +13,13 @@ k_mutex_system_init(void)
 void
 k_mutex_init(struct KMutex *mutex, const char *name)
 {
-  k_mutex_ctor(mutex, sizeof(struct KMutex));
-  k_mutex_init_common(mutex, name);
-  mutex->flags = K_MUTEX_STATIC;
-}
-
-struct KMutex *
-k_mutex_create(const char *name)
-{
-  struct KMutex *mutex;
-
-  if ((mutex = (struct KMutex *) k_object_pool_get(k_mutex_pool)) == NULL)
-    return NULL;
-
-  k_mutex_init_common(mutex, name);
-  mutex->flags = 0;
-
-  return mutex;
-}
-
-static void
-k_mutex_init_common(struct KMutex *mutex, const char *name)
-{
-  mutex->name     = name;
+  k_list_init(&mutex->queue);
+  k_list_null(&mutex->link);
+  mutex->type = K_MUTEX_TYPE;
+  mutex->owner = NULL;
+  mutex->name = name;
   mutex->priority = K_TASK_MAX_PRIORITIES;
+  mutex->flags = 0;
 }
 
 void
@@ -64,26 +27,7 @@ k_mutex_fini(struct KMutex *mutex)
 {
   k_assert(mutex != NULL);
   k_assert(mutex->type == K_MUTEX_TYPE);
-  k_assert(mutex->flags & K_MUTEX_STATIC);
 
-  k_mutex_fini_common(mutex);
-}
-
-void
-k_mutex_destroy(struct KMutex *mutex)
-{
-  k_assert(mutex != NULL);
-  k_assert(mutex->type == K_MUTEX_TYPE);
-  k_assert(!(mutex->flags & K_MUTEX_STATIC));
-
-  k_mutex_fini_common(mutex);
-
-  k_object_pool_put(k_mutex_pool, mutex);
-}
-
-static void
-k_mutex_fini_common(struct KMutex *mutex)
-{
   _k_sched_lock();
 
   k_assert(mutex->owner == NULL);
@@ -278,27 +222,4 @@ k_mutex_holding(struct KMutex *mutex)
   _k_sched_unlock();
 
   return (owner != NULL) && (owner == k_task_current());
-}
-
-static void
-k_mutex_ctor(void *p, size_t n)
-{
-  struct KMutex *mutex = (struct KMutex *) p;
-  (void) n;
-
-  k_list_init(&mutex->queue);
-  k_list_null(&mutex->link);
-  mutex->type = K_MUTEX_TYPE;
-  mutex->owner = NULL;
-}
-
-static void
-k_mutex_dtor(void *p, size_t n)
-{
-  struct KMutex *mutex = (struct KMutex *) p;
-  (void) n;
-
-  k_assert(k_list_is_empty(&mutex->queue));
-  k_assert(k_list_is_null(&mutex->link));
-  k_assert(mutex->owner == NULL);
 }

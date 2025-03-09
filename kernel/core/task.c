@@ -1,18 +1,10 @@
 #include <kernel/core/assert.h>
-#include <errno.h>
-#include <string.h>
 
-#include <kernel/console.h>
+#include <kernel/core/config.h>
 #include <kernel/core/cpu.h>
 #include <kernel/core/irq.h>
 #include <kernel/core/task.h>
 #include <kernel/core/spinlock.h>
-#include <kernel/process.h>
-#include <kernel/vmspace.h>
-#include <kernel/vm.h>
-#include <kernel/vm.h>
-#include <kernel/object_pool.h>
-#include <kernel/page.h>
 
 #include "core_private.h"
 
@@ -105,24 +97,9 @@ k_task_interrupt(struct KTask *task)
  * 
  * @return 0 on success.
  */
-struct KTask *
-k_task_create(void *ext, void (*entry)(void *), void *arg, int priority)
+int
+k_task_create(struct KTask *task, void *ext, void (*entry)(void *), void *arg, void *stack, int priority)
 {
-  struct Page *stack_page;
-  struct KTask *task;
-  uint8_t *stack;
-
-  if ((task = (struct KTask *) k_object_pool_get(k_task_cache)) == NULL)
-    return NULL;
-
-  if ((stack_page = page_alloc_one(0, PAGE_TAG_KSTACK)) == NULL) {
-    k_object_pool_put(k_task_cache, task);
-    return NULL;
-  }
-
-  stack = (uint8_t *) page2kva(stack_page);
-  stack_page->ref_count++;
-
   k_list_init(&task->owned_mutexes);
   k_list_null(&task->link);
   task->sleep_on_mutex     = NULL;
@@ -141,7 +118,7 @@ k_task_create(void *ext, void (*entry)(void *), void *arg, int priority)
 
   arch_task_init_stack(task, k_task_run);
 
-  return task;
+  return 0;
 }
 
 /**
@@ -151,7 +128,6 @@ void
 k_task_exit(void)
 {
   struct KTask *task = k_task_current();
-  extern struct KListLink _k_tasks_to_destroy;
 
   if (task == NULL)
     k_panic("no current task");
@@ -162,7 +138,9 @@ k_task_exit(void)
 
   task->state = K_TASK_STATE_DESTROYED;
 
-  k_list_add_back(&_k_tasks_to_destroy, &task->link);
+#ifdef K_ON_TASK_DESTROY
+  K_ON_TASK_DESTROY(task);
+#endif
 
   _k_sched_yield_locked();
 

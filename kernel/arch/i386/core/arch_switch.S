@@ -19,21 +19,9 @@ k_arch_switch:
   pushl %esi
   pushl %edi
 
-  # Save old floating-point registers
-  movl  %esp, %ebp
-  andl  $0xfffffff0, %ebp
-  subl  $512, %ebp
-  fxsave (%ebp)
-
   # Switch stacks
   movl %esp, (%eax)
   movl %edx, %esp
-
-  # Load new floating-point registers
-  movl  %esp, %ebp
-  andl  $0xfffffff0, %ebp
-  subl  $512, %ebp
-  fxrstor (%ebp)
 
   # Load new callee-save registers
   popl %edi

@@ -21,7 +21,6 @@ KERNEL_SRCFILES := \
 	kernel/core/mutex.c \
 	kernel/core/semaphore.c \
 	kernel/core/mailbox.c \
-	kernel/core/object_pool.c \
 	kernel/core/timer.c \
 	kernel/core/task.c \
 	kernel/core/sched.c \
@@ -45,6 +44,7 @@ KERNEL_SRCFILES := \
 	kernel/fs/inode.c \
 	kernel/fs/path.c \
 	kernel/fs/fs.c \
+	kernel/mm/object_pool.c \
 	kernel/mm/page.c \
 	kernel/mm/vm.c \
 	kernel/net/net.c \
@@ -55,6 +55,7 @@ KERNEL_SRCFILES := \
 	kernel/process/vmspace.c \
 	kernel/console.c \
 	kernel/dev.c \
+	kernel/hooks.c \
 	kernel/ipc.c \
 	kernel/interrupt.c \
 	kernel/kdebug.c \

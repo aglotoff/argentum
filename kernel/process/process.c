@@ -105,6 +105,10 @@ process_alloc(void)
 {
   struct Process *process;
   struct Thread *thread;
+  struct Page *stack_page;
+  uint8_t *stack;
+
+  
 
   if ((thread = (struct Thread *) k_object_pool_get(thread_cache)) == NULL)
     return NULL;
@@ -114,13 +118,25 @@ process_alloc(void)
     return NULL;
   }
 
+  if ((stack_page = page_alloc_one(0, PAGE_TAG_KSTACK)) == NULL) {
+    k_object_pool_put(thread_cache, thread);
+    k_object_pool_put(process_cache, process);
+    return NULL;
+  }
+
+  stack = (uint8_t *) page2kva(stack_page);
+  stack_page->ref_count++;
+
   process->thread = thread;
   thread->process = process;
 
-  thread->task = k_task_create(thread, process_run, process, NZERO);
-  if (thread->task == NULL) {
+  if (k_task_create(&thread->task, thread, process_run, process, stack, NZERO)) {
     k_object_pool_put(thread_cache, thread);
     k_object_pool_put(process_cache, process);
+
+    stack_page->ref_count--;
+    page_free_one(stack_page);
+
     return NULL;
   }
 
@@ -142,9 +158,9 @@ process_alloc(void)
   process->times.tms_cutime = 0;
   process->times.tms_cstime = 0;
 
-  k_timer_init(&process->itimers[ITIMER_PROF].timer, process_itimer, (void *) process->pid, 0, 0, 0);
-  k_timer_init(&process->itimers[ITIMER_REAL].timer, process_itimer, (void *) process->pid, 0, 0, 0);
-  k_timer_init(&process->itimers[ITIMER_VIRTUAL].timer, process_itimer, (void *) process->pid, 0, 0, 0);
+  k_timer_create(&process->itimers[ITIMER_PROF].timer, process_itimer, (void *) process->pid, 0, 0, 0);
+  k_timer_create(&process->itimers[ITIMER_REAL].timer, process_itimer, (void *) process->pid, 0, 0, 0);
+  k_timer_create(&process->itimers[ITIMER_VIRTUAL].timer, process_itimer, (void *) process->pid, 0, 0, 0);
 
   k_spinlock_acquire(&pid_hash.lock);
 
@@ -236,7 +252,7 @@ process_create(const void *binary, struct Process **pstore)
   k_list_add_back(&__process_list, &proc->link);
   process_unlock();
 
-  k_task_resume(proc->thread->task);
+  k_task_resume(&proc->thread->task);
 
   if (pstore != NULL)
     *pstore = proc;
@@ -318,9 +334,9 @@ process_destroy(int status)
 
   vm = current->vm;
 
-  k_timer_fini(&current->itimers[ITIMER_PROF].timer);
-  k_timer_fini(&current->itimers[ITIMER_REAL].timer);
-  k_timer_fini(&current->itimers[ITIMER_VIRTUAL].timer);
+  k_timer_destroy(&current->itimers[ITIMER_PROF].timer);
+  k_timer_destroy(&current->itimers[ITIMER_REAL].timer);
+  k_timer_destroy(&current->itimers[ITIMER_VIRTUAL].timer);
 
   // Move children to the init process
   has_zombies = 0;
@@ -347,9 +363,11 @@ process_destroy(int status)
 
   _signal_state_change_to_parent(current);
 
-  current->thread->task->ext = NULL;
-  k_object_pool_put(thread_cache, current->thread);
+  current->thread->process = NULL;
   current->thread = NULL;
+
+  //current->thread->task->ext = NULL;
+  //k_object_pool_put(thread_cache, current->thread);
 
   process_unlock();
 
@@ -397,7 +415,7 @@ process_copy(int share_vm)
   // cprintf("[k] process #%x created\n", child->pid);
 
   k_assert(child->thread != NULL);
-  k_task_resume(child->thread->task);
+  k_task_resume(&child->thread->task);
 
   return child->pid;
 }
@@ -618,7 +636,7 @@ _process_continue(struct Process *process)
     process->state = PROCESS_STATE_ACTIVE;
     k_assert(process->flags != 0);
     k_assert(process->thread != NULL);
-    k_task_interrupt(process->thread->task);
+    k_task_interrupt(&process->thread->task);
 
     _signal_state_change_to_parent(process);
   }
@@ -656,7 +674,7 @@ process_set_itimer(int which, struct itimerval *value, struct itimerval *ovalue)
   k_timer_stop(&process->itimers[which].timer);
 
   if (value->it_value.tv_sec != 0 || value->it_value.tv_usec != 0) {
-    k_timer_init(&process->itimers[which].timer,
+    k_timer_create(&process->itimers[which].timer,
       process_itimer, (void *) process->pid,
       timeval2ticks(&value->it_value), timeval2ticks(&value->it_interval),
       1);
@@ -668,4 +686,53 @@ process_set_itimer(int which, struct itimerval *value, struct itimerval *ovalue)
   process_unlock();
 
   return 0;
+}
+
+KLIST_DECLARE(thread_destroy_list);
+struct KSpinLock thread_destroy_lock = K_SPINLOCK_INITIALIZER("thread_destroy");
+
+void
+thread_on_destroy(struct Thread *thread)
+{
+  k_spinlock_acquire(&thread_destroy_lock);
+  k_list_add_back(&thread_destroy_list, &thread->task.link);
+  k_spinlock_release(&thread_destroy_lock);
+}
+
+static void
+thread_free(struct Thread *thread)
+{
+  struct Page *kstack_page;
+
+  // Free the task kernel stack
+  kstack_page = kva2page(thread->task.kstack);
+  page_assert(kstack_page, 0, PAGE_TAG_KSTACK);
+
+  kstack_page->ref_count--;
+  page_free_one(kstack_page);
+
+  k_object_pool_put(thread_cache, thread);
+}
+
+void
+thread_idle(void)
+{
+  k_spinlock_acquire(&thread_destroy_lock);
+
+  // Cleanup destroyed tasks
+  while (!k_list_is_empty(&thread_destroy_list)) {
+    struct KTask *task;
+
+    task = KLIST_CONTAINER(thread_destroy_list.next, struct KTask, link);
+
+    k_list_remove(&task->link);
+
+    k_spinlock_release(&thread_destroy_lock);
+
+    thread_free((struct Thread *) task->ext);
+
+    k_spinlock_acquire(&thread_destroy_lock);
+  }
+
+  k_spinlock_release(&thread_destroy_lock);
 }

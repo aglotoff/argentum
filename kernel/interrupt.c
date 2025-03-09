@@ -5,6 +5,7 @@
 #include <kernel/core/irq.h>
 #include <kernel/core/task.h>
 #include <kernel/object_pool.h>
+#include <kernel/page.h>
 
 static int  interrupt_handler_call(int);
 static void interrupt_task_entry(void *);
@@ -14,6 +15,7 @@ static int  interrupt_task_notify(int, void *);
 #define INTERRUPT_HANDLER_MAX       64
 
 struct InterruptTask {
+  struct KTask        task;
   interrupt_handler_t handler;
   void               *handler_arg;
   int                 irq;
@@ -44,23 +46,30 @@ interrupt_attach(int irq, interrupt_handler_t handler, void *handler_arg)
 void
 interrupt_attach_task(int irq, interrupt_handler_t handler, void *handler_arg)
 {
+  struct Page *stack_page;
   struct InterruptTask *isr;
-  struct KTask *task;
+  uint8_t *stack;
 
   if ((isr = k_malloc(sizeof(struct InterruptTask))) == NULL)
     k_panic("cannot allocate IRQ task strucure");
 
-  if ((task = k_task_create(NULL, interrupt_task_entry, isr, 0)) == NULL)
+  if ((stack_page = page_alloc_one(0, PAGE_TAG_KSTACK)) == NULL)
     k_panic("cannot create IRQ task");
 
-  k_semaphore_init(&isr->semaphore, 0);
+  stack = (uint8_t *) page2kva(stack_page);
+  stack_page->ref_count++;
+
+  if (k_task_create(&isr->task, NULL, interrupt_task_entry, isr, stack, 0) != 0)
+    k_panic("cannot create IRQ task");
+
+  k_semaphore_create(&isr->semaphore, 0);
   isr->irq         = irq;
   isr->handler     = handler;
   isr->handler_arg = handler_arg;
 
   interrupt_attach(irq, interrupt_task_notify, isr);
 
-  k_task_resume(task);
+  k_task_resume(&isr->task);
 }
 
 void

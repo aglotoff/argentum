@@ -73,7 +73,7 @@ void          arch_task_init_stack(struct KTask *, void (*)(void));
 void          arch_task_idle(void);
 
 struct KTask *k_task_current(void);
-struct KTask *k_task_create(void *, void (*)(void *), void *, int);
+int           k_task_create(struct KTask *, void *, void (*)(void *), void *, void *, int);
 void          k_task_exit(void);
 int           k_task_resume(struct KTask *);
 void          k_task_suspend(void);

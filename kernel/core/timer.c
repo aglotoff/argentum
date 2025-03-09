@@ -1,7 +1,6 @@
 #include <kernel/core/assert.h>
 #include <errno.h>
 
-#include <kernel/console.h>
 #include <kernel/core/timer.h>
 #include <kernel/core/spinlock.h>
 
@@ -15,7 +14,7 @@ static struct KSpinLock k_timer_lock = K_SPINLOCK_INITIALIZER("k_timer");
 static struct KTimer *k_timer_current;
 
 int
-k_timer_init(struct KTimer *timer,
+k_timer_create(struct KTimer *timer,
              void (*callback)(void *),
              void *callback_arg,
              unsigned long delay,
@@ -91,7 +90,7 @@ k_timer_stop(struct KTimer *timer)
 }
 
 int
-k_timer_fini(struct KTimer *timer)
+k_timer_destroy(struct KTimer *timer)
 {
   return k_timer_stop(timer);
 }

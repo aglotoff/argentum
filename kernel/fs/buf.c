@@ -25,7 +25,7 @@ buf_ctor(void *ptr, size_t)
 {
   struct Buf *buf = (struct Buf *) ptr;
 
-  k_condvar_init(&buf->wait_cond);
+  k_condvar_create(&buf->wait_cond);
   k_mutex_init(&buf->mutex, "buf");
 }
 

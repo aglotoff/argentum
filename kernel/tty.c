@@ -52,7 +52,7 @@ tty_init(void)
     struct Tty *tty = &ttys[i];
 
     k_mutex_init(&tty->in.mutex, "tty.in");
-    k_condvar_init(&tty->in.cond);
+    k_condvar_create(&tty->in.cond);
 
     k_mutex_init(&tty->out.mutex, "tty.out");
     tty->out.stopped = 0;

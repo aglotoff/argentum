@@ -34,10 +34,10 @@ struct FileDesc {
 };
 
 struct Thread {
+  struct KTask     task;
   struct Process  *process;
-  struct KTask    *task;
   /** Address of the current trap frame on the stack */
-  struct TrapFrame  *tf;
+  struct TrapFrame *tf;
 
   struct Signal   *signal_pending[NSIG];
   struct KListLink signal_queue;
@@ -151,5 +151,8 @@ pid_t          process_get_gid(pid_t);
 int            process_set_gid(pid_t, pid_t);
 int            process_match_pid(struct Process *, pid_t);
 int            process_set_itimer(int, struct itimerval *, struct itimerval *);
+
+void           thread_on_destroy(struct Thread *);
+void           thread_idle(void);
 
 #endif  // __KERNEL_INCLUDE_KERNEL_PROCESS_H__

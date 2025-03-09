@@ -18,8 +18,10 @@ sys_mutex_new(sys_mutex_t *mutex)
 {
   struct KMutex *kmutex;
 
-  if ((kmutex = k_mutex_create("lwip")) == NULL)
+  if ((kmutex = k_malloc(sizeof(struct KMutex))) == NULL)
     return ERR_MEM;
+  
+  k_mutex_init(kmutex, "lwip");
 
   *mutex = kmutex;
   return ERR_OK;
@@ -40,7 +42,8 @@ sys_mutex_unlock(sys_mutex_t *mutex)
 void
 sys_mutex_free(sys_mutex_t *mutex)
 {
-  k_mutex_destroy(*mutex);
+  k_mutex_fini(*mutex);
+  k_free(*mutex);
 }
 
 int
@@ -62,8 +65,10 @@ sys_sem_new(sys_sem_t *sem, u8_t count)
 {
   struct KSemaphore *ksemaphore;
 
-  if ((ksemaphore = k_semaphore_create(count)) == NULL)
+  if ((ksemaphore = k_malloc(sizeof(struct KSemaphore))) == NULL)
     return ERR_MEM;
+
+  k_semaphore_create(ksemaphore, count);
 
   *sem = ksemaphore;
   return ERR_OK;
@@ -92,6 +97,7 @@ void
 sys_sem_free(sys_sem_t *sem)
 {
   k_semaphore_destroy(*sem);
+  k_free(*sem);
 }
 
 int
@@ -112,10 +118,19 @@ err_t
 sys_mbox_new(sys_mbox_t *mbox, int size)
 {
   struct KMailBox *kmailbox;
-  (void) size;
-
-  if ((kmailbox = k_mailbox_create(sizeof(void *), PAGE_SIZE)) == NULL)
+  void *buf;
+  
+  if ((kmailbox = k_malloc(sizeof(struct KMailBox))) == NULL)
     return ERR_MEM;
+
+  (void) size;
+  
+  if ((buf = k_malloc(PAGE_SIZE)) == NULL) {
+    k_free(kmailbox);
+    return ERR_MEM;
+  }
+
+  k_mailbox_create(kmailbox, sizeof(void *), buf, PAGE_SIZE);
 
   *mbox = kmailbox;
   return ERR_OK;
@@ -164,6 +179,8 @@ void
 sys_mbox_free(sys_mbox_t *mbox)
 {
   k_mailbox_destroy(*mbox);
+  k_free((*mbox)->buf_start);
+  k_free(*mbox);
 }
 
 int
@@ -182,14 +199,25 @@ sys_thread_t
 sys_thread_new(const char *name, void (*thread)(void *), void *arg,
                int stacksize, int prio)
 {
+  struct Page *stack_page;
   struct KTask *task;
+  uint8_t *stack;
+
+  if ((stack_page = page_alloc_one(0, PAGE_TAG_KSTACK)) == NULL)
+    k_panic("cannot create IRQ task");
+
+  stack = (uint8_t *) page2kva(stack_page);
+  stack_page->ref_count++;
 
   // TODO: priority!
   (void) name;
   (void) prio;
   (void) stacksize;
 
-  task = k_task_create(NULL, thread, arg, 0);
+  if ((task = k_malloc(sizeof(struct KTask))) == NULL)
+    k_panic("cannot create IRQ task");
+
+  k_task_create(task, NULL, thread, arg, stack, 0);
   k_task_resume(task);
 
   return task;

@@ -19,9 +19,9 @@ enum {
   K_TIMER_STATE_RUNNING  = 3,
 };
 
-int  k_timer_init(struct KTimer *, void (*)(void *), void *, unsigned long,
+int  k_timer_create(struct KTimer *, void (*)(void *), void *, unsigned long,
                     unsigned long, int);
-int  k_timer_fini(struct KTimer *);
+int  k_timer_destroy(struct KTimer *);
 int  k_timer_start(struct KTimer *);
 int  k_timer_stop(struct KTimer *);
 
