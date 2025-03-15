@@ -183,8 +183,8 @@ init_large_desc(pde_t *pde, physaddr_t pa, int flags)
   *pde = pa | bits;
 }
 
-static void
-init_fixed_mapping(uintptr_t va, uint32_t pa, size_t n, int flags)
+void
+arch_vm_map_fixed(uintptr_t va, uint32_t pa, size_t n, int flags)
 { 
   k_assert(va % PAGE_SIZE == 0);
   k_assert(pa % PAGE_SIZE == 0);
@@ -223,6 +223,39 @@ init_fixed_mapping(uintptr_t va, uint32_t pa, size_t n, int flags)
 }
 
 void
+arch_vm_unmap_fixed(uintptr_t va, size_t n)
+{ 
+  k_assert(va % PAGE_SIZE == 0);
+  k_assert(n  % PAGE_SIZE == 0);
+
+  while (n != 0) {
+    // Whenever possible, map entire 1MB sections to reduce memory overhead for
+    // second-level page tables
+    if ((va % LARGE_PAGE_SIZE == 0) && (n  % LARGE_PAGE_SIZE == 0)) {
+      pde_t *pde = (pde_t *) kernel_pgdir + PGDIR_IDX(va);
+
+      if (!(*pde & PDE_P) || !(*pde & PDE_PS))
+        k_panic("pde for %p does not exist", va);
+
+      *pde = 0;
+
+      va += LARGE_PAGE_SIZE;
+      n  -= LARGE_PAGE_SIZE;
+    } else {
+      pte_t *pte = arch_vm_lookup(kernel_pgdir, va, 0);
+
+      if (pte == NULL || !arch_vm_pte_valid(pte))
+        k_panic("PTE for %p does not exist", va);
+        
+      *pte = 0;
+
+      va += PAGE_SIZE;
+      n  -= PAGE_SIZE;
+    }
+  }
+}
+
+void
 arch_vm_init(void)
 {
   // extern uint8_t _start[];
@@ -238,9 +271,11 @@ arch_vm_init(void)
 
   // Map all physical memory at VIRT_KERNEL_BASE
   // Permissions: kernel RW, user NONE
-  init_fixed_mapping(VIRT_KERNEL_BASE, 0, PHYS_LIMIT, PROT_READ | PROT_WRITE);
+  arch_vm_map_fixed(VIRT_KERNEL_BASE, 0, PHYS_LIMIT, PROT_READ | PROT_WRITE);
 
-  init_fixed_mapping(VIRT_DEV_BASE, PHYS_DEV_BASE, 0 - PHYS_DEV_BASE,
+  arch_vm_map_fixed(VIRT_LAPIC_BASE, PHYS_LAPIC_BASE, PAGE_SIZE,
+                     PROT_READ | PROT_WRITE);
+  arch_vm_map_fixed(VIRT_IOAPIC_BASE, PHYS_IOAPIC_BASE, PAGE_SIZE,
                      PROT_READ | PROT_WRITE);
 
   arch_vm_init_percpu();

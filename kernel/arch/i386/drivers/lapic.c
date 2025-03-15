@@ -2,6 +2,7 @@
 
 #include <kernel/console.h>
 
+#include <arch/memlayout.h>
 #include <arch/i386/lapic.h>
 #include <arch/i386/i8253.h>
 #include <arch/trap.h>
@@ -30,7 +31,7 @@ enum {
   LVT_TIMER_PERIODIC = (1 << 17),
 };
 
-static volatile uint32_t *lapic_base = (uint32_t *) 0xFEE00000;
+static volatile uint32_t *lapic_base = (uint32_t *) VIRT_LAPIC_BASE;
 
 void
 lapic_reg_write(int idx, uint32_t value)

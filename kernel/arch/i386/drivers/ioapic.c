@@ -2,6 +2,7 @@
 
 #include <kernel/console.h>
 
+#include <arch/memlayout.h>
 #include <arch/i386/ioapic.h>
 #include <arch/trap.h>
 
@@ -21,7 +22,7 @@ enum {
   REDTBL_MASKED = (1 << 16),
 };
 
-volatile uint32_t *ioapic_base = (uint32_t *) 0xFEC00000;
+volatile uint32_t *ioapic_base = (uint32_t *) VIRT_IOAPIC_BASE;
 
 static uint32_t
 ioapic_reg_read(int reg)

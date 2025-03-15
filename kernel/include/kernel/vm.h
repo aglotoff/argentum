@@ -37,6 +37,8 @@ void         arch_vm_init_percpu(void);
 void         arch_vm_load_kernel(void);
 void         arch_vm_load(void *);
 void         arch_vm_switch(struct Process *);
+void         arch_vm_map_fixed(uintptr_t, uint32_t, size_t, int);
+void         arch_vm_unmap_fixed(uintptr_t, size_t);
 
 struct Page *vm_page_lookup(void *, uintptr_t, int *);
 int          vm_page_insert(void *, struct Page *, uintptr_t, int);

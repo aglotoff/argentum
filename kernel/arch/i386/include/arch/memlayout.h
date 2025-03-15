@@ -19,14 +19,16 @@
 #define PHYS_ENTRY_LIMIT  0x00400000
 /** Maximum available physical memory */
 #define PHYS_LIMIT        0x10000000
-/** I/O base */
-#define PHYS_DEV_BASE     0xfe000000
+
+#define PHYS_IOAPIC_BASE  0xFEC00000
+#define PHYS_LAPIC_BASE   0xFEE00000
 
 /** All physical memory is mapped at this virtual address */
 #define VIRT_KERNEL_BASE  0x80000000
 /** Top of the user-mode process stack */
 #define VIRT_USTACK_TOP   VIRT_KERNEL_BASE
-/** I/O base (mapped directly) */
-#define VIRT_DEV_BASE     0xfe000000
+
+#define VIRT_IOAPIC_BASE  0xFFFFE000
+#define VIRT_LAPIC_BASE   0xFFFFF000
 
 #endif  // !_ARCH_MEMLAYOUT_H
