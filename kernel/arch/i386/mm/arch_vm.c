@@ -240,6 +240,9 @@ arch_vm_init(void)
   // Permissions: kernel RW, user NONE
   init_fixed_mapping(VIRT_KERNEL_BASE, 0, PHYS_LIMIT, PROT_READ | PROT_WRITE);
 
+  init_fixed_mapping(VIRT_DEV_BASE, PHYS_DEV_BASE, 0 - PHYS_DEV_BASE,
+                     PROT_READ | PROT_WRITE);
+
   arch_vm_init_percpu();
 }
 

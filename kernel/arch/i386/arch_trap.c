@@ -54,7 +54,7 @@ trap(struct TrapFrame *tf)
 {
   struct Process *my_process = process_current();
 
-  if ((tf->trapno >= T_IRQ0) && (tf->trapno < (T_IRQ0 + 16))) {
+  if ((tf->trapno >= T_IRQ0) && (tf->trapno < (T_IRQ0 + 32))) {
     interrupt_dispatch(tf);
   } else {
     switch (tf->trapno) {

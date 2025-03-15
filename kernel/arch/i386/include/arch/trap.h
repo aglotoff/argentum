@@ -37,6 +37,9 @@
 #define IRQ_ATA1      14
 #define IRQ_ATA2      15
 
+#define IRQ_ERROR     19
+#define IRQ_SPURIOUS  31
+
 #ifndef __ASSEMBLER__
 
 #include <stdint.h>

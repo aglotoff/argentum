@@ -98,7 +98,11 @@ k_task_interrupt(struct KTask *task)
  * @return 0 on success.
  */
 int
-k_task_create(struct KTask *task, void *ext, void (*entry)(void *), void *arg, void *stack, int priority)
+k_task_create(struct KTask *task,
+              void *ext,
+              void (*entry)(void *), void *arg,
+              void *stack, size_t stack_size,
+              int priority)
 {
   k_list_init(&task->owned_mutexes);
   k_list_null(&task->link);
@@ -113,6 +117,7 @@ k_task_create(struct KTask *task, void *ext, void (*entry)(void *), void *arg, v
   task->err            = 0;
   task->ext            = ext;
   task->kstack         = stack;
+  task->kstack_size    = stack_size;
 
   _k_timeout_init(&task->timer);
 

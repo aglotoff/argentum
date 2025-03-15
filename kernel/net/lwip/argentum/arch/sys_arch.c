@@ -217,7 +217,7 @@ sys_thread_new(const char *name, void (*thread)(void *), void *arg,
   if ((task = k_malloc(sizeof(struct KTask))) == NULL)
     k_panic("cannot create IRQ task");
 
-  k_task_create(task, NULL, thread, arg, stack, 0);
+  k_task_create(task, NULL, thread, arg, stack, PAGE_SIZE, 0);
   k_task_resume(task);
 
   return task;

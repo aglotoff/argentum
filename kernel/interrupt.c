@@ -59,7 +59,7 @@ interrupt_attach_task(int irq, interrupt_handler_t handler, void *handler_arg)
   stack = (uint8_t *) page2kva(stack_page);
   stack_page->ref_count++;
 
-  if (k_task_create(&isr->task, NULL, interrupt_task_entry, isr, stack, 0) != 0)
+  if (k_task_create(&isr->task, NULL, interrupt_task_entry, isr, stack, PAGE_SIZE, 0) != 0)
     k_panic("cannot create IRQ task");
 
   k_semaphore_create(&isr->semaphore, 0);

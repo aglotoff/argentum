@@ -108,8 +108,6 @@ process_alloc(void)
   struct Page *stack_page;
   uint8_t *stack;
 
-  
-
   if ((thread = (struct Thread *) k_object_pool_get(thread_cache)) == NULL)
     return NULL;
 
@@ -130,7 +128,11 @@ process_alloc(void)
   process->thread = thread;
   thread->process = process;
 
-  if (k_task_create(&thread->task, thread, process_run, process, stack, NZERO)) {
+  // Leave space for trap frame
+  thread->tf = (struct TrapFrame *) (stack + PAGE_SIZE - sizeof(struct TrapFrame));
+  memset(thread->tf, 0, sizeof(struct TrapFrame));
+
+  if (k_task_create(&thread->task, thread, process_run, process, stack, PAGE_SIZE - sizeof(struct TrapFrame), NZERO)) {
     k_object_pool_put(thread_cache, thread);
     k_object_pool_put(process_cache, process);
 

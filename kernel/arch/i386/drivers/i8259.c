@@ -49,11 +49,17 @@ i8259_unmask(int irq)
 }
 
 void
-i8259_init(uint8_t vector_base, int irq_cascade)
+i8259_mask_all(void)
 {
   // Disable all interrupts
   outb(PIC1_DATA, 0xFF);
   outb(PIC2_DATA, 0xFF);
+}
+
+void
+i8259_init(uint8_t vector_base, int irq_cascade)
+{
+  i8259_mask_all();
 
   // ICW1: begin initialization, edge triggered, cascade mode, ICW4 present
   outb(PIC1_CMD, ICW1_INIT | ICW1_IC4);

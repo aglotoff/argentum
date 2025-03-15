@@ -98,7 +98,7 @@ k_sched_idle(void)
 #ifdef K_ON_TASK_IDLE
   K_ON_TASK_IDLE();
 #endif
-  
+
   arch_task_idle();
 
   _k_sched_lock();

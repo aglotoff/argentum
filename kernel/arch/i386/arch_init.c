@@ -12,6 +12,7 @@
 
 #include <arch/i386/ide.h>
 #include <arch/i386/io.h>
+#include <arch/i386/lapic.h>
 
 void main(void);
 void mp_main(void);

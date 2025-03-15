@@ -6,8 +6,6 @@
 #include <kernel/core/irq.h>
 #include <kernel/core/spinlock.h>
 
-#include <kernel/kdebug.h>
-
 #include "core_private.h"
 
 /**

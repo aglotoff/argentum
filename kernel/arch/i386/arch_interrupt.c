@@ -2,8 +2,10 @@
 
 #include <arch/trap.h>
 #include <arch/i386/mmu.h>
+#include <arch/i386/lapic.h>
 #include <arch/i386/i8253.h>
 #include <arch/i386/i8259.h>
+#include <arch/i386/ioapic.h>
 
 void
 arch_interrupt_ipi(void)
@@ -20,27 +22,25 @@ arch_interrupt_id(struct TrapFrame *tf)
 void
 arch_interrupt_enable(int irq, int cpu)
 {
-  // TODO
-  (void) irq;
-  (void) cpu;
+  ioapic_enable(irq, cpu);
 }
 
 void
 arch_interrupt_mask(int irq)
 {
-  i8259_mask(irq);
+  ioapic_mask(irq);
 }
 
 void
 arch_interrupt_unmask(int irq)
 {
-  i8259_unmask(irq);
+  ioapic_unmask(irq);
 }
 
 void
-arch_interrupt_eoi(int irq)
+arch_interrupt_eoi(int)
 {
-  i8259_eoi(irq);
+  lapic_eoi();
 }
 
 struct IDTGate idt[256];
@@ -84,6 +84,22 @@ extern void trap_irq12(void);
 extern void trap_irq13(void);
 extern void trap_irq14(void);
 extern void trap_irq15(void);
+extern void trap_irq16(void);
+extern void trap_irq17(void);
+extern void trap_irq18(void);
+extern void trap_irq19(void);
+extern void trap_irq20(void);
+extern void trap_irq21(void);
+extern void trap_irq22(void);
+extern void trap_irq23(void);
+extern void trap_irq24(void);
+extern void trap_irq25(void);
+extern void trap_irq26(void);
+extern void trap_irq27(void);
+extern void trap_irq28(void);
+extern void trap_irq29(void);
+extern void trap_irq30(void);
+extern void trap_irq31(void);
 
 extern void trap_syscall(void);
 
@@ -124,12 +140,28 @@ arch_interrupt_init(void)
   idt[T_IRQ0 + 13] = IDT_GATE(SEG_TYPE_IG32, trap_irq13, SEG_KERNEL_CODE, PL_KERNEL);
   idt[T_IRQ0 + 14] = IDT_GATE(SEG_TYPE_IG32, trap_irq14, SEG_KERNEL_CODE, PL_KERNEL);
   idt[T_IRQ0 + 15] = IDT_GATE(SEG_TYPE_IG32, trap_irq15, SEG_KERNEL_CODE, PL_KERNEL);
+  idt[T_IRQ0 + 16] = IDT_GATE(SEG_TYPE_IG32, trap_irq16, SEG_KERNEL_CODE, PL_KERNEL);
+  idt[T_IRQ0 + 17] = IDT_GATE(SEG_TYPE_IG32, trap_irq17, SEG_KERNEL_CODE, PL_KERNEL);
+  idt[T_IRQ0 + 18] = IDT_GATE(SEG_TYPE_IG32, trap_irq18, SEG_KERNEL_CODE, PL_KERNEL);
+  idt[T_IRQ0 + 19] = IDT_GATE(SEG_TYPE_IG32, trap_irq19, SEG_KERNEL_CODE, PL_KERNEL);
+  idt[T_IRQ0 + 20] = IDT_GATE(SEG_TYPE_IG32, trap_irq20, SEG_KERNEL_CODE, PL_KERNEL);
+  idt[T_IRQ0 + 21] = IDT_GATE(SEG_TYPE_IG32, trap_irq21, SEG_KERNEL_CODE, PL_KERNEL);
+  idt[T_IRQ0 + 22] = IDT_GATE(SEG_TYPE_IG32, trap_irq22, SEG_KERNEL_CODE, PL_KERNEL);
+  idt[T_IRQ0 + 23] = IDT_GATE(SEG_TYPE_IG32, trap_irq23, SEG_KERNEL_CODE, PL_KERNEL);
+  idt[T_IRQ0 + 24] = IDT_GATE(SEG_TYPE_IG32, trap_irq24, SEG_KERNEL_CODE, PL_KERNEL);
+  idt[T_IRQ0 + 25] = IDT_GATE(SEG_TYPE_IG32, trap_irq25, SEG_KERNEL_CODE, PL_KERNEL);
+  idt[T_IRQ0 + 26] = IDT_GATE(SEG_TYPE_IG32, trap_irq26, SEG_KERNEL_CODE, PL_KERNEL);
+  idt[T_IRQ0 + 27] = IDT_GATE(SEG_TYPE_IG32, trap_irq27, SEG_KERNEL_CODE, PL_KERNEL);
+  idt[T_IRQ0 + 28] = IDT_GATE(SEG_TYPE_IG32, trap_irq28, SEG_KERNEL_CODE, PL_KERNEL);
+  idt[T_IRQ0 + 29] = IDT_GATE(SEG_TYPE_IG32, trap_irq29, SEG_KERNEL_CODE, PL_KERNEL);
+  idt[T_IRQ0 + 30] = IDT_GATE(SEG_TYPE_IG32, trap_irq30, SEG_KERNEL_CODE, PL_KERNEL);
+  idt[T_IRQ0 + 31] = IDT_GATE(SEG_TYPE_IG32, trap_irq31, SEG_KERNEL_CODE, PL_KERNEL);
 
   idt[T_SYSCALL] = IDT_GATE(SEG_TYPE_TG32, trap_syscall, SEG_KERNEL_CODE, PL_USER);
 
-  i8259_init(T_IRQ0, IRQ_CASCADE);
+  i8259_mask_all();
 
-  i8253_init();
+  //i8253_init();
 
   arch_interrupt_init_percpu();
 }
@@ -138,4 +170,7 @@ void
 arch_interrupt_init_percpu(void)
 {
   lidt(&idtr);
+
+  lapic_init();
+  ioapic_init();
 }
