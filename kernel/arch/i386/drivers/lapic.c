@@ -3,6 +3,7 @@
 #include <kernel/console.h>
 
 #include <arch/i386/lapic.h>
+#include <arch/i386/i8253.h>
 #include <arch/trap.h>
 
 enum {
@@ -41,11 +42,23 @@ lapic_reg_write(int idx, uint32_t value)
 void
 lapic_init(void)
 {
+  uint32_t init_count, count;
+
   lapic_reg_write(REG_SPURIOUS, SPURIOUS_ENABLE | (T_IRQ0 + IRQ_SPURIOUS));
+
+  // Calibrate
+  lapic_reg_write(REG_DIVIDE_CONF, DIVIDE_CONF_X1);
+  lapic_reg_write(REG_INITIAL_COUNT, 0xFFFFFFFF);
+  i8253_count_down();
+  init_count = lapic_base[REG_CURRENT_COUNT];
+
+  count = 0xffffffff - init_count;
+
+  lapic_eoi();
 
   lapic_reg_write(REG_DIVIDE_CONF, DIVIDE_CONF_X1);
   lapic_reg_write(REG_LVT_TIMER, LVT_TIMER_PERIODIC | (T_IRQ0 + IRQ_PIT));
-  lapic_reg_write(REG_INITIAL_COUNT, 10000000); // TODO: calibrate
+  lapic_reg_write(REG_INITIAL_COUNT, count);
 
   lapic_reg_write(REG_TPR, 0);
 }

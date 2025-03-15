@@ -161,8 +161,6 @@ arch_interrupt_init(void)
 
   i8259_mask_all();
 
-  //i8253_init();
-
   arch_interrupt_init_percpu();
 }
 

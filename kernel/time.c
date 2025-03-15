@@ -8,7 +8,6 @@
 #include <kernel/console.h>
 #include <kernel/time.h>
 
-static unsigned long long skip_ticks = 0;
 static unsigned ticks_to_sync = 0;
 
 #define TICKS_SYNC_PERIOD   TICKS_PER_SECOND
@@ -36,22 +35,12 @@ time_tick(void)
   if (k_cpu_id() == 0) {
     ticks_to_sync--;
 
-    if (skip_ticks > 0) {
-      skip_ticks--;
-      return;
-    }
-
     if (ticks_to_sync == 0) {
       unsigned long expected_ticks = seconds2ticks(arch_get_time_seconds());
       unsigned long current_ticks = k_tick_get();
 
-      // TODO: panic if difference gets too big?
-
-      if (current_ticks < expected_ticks) {
+      if (current_ticks != expected_ticks)
         k_tick_set(expected_ticks);
-      } else if (current_ticks > expected_ticks) {
-        skip_ticks = current_ticks - expected_ticks;
-      }
 
       ticks_to_sync = TICKS_SYNC_PERIOD;
     }

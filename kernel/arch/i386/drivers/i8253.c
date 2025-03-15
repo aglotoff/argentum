@@ -14,14 +14,34 @@ static const unsigned PIT_FREQ = 1193182U;
 
 enum {
   PIT_SEL0     = 0x00,
-  PIT_RATEGEN  = 0x04,
+  PIT_ONESHOT  = 0x01,
+  PIT_RATEGEN  = 0x02,
   PIT_16BIT    = 0x30,
 };
 
 void
-i8253_init(void)
+i8253_init_periodic(void)
 {
   outb(PIT_CMD, PIT_SEL0 | PIT_RATEGEN | PIT_16BIT);
+
   outb(PIT_DATA0, PIT_DIV(TICKS_PER_SECOND) % 256);
   outb(PIT_DATA0, PIT_DIV(TICKS_PER_SECOND) / 256);
+}
+
+void
+i8253_count_down(void)
+{
+  uint16_t count;
+
+  outb(PIT_CMD, PIT_SEL0 | PIT_ONESHOT | PIT_16BIT);
+
+  outb(PIT_DATA0, PIT_DIV(TICKS_PER_SECOND) % 256);
+  outb(PIT_DATA0, PIT_DIV(TICKS_PER_SECOND) / 256);
+
+  do {
+    outb(PIT_CMD, PIT_SEL0);
+
+    count = inb(PIT_DATA0);
+    count |= inb(PIT_DATA0) << 8;
+  } while (count != 0);
 }
