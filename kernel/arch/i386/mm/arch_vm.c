@@ -27,7 +27,7 @@ entry_pgdir[PGDIR_NR_ENTRIES] = {
 };
 
 // Master kernel page directory
-static void *kernel_pgdir;
+void *kernel_pgdir;
 
 static struct SegDesc gdt[] = {
   [GD_NULL]        = SEG_DESC_NULL,
@@ -35,8 +35,10 @@ static struct SegDesc gdt[] = {
   [GD_KERNEL_DATA] = SEG_DESC_32(0, 0xFFFFFFFF, SEG_TYPE_DATA | SEG_TYPE_W, PL_KERNEL),
   [GD_USER_CODE]   = SEG_DESC_32(0, 0xFFFFFFFF, SEG_TYPE_CODE | SEG_TYPE_R, PL_USER),
   [GD_USER_DATA]   = SEG_DESC_32(0, 0xFFFFFFFF, SEG_TYPE_DATA | SEG_TYPE_W, PL_USER),
-  [GD_TSS]         = SEG_DESC_NULL,
-  // FIXME: SMP
+  [GD_TSS + 0]     = SEG_DESC_NULL,
+  [GD_TSS + 1]     = SEG_DESC_NULL,
+  [GD_TSS + 2]     = SEG_DESC_NULL,
+  [GD_TSS + 3]     = SEG_DESC_NULL,
 };
 
 static struct PseudoDesc gdtr = {
@@ -45,21 +47,23 @@ static struct PseudoDesc gdtr = {
 };
 
 // FIXME: per-CPU
-struct TaskState tss;
+struct TaskState tss[K_CPU_MAX];
 
 void
 arch_vm_switch(struct Process *process)
 {
   k_irq_state_save();
 
+  unsigned cpu_id = k_cpu_id();
+
   k_assert(process->thread != NULL);
   page_assert(kva2page(process->vm->pgtab), 0, PAGE_TAG_VM);
 
-  gdt[GD_TSS] = SEG_DESC_16(&tss, sizeof tss - 1, SEG_TYPE_TSS32A, PL_KERNEL);
-  tss.esp0 = (uintptr_t) process->thread->task.kstack + PAGE_SIZE;
-  tss.ss0 = SEG_KERNEL_DATA;
+  gdt[GD_TSS + cpu_id] = SEG_DESC_16(&tss[cpu_id], sizeof(struct TaskState) - 1, SEG_TYPE_TSS32A, PL_KERNEL);
+  tss[cpu_id].esp0 = (uintptr_t) process->thread->task.kstack + PAGE_SIZE;
+  tss[cpu_id].ss0 = SEG_KERNEL_DATA;
 
-  ltr(SEG_TSS);
+  ltr(SEG_TSS + (cpu_id << 3));
 
   //cprintf("switch to %d\n", process->pid);
 

@@ -10,6 +10,9 @@
 
 #include <kernel/console.h> // _panic, _warn
 
+// TODO: should be architecture-specific
+#define K_CPU_MAX   4
+
 #define K_TASK_MAX_PRIORITIES  (2 * NZERO)
 
 #define K_ERR_AGAIN   (-EAGAIN)

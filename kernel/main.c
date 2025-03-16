@@ -25,9 +25,6 @@
 #include <kernel/interrupt.h>
 #include <kernel/time.h>
 
-// Whether the bootstrap processor has finished its initialization?
-int bsp_started;
-
 // For uname()
 struct utsname utsname = {
   .sysname = "Argentum",
@@ -42,6 +39,7 @@ struct utsname utsname = {
 };
 
 void arch_init_devices(void);
+void arch_init_smp(void);
 
 void
 mp_main(void)
@@ -88,8 +86,7 @@ main(void)
 
   time_init();
 
-  // Unblock other CPUs
-  bsp_started = 1;
+  arch_init_smp();
 
   // struct KTask *t1, *t2;
 

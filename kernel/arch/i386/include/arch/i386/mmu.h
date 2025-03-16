@@ -52,6 +52,14 @@
 #define SEG_USER_DATA   ((GD_USER_DATA << 3) | PL_USER)
 #define SEG_TSS         ((GD_TSS << 3) | PL_KERNEL)
 
+#define SEG_TYPE_DATA   (0 << 3)    // Data
+#define SEG_TYPE_CODE   (1 << 3)    // Code
+#define SEG_TYPE_E      (1 << 2)    // Expand-down
+#define SEG_TYPE_C      (1 << 2)    // Conforming
+#define SEG_TYPE_W      (1 << 1)    // Write
+#define SEG_TYPE_R      (1 << 1)    // Read
+#define SEG_TYPE_A      (1 << 0)    // Accessed 
+
 #ifndef __ASSEMBLER__
 
 #include <stdint.h>
@@ -121,14 +129,6 @@ struct PseudoDesc {
   .g           = 0,                                         \
   .base_31_24  = (((uintptr_t) (base)) >> 24) & 0xFF        \
 })
-
-#define SEG_TYPE_DATA   (0 << 3)    // Data
-#define SEG_TYPE_CODE   (1 << 3)    // Code
-#define SEG_TYPE_E      (1 << 2)    // Expand-down
-#define SEG_TYPE_C      (1 << 2)    // Conforming
-#define SEG_TYPE_W      (1 << 1)    // Write
-#define SEG_TYPE_R      (1 << 1)    // Read
-#define SEG_TYPE_A      (1 << 0)    // Accessed 
 
 static inline void
 lgdt(void *p)
@@ -222,6 +222,18 @@ ltr(uint16_t sel)
 {
 	asm volatile("ltr %0" : : "r" (sel));
 }
+
+#else
+
+#define SEG_DESC_NULL   \
+  .word 0, 0;           \
+  .byte 0, 0;           \
+  .byte 0, 0
+
+#define SEG_DESC_32(base, limit, t, d)                      \
+  .word (((limit) >> 12) & 0xFFFF), ((base) & 0xFFFF);      \
+  .byte (((base) >> 16) & 0xFF), (0x90 | (t) |((d) << 5));  \
+  .byte (0xC0 | (((limit) >> 28) & 0xF)), (((base) >> 24) & 0xFF)
 
 #endif  // !__ASSEMBLER__
 

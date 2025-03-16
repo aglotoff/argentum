@@ -96,14 +96,14 @@ KERNEL_SRCFILES += \
 	kernel/net/lwip/argentum/arch/sys_arch.c \
 	kernel/net/lwip/argentum/arch/sio.c
 
+KERNEL_BINFILES :=
+
 include kernel/arch/${ARCH}/arch_kernel.mk
 
 KERNEL_OBJFILES := $(patsubst %.c, $(OBJ)/%.o, $(KERNEL_SRCFILES))
 KERNEL_OBJFILES := $(patsubst %.S, $(OBJ)/%.o, $(KERNEL_OBJFILES))
 
 KERNEL_LDFLAGS := $(LDFLAGS) -T $(KERNEL_LDFILE) -nostdlib
-
-KERNEL_BINFILES :=
 
 # Embed the initial process directly into the kernel binary
 ifdef PROCESS_NAME

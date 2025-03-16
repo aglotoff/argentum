@@ -4,9 +4,6 @@
 
 #include "core_private.h"
 
-// TODO: should be architecture-specific
-#define K_CPU_MAX   4
-
 static struct KCpu _k_cpus[K_CPU_MAX];
 
 /**

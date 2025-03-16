@@ -161,14 +161,14 @@ arch_interrupt_init(void)
 
   i8259_mask_all();
 
-  arch_interrupt_init_percpu();
+  lidt(&idtr);
+  lapic_init();
+  ioapic_init();
 }
 
 void
 arch_interrupt_init_percpu(void)
 {
   lidt(&idtr);
-
-  lapic_init();
-  ioapic_init();
+  lapic_init_percpu();
 }

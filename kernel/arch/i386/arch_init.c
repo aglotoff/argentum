@@ -24,7 +24,7 @@ arch_init(void)
 {
 	page_init_low();
 	arch_vm_init();
-	page_init_high();
+  page_init_high();
 
   acpi_init();
   arch_interrupt_init();
@@ -350,6 +350,9 @@ acpi_madt_map(uint32_t address)
   return (struct AcpiMadt *) madt;
 }
 
+static uint32_t testids[3];
+static int32_t testflags[3];
+
 static void
 acpi_madt_parse(struct AcpiMadt *madt)
 {
@@ -363,6 +366,11 @@ acpi_madt_parse(struct AcpiMadt *madt)
 
     switch (entry->type) {
       case ACPI_MADT_LAPIC: {
+        if (lapic_ncpus >= K_CPU_MAX)
+          break;
+
+        testids[lapic_ncpus] = ((struct AcpiMadtEntryLapic *) entry)->apic_id;
+        testflags[lapic_ncpus] = ((struct AcpiMadtEntryLapic *) entry)->flags;
         // FIXME: could be not sequential
         lapic_ncpus++;
         break;
@@ -422,4 +430,53 @@ arch_eth_write(const void *buf, size_t n)
   // TODO
   (void) buf;
   (void) n;
+}
+
+struct KSemaphore smp_sema;
+
+void
+arch_mp_entry(void)
+{
+  arch_vm_init_percpu();
+  arch_interrupt_init_percpu();
+
+  k_semaphore_put(&smp_sema);
+  
+  mp_main();
+}
+
+extern void *kernel_pgdir;
+
+uint32_t mp_stack;
+
+void
+arch_init_smp(void)
+{
+  extern uint8_t mp_start[], mp_end[];
+
+  extern uint8_t kstack_top[];
+
+  uint32_t *mp_entry = (uint32_t *) PA2KVA(PHYS_MP_ENTRY);
+  unsigned   cpu_id;
+
+  // TODO: check size
+
+  memmove(mp_entry, mp_start, (size_t) (mp_end - mp_start));
+
+  k_semaphore_create(&smp_sema, 0);
+
+  for (cpu_id = 0; cpu_id < lapic_ncpus; cpu_id++) {
+    cprintf("- %d, %x\n", testids[cpu_id], testflags[cpu_id]);
+
+    if (cpu_id == lapic_id())
+      continue;
+    
+    mp_stack = (uint32_t) kstack_top - (cpu_id * KSTACK_SIZE);
+    cprintf("stack at %p\n", mp_stack);
+
+    lapic_start(cpu_id, PHYS_MP_ENTRY);
+
+    while (k_semaphore_try_get(&smp_sema) != 0)
+      ;
+  }
 }

@@ -24,6 +24,7 @@ KERNEL_SRCFILES += \
 	kernel/arch/${ARCH}/arch_syscall.c \
 	kernel/arch/${ARCH}/arch_tty.c \
 	kernel/arch/${ARCH}/entry.S \
+	kernel/arch/${ARCH}/mp_entry.S \
 	kernel/arch/${ARCH}/trap_entry.S
 
 KERNEL_CFLAGS += -Ikernel/arch/${ARCH}/include

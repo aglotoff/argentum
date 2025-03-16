@@ -44,4 +44,6 @@ i8253_count_down(void)
     count = inb(PIT_DATA0);
     count |= inb(PIT_DATA0) << 8;
   } while (count != 0);
+
+  outb(PIT_CMD, 0);
 }

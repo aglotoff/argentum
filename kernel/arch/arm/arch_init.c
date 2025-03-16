@@ -52,3 +52,13 @@ arch_eth_write(const void *buf, size_t n)
 {
   mach_current->eth_write(buf, n);
 }
+
+// Whether the bootstrap processor has finished its initialization?
+int bsp_started;
+
+void
+arch_init_smp(void)
+{
+  // Unblock other CPUs
+  bsp_started = 1;
+}

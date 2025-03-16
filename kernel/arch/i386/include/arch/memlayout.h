@@ -13,6 +13,7 @@
 // TODO: keep in sync with rlimit
 #define USTACK_SIZE       (PAGE_SIZE * 48)
 
+#define PHYS_MP_ENTRY     0x7000
 /** Physical address the kernel executable is loaded at */
 #define PHYS_KERNEL_LOAD  0x00100000
 /** Maximum physical memory available during the early boot process */
