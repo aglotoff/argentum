@@ -6,6 +6,7 @@
 #include <arch/i386/lapic.h>
 #include <arch/i386/i8253.h>
 #include <arch/trap.h>
+#include <kernel/vm.h>
 
 enum {
   REG_ID            = (0x020 >> 2), // Local APIC ID Register
@@ -31,6 +32,9 @@ enum {
   LVT_TIMER_PERIODIC = (1 << 17),
 };
 
+uint32_t lapic_pa;
+size_t lapic_ncpus;
+
 static volatile uint32_t *lapic_base = (uint32_t *) VIRT_LAPIC_BASE;
 
 void
@@ -44,6 +48,9 @@ void
 lapic_init(void)
 {
   uint32_t init_count, count;
+
+  arch_vm_map_fixed(VIRT_LAPIC_BASE, lapic_pa, PAGE_SIZE,
+                    PROT_READ | PROT_WRITE);
 
   lapic_reg_write(REG_SPURIOUS, SPURIOUS_ENABLE | (T_IRQ0 + IRQ_SPURIOUS));
 
@@ -68,4 +75,11 @@ void
 lapic_eoi(void)
 {
   lapic_reg_write(REG_EOI, 0);
+}
+
+unsigned
+lapic_id(void)
+{
+  // TODO: this is workaround for early boot
+  return lapic_pa ? lapic_base[REG_ID] >> 24 : 0;
 }

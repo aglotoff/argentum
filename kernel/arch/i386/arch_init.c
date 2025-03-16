@@ -13,7 +13,9 @@
 #include <arch/i386/ide.h>
 #include <arch/i386/io.h>
 #include <arch/i386/lapic.h>
+#include <arch/i386/ioapic.h>
 
+void acpi_init(void);
 void main(void);
 void mp_main(void);
 
@@ -24,6 +26,7 @@ arch_init(void)
 	arch_vm_init();
 	page_init_high();
 
+  acpi_init();
   arch_interrupt_init();
 
   main();
@@ -179,6 +182,225 @@ pci_scan(void)
       pci_device_check(bus, device);
     }
   }
+}
+
+struct Rsdp {
+  char      signature[8];
+  uint8_t   checksum;
+  char      oemid[6];
+  uint8_t   revision;
+  uint32_t  rsdt_address;
+} __attribute__ ((packed));
+
+struct AcpiSdtHeader {
+  char     signature[4];
+  uint32_t length;
+  uint8_t  revision;
+  uint8_t  checksum;
+  char     oemid[6];
+  char     oem_table_id[8];
+  uint32_t oem_revision;
+  uint32_t creator_id;
+  uint32_t creator_revision;
+};
+
+struct AcpiRsdt {
+  struct AcpiSdtHeader header;
+  uint32_t             pointers[0];
+};
+
+struct AcpiMadt {
+  struct AcpiSdtHeader header;
+  uint32_t             lapic_addr;
+  uint32_t             flags;
+};
+
+struct AcpiMadtEntry {
+  uint8_t type;
+  uint8_t length;
+} __attribute__((packed));
+
+enum {
+  ACPI_MADT_LAPIC = 0,
+  ACPI_MADT_IOAPIC = 1,
+};
+
+struct AcpiMadtEntryLapic {
+  uint8_t type;
+  uint8_t length;
+  uint8_t acpi_id;
+  uint8_t apic_id;
+  uint32_t flags;
+} __attribute__((packed));
+
+struct AcpiMadtEntryIOApic {
+  uint8_t  type;
+  uint8_t  length;
+  uint8_t  io_apic_id;
+  uint8_t  reserved;
+  uint32_t io_apic_address;
+  uint32_t intr_base;
+} __attribute__((packed));
+
+static uint8_t
+acpi_sum(void *addr, size_t n)
+{
+  uint8_t *p = (uint8_t *) addr;
+  uint8_t sum = 0;
+  size_t i;
+ 
+  for (i = 0; i < n; i++)
+    sum += p[i];
+
+  return sum;
+}
+
+static struct Rsdp *
+acpi_check_rsdp(void *addr, size_t n)
+{
+  uint8_t *p = (uint8_t *) addr;
+  uint8_t *e = p + n;
+  
+  for ( ; p < e; p += 16) {
+    if (memcmp(p, "RSD PTR ", 8) != 0)
+      continue;
+    if (acpi_sum(p, sizeof(struct Rsdp)) != 0)
+      continue;
+    return (struct Rsdp *) p;
+  }
+
+  return NULL;
+}
+
+static struct Rsdp *
+acpi_find_rsdp(void)
+{
+  struct Rsdp *rsdp;
+  uint8_t *bda = (uint8_t *) PA2KVA(0x40E);
+  uint16_t ebda = (bda[1] << 8) | (bda[0] << 4);
+  
+  if ((rsdp = acpi_check_rsdp(PA2KVA(ebda), 0x1000)) != NULL)
+    return rsdp;
+
+  return acpi_check_rsdp(PA2KVA(0x000E0000), 0x20000);
+}
+
+static struct AcpiRsdt *
+acpi_rsdt_map(uint32_t rsdt_address)
+{
+  struct AcpiSdtHeader *rsdt;
+  uintptr_t rsdt_va;
+
+  arch_vm_map_fixed(VIRT_ACPI_RSDT,
+                    ROUND_DOWN(rsdt_address, PAGE_SIZE),
+                    ACPI_RSDT_SIZE,
+                    PROT_READ | PROT_WRITE);
+
+  rsdt_va = VIRT_ACPI_RSDT + (rsdt_address % PAGE_SIZE);
+  rsdt = (struct AcpiSdtHeader *) rsdt_va;
+
+  if (rsdt_va + rsdt->length > VIRT_ACPI_RSDT + ACPI_RSDT_SIZE)
+    k_panic("too large RSDT");
+  if (memcmp(rsdt->signature, "RSDT", 4) != 0)
+    k_panic("bad RSDT");
+  if (acpi_sum(rsdt, rsdt->length) != 0)
+    k_panic("bad RSDT");
+
+  return (struct AcpiRsdt *) rsdt;
+}
+
+static void
+acpi_rsdt_unmap(void)
+{
+  arch_vm_unmap_fixed(VIRT_ACPI_RSDT, ACPI_RSDT_SIZE);
+}
+
+static void
+acpi_madt_unmap(void)
+{
+  arch_vm_unmap_fixed(VIRT_ACPI_MADT, ACPI_MADT_SIZE);
+}
+
+static struct AcpiMadt *
+acpi_madt_map(uint32_t address)
+{
+  struct AcpiSdtHeader *madt;
+  uintptr_t va;
+
+  arch_vm_map_fixed(VIRT_ACPI_MADT,
+                    ROUND_DOWN(address, PAGE_SIZE),
+                    ACPI_MADT_SIZE,
+                    PROT_READ | PROT_WRITE);
+
+  va = VIRT_ACPI_MADT + (address % PAGE_SIZE);
+  madt = (struct AcpiSdtHeader *) va;
+
+  if (va + madt->length > VIRT_ACPI_MADT + ACPI_MADT_SIZE)
+    k_panic("too large SDT");
+
+  if (memcmp(madt->signature, "APIC", 4) != 0) {
+    acpi_madt_unmap();
+    return NULL;
+  }
+  if (acpi_sum(madt, madt->length) != 0) {
+    acpi_madt_unmap();
+    return NULL;
+  }
+
+  return (struct AcpiMadt *) madt;
+}
+
+static void
+acpi_madt_parse(struct AcpiMadt *madt)
+{
+  uint8_t *p = (uint8_t *) (madt + 1);
+  uint8_t *e = (uint8_t *) madt + madt->header.length;
+
+  lapic_pa = madt->lapic_addr;
+
+  while (p < e) {
+    struct AcpiMadtEntry *entry = (struct AcpiMadtEntry *) p;
+
+    switch (entry->type) {
+      case ACPI_MADT_LAPIC: {
+        // FIXME: could be not sequential
+        lapic_ncpus++;
+        break;
+      }
+      case ACPI_MADT_IOAPIC: {
+        // FIXME: what if multiple?
+        ioapic_pa = ((struct AcpiMadtEntryIOApic *) entry)->io_apic_address;
+        break;
+      }
+    }
+
+    p += entry->length;
+  }
+}
+
+void
+acpi_init(void)
+{
+  struct Rsdp *rsdp;
+  struct AcpiRsdt *rsdt;
+  size_t i, n;
+
+  if ((rsdp = acpi_find_rsdp()) == NULL)
+    k_panic("no RSDP");
+
+  rsdt = acpi_rsdt_map(rsdp->rsdt_address);
+  n = (rsdt->header.length - sizeof(rsdt->header)) / sizeof(rsdt->pointers[0]);
+
+  for (i = 0; i < n; i++) {
+    struct AcpiMadt *madt = acpi_madt_map(rsdt->pointers[i]);
+
+    if (madt != NULL) {
+      acpi_madt_parse(madt);
+      acpi_madt_unmap();
+    }
+  }
+
+  acpi_rsdt_unmap();
 }
 
 void

@@ -273,11 +273,6 @@ arch_vm_init(void)
   // Permissions: kernel RW, user NONE
   arch_vm_map_fixed(VIRT_KERNEL_BASE, 0, PHYS_LIMIT, PROT_READ | PROT_WRITE);
 
-  arch_vm_map_fixed(VIRT_LAPIC_BASE, PHYS_LAPIC_BASE, PAGE_SIZE,
-                     PROT_READ | PROT_WRITE);
-  arch_vm_map_fixed(VIRT_IOAPIC_BASE, PHYS_IOAPIC_BASE, PAGE_SIZE,
-                     PROT_READ | PROT_WRITE);
-
   arch_vm_init_percpu();
 }
 

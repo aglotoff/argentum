@@ -5,6 +5,7 @@
 #include <arch/memlayout.h>
 #include <arch/i386/ioapic.h>
 #include <arch/trap.h>
+#include <kernel/vm.h>
 
 // Memory Mapped Registers for Accessing IOAPIC Registers
 enum {
@@ -21,6 +22,8 @@ enum {
 enum {
   REDTBL_MASKED = (1 << 16),
 };
+
+uint32_t ioapic_pa;
 
 volatile uint32_t *ioapic_base = (uint32_t *) VIRT_IOAPIC_BASE;
 
@@ -42,6 +45,9 @@ void
 ioapic_init(void)
 {
   int irq, max_irq;
+
+  arch_vm_map_fixed(VIRT_IOAPIC_BASE, ioapic_pa, PAGE_SIZE,
+                    PROT_READ | PROT_WRITE);
 
   max_irq = (ioapic_reg_read(IOAPICVER) >> 16) & 0xFF;
 
