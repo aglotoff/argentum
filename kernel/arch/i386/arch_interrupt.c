@@ -22,25 +22,51 @@ arch_interrupt_id(struct TrapFrame *tf)
 void
 arch_interrupt_enable(int irq, int cpu)
 {
+#ifdef NOSMP
+  (void) irq;
+  (void) cpu;
+#else
   ioapic_enable(irq, cpu);
+#endif
 }
 
 void
 arch_interrupt_mask(int irq)
 {
-  ioapic_mask(irq);
+#ifdef NOSMP
+  i8259_mask(irq);
+#else
+  // if (irq == IRQ_ATA1)
+  //   cprintf("[k] mask %d\n", irq);
+
+  if (irq != IRQ_PIT)
+    ioapic_mask(irq);
+#endif
 }
 
 void
 arch_interrupt_unmask(int irq)
 {
-  ioapic_unmask(irq);
+#ifdef NOSMP
+  i8259_unmask(irq);
+#else
+  // if (irq == IRQ_ATA1)
+  //   cprintf("[k] unmask %d\n", irq);
+
+  if (irq != IRQ_PIT)
+    ioapic_unmask(irq);
+#endif
 }
 
 void
-arch_interrupt_eoi(int)
+arch_interrupt_eoi(int irq)
 {
+#ifdef NOSMP
+  i8259_eoi(irq);
+#else
+  (void) irq;
   lapic_eoi();
+#endif
 }
 
 struct IDTGate idt[256];
@@ -159,11 +185,16 @@ arch_interrupt_init(void)
 
   idt[T_SYSCALL] = IDT_GATE(SEG_TYPE_TG32, trap_syscall, SEG_KERNEL_CODE, PL_USER);
 
-  i8259_mask_all();
-
   lidt(&idtr);
+
+#ifdef NOSMP
+  i8259_init(T_IRQ0, IRQ_CASCADE);
+  i8253_init_periodic();
+#else
+  i8259_mask_all();
   lapic_init();
   ioapic_init();
+#endif
 }
 
 void

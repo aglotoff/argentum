@@ -52,7 +52,7 @@ ioapic_init(void)
   max_irq = (ioapic_reg_read(IOAPICVER) >> 16) & 0xFF;
 
   for (irq = 0; irq <= max_irq; irq++){
-    ioapic_mask(irq);
+    ioapic_reg_write(IOREDTBL + (2 * irq), REDTBL_MASKED | (T_IRQ0 + irq));
     ioapic_reg_write(IOREDTBL + (2 * irq) + 1, 0);
   }
 }
@@ -60,18 +60,20 @@ ioapic_init(void)
 void
 ioapic_enable(int irq, int cpu)
 {
-  ioapic_unmask(irq);
+  ioapic_reg_write(IOREDTBL + (2 * irq), T_IRQ0 + irq);
   ioapic_reg_write(IOREDTBL + (2 * irq) + 1, cpu << 24);
 }
 
 void
 ioapic_mask(int irq)
 {
-  ioapic_reg_write(IOREDTBL + (2 * irq), REDTBL_MASKED | (T_IRQ0 + irq));
+  uint32_t data = ioapic_reg_read(IOREDTBL + (2 * irq));
+  ioapic_reg_write(IOREDTBL + (2 * irq), data | REDTBL_MASKED);
 }
 
 void
 ioapic_unmask(int irq)
 {
-  ioapic_reg_write(IOREDTBL + (2 * irq), T_IRQ0 + irq);
+  uint32_t data = ioapic_reg_read(IOREDTBL + (2 * irq));
+  ioapic_reg_write(IOREDTBL + (2 * irq), data & ~REDTBL_MASKED);
 }

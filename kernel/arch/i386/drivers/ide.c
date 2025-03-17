@@ -67,7 +67,7 @@ enum {
 struct KListLink ide_queue;
 struct KMutex ide_mutex;
 
-static int  ide_irq_task(int, void *);
+static void ide_irq_task(int, void *);
 static void ide_start_transfer(struct Buf *);
 
 struct PRD {
@@ -193,6 +193,8 @@ ide_start_transfer(struct Buf *buf)
   k_assert(buf->queue_link.prev == &ide_queue);
   k_assert(buf->block_size % IDE_BLOCK_LEN == 0);
 
+  // cprintf("[k] start %d\n", buf->block_no);
+
   nsectors = buf->block_size / IDE_BLOCK_LEN;
 
   int sector = buf->block_no * nsectors;
@@ -271,7 +273,7 @@ ide_start_transfer(struct Buf *buf)
   }
 }
 
-static int
+static void
 ide_irq_task(int irq, void *arg)
 {
   struct KListLink *link;
@@ -295,6 +297,7 @@ ide_irq_task(int irq, void *arg)
   k_assert((buf->flags & (BUF_DIRTY | BUF_VALID)) != BUF_VALID);
   k_assert(buf->block_size % IDE_BLOCK_LEN == 0);
 
+  // cprintf("[k] end %d\n", buf->block_no);
 
   if (buf->flags & BUF_DIRTY) {
     // WRITING
@@ -316,6 +319,7 @@ ide_irq_task(int irq, void *arg)
   k_list_remove(link);
 
   // TODO
+  arch_interrupt_unmask(irq);
 
   if (!k_list_is_empty(&ide_queue)) {
     next_buf = KLIST_CONTAINER(ide_queue.next, struct Buf, queue_link);
@@ -325,6 +329,4 @@ ide_irq_task(int irq, void *arg)
   k_condvar_broadcast(&buf->wait_cond);
 
   k_mutex_unlock(&ide_mutex);
-
-  return 1;
 }

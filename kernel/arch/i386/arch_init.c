@@ -26,7 +26,10 @@ arch_init(void)
 	arch_vm_init();
   page_init_high();
 
+#ifndef NOSMP
   acpi_init();
+#endif
+
   arch_interrupt_init();
 
   main();
@@ -466,13 +469,10 @@ arch_init_smp(void)
   k_semaphore_create(&smp_sema, 0);
 
   for (cpu_id = 0; cpu_id < lapic_ncpus; cpu_id++) {
-    cprintf("- %d, %x\n", testids[cpu_id], testflags[cpu_id]);
-
     if (cpu_id == lapic_id())
       continue;
     
     mp_stack = (uint32_t) kstack_top - (cpu_id * KSTACK_SIZE);
-    cprintf("stack at %p\n", mp_stack);
 
     lapic_start(cpu_id, PHYS_MP_ENTRY);
 

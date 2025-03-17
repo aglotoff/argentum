@@ -36,11 +36,12 @@ time_tick(void)
     ticks_to_sync--;
 
     if (ticks_to_sync == 0) {
-      unsigned long expected_ticks = seconds2ticks(arch_get_time_seconds());
-      unsigned long current_ticks = k_tick_get();
+      //unsigned long expected_ticks = seconds2ticks(arch_get_time_seconds());
+      //unsigned long current_ticks = k_tick_get();
 
-      if (current_ticks != expected_ticks)
-        k_tick_set(expected_ticks);
+      // FIXME
+      //if (current_ticks != expected_ticks)
+      //  k_tick_set(expected_ticks);
 
       ticks_to_sync = TICKS_SYNC_PERIOD;
     }

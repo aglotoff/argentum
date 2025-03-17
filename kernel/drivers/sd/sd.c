@@ -36,7 +36,7 @@ enum {
   OCR_BUSY     = (1 << 31),     // Card power up status bit
 };
 
-static int  sd_irq_task(int, void *);
+static void sd_irq_task(int, void *);
 static void sd_start_transfer(struct SD *, struct Buf *);
 
 int
@@ -135,14 +135,12 @@ sd_start_transfer(struct SD *sd, struct Buf *buf)
 
 // Handle the SD card interrupts. Complete the current data transfer operation
 // and wake up the corresponding task.
-static int
+static void
 sd_irq_task(int irq, void *arg)
 {
   struct SD *sd = (struct SD *) arg;
   struct KListLink *link;
   struct Buf *buf, *next_buf;
-
-  (void) irq;
 
   k_mutex_lock(&sd->mutex);
 
@@ -174,6 +172,8 @@ sd_irq_task(int irq, void *arg)
   if (buf->block_size > SD_BLOCKLEN)
     sd->ops->send_cmd(sd->ctx, CMD_STOP_TRANSMISSION, 0, SD_RESPONSE_R1B, NULL);
 
+  arch_interrupt_unmask(irq);
+
   // Begin processing the next buffer in the queue.
   if (!k_list_is_empty(&sd->queue)) {
     next_buf = KLIST_CONTAINER(sd->queue.next, struct Buf, queue_link);
@@ -184,6 +184,4 @@ sd_irq_task(int irq, void *arg)
   k_condvar_broadcast(&buf->wait_cond);
 
   k_mutex_unlock(&sd->mutex);
-
-  return 1;
 }

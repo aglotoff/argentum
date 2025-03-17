@@ -82,8 +82,8 @@ include config/arch/$(ARCH)/qemu.mk
 $(SYSROOT):
 	@mkdir -p $@{,/dev,/usr{,/lib,/include}}
 
-clean:
-	rm -rf $(OBJ) $(SYSROOT)
+# clean:
+# 	rm -rf $(OBJ) $(SYSROOT)
 
 .PRECIOUS: $(OBJ)/user/%.o
 

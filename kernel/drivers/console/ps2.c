@@ -9,7 +9,7 @@
 #include <kernel/drivers/ps2.h>
 #include <kernel/drivers/kbd.h>
 
-int ps2_kbd_irq_task(int, void *);
+void ps2_kbd_irq_task(int, void *);
 
 int
 ps2_init(struct PS2 *ps2, struct PS2Ops *ops, void *ops_arg, int irq)
@@ -40,14 +40,12 @@ static char *key_sequences[KEY_MAX] = {
  * 
  * Get data and store it into the console buffer.
  */
-int
+void
 ps2_kbd_irq_task(int irq, void *arg)
 {
   struct PS2 *ps2 = (struct PS2 *) arg;
   char buf[2];
   int c;
-
-  (void) irq;
 
   while ((c = ps2_kbd_getc(ps2)) >= 0) {
     if ((c == 0) || (c >= KEY_MAX))
@@ -62,7 +60,7 @@ ps2_kbd_irq_task(int irq, void *arg)
     }
   }
 
-  return 1;
+  arch_interrupt_unmask(irq);
 }
 
 // Keymap column indicies for different states

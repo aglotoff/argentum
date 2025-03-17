@@ -16,7 +16,7 @@ static int  interrupt_task_notify(int, void *);
 
 struct InterruptTask {
   struct KTask        task;
-  interrupt_handler_t handler;
+  void              (*handler)(int, void *);
   void               *handler_arg;
   int                 irq;
   struct KSemaphore   semaphore;
@@ -44,7 +44,7 @@ interrupt_attach(int irq, interrupt_handler_t handler, void *handler_arg)
 }
 
 void
-interrupt_attach_task(int irq, interrupt_handler_t handler, void *handler_arg)
+interrupt_attach_task(int irq, void (*handler)(int, void *), void *handler_arg)
 {
   struct Page *stack_page;
   struct InterruptTask *isr;
@@ -81,6 +81,7 @@ interrupt_dispatch(struct TrapFrame *tf)
   k_irq_handler_begin();
 
   arch_interrupt_mask(irq);
+
   arch_interrupt_eoi(irq);
 
   should_unmask = interrupt_handler_call(irq);
@@ -98,7 +99,7 @@ interrupt_handler_call(int irq)
                                            interrupt_handlers[irq].handler_arg);
  
   // TODO: warn
-  cprintf("Unexpected IRQ %d from CPU %d\n", irq, k_cpu_id());
+  k_warn("Unexpected IRQ %d from CPU %d\n", irq, k_cpu_id());
 
   return 1;
 }
@@ -109,15 +110,10 @@ interrupt_task_entry(void *arg)
   struct InterruptTask *isr = (struct InterruptTask *) arg;
 
   for (;;) {
-    int should_unmask;
-
     if (k_semaphore_get(&isr->semaphore) < 0)
       k_panic("k_semaphore_get");
 
-    should_unmask = isr->handler(isr->irq, isr->handler_arg);
-    if (should_unmask) {
-      arch_interrupt_unmask(isr->irq);
-    }
+    isr->handler(isr->irq, isr->handler_arg);
   }
 }
 

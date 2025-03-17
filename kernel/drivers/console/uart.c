@@ -2,7 +2,7 @@
 #include <kernel/tty.h>
 #include <kernel/interrupt.h>
 
-static int uart_irq_task(int, void *);
+static void uart_irq_task(int, void *);
 
 int
 uart_init(struct Uart *uart, struct UartOps *ops, void *ctx, int irq)
@@ -41,15 +41,13 @@ uart_putc(struct Uart *uart, int c)
   return 0;
 }
 
-static int
+static void
 uart_irq_task(int irq, void *arg)
 {
   struct Uart *uart = (struct Uart *) arg;
 
   char buf[2];
   int c;
-
-  (void) irq;
 
   while ((c = uart_getc(uart)) >= 0) {
     if (c != 0) {
@@ -59,5 +57,5 @@ uart_irq_task(int irq, void *arg)
     }
   }
 
-  return 1;
+  arch_interrupt_unmask(irq);
 }
