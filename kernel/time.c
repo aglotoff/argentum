@@ -9,6 +9,7 @@
 #include <kernel/time.h>
 
 static unsigned ticks_to_sync = 0;
+static unsigned ticks_to_skip = 0;
 
 #define TICKS_SYNC_PERIOD   TICKS_PER_SECOND
 
@@ -32,19 +33,31 @@ time_get_seconds(void)
 void
 time_tick(void)
 {
-  if (k_cpu_id() == 0) {
-    ticks_to_sync--;
+  k_sched_tick();
 
-    if (ticks_to_sync == 0) {
-      //unsigned long expected_ticks = seconds2ticks(arch_get_time_seconds());
-      //unsigned long current_ticks = k_tick_get();
+  if (k_cpu_id() != 0)
+    return;
 
-      // FIXME
-      //if (current_ticks != expected_ticks)
-      //  k_tick_set(expected_ticks);
+  if (ticks_to_skip > 0) {
+    ticks_to_skip--;
+    return;
+  }
 
-      ticks_to_sync = TICKS_SYNC_PERIOD;
+  k_timer_tick();
+
+  ticks_to_sync--;
+
+  if (ticks_to_sync == 0) {
+    unsigned long expected_ticks = seconds2ticks(arch_get_time_seconds());
+    unsigned long current_ticks = k_tick_get();
+
+    if (current_ticks < expected_ticks) {
+      k_tick_set(expected_ticks);
+    } else if (current_ticks > expected_ticks) {
+      ticks_to_skip = current_ticks - expected_ticks;
     }
+
+    ticks_to_sync = TICKS_SYNC_PERIOD;
   }
 }
 
@@ -108,8 +121,6 @@ timer_irq(int, void *)
       process_update_times(my_process, 0, 1);
     }
   }
-
-  k_tick();
 
   time_tick();
 

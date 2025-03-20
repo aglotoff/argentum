@@ -10,6 +10,6 @@ struct KTimeout {
 
 unsigned long long k_tick_get(void);
 void               k_tick_set(unsigned long long);
-void               k_tick(void);
+void               k_sched_tick(void);
 
 #endif  // !__KERNEL_INCLUDE_TICK_H__

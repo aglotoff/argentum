@@ -21,17 +21,15 @@ static unsigned long long k_tick_counter = 0;
  * Notify the kernel that a tick occured.
  */
 void
-k_tick(void)
+k_timer_tick(void)
 {
-  _k_sched_tick();
+  _k_sched_timer_tick();
   _k_timer_tick();
 
   // TODO: all timeouts are processed by CPU #0, is it ok?
-  if (k_cpu_id() == 0) {
-    k_spinlock_acquire(&k_tick_lock);
-    k_tick_counter++;
-    k_spinlock_release(&k_tick_lock);
-  }
+  k_spinlock_acquire(&k_tick_lock);
+  k_tick_counter++;
+  k_spinlock_release(&k_tick_lock);
 }
 
 /**

@@ -2,6 +2,7 @@
 
 #include <kernel/time.h>
 #include <kernel/console.h>
+#include <kernel/core/spinlock.h>
 
 #include <arch/i386/io.h>
 
@@ -87,6 +88,8 @@ cmos_get_time(struct tm *tm)
   tm->tm_isdst = 0;
 }
 
+static struct KSpinLock cmos_lock = K_SPINLOCK_INITIALIZER("cmos");
+
 void
 arch_time_init(void)
 {
@@ -98,6 +101,9 @@ arch_get_time_seconds(void)
 {
   struct tm tm;
 
+  k_spinlock_acquire(&cmos_lock);
   cmos_get_time(&tm);
+  k_spinlock_release(&cmos_lock);
+
   return mktime(&tm);
 }

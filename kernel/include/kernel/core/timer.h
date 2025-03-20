@@ -25,6 +25,6 @@ int  k_timer_destroy(struct KTimer *);
 int  k_timer_start(struct KTimer *);
 int  k_timer_stop(struct KTimer *);
 
-void k_tick(void);
+void k_timer_tick(void);
 
 #endif  // !__KERNEL_INCLUDE_KERNEL_TIMER_H__

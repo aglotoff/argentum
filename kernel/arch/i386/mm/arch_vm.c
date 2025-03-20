@@ -52,11 +52,15 @@ struct TaskState tss[K_CPU_MAX];
 void
 arch_vm_switch(struct Process *process)
 {
+  unsigned cpu_id;
+  
   k_irq_state_save();
 
-  unsigned cpu_id = k_cpu_id();
+  cpu_id = k_cpu_id();
 
   k_assert(process->thread != NULL);
+  k_assert(process->vm != NULL);
+
   page_assert(kva2page(process->vm->pgtab), 0, PAGE_TAG_VM);
 
   gdt[GD_TSS + cpu_id] = SEG_DESC_16(&tss[cpu_id], sizeof(struct TaskState) - 1, SEG_TYPE_TSS32A, PL_KERNEL);
@@ -64,8 +68,6 @@ arch_vm_switch(struct Process *process)
   tss[cpu_id].ss0 = SEG_KERNEL_DATA;
 
   ltr(SEG_TSS + (cpu_id << 3));
-
-  //cprintf("switch to %d\n", process->pid);
 
   k_irq_state_restore();
 }

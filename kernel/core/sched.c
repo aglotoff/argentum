@@ -343,7 +343,7 @@ k_task_timeout_callback(struct KTimeout *entry)
 }
 
 void
-_k_sched_tick(void)
+k_sched_tick(void)
 {
   struct KTask *current_task = k_task_current();
 
@@ -354,7 +354,11 @@ _k_sched_tick(void)
     current_task->flags |= K_TASK_FLAG_RESCHEDULE;
     _k_sched_unlock();
   }
+}
 
+void
+_k_sched_timer_tick(void)
+{
   if (k_cpu_id() == 0) {
     _k_sched_lock();
     _k_timeout_process_queue(&_k_sched_timeouts, k_task_timeout_callback);

@@ -20,7 +20,7 @@ struct KTask *_k_sched_wakeup_one_locked(struct KListLink *, int);
 int             _k_sched_sleep(struct KListLink *, int, unsigned long, struct KSpinLock *);
 void            _k_sched_raise_priority(struct KTask *, int);
 void            _k_sched_recalc_priority(struct KTask *);
-void            _k_sched_tick(void);
+void            _k_sched_timer_tick(void);
 void            _k_sched_update_effective_priority(void);
 
 int             _k_mutex_timed_lock(struct KMutex *, unsigned long);
