@@ -64,7 +64,11 @@ k_task_run(void)
   // Still holding the scheduler lock (acquired in k_sched_start)
   _k_sched_unlock();
 
+  k_spinlock_release(&k_giant_lock);
+
   k_irq_enable();
+
+  k_spinlock_acquire(&k_giant_lock);
 
   my_task->entry(my_task->arg);
 

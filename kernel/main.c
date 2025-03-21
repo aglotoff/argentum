@@ -46,6 +46,8 @@ mp_main(void)
 {
   cprintf("Starting CPU %d\n", k_cpu_id());
 
+  k_spinlock_acquire(&k_giant_lock);
+
   // Enter the scheduler loop
   k_sched_start();
 }

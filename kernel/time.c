@@ -20,6 +20,7 @@ time_init(void)
 
   if (k_cpu_id() == 0) {
     k_tick_set(seconds2ticks(arch_get_time_seconds()));
+   // cprintf("[k] init time %p\n", k_tick_get());
     ticks_to_sync = TICKS_SYNC_PERIOD;
   }
 }
@@ -48,11 +49,12 @@ time_tick(void)
   ticks_to_sync--;
 
   if (ticks_to_sync == 0) {
-    unsigned long expected_ticks = seconds2ticks(arch_get_time_seconds());
-    unsigned long current_ticks = k_tick_get();
+    unsigned long long expected_ticks = seconds2ticks(arch_get_time_seconds());
+    unsigned long long current_ticks = k_tick_get();
 
     if (current_ticks < expected_ticks) {
       k_tick_set(expected_ticks);
+     // cprintf("[k] new time %p\n", k_tick_get());
     } else if (current_ticks > expected_ticks) {
       ticks_to_skip = current_ticks - expected_ticks;
     }

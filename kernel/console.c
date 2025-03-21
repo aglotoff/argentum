@@ -103,11 +103,14 @@ _panic(const char *file, int line, const char *format, ...)
     va_end(ap);
 
     cprintf("\n");
-  }
 
-  // Never returns.
-  while (1)
-    monitor(NULL);
+    // Never returns.
+    while (1)
+      monitor(NULL);
+  } else {
+    while (1)
+      ;
+  }
 }
 
 void

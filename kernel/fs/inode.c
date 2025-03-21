@@ -14,6 +14,7 @@
 #include <kernel/process.h>
 #include <kernel/vmspace.h>
 #include <kernel/dev.h>
+#include <kernel/core/tick.h>
 
 #include "ext2.h"
 
@@ -166,6 +167,8 @@ fs_inode_lock(struct Inode *ip)
 
   ip->fs->ops->inode_read(ip);
 
+  k_assert(ip->atime < 20000000 || ip->atime > 30000000);
+
   ip->flags |= FS_INODE_VALID;
 }
 
@@ -176,10 +179,17 @@ fs_inode_unlock(struct Inode *ip)
     k_panic("inode not valid");
 
   if (ip->flags & FS_INODE_DIRTY) {
-    if ((ip->dev != 1) && (ip->mtime < 100000 || ip->atime < 100000 || ip->ctime < 100000)) {
-      k_panic("bad inode time: ino=%d, ctime=%d mtime=%d atime=%d", 
-             ip->ino, ip->ctime, ip->mtime, ip->atime);
+    if (ip->atime > 20000000 && ip->atime < 30000000) {
+      cprintf("atime %ld\n", ip->atime);
+      cprintf("ref_count=%d\n", ip->ref_count);
+      cprintf("ino=%d\n", ip->ino);
+
+      cprintf("%p\n", k_tick_get());
+      cprintf("%ld\n", time_get_seconds());
+
+      k_panic("garbage");
     }
+
     ip->fs->ops->inode_write(ip);
     ip->flags &= ~FS_INODE_DIRTY;
   }

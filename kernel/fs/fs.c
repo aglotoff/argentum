@@ -7,6 +7,7 @@
 #include <kernel/fs/fs.h>
 #include <kernel/fs/file.h>
 #include <kernel/console.h>
+#include <kernel/time.h>
 
 #define STATUS_MASK (O_APPEND | O_NONBLOCK | O_SYNC)
 
@@ -311,6 +312,9 @@ fs_fstat(struct File *file, struct stat *buf)
   fs_inode_lock(inode);
 
   r = fs_inode_stat_locked(inode, buf);
+
+  // if (strcmp(file->node->name, "conftest.file") == 0 || strcmp(file->node->name, "configure") == 0)
+  //   cprintf("[k] stat %s %lld %lld %lld\n", file->node->name, inode->atime, inode->ctime, inode->mtime);
 
   fs_inode_unlock(inode);
   fs_inode_put(inode);

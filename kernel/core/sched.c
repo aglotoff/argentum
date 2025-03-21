@@ -93,7 +93,11 @@ k_sched_idle(void)
 {
   _k_sched_unlock();
 
+  k_spinlock_release(&k_giant_lock);
+
   k_irq_enable();
+
+  k_spinlock_acquire(&k_giant_lock);
 
 #ifdef K_ON_TASK_IDLE
   K_ON_TASK_IDLE();
