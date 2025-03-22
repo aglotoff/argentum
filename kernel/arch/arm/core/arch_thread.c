@@ -1,4 +1,8 @@
 #include <string.h>
+#include <stdint.h>
+
+#include <arch/context.h>
+#include <kernel/core/task.h>
 
 void
 arch_task_init_stack(struct KTask *task, void (*entry)(void))

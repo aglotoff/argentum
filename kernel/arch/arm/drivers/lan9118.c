@@ -103,7 +103,7 @@
 #define MAC_MII_DATA        7
 #define MAC_FLOW            8
 
-static int eth_irq_task(int, void *);
+static void eth_irq_task(int, void *);
 
 // Read from a MAC register
 uint32_t
@@ -284,13 +284,11 @@ eth_rx(struct Lan9118 *lan9118)
   }
 }
 
-static int
+static void
 eth_irq_task(int irq, void *arg)
 {
   struct Lan9118 *lan9118 = (struct Lan9118 *) arg;
   uint32_t status;
-
-  (void) irq;
 
   // Wake up
   while (!(lan9118->base[PMT_CTRL]) & PMT_CTRL_READY)
@@ -309,7 +307,7 @@ eth_irq_task(int irq, void *arg)
   if (status & ~(RSFL_INT))
     k_panic("Unexpected interupt %x", status & ~(RSFL_INT));
 
-  return 1;
+  arch_interrupt_unmask(irq);
 }
 
 void

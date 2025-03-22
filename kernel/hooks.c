@@ -9,6 +9,9 @@ on_task_destroy(struct KTask *task)
     thread_on_destroy((struct Thread *) task->ext);
 }
 
+void arch_on_thread_before_switch(struct Thread *);
+void arch_on_thread_after_switch(struct Thread *);
+
 void
 on_task_before_switch(struct KTask *task)
 {
@@ -18,10 +21,7 @@ on_task_before_switch(struct KTask *task)
     k_assert(&thread->task == task);
 
     if (thread->process != NULL) {
-      asm volatile("fxrstor (%0)" : : "r" (task->kstack));
-
-      arch_vm_switch(thread->process);
-      arch_vm_load(thread->process->vm->pgtab);
+      arch_on_thread_before_switch(thread);
     }
   }
 }
@@ -30,10 +30,7 @@ void
 on_task_after_switch(struct KTask *task)
 {
   if (task->ext != NULL) {
-    k_assert((uint8_t *) task->context >= ((uint8_t *) task->kstack + 512));
-    asm volatile("fxsave (%0)" : : "r" (task->kstack));
-
-    arch_vm_load_kernel();
+    arch_on_thread_after_switch((struct Thread *) task->ext);
   }
 }
 

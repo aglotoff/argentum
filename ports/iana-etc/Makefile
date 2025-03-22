@@ -25,3 +25,6 @@ $(SYSROOT)/etc/services: $(SRC_DIR)/services
 $(SYSROOT)/etc/protocols: $(SRC_DIR)/protocols
 	mkdir -p $(@D)
 	cp $^ $(@D)
+
+clean:
+	rm -rf $(SRC_DIR)

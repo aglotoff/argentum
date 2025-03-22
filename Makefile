@@ -13,8 +13,8 @@ OBJ     := obj
 SYSROOT := sysroot
 
 ifndef ARCH
-	#ARCH := arm
-	ARCH := i386
+	ARCH := arm
+	#ARCH := i386
 endif
 
 # Common compiler flags
@@ -82,12 +82,12 @@ include config/arch/$(ARCH)/qemu.mk
 $(SYSROOT):
 	@mkdir -p $@{,/dev,/usr{,/lib,/include}}
 
-# clean:
-# 	rm -rf $(OBJ) $(SYSROOT)
+clean:
+	rm -rf $(OBJ) $(SYSROOT)
 
 .PRECIOUS: $(OBJ)/user/%.o
 
 .PHONY: all all-kernel all-lib all-user \
-	clean clean-fs clean-kernel clean-user clean-lib \
+	clean clean-fs clean-kernel clean-user clean-lib clean-ports \
 	install-headers install-lib \
 	fs
