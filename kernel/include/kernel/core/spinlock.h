@@ -50,6 +50,4 @@ void k_arch_spinlock_release(volatile int *);
 void k_arch_spinlock_save_callstack(struct KSpinLock *);
 void k_arch_spinlock_print_callstack(struct KSpinLock *);
 
-extern struct KSpinLock k_giant_lock;
-
 #endif  // !__KERNEL_INCLUDE_KERNEL_SPINLOCK_H__

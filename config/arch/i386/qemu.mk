@@ -6,6 +6,7 @@ QEMUOPTS += -kernel $(KERNEL)
 QEMUOPTS += -drive file=$(OBJ)/fs.img,index=0,media=disk,format=raw
 # QEMUOPTS += -nic user,hostfwd=tcp::8080-:80
 QEMUOPTS += -serial mon:stdio
+# QEMUOPTS += -d int -no-reboot -no-shutdown
 
 qemu: $(KERNEL) $(OBJ)/fs.img
 	$(QEMU) $(QEMUOPTS)

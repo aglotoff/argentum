@@ -335,6 +335,10 @@ process_destroy(int status)
   process_lock();
 
   vm = current->vm;
+  current->vm = NULL;
+
+  // Switch to the kernel page table since vm will be destroyed shortly
+  arch_vm_load_kernel();
 
   k_timer_destroy(&current->itimers[ITIMER_PROF].timer);
   k_timer_destroy(&current->itimers[ITIMER_REAL].timer);

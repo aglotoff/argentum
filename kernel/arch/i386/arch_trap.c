@@ -52,8 +52,6 @@ trap_handle_pgfault(struct TrapFrame *tf)
 void
 trap(struct TrapFrame *tf)
 {
-  k_spinlock_acquire(&k_giant_lock);
-
   struct Process *my_process = process_current();
 
   if ((tf->trapno >= T_IRQ0) && (tf->trapno < (T_IRQ0 + 32))) {
@@ -80,8 +78,6 @@ trap(struct TrapFrame *tf)
       signal_deliver_pending();
     }
   }
-
-  k_spinlock_release(&k_giant_lock);
 }
 
 // Returns a human-readable name for the given trap number
@@ -172,8 +168,6 @@ arch_trap_frame_init(struct Process *process, uintptr_t entry, uintptr_t arg1,
 void
 arch_trap_frame_pop(struct TrapFrame *tf)
 {
-  k_spinlock_release(&k_giant_lock);
-
   asm volatile("movl %0,%%esp\n"
 		"\tpopal\n"
     "\tpopl %%gs\n"
