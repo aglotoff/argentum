@@ -1,6 +1,6 @@
 diff -ruN old/build-aux/config.sub new/build-aux/config.sub
 --- old/build-aux/config.sub	2021-05-08 00:40:00.000000000 +0300
-+++ new/build-aux/config.sub	2024-08-12 11:06:13.638282016 +0300
++++ new/build-aux/config.sub	2025-03-23 23:14:22.660477531 +0300
 @@ -1729,7 +1729,7 @@
  	     | skyos* | haiku* | rdos* | toppers* | drops* | es* \
  	     | onefs* | tirtos* | phoenix* | fuchsia* | redox* | bme* \
@@ -10,3 +10,15 @@ diff -ruN old/build-aux/config.sub new/build-aux/config.sub
  		;;
  	# This one is extra strict with allowed versions
  	sco3.2v2 | sco3.2v[4-9]* | sco5v6*)
+diff -ruN old/lib/asyncsafe-spin.c new/lib/asyncsafe-spin.c
+--- old/lib/asyncsafe-spin.c	2021-04-01 23:30:11.000000000 +0300
++++ new/lib/asyncsafe-spin.c	2025-03-23 23:15:10.320466820 +0300
+@@ -57,7 +57,7 @@
+ 
+ #else
+ 
+-# if HAVE_PTHREAD_H
++# if HAVE_PTHREAD_H && ! defined __ARGENTUM__
+ /* Use POSIX threads.  */
+ 
+ /* We don't use semaphores (although sem_post() is allowed in signal handlers),
