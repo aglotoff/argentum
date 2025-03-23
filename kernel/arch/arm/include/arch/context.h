@@ -8,8 +8,6 @@
  * See https://wiki.osdev.org/Calling_Conventions
  */
 struct Context {
-  uint32_t s[32];
-  uint32_t fpscr;
   uint32_t r4;
   uint32_t r5;
   uint32_t r6;
