@@ -55,6 +55,7 @@ struct Ext2SuperblockData {
   uint32_t block_count;
   uint32_t r_blocks_count;
   uint32_t free_blocks_count;
+  uint32_t free_inodes_count;
   uint32_t log_block_size;
   uint32_t blocks_per_group;
   uint32_t inodes_per_group;

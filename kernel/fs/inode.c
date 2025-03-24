@@ -925,6 +925,46 @@ fs_inode_access(struct Inode *inode, int amode)
 }
 
 int
+fs_inode_utime(struct Inode *inode, struct utimbuf *times)
+{
+  struct Process *my_process = process_current();
+  int r = 0;
+
+  fs_inode_lock(inode);
+
+  if (times == NULL) {
+    if ((my_process->euid != 0) &&
+        (my_process->euid != inode->uid) &&
+        !fs_permission(inode, FS_PERM_WRITE, 1)) {
+      r = -EPERM;
+      goto out;
+    }
+
+    inode->atime = time_get_seconds();
+    inode->mtime = time_get_seconds();
+
+    inode->flags |= FS_INODE_DIRTY;
+  } else {
+    if ((my_process->euid != 0) ||
+       ((my_process->euid != inode->uid) ||
+         !fs_permission(inode, FS_PERM_WRITE, 1))) {
+      r = -EPERM;
+      goto out;
+    }
+
+    inode->atime = times->actime;
+    inode->mtime = times->modtime;
+
+    inode->flags |= FS_INODE_DIRTY;
+  }
+
+out:
+  fs_inode_unlock(inode);
+
+  return r;
+}
+
+int
 fs_inode_ioctl_locked(struct Inode *inode, int request, int arg)
 {
   int ret;

@@ -9,6 +9,7 @@ libc_a_SOURCES += \
   %D%/grp/getgrent.c \
   %D%/grp/getgrgid.c \
   %D%/grp/getgrnam.c \
+  %D%/grp/initgroups.c \
   %D%/grp/setgrent.c \
   %D%/mntent/getmntent.c \
   %D%/netdb/endservent.c \
@@ -25,6 +26,7 @@ libc_a_SOURCES += \
   %D%/signal/sigpending.c \
   %D%/signal/sigprocmask.c \
   %D%/signal/sigsuspend.c \
+  %D%/signal/sigwait.c \
   %D%/stdio/_rename.c \
   %D%/stdio/flockfile.c \
   %D%/stdio/funlockfile.c \

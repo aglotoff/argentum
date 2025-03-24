@@ -427,6 +427,7 @@ ext2_sb_sync(struct Ext2SuperblockData *sb, dev_t dev)
 
   raw->wtime             = sb->wtime;
   raw->free_blocks_count = sb->free_blocks_count;
+  raw->free_inodes_count = sb->free_inodes_count;
 
   buf->flags = BUF_DIRTY;
 
@@ -514,6 +515,7 @@ ext2_mount(dev_t dev)
   sb->inodes_count      = raw->inodes_count;
   sb->r_blocks_count    = raw->r_blocks_count;
   sb->free_blocks_count = raw->free_blocks_count;
+  sb->free_inodes_count = raw->free_inodes_count;
   sb->log_block_size    = raw->log_block_size;
   sb->blocks_per_group  = raw->blocks_per_group;
   sb->inodes_per_group  = raw->inodes_per_group;

@@ -1,14 +1,8 @@
-#include <stdio.h>
-#include <stdlib.h>
 #include <utime.h>
+#include <sys/syscall.h>
 
 int
 utime(const char *path, const struct utimbuf *times)
 {
-  (void) path;
-  (void) times;
-  
-  fprintf(stderr, "TODO: utime\n");
-
-  return 0;
+  return __syscall2(__SYS_UTIME, path, times);
 }

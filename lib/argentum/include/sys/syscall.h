@@ -72,6 +72,8 @@
 #define __SYS_MOUNT         66
 #define __SYS_SETITIMER     67
 #define __SYS_RENAME        68
+#define __SYS_CHOWN         69
+#define __SYS_UTIME         70
 
 #ifndef __ASSEMBLER__
 

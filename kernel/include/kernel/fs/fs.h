@@ -8,6 +8,7 @@
 #include <limits.h>
 #include <stdint.h>
 #include <sys/types.h>
+#include <utime.h>
 
 #include <kernel/elf.h>
 #include <kernel/core/list.h>
@@ -112,6 +113,7 @@ void          fs_inode_put(struct Inode *);
 struct Inode *fs_inode_duplicate(struct Inode *);
 void          fs_inode_lock(struct Inode *);
 int           fs_inode_access(struct Inode *, int);
+int           fs_inode_utime(struct Inode *, struct utimbuf *);
 void          fs_inode_unlock(struct Inode *);
 int           fs_inode_lookup_locked(struct Inode *, const char *, int, struct Inode **);
 
@@ -142,6 +144,7 @@ int              fs_unlink(const char *);
 int              fs_rmdir(const char *);
 int              fs_access(const char *, int);
 ssize_t          fs_readlink(const char *, char *, size_t);
+int              fs_utime(const char *, struct utimbuf *);
 
 // File operations
 int              fs_close(struct File *);
@@ -157,6 +160,7 @@ int              fs_ioctl(struct File *, int, int);
 int              fs_select(struct File *, struct timeval *);
 int              fs_ftruncate(struct File *, off_t);
 int              fs_fsync(struct File *);
+int              fs_chown(const char *, uid_t, gid_t);
 
 struct PathNode *fs_path_node_create(const char *, struct Inode *, struct PathNode *);
 struct PathNode *fs_path_duplicate(struct PathNode *);

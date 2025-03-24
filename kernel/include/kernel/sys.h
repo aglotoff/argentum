@@ -74,5 +74,7 @@ int32_t sys_mount(void);
 int32_t sys_gethostbyname(void);
 int32_t sys_setitimer(void);
 int32_t sys_rename(void);
+int32_t sys_chown(void);
+int32_t sys_utime(void);
 
 #endif  // !__KERNEL_INCLUDE_KERNEL_SYSCALL_H__

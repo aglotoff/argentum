@@ -1,0 +1,12 @@
+diff -ruN old/build-aux/config.sub new/build-aux/config.sub
+--- old/build-aux/config.sub	2023-07-10 10:36:00.000000000 +0300
++++ new/build-aux/config.sub	2025-03-24 09:14:04.603015573 +0300
+@@ -1758,7 +1758,7 @@
+ 	     | onefs* | tirtos* | phoenix* | fuchsia* | redox* | bme* \
+ 	     | midnightbsd* | amdhsa* | unleashed* | emscripten* | wasi* \
+ 	     | nsk* | powerunix* | genode* | zvmoe* | qnx* | emx* | zephyr* \
+-	     | fiwix* | mlibc* )
++	     | fiwix* | mlibc* | argentum* )
+ 		;;
+ 	# This one is extra strict with allowed versions
+ 	sco3.2v2 | sco3.2v[4-9]* | sco5v6*)

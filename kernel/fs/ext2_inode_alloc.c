@@ -88,6 +88,19 @@ ext2_inode_alloc(struct Ext2SuperblockData *sb, mode_t mode, dev_t rdev, dev_t d
   uint32_t gds_per_block, g, gi;
   uint32_t inum;
   uint32_t gd_start      = sb->block_size > 1024U ? 1 : 2;
+  int r;
+
+  if ((r = k_mutex_lock(&sb->mutex)) < 0)
+    return r;
+  
+  if (sb->free_inodes_count == 0) {
+    k_mutex_unlock(&sb->mutex);
+    return -ENOSPC;
+  }
+
+  sb->free_inodes_count--;
+
+  k_mutex_unlock(&sb->mutex);
 
   gds_per_block = sb->block_size / sizeof(struct Ext2BlockGroup);
 
@@ -150,6 +163,14 @@ ext2_inode_alloc(struct Ext2SuperblockData *sb, mode_t mode, dev_t rdev, dev_t d
 
     buf_release(buf);
   }
+
+  if ((r = k_mutex_lock(&sb->mutex)) < 0)
+    k_panic("TODO");
+
+  sb->free_inodes_count++;
+  k_mutex_unlock(&sb->mutex);
+
+  k_panic("no free inodes");
   
   return -ENOMEM;
 }

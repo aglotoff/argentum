@@ -20,7 +20,6 @@ time_init(void)
 
   if (k_cpu_id() == 0) {
     k_tick_set(seconds2ticks(arch_get_time_seconds()));
-   // cprintf("[k] init time %p\n", k_tick_get());
     ticks_to_sync = TICKS_SYNC_PERIOD;
   }
 }

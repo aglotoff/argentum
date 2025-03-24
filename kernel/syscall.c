@@ -93,6 +93,8 @@ static int32_t (*syscalls[])(void) = {
   [__SYS_GETHOSTBYNAME] = sys_gethostbyname,
   [__SYS_SETITIMER]   = sys_setitimer,
   [__SYS_RENAME]      = sys_rename,
+  [__SYS_CHOWN]       = sys_chown,
+  [__SYS_UTIME]       = sys_utime,
 };
 
 int32_t
@@ -545,7 +547,6 @@ sys_chmod(void)
 
   if ((r = sys_arg_str(0, PATH_MAX, VM_READ, &path)) < 0) {
     cprintf("%s\n", process_current()->name);
-    k_panic("bub\n");
     goto out1;
   }
 
@@ -1702,6 +1703,62 @@ sys_setitimer(void)
 out2:
   if (value != NULL)
     k_free(value);
+out1:
+  return r;
+}
+
+int32_t
+sys_chown(void)
+{
+  char *path;
+  uid_t uid;
+  gid_t gid;
+  int r;
+
+  if ((r = sys_arg_str(0, PATH_MAX, VM_READ, &path)) < 0)
+    goto out1;
+
+  if ((r = sys_arg_ushort(1, &uid)) < 0)
+    goto out2;
+  if ((r = sys_arg_ushort(2, &gid)) < 0)
+    goto out2;
+
+  r = fs_chown(path, uid, gid);
+
+out2:
+  k_free(path);
+out1:
+  return r;
+}
+
+int32_t
+sys_utime(void)
+{
+  char *path;
+  uintptr_t times_va;
+  int r;
+
+  if ((r = sys_arg_str(0, PATH_MAX, VM_READ, &path)) < 0)
+    goto out1;
+
+  if ((r = sys_arg_va(2, &times_va, sizeof times_va, VM_WRITE, 1)) < 0)
+    goto out2;
+
+  if (times_va) {
+    struct utimbuf *times;
+
+    if ((r = sys_arg_buf(1, (void **) &times, sizeof *times, VM_READ)) < 0)
+      goto out2;
+
+    r = fs_utime(path, times);
+
+    k_free(times);
+  } else {
+    r = fs_utime(path, NULL);
+  }
+
+out2:
+  k_free(path);
 out1:
   return r;
 }

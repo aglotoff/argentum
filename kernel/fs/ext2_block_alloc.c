@@ -139,6 +139,8 @@ ext2_block_alloc(struct Ext2SuperblockData *sb, dev_t dev, uint32_t *bstore)
   sb->free_blocks_count++;
   k_mutex_unlock(&sb->mutex);
 
+  k_panic("no free blocks");
+
   return -ENOMEM;
 }
 

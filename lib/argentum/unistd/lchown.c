@@ -1,9 +1,9 @@
-#include <stdio.h>
+#include <sys/syscall.h>
 #include <unistd.h>
 
 int
 lchown(const char *path, uid_t owner, gid_t group)
 {
-  fprintf(stderr, "TODO: lchown(%s,%d,%d)\n", path, owner, group);
-  return -1;
+  // FIXME: symlinks
+  return __syscall3(__SYS_CHOWN, path, owner, group);
 }

@@ -14,6 +14,7 @@ LIB_SRCFILES := \
 	lib/argentum/grp/getgrent.c \
 	lib/argentum/grp/getgrgid.c \
 	lib/argentum/grp/getgrnam.c \
+	lib/argentum/grp/initgroups.c \
 	lib/argentum/grp/setgrent.c \
 	lib/argentum/include/arpa/ftp.h \
 	lib/argentum/include/arpa/inet.h \
@@ -59,6 +60,7 @@ LIB_SRCFILES := \
 	lib/argentum/signal/sigpending.c \
 	lib/argentum/signal/sigprocmask.c \
 	lib/argentum/signal/sigsuspend.c \
+	lib/argentum/signal/sigwait.c \
 	lib/argentum/stdio/_rename.c \
 	lib/argentum/stdio/flockfile.c \
 	lib/argentum/stdio/funlockfile.c \

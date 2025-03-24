@@ -64,6 +64,22 @@ fs_access(const char *path, int amode)
 }
 
 int
+fs_utime(const char *path, struct utimbuf *times)
+{
+  struct Inode *inode;
+  int r;
+
+  if ((r = fs_lookup_inode(path, 0, &inode)) < 0)
+    return r;
+
+  r = fs_inode_utime(inode, times);
+
+  fs_inode_put(inode);
+
+  return r;
+}
+
+int
 fs_open(const char *path, int oflag, mode_t mode, struct File **file_store)
 {
   struct File *file;
@@ -366,6 +382,25 @@ fs_fchown(struct File *file, uid_t uid, gid_t gid)
     k_panic("not a file");
 
   inode = fs_path_inode(file->node);
+  fs_inode_lock(inode);
+
+  r = fs_inode_chown_locked(inode, uid, gid);
+
+  fs_inode_unlock(inode);
+  fs_inode_put(inode);
+
+  return r;
+}
+
+int
+fs_chown(const char *path, uid_t uid, gid_t gid)
+{
+  struct Inode *inode;
+  int r;
+
+  if ((r = fs_lookup_inode(path, 0, &inode)) < 0)
+    return r;
+
   fs_inode_lock(inode);
 
   r = fs_inode_chown_locked(inode, uid, gid);
