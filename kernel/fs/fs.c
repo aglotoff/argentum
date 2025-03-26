@@ -133,8 +133,6 @@ fs_open(const char *path, int oflag, mode_t mode, struct File **file_store)
       r = -ENOTDIR;
       goto out2;
     }
-
-
   }
 
   if (S_ISDIR(inode->mode) && (oflag & O_WRONLY)) {
@@ -149,8 +147,6 @@ fs_open(const char *path, int oflag, mode_t mode, struct File **file_store)
     if ((r = fs_inode_truncate_locked(inode, 0)) < 0)
       goto out2;
   }
-
-  
 
   if (oflag & O_RDONLY) {
     // TODO: check group and other permissions

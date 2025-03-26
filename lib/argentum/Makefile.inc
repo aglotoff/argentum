@@ -44,6 +44,7 @@ libc_a_SOURCES += \
   %D%/sys/mman/munmap.c \
   %D%/sys/mount/mount.c \
   %D%/sys/resource/getrlimit.c \
+  %D%/sys/resource/getrusage.c \
   %D%/sys/resource/setrlimit.c \
   %D%/sys/socket/accept.c \
   %D%/sys/socket/bind.c \
@@ -68,6 +69,7 @@ libc_a_SOURCES += \
   %D%/sys/stat/stat.c \
   %D%/sys/stat/umask.c \
   %D%/sys/time/clock_gettime.c \
+  %D%/sys/time/getitimer.c \
   %D%/sys/time/gettimeofday.c \
   %D%/sys/time/select.c \
   %D%/sys/time/setitimer.c \
@@ -84,17 +86,20 @@ libc_a_SOURCES += \
   %D%/termios/tcflush.c \
   %D%/termios/tcgetattr.c \
   %D%/termios/tcsetattr.c \
+  %D%/time/clock_getres.c \
   %D%/time/nanosleep.c \
   %D%/unistd/_exit.c \
   %D%/unistd/access.c \
   %D%/unistd/alarm.c \
   %D%/unistd/chdir.c \
+  %D%/unistd/chroot.c \
   %D%/unistd/close.c \
   %D%/unistd/dup.c \
   %D%/unistd/dup2.c \
   %D%/unistd/execve.c \
   %D%/unistd/fchdir.c \
   %D%/unistd/fchown.c \
+  %D%/unistd/fdatasync.c \
   %D%/unistd/fork.c \
   %D%/unistd/fsync.c \
   %D%/unistd/fpathconf.c \
@@ -122,6 +127,7 @@ libc_a_SOURCES += \
   %D%/unistd/rmdir.c \
   %D%/unistd/sbrk.c \
   %D%/unistd/setgid.c \
+  %D%/unistd/setgroups.c \
   %D%/unistd/sethostname.c \
   %D%/unistd/setpgid.c \
   %D%/unistd/setregid.c \
@@ -129,6 +135,7 @@ libc_a_SOURCES += \
   %D%/unistd/setresuid.c \
   %D%/unistd/setreuid.c \
   %D%/unistd/setuid.c \
+  %D%/unistd/symlink.c \
   %D%/unistd/sync.c \
   %D%/unistd/sysconf.c \
   %D%/unistd/tcgetpgrp.c \

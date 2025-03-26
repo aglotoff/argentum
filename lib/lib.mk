@@ -78,6 +78,7 @@ LIB_SRCFILES := \
 	lib/argentum/sys/mman/munmap.c \
 	lib/argentum/sys/mount/mount.c \
 	lib/argentum/sys/resource/getrlimit.c \
+	lib/argentum/sys/resource/getrusage.c \
 	lib/argentum/sys/resource/setrlimit.c \
 	lib/argentum/sys/socket/accept.c \
 	lib/argentum/sys/socket/bind.c \
@@ -102,6 +103,7 @@ LIB_SRCFILES := \
 	lib/argentum/sys/stat/stat.c \
 	lib/argentum/sys/stat/umask.c \
 	lib/argentum/sys/time/clock_gettime.c \
+	lib/argentum/sys/time/getitimer.c \
 	lib/argentum/sys/time/gettimeofday.c \
 	lib/argentum/sys/time/select.c \
 	lib/argentum/sys/time/setitimer.c \
@@ -117,17 +119,20 @@ LIB_SRCFILES := \
 	lib/argentum/termios/tcflush.c \
 	lib/argentum/termios/tcgetattr.c \
 	lib/argentum/termios/tcsetattr.c \
+	lib/argentum/time/clock_getres.c \
 	lib/argentum/time/nanosleep.c \
 	lib/argentum/unistd/_exit.c \
 	lib/argentum/unistd/access.c \
 	lib/argentum/unistd/alarm.c \
 	lib/argentum/unistd/chdir.c \
+	lib/argentum/unistd/chroot.c \
 	lib/argentum/unistd/close.c \
 	lib/argentum/unistd/dup.c \
 	lib/argentum/unistd/dup2.c \
 	lib/argentum/unistd/execve.c \
 	lib/argentum/unistd/fchdir.c \
 	lib/argentum/unistd/fchown.c \
+	lib/argentum/unistd/fdatasync.c \
 	lib/argentum/unistd/fork.c \
 	lib/argentum/unistd/fpathconf.c \
 	lib/argentum/unistd/fsync.c \
@@ -155,6 +160,7 @@ LIB_SRCFILES := \
 	lib/argentum/unistd/rmdir.c \
 	lib/argentum/unistd/sbrk.c \
 	lib/argentum/unistd/setgid.c \
+	lib/argentum/unistd/setgroups.c \
 	lib/argentum/unistd/sethostname.c \
 	lib/argentum/unistd/setpgid.c \
 	lib/argentum/unistd/setregid.c \
@@ -162,6 +168,7 @@ LIB_SRCFILES := \
 	lib/argentum/unistd/setresuid.c \
 	lib/argentum/unistd/setreuid.c \
 	lib/argentum/unistd/setuid.c \
+	lib/argentum/unistd/symlink.c \
 	lib/argentum/unistd/sync.c \
 	lib/argentum/unistd/sysconf.c \
 	lib/argentum/unistd/tcgetpgrp.c \

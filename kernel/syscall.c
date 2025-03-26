@@ -108,8 +108,8 @@ sys_dispatch(void)
   if ((num < (int) ARRAY_SIZE(syscalls)) && syscalls[num]) {
     int r = syscalls[num]();
 
-    //if (process_current()->pid >= 270)
-    //  cprintf("[%s] syscall(%d) -> %d\n", process_current()->name, num, r);
+    // if (r < 0)
+    //   cprintf("[%s] syscall(%d) -> %d\n", process_current()->name, num, r);
 
     return r;
   }
@@ -704,7 +704,7 @@ sys_readlink(void)
     r = -ENOMEM;
     goto out2;
   }
-  
+
   if ((r = fs_readlink(path, buf, NAME_MAX)) < 0)
     goto out3;
 
