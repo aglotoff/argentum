@@ -86,7 +86,7 @@ sys_arch_sem_wait(sys_sem_t *sem, u32_t timeout_ms)
   unsigned long start_ticks, end_ticks;
 
   start_ticks = k_tick_get();
-  if (k_semaphore_timed_get(*sem, ms2ticks(timeout_ms)) < 0)
+  if (k_semaphore_timed_get(*sem, ms2ticks(timeout_ms), K_SLEEP_UNINTERUPTIBLE) < 0)
     return SYS_ARCH_TIMEOUT; 
   end_ticks = k_tick_get();
   

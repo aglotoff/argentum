@@ -95,7 +95,7 @@ time_nanosleep(struct timespec *rqtp, struct timespec *rmtp)
     struct KSemaphore sem;
 
     k_semaphore_create(&sem, 0);
-    r = k_semaphore_timed_get(&sem, req_ticks);
+    r = k_semaphore_timed_get(&sem, req_ticks, 0);
 
     elapsed_ticks = MIN(k_tick_get() - start_ticks, req_ticks);
 

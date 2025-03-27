@@ -107,7 +107,7 @@ _k_mutex_timed_lock(struct KMutex *mutex, unsigned long timeout)
     _k_mutex_may_raise_priority(mutex, my_task->priority);
 
     my_task->sleep_on_mutex = mutex;
-    r = _k_sched_sleep(&mutex->queue, K_TASK_STATE_MUTEX, timeout, NULL);
+    r = _k_sched_sleep(&mutex->queue, K_TASK_STATE_SLEEP, timeout, NULL);
     my_task->sleep_on_mutex = NULL;
 
     if (r < 0)

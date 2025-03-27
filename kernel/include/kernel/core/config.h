@@ -35,4 +35,6 @@ void on_task_idle(void);
 #define K_ON_TASK_AFTER_SWITCH    on_task_after_switch
 #define K_ON_TASK_IDLE            on_task_idle
 
+typedef unsigned long long  k_tick_t;
+
 #endif  // !_KERNEL_CORE_CONFIG_H_

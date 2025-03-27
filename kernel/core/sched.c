@@ -225,12 +225,16 @@ _k_sched_raise_priority(struct KTask *task, int priority)
     k_list_remove(&task->link);
     _k_sched_enqueue(task);
     break;
-  case K_TASK_STATE_MUTEX:
-    // Re-insert to update priority
-    k_list_remove(&task->link);
-    _k_sched_add(&task->sleep_on_mutex->queue, task);
+  case K_TASK_STATE_SLEEP:
+  case K_TASK_STATE_SLEEP_UNINTERRUPTIBLE:
+    if (task->sleep_on_mutex != NULL) {
+      // Re-insert to update priority
+      k_list_remove(&task->link);
+      _k_sched_add(&task->sleep_on_mutex->queue, task);
   
-    _k_mutex_may_raise_priority(task->sleep_on_mutex, task->priority);
+      _k_mutex_may_raise_priority(task->sleep_on_mutex, task->priority);
+    }
+    
     break;
   default:
     break;
@@ -245,14 +249,11 @@ _k_sched_resume(struct KTask *task, int result)
 
   switch (task->state) {
   case K_TASK_STATE_SLEEP:
+  case K_TASK_STATE_SLEEP_UNINTERRUPTIBLE:
+    // FIXME: this may lead to decreasing mutex priority
     k_list_remove(&task->link);
     break;
-  case K_TASK_STATE_MUTEX:
-    k_list_remove(&task->link);
-  
-    // TODO: this may lead to decreasing mutex priority
 
-    break;
   default:
     return;
   }
@@ -333,9 +334,6 @@ k_task_timeout_callback(struct KTimeout *entry)
   struct KTask *task = KLIST_CONTAINER(entry, struct KTask, timer);
 
   switch (task->state) {
-  case K_TASK_STATE_MUTEX:
-    // TODO
-    // fall through
   case K_TASK_STATE_SLEEP:
     _k_sched_resume(task, -ETIMEDOUT);
     break;
