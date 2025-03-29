@@ -5,6 +5,7 @@
 #include <kernel/console.h>
 #include <kernel/fs/buf.h>
 #include <kernel/time.h>
+#include <kernel/process.h>
 
 #include "ext2.h"
 
@@ -50,7 +51,7 @@ ext2_inode_init(struct Ext2SuperblockData *sb, dev_t dev, uint32_t table, uint32
 
   if (((mode & EXT2_S_IFMASK) == EXT2_S_IFBLK) ||
       ((mode & EXT2_S_IFMASK) == EXT2_S_IFCHR)) {
-    ext2_block_alloc(sb, dev, &raw->block[0]);
+    ext2_block_alloc(thread_current(), sb, dev, &raw->block[0]);
     struct Buf *block_buf;
 
     block_buf = buf_read(raw->block[0], sb->block_size, dev);
@@ -102,6 +103,8 @@ ext2_inode_alloc(struct Ext2SuperblockData *sb, mode_t mode, dev_t rdev, dev_t d
 
   k_mutex_unlock(&sb->mutex);
 
+  ext2_sb_sync(sb, dev);
+
   gds_per_block = sb->block_size / sizeof(struct Ext2BlockGroup);
 
   // First try to find a free block in the same group as the specified inode
@@ -128,6 +131,8 @@ ext2_inode_alloc(struct Ext2SuperblockData *sb, mode_t mode, dev_t rdev, dev_t d
 
     if (istore)
       *istore = inum;
+
+    //cprintf("[k] alloc %d (%d)\n", inum, sb->free_inodes_count);
 
     return 0;
   }
@@ -157,6 +162,8 @@ ext2_inode_alloc(struct Ext2SuperblockData *sb, mode_t mode, dev_t rdev, dev_t d
         if (istore)
           *istore = inum;
 
+        //cprintf("[k] alloc %d (%d)\n", inum, sb->free_inodes_count);
+
         return 0;
       }
     }
@@ -170,7 +177,9 @@ ext2_inode_alloc(struct Ext2SuperblockData *sb, mode_t mode, dev_t rdev, dev_t d
   sb->free_inodes_count++;
   k_mutex_unlock(&sb->mutex);
 
-  k_panic("no free inodes");
+  ext2_sb_sync(sb, dev);
+
+  k_warn("no free inodes");
   
   return -ENOMEM;
 }
@@ -204,4 +213,15 @@ ext2_inode_free(struct Ext2SuperblockData *sb, dev_t dev, uint32_t ino)
   buf->flags |= BUF_DIRTY;
 
   buf_release(buf);
+
+  if (k_mutex_lock(&sb->mutex) < 0)
+    k_panic("TODO");
+
+  sb->free_inodes_count++;
+
+  //cprintf("[k] free %d (%d)\n", ino, sb->free_inodes_count);
+
+  k_mutex_unlock(&sb->mutex);
+
+  ext2_sb_sync(sb, dev);
 }

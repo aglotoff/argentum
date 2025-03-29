@@ -60,7 +60,7 @@ ext2_locate_inode(struct Inode *inode, uint32_t *offset)
 }
 
 int
-ext2_inode_read(struct Inode *inode)
+ext2_inode_read(struct Thread *thread, struct Inode *inode)
 {
   struct Buf *buf;
   struct Ext2Inode *raw;
@@ -94,7 +94,7 @@ ext2_inode_read(struct Inode *inode)
   memmove(extra->block, raw->block, sizeof(extra->block));
 
   if (S_ISCHR(inode->mode) || S_ISBLK(inode->mode)) {
-    ext2_read(inode, (uintptr_t) &inode->rdev, sizeof(inode->rdev), 0);
+    ext2_read(thread, inode, (uintptr_t) &inode->rdev, sizeof(inode->rdev), 0);
   }
 
   buf_release(buf);
@@ -103,13 +103,15 @@ ext2_inode_read(struct Inode *inode)
 }
 
 int
-ext2_inode_write(struct Inode *inode)
+ext2_inode_write(struct Thread *thread, struct Inode *inode)
 {
   struct Buf *buf;
   struct Ext2Inode *raw;
   unsigned long block, offset;
   struct Ext2InodeExtra *extra;
   struct Ext2SuperblockData *sb = (struct Ext2SuperblockData *) (inode->fs->extra);
+
+  (void) thread;
 
   block = ext2_locate_inode(inode, &offset);
 
@@ -159,7 +161,7 @@ ext2_inode_get_block(struct Inode *inode, uint32_t n, int alloc)
     id_store = &extra->block[n];
 
     if ((id = *id_store) == 0) {
-      if (!alloc || (ext2_block_alloc(sb, inode->dev, &id) != 0))
+      if (!alloc || (ext2_block_alloc(thread_current(), sb, inode->dev, &id) != 0))
         return 0;
 
       *id_store = id;
@@ -195,7 +197,7 @@ ext2_inode_get_block(struct Inode *inode, uint32_t n, int alloc)
   // Get the ID of the first indirect block in the chain
   id_store = &extra->block[EXT2_MAX_DIRECT_BLOCKS + lvl];
   if ((id = *id_store) == 0) {
-    if (!alloc || (ext2_block_alloc(sb, inode->dev, &id) != 0))
+    if (!alloc || (ext2_block_alloc(thread_current(), sb, inode->dev, &id) != 0))
       return 0;
 
     *id_store = id;
@@ -215,7 +217,7 @@ ext2_inode_get_block(struct Inode *inode, uint32_t n, int alloc)
     id_store += (n >> lvl_idx_shift) & lvl_idx_mask;
 
     if ((id = *id_store) == 0) {
-      if (!alloc || (ext2_block_alloc(sb, inode->dev, &id) != 0)) {
+      if (!alloc || (ext2_block_alloc(thread_current(), sb, inode->dev, &id) != 0)) {
         buf_release(buf);
         return 0;
       }
@@ -268,7 +270,7 @@ ext2_trunc_indirect(struct Inode *inode, uint32_t *id_store, int lvl, size_t to)
 }
 
 void
-ext2_trunc(struct Inode *inode, off_t length)
+ext2_trunc(struct Thread *thread, struct Inode *inode, off_t length)
 {
   struct Ext2SuperblockData *sb = (struct Ext2SuperblockData *) (inode->fs->extra);
   size_t blocks_inc = (1024U / 512U) << sb->log_block_size;
@@ -279,7 +281,11 @@ ext2_trunc(struct Inode *inode, off_t length)
   uint32_t shift_per_lvl = (10 - 2 + sb->log_block_size);
   uint32_t lvl_start, lvl_limit;
 
+  // FIXME: symlinks
+
   int lvl;
+
+  (void) thread;
 
   // Free direct blocks
   for ( ; (n < end) && (n < EXT2_MAX_DIRECT_BLOCKS); n++) {
@@ -296,12 +302,13 @@ ext2_trunc(struct Inode *inode, off_t length)
   for (lvl = 0; (lvl < 3) && (n < end); lvl++) {
     size_t lvl_end = lvl_start + lvl_limit;
 
-    if (n < lvl_end) {
+    if (n <= lvl_end) {
       ext2_trunc_indirect(inode,
                           &extra->block[EXT2_MAX_DIRECT_BLOCKS + lvl], lvl,
                           n - lvl_start);
-      n = lvl_end;
     }
+
+    n = lvl_end;
 
     lvl_start  += lvl_limit;
     lvl_limit <<= shift_per_lvl;
@@ -309,10 +316,12 @@ ext2_trunc(struct Inode *inode, off_t length)
 }
 
 ssize_t
-ext2_read(struct Inode *inode, uintptr_t va, size_t nbyte, off_t off)
+ext2_read(struct Thread *thread, struct Inode *inode, uintptr_t va, size_t nbyte, off_t off)
 {
   size_t total, n;
   struct Ext2SuperblockData *sb = (struct Ext2SuperblockData *) (inode->fs->extra);
+
+  (void) thread;
 
   for (total = 0; total < nbyte; total += n, off += n, va += n) {
     uint32_t block_id = ext2_inode_get_block(inode, off / sb->block_size, 0);
@@ -333,7 +342,7 @@ ext2_read(struct Inode *inode, uintptr_t va, size_t nbyte, off_t off)
         return -EIO;
       }
 
-      if ((r = vm_space_copy_out(&buf->data[off % sb->block_size], va, n)) < 0) {
+      if ((r = vm_space_copy_out(thread, &buf->data[off % sb->block_size], va, n)) < 0) {
         buf_release(buf);
         return r;
       }
@@ -346,10 +355,12 @@ ext2_read(struct Inode *inode, uintptr_t va, size_t nbyte, off_t off)
 }
 
 ssize_t
-ext2_write(struct Inode *inode, uintptr_t va, size_t nbyte, off_t off)
+ext2_write(struct Thread *thread, struct Inode *inode, uintptr_t va, size_t nbyte, off_t off)
 {
   struct Ext2SuperblockData *sb = (struct Ext2SuperblockData *) (inode->fs->extra);
   size_t total, n;
+
+  (void) thread;
 
   for (total = 0; total < nbyte; total += n, off += n, va += n) {
     uint32_t block_id = ext2_inode_get_block(inode, off / sb->block_size, 1);
@@ -364,7 +375,7 @@ ext2_write(struct Inode *inode, uintptr_t va, size_t nbyte, off_t off)
       return -EIO;
     }
 
-    vm_space_copy_in(&buf->data[off % sb->block_size], va, n);
+    vm_space_copy_in(thread, &buf->data[off % sb->block_size], va, n);
     buf->flags |= BUF_DIRTY;
 
     buf_release(buf);

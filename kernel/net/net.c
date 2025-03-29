@@ -5,6 +5,7 @@
 #include <kernel/core/task.h>
 #include <kernel/object_pool.h>
 #include <kernel/vmspace.h>
+#include <kernel/process.h>
 #include <netdb.h>
 
 #include <lwip/api.h>
@@ -231,7 +232,7 @@ net_recvfrom(struct File *file, uintptr_t va, size_t nbytes, int flags,
       break;
     }
 
-    if ((r = vm_space_copy_out(p, va, nread)) < 0) {
+    if ((r = vm_space_copy_out(thread_current(), p, va, nread)) < 0) {
       total = -errno;
       break;
     }
@@ -272,7 +273,7 @@ net_sendto(struct File *file, uintptr_t va, size_t nbytes, int flags,
   while (nbytes) {
     ssize_t nwrite = MIN(nbytes, PAGE_SIZE);
     
-    if ((r = vm_space_copy_in(p, va, nwrite)) < 0) {
+    if ((r = vm_space_copy_in(thread_current(), p, va, nwrite)) < 0) {
       total = -errno;
       break;
     }

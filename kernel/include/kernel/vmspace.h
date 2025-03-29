@@ -15,6 +15,7 @@
 
 struct Inode;
 struct Page;
+struct Thread;
 
 struct VMSpaceMapEntry {
   struct KListLink link;
@@ -39,8 +40,8 @@ int               vm_space_load_inode(void *, void *, struct Inode *,
 intptr_t          vmspace_map(struct VMSpace *, uintptr_t, size_t, int);
 void              vm_print_areas(struct VMSpace *);
 
-int               vm_space_copy_out(const void *, uintptr_t, size_t);
-int               vm_space_copy_in(void *, uintptr_t, size_t);
+int               vm_space_copy_out(struct Thread *, const void *, uintptr_t, size_t);
+int               vm_space_copy_in(struct Thread *, void *, uintptr_t, size_t);
 int               vm_space_clear(uintptr_t, size_t);
 
 #endif  // !__KERNEL_INCLUDE_KERNEL_VMSPACE_H__

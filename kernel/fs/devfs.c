@@ -7,6 +7,7 @@
 #include <kernel/console.h>
 #include <kernel/dev.h>
 #include <kernel/time.h>
+#include <kernel/page.h>
 
 #include "devfs.h"
 
@@ -47,7 +48,7 @@ devfs_inode_get(struct FS *fs, ino_t inum)
 }
 
 int
-devfs_inode_read(struct Inode *inode)
+devfs_inode_read(struct Thread *, struct Inode *inode)
 {
   if ((inode->ino >= 2) && (inode->ino <= NDEV)) {
     struct DevfsNode *device = &devices[inode->ino - 1];
@@ -71,20 +72,20 @@ devfs_inode_read(struct Inode *inode)
 }
 
 int
-devfs_inode_write(struct Inode *inode)
+devfs_inode_write(struct Thread *, struct Inode *inode)
 {
   k_assert(inode->dev == 1);
   return -ENOSYS;
 }
 
 void
-devfs_inode_delete(struct Inode *inode)
+devfs_inode_delete(struct Thread *, struct Inode *inode)
 {
   k_assert(inode->dev == 1);
 }
 
 ssize_t
-devfs_read(struct Inode *inode, uintptr_t va, size_t n, off_t offset)
+devfs_read(struct Thread *, struct Inode *inode, uintptr_t va, size_t n, off_t offset)
 {
   k_assert(inode->dev == 1);
   (void) va;
@@ -94,7 +95,7 @@ devfs_read(struct Inode *inode, uintptr_t va, size_t n, off_t offset)
 }
 
 ssize_t
-devfs_write(struct Inode *inode, uintptr_t va, size_t n, off_t offset)
+devfs_write(struct Thread *, struct Inode *inode, uintptr_t va, size_t n, off_t offset)
 {
   (void) inode;
   (void) va;
@@ -104,7 +105,7 @@ devfs_write(struct Inode *inode, uintptr_t va, size_t n, off_t offset)
 }
 
 int
-devfs_rmdir(struct Inode *parent, struct Inode *inode, const char *)
+devfs_rmdir(struct Thread *, struct Inode *parent, struct Inode *inode, const char *)
 {
   k_assert(inode->dev == 1);
   (void) parent;
@@ -112,7 +113,7 @@ devfs_rmdir(struct Inode *parent, struct Inode *inode, const char *)
 }
 
 ssize_t
-devfs_readdir(struct Inode *inode, void *buf, FillDirFunc filldir, off_t offset)
+devfs_readdir(struct Thread *, struct Inode *inode, void *buf, FillDirFunc filldir, off_t offset)
 {
   struct DevfsNode *device = &devices[offset];
 
@@ -130,7 +131,7 @@ devfs_readdir(struct Inode *inode, void *buf, FillDirFunc filldir, off_t offset)
 }
 
 ssize_t
-devfs_readlink(struct Inode *inode, char *buf, size_t n)
+devfs_readlink(struct Thread *, struct Inode *inode, char *buf, size_t n)
 {
   k_assert(inode->dev == 1);
   (void) buf;
@@ -139,7 +140,7 @@ devfs_readlink(struct Inode *inode, char *buf, size_t n)
 }
 
 int
-devfs_create(struct Inode *inode, char *name, mode_t mode, struct Inode **store)
+devfs_create(struct Thread *, struct Inode *inode, char *name, mode_t mode, struct Inode **store)
 {
   k_assert(inode->dev == 1);
   (void) name;
@@ -149,7 +150,7 @@ devfs_create(struct Inode *inode, char *name, mode_t mode, struct Inode **store)
 }
 
 int
-devfs_mkdir(struct Inode *inode, char *name, mode_t mode, struct Inode **store)
+devfs_mkdir(struct Thread *, struct Inode *inode, char *name, mode_t mode, struct Inode **store)
 {
   k_assert(inode->dev == 1);
   (void) name;
@@ -159,7 +160,7 @@ devfs_mkdir(struct Inode *inode, char *name, mode_t mode, struct Inode **store)
 }
 
 int
-devfs_mknod(struct Inode *inode, char *name, mode_t mode, dev_t dev, struct Inode **store)
+devfs_mknod(struct Thread *, struct Inode *inode, char *name, mode_t mode, dev_t dev, struct Inode **store)
 {
   k_assert(inode->dev == 1);
   (void) name;
@@ -170,7 +171,7 @@ devfs_mknod(struct Inode *inode, char *name, mode_t mode, dev_t dev, struct Inod
 }
 
 int
-devfs_link(struct Inode *parent, char *name, struct Inode *inode)
+devfs_link(struct Thread *, struct Inode *parent, char *name, struct Inode *inode)
 {
   k_assert(inode->dev == 1);
   (void) name;
@@ -179,7 +180,7 @@ devfs_link(struct Inode *parent, char *name, struct Inode *inode)
 }
 
 int
-devfs_unlink(struct Inode *parent, struct Inode *inode, const char *)
+devfs_unlink(struct Thread *, struct Inode *parent, struct Inode *inode, const char *)
 {
   k_assert(inode->dev == 1);
   (void) parent;
@@ -187,7 +188,7 @@ devfs_unlink(struct Inode *parent, struct Inode *inode, const char *)
 }
 
 struct Inode *
-devfs_lookup(struct Inode *inode, const char *name)
+devfs_lookup(struct Thread *, struct Inode *inode, const char *name)
 {
   struct DevfsNode *device;
   
@@ -202,7 +203,7 @@ devfs_lookup(struct Inode *inode, const char *name)
 }
 
 void
-devfs_trunc(struct Inode *inode, off_t size)
+devfs_trunc(struct Thread *, struct Inode *inode, off_t size)
 {
   (void) inode;
   (void) size;
@@ -281,13 +282,8 @@ devfs_mount(dev_t dev)
 {
   struct FS *devfs;
 
-  if ((devfs = (struct FS *) k_malloc(sizeof(struct FS))) == NULL)
+  if ((devfs = fs_create_service("devfs", dev, NULL, &devfs_ops)) == NULL)
     k_panic("cannot allocate FS");
-  
-  devfs->name  = "devfs";
-  devfs->dev   = dev;
-  devfs->extra = NULL;
-  devfs->ops   = &devfs_ops;
 
   //devfs_time = time_get_seconds();
 

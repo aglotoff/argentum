@@ -372,7 +372,7 @@ tty_read(dev_t dev, uintptr_t buf, size_t nbytes)
       if (c == tty->termios.c_cc[VEOF])
         break;
 
-      if ((r = vm_space_copy_out(&c, buf++, 1)) < 0) {
+      if ((r = vm_space_copy_out(thread_current(), &c, buf++, 1)) < 0) {
         k_mutex_unlock(&tty->in.mutex);
         return r;
       }
@@ -382,7 +382,7 @@ tty_read(dev_t dev, uintptr_t buf, size_t nbytes)
       if ((c == tty->termios.c_cc[VEOL]) || (c == '\n'))
         break;
     } else {
-      if ((r = vm_space_copy_out(&c, buf++, 1)) < 0) {
+      if ((r = vm_space_copy_out(thread_current(), &c, buf++, 1)) < 0) {
         k_mutex_unlock(&tty->in.mutex);
         return r;
       }
@@ -414,7 +414,7 @@ tty_write(dev_t dev, uintptr_t buf, size_t nbytes)
     for (i = 0; i != nbytes; i++) {
       int c, r;
 
-      if ((r = vm_space_copy_in(&c, buf + i, 1)) < 0) {
+      if ((r = vm_space_copy_in(thread_current(), &c, buf + i, 1)) < 0) {
         k_mutex_unlock(&tty->out.mutex);
         return r;
       }

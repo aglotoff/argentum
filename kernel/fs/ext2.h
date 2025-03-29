@@ -163,7 +163,7 @@ extern struct FS ext2fs;
 int           ext2_bitmap_alloc(struct Ext2SuperblockData *, uint32_t, size_t, dev_t, uint32_t *);
 int           ext2_bitmap_free(struct Ext2SuperblockData *, uint32_t, dev_t, uint32_t);
 
-int           ext2_block_alloc(struct Ext2SuperblockData *, dev_t, uint32_t *);
+int           ext2_block_alloc(struct Thread *, struct Ext2SuperblockData *, dev_t, uint32_t *);
 void          ext2_block_free(struct Ext2SuperblockData *, dev_t, uint32_t);
 int           ext2_block_zero(struct Ext2SuperblockData *, uint32_t, uint32_t);
 
@@ -172,24 +172,24 @@ void          ext2_inode_free(struct Ext2SuperblockData *, dev_t, uint32_t);
 
 void          ext2_sb_sync(struct Ext2SuperblockData *, dev_t);
 struct Inode *ext2_mount(dev_t);
-int           ext2_inode_read(struct Inode *);
-int           ext2_inode_write(struct Inode *);
-void          ext2_inode_delete(struct Inode *);
+int           ext2_inode_read(struct Thread *, struct Inode *);
+int           ext2_inode_write(struct Thread *, struct Inode *);
+void          ext2_inode_delete(struct Thread *, struct Inode *);
 
-int           ext2_create(struct Inode *, char *, mode_t,
+int           ext2_create(struct Thread *, struct Inode *, char *, mode_t,
                                 struct Inode **);
-struct Inode *ext2_lookup(struct Inode *, const char *);
-int           ext2_link(struct Inode *, char *, struct Inode *);
-int           ext2_unlink(struct Inode *, struct Inode *, const char *);
-int           ext2_mkdir(struct Inode *, char *, mode_t, struct Inode **);
-int           ext2_rmdir(struct Inode *, struct Inode *,const char *);
-int           ext2_mknod(struct Inode *, char *, mode_t, dev_t, struct Inode **);
-void          ext2_trunc(struct Inode *, off_t);
-ssize_t       ext2_read(struct Inode *, uintptr_t, size_t, off_t);
-ssize_t       ext2_write(struct Inode *, uintptr_t, size_t, off_t);
+struct Inode *ext2_lookup(struct Thread *, struct Inode *, const char *);
+int           ext2_link(struct Thread *, struct Inode *, char *, struct Inode *);
+int           ext2_unlink(struct Thread *, struct Inode *, struct Inode *, const char *);
+int           ext2_mkdir(struct Thread *, struct Inode *, char *, mode_t, struct Inode **);
+int           ext2_rmdir(struct Thread *, struct Inode *, struct Inode *,const char *);
+int           ext2_mknod(struct Thread *, struct Inode *, char *, mode_t, dev_t, struct Inode **);
+void          ext2_trunc(struct Thread *, struct Inode *, off_t);
+ssize_t       ext2_read(struct Thread *, struct Inode *, uintptr_t, size_t, off_t);
+ssize_t       ext2_write(struct Thread *, struct Inode *, uintptr_t, size_t, off_t);
 
-ssize_t       ext2_readdir(struct Inode *, void *, FillDirFunc, off_t);
-ssize_t       ext2_readlink(struct Inode *, char *, size_t);
+ssize_t       ext2_readdir(struct Thread *, struct Inode *, void *, FillDirFunc, off_t);
+ssize_t       ext2_readlink(struct Thread *, struct Inode *, char *, size_t);
 uint32_t      ext2_inode_get_block(struct Inode *, uint32_t, int);
 
 #endif  // !__KERNEL_FS_EXT2_H__

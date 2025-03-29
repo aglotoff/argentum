@@ -201,7 +201,7 @@ vm_print_areas(struct VMSpace *vm)
 }
 
 int
-vm_space_copy_out(const void *src, uintptr_t dst_va, size_t n)
+vm_space_copy_out(struct Thread *thread, const void *src, uintptr_t dst_va, size_t n)
 {
   if ((dst_va + n) < dst_va)
     return -EFAULT;
@@ -211,11 +211,13 @@ vm_space_copy_out(const void *src, uintptr_t dst_va, size_t n)
     return 0;
   }
 
-  return vm_copy_out(process_current()->vm->pgtab, src, dst_va, n);
+  k_assert(thread != NULL);
+
+  return vm_copy_out(thread->process->vm->pgtab, src, dst_va, n);
 }
 
 int
-vm_space_copy_in(void *dst, uintptr_t src_va, size_t n)
+vm_space_copy_in(struct Thread *thread, void *dst, uintptr_t src_va, size_t n)
 {
   if ((src_va + n) < src_va)
     return -EFAULT;
@@ -225,7 +227,9 @@ vm_space_copy_in(void *dst, uintptr_t src_va, size_t n)
     return 0;
   }
 
-  return vm_copy_in(process_current()->vm->pgtab, dst, src_va, n);
+  k_assert(thread != NULL);
+
+  return vm_copy_in(thread->process->vm->pgtab, dst, src_va, n);
 }
 
 int

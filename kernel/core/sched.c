@@ -263,7 +263,7 @@ _k_sched_resume(struct KTask *task, int result)
   task->sleep_result = result;
 
   _k_sched_enqueue(task);
-  _k_sched_may_yield(task);
+  //_k_sched_may_yield(task);
 }
 
 // Resume all tasks waiting on the given queue

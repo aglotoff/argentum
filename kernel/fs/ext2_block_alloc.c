@@ -67,10 +67,10 @@ ext2_block_group_alloc(struct Ext2SuperblockData *sb, struct Ext2BlockGroup *gd,
  * @retval -ENOMEM Couldn't find a free block.
  */
 int
-ext2_block_alloc(struct Ext2SuperblockData *sb, dev_t dev, uint32_t *bstore)
+ext2_block_alloc(struct Thread *thread, struct Ext2SuperblockData *sb, dev_t dev, uint32_t *bstore)
 {
-  struct Process *my_process = process_current();
   int r;
+  uid_t euid = (thread == NULL) ? 0 : thread->process->euid;
   
   uint32_t gd_start      = sb->block_size > 1024U ? 1 : 2;
   uint32_t gds_total     = sb->block_count / sb->blocks_per_group;
@@ -86,8 +86,7 @@ ext2_block_alloc(struct Ext2SuperblockData *sb, dev_t dev, uint32_t *bstore)
     return -ENOSPC;
   }
 
-  if ((sb->free_blocks_count < sb->r_blocks_count) &&
-      (my_process->euid != 0)) {
+  if ((sb->free_blocks_count < sb->r_blocks_count) && (euid != 0)) {
     k_mutex_unlock(&sb->mutex);
     return -ENOSPC;
   }
@@ -95,6 +94,8 @@ ext2_block_alloc(struct Ext2SuperblockData *sb, dev_t dev, uint32_t *bstore)
   sb->free_blocks_count--;
 
   k_mutex_unlock(&sb->mutex);
+
+  ext2_sb_sync(sb, dev);
 
   // TODO: do not exceed r_blocks_count for ordinary users!
   // TODO: update free_blocks_count
@@ -139,7 +140,9 @@ ext2_block_alloc(struct Ext2SuperblockData *sb, dev_t dev, uint32_t *bstore)
   sb->free_blocks_count++;
   k_mutex_unlock(&sb->mutex);
 
-  k_panic("no free blocks");
+  ext2_sb_sync(sb, dev);
+
+  k_warn("no free blocks");
 
   return -ENOMEM;
 }
@@ -178,4 +181,6 @@ ext2_block_free(struct Ext2SuperblockData *sb, dev_t dev, uint32_t bno)
     k_panic("TODO");
   sb->free_blocks_count++;
   k_mutex_unlock(&sb->mutex);
+
+  ext2_sb_sync(sb, dev);
 }

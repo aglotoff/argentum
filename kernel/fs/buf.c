@@ -269,7 +269,7 @@ void
 buf_release(struct Buf *buf)
 { 
   if (!(buf->flags & BUF_VALID))
-    k_warn("buffer not valid");
+    k_panic("buffer not valid");
 
   if (buf->flags & BUF_DIRTY) {
     buf_write(buf);

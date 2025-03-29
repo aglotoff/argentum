@@ -13,12 +13,17 @@
 #include <kernel/elf.h>
 #include <kernel/core/list.h>
 #include <kernel/core/mutex.h>
+#include <kernel/core/mailbox.h>
+#include <kernel/core/task.h>
+#include <kernel/core/semaphore.h>
 
 #define INODE_CACHE_SIZE  32
 
 struct stat;
 struct File;
 struct FS;
+
+struct Thread;
 
 struct Inode {
   // These two fields never change
@@ -65,28 +70,34 @@ typedef int (*FillDirFunc)(void *, ino_t, const char *, size_t);
 
 struct FSOps {
   char             *name;
-  int             (*inode_read)(struct Inode *);
-  int             (*inode_write)(struct Inode *);
-  void            (*inode_delete)(struct Inode *);
-  ssize_t         (*read)(struct Inode *, uintptr_t, size_t, off_t);
-  ssize_t         (*write)(struct Inode *, uintptr_t, size_t, off_t);
-  int             (*rmdir)(struct Inode *, struct Inode *, const char *);
-  ssize_t         (*readdir)(struct Inode *, void *, FillDirFunc, off_t);
-  ssize_t         (*readlink)(struct Inode *, char *, size_t);
-  int             (*create)(struct Inode *, char *, mode_t, struct Inode **);
-  int             (*mkdir)(struct Inode *, char *, mode_t, struct Inode **);
-  int             (*mknod)(struct Inode *, char *, mode_t, dev_t, struct Inode **);
-  int             (*link)(struct Inode *, char *, struct Inode *);
-  int             (*unlink)(struct Inode *, struct Inode *, const char *);
-  struct Inode *  (*lookup)(struct Inode *, const char *);
-  void            (*trunc)(struct Inode *, off_t);
+  int             (*inode_read)(struct Thread *, struct Inode *);
+  int             (*inode_write)(struct Thread *, struct Inode *);
+  void            (*inode_delete)(struct Thread *, struct Inode *);
+  ssize_t         (*read)(struct Thread *, struct Inode *, uintptr_t, size_t, off_t);
+  ssize_t         (*write)(struct Thread *, struct Inode *, uintptr_t, size_t, off_t);
+  int             (*rmdir)(struct Thread *, struct Inode *, struct Inode *, const char *);
+  ssize_t         (*readdir)(struct Thread *, struct Inode *, void *, FillDirFunc, off_t);
+  ssize_t         (*readlink)(struct Thread *, struct Inode *, char *, size_t);
+  int             (*create)(struct Thread *, struct Inode *, char *, mode_t, struct Inode **);
+  int             (*mkdir)(struct Thread *, struct Inode *, char *, mode_t, struct Inode **);
+  int             (*mknod)(struct Thread *, struct Inode *, char *, mode_t, dev_t, struct Inode **);
+  int             (*link)(struct Thread *, struct Inode *, char *, struct Inode *);
+  int             (*unlink)(struct Thread *, struct Inode *, struct Inode *, const char *);
+  struct Inode *  (*lookup)(struct Thread *, struct Inode *, const char *);
+  void            (*trunc)(struct Thread *, struct Inode *, off_t);
 };
 
+#define FS_MBOX_CAPACITY  4
+
 struct FS {
-  dev_t         dev;
-  void         *extra;
-  struct FSOps *ops;
-  char         *name;
+  dev_t           dev;
+  void           *extra;
+  struct FSOps   *ops;
+  char           *name;
+  
+  struct KMailBox mbox;
+  uint8_t         mbox_buf[FS_MBOX_CAPACITY * sizeof(void *)];
+  struct KTask    tasks[FS_MBOX_CAPACITY];
 };
 
 #define FS_INODE_VALID  (1 << 0)
@@ -173,5 +184,120 @@ void             fs_path_unlock_two(struct PathNode *, struct PathNode *);
 int              fs_path_mount(struct PathNode *, struct Inode *);
 int              fs_mount(const char *, const char *);
 struct Inode    *fs_path_inode(struct PathNode *);
+
+struct FS *      fs_create_service(char *, dev_t, void *, struct FSOps *);
+void             fs_service_task(void *);
+
+struct Thread;
+
+struct FSMessage {
+  struct KSemaphore sem;
+  struct Thread *sender;
+
+  int type;
+  
+  union {
+    struct {
+      struct Inode *inode;
+      int r;
+    } inode_read;
+    struct {
+      struct Inode *inode;
+    } inode_delete;
+    struct {
+      struct Inode *inode;
+      int r;
+    } inode_write;
+    struct {
+      struct Inode *inode;
+      off_t length;
+    } trunc;
+    struct {
+      struct Inode *dir;
+      const char *name;
+      struct Inode *r;
+    } lookup;
+    struct {
+      struct Inode *dir;
+      char *name;
+      mode_t mode;
+      struct Inode **istore;
+      int r;
+    } mkdir;
+    struct {
+      struct Inode *dir;
+      char *name;
+      mode_t mode;
+      struct Inode **istore;
+      int r;
+    } create;
+    struct {
+      struct Inode *dir;
+      char *name;
+      mode_t mode;
+      dev_t dev;
+      struct Inode **istore;
+      int r;
+    } mknod;
+    struct {
+      struct Inode *inode;
+      uintptr_t va;
+      size_t nbyte;
+      off_t off;
+      ssize_t r;
+    } read;
+    struct {
+      struct Inode *inode;
+      uintptr_t va;
+      size_t nbyte;
+      off_t off;
+      ssize_t r;
+    } write;
+    struct {
+      struct Inode *inode;
+      void *buf;
+      FillDirFunc func;
+      off_t off;
+      ssize_t r;
+    } readdir;
+    struct {
+      struct Inode *dir;
+      char *name;
+      struct Inode *inode;
+      int r;
+    } link;
+    struct {
+      struct Inode *dir;
+      struct Inode *inode;
+      const char *name;
+      int r;
+    } unlink;
+    struct {
+      struct Inode *dir;
+      struct Inode *inode;
+      const char *name;
+      int r;
+    } rmdir;
+  } u;
+};
+
+int              fs_send_recv(struct FS *, struct FSMessage *);
+
+enum {
+  FS_MSG_INODE_READ   = 1,
+  FS_MSG_INODE_DELETE = 2,
+  FS_MSG_INODE_WRITE  = 3,
+  FS_MSG_TRUNC        = 4,
+  FS_MSG_LOOKUP       = 5,
+  FS_MSG_MKDIR        = 6,
+  FS_MSG_CREATE       = 7,
+  FS_MSG_MKNOD        = 8,
+  FS_MSG_READ         = 9,
+  FS_MSG_WRITE        = 10,
+  FS_MSG_READDIR      = 11,
+  FS_MSG_LINK         = 12,
+  FS_MSG_UNLINK       = 13,
+  FS_MSG_RMDIR        = 14,
+};
 
 #endif  // !__KERNEL_INCLUDE_KERNEL_FS_FS_H__

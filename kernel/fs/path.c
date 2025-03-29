@@ -426,7 +426,7 @@ fs_mount(const char *type, const char *path)
   if ((fs_lookup(path, 0, &node) != 0) || (node == NULL))
     return -ENOENT;
 
-  if (!strcmp(type, "devfs")) {
+  if (strcmp(type, "devfs") == 0) {
     root = devfs_mount(FS_DEV_DEV);
   } else {
     fs_path_put(node);

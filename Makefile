@@ -63,7 +63,7 @@ include ports/ports.mk
 include tools/tools.mk
 
 clean-fs:
-	rm -rf $(OBJ)/fs.img
+	rm -rf $(OBJ)/fs.img $(OBJ)/fs.img.d
 
 fs: clean-fs $(OBJ)/fs.img
 
