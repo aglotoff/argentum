@@ -695,7 +695,7 @@ fs_create(const char *path, mode_t mode, dev_t dev, struct PathNode **istore)
   int r;
 
   // (dir->ref_count): +1
-  if ((r = fs_path_lookup(path, name, 0, NULL, &dir)) < 0)
+  if ((r = fs_path_node_resolve(path, name, FS_LOOKUP_FOLLOW_LINKS, NULL, &dir)) < 0)
     return r;
 
   mode &= ~process_current()->cmask;
@@ -725,7 +725,7 @@ fs_create(const char *path, mode_t mode, dev_t dev, struct PathNode **istore)
   fs_inode_unlock(dir_inode);
   fs_inode_put(dir_inode);
 
-  fs_path_put(dir); // (dir->ref_count): -1
+  fs_path_node_unref(dir); // (dir->ref_count): -1
 
   return r;
 }
@@ -762,12 +762,12 @@ fs_link(char *path1, char *path2)
   char name[NAME_MAX + 1];
   int r;
 
-  if ((r = fs_lookup(path1, 0, &pp)) < 0)
+  if ((r = fs_path_resolve(path1, 0, &pp)) < 0)
     return r;
   if (pp == NULL)
     return -ENOENT;
 
-  if ((r = fs_path_lookup(path2, name, 0, NULL, &dirp)) < 0)
+  if ((r = fs_path_node_resolve(path2, name, FS_LOOKUP_FOLLOW_LINKS, NULL, &dirp)) < 0)
     goto out1;
 
   // TODO: check for the same node?
@@ -786,9 +786,9 @@ fs_link(char *path1, char *path2)
   fs_inode_put(inode);
   fs_inode_put(parent_inode);
 
-  fs_path_put(dirp);
+  fs_path_node_unref(dirp);
 out1:
-  fs_path_put(pp);
+  fs_path_node_unref(pp);
   return r;
 }
 
@@ -801,12 +801,12 @@ fs_rename(char *old, char *new)
   char new_name[NAME_MAX + 1];
   int r;
 
-  if ((r = fs_path_lookup(old, old_name, 0, &old_node, &old_dir)) < 0)
+  if ((r = fs_path_node_resolve(old, old_name, FS_LOOKUP_FOLLOW_LINKS, &old_node, &old_dir)) < 0)
     return r;
   if (old_node == NULL)
     return -ENOENT;
 
-  if ((r = fs_path_lookup(new, new_name, 0, &new_node, &new_dir)) < 0)
+  if ((r = fs_path_node_resolve(new, new_name, FS_LOOKUP_FOLLOW_LINKS, &new_node, &new_dir)) < 0)
     goto out1;
   if (new_dir == NULL) {
     r = -ENOENT;
@@ -828,7 +828,7 @@ fs_rename(char *old, char *new)
     // FIXME: check if is dir
 
     if ((r = fs_inode_unlink(parent_inode, inode, new_name)) == 0) {
-      fs_path_remove(new_node);
+      fs_path_node_remove(new_node);
     }
 
     fs_inode_unlock_two(parent_inode, inode);
@@ -836,7 +836,7 @@ fs_rename(char *old, char *new)
     fs_inode_put(inode);
     fs_inode_put(parent_inode);
 
-    fs_path_put(new_node);
+    fs_path_node_unref(new_node);
 
     if (r != 0)
       goto out2;
@@ -860,7 +860,7 @@ fs_rename(char *old, char *new)
   fs_inode_lock_two(parent_inode, inode);
   //cprintf("remove %s\n", );
   if ((r = fs_inode_unlink(parent_inode, inode, old_name)) == 0) {
-    fs_path_remove(old_node);
+    fs_path_node_remove(old_node);
   }
   fs_inode_unlock_two(parent_inode, inode);
 
@@ -869,12 +869,12 @@ fs_rename(char *old, char *new)
 out2:
   fs_inode_put(inode);
 
-  fs_path_put(new_dir);
+  fs_path_node_unref(new_dir);
 out1:
   if (old_dir != NULL)
-    fs_path_put(old_dir);
+    fs_path_node_unref(old_dir);
   if (old_node != NULL)
-    fs_path_put(old_node);
+    fs_path_node_unref(old_node);
   return r;
 }
 
@@ -886,11 +886,11 @@ fs_unlink(const char *path)
   char name[NAME_MAX + 1];
   int r;
 
-  if ((r = fs_path_lookup(path, name, 0, &pp, &dir)) < 0)
+  if ((r = fs_path_node_resolve(path, name, FS_LOOKUP_FOLLOW_LINKS, &pp, &dir)) < 0)
     return r;
 
   if (pp == NULL) {
-    fs_path_put(dir);
+    fs_path_node_unref(dir);
     return -ENOENT;
   }
 
@@ -902,7 +902,7 @@ fs_unlink(const char *path)
   fs_inode_lock_two(parent_inode, inode);
   
   if ((r = fs_inode_unlink(parent_inode, inode, name)) == 0) {
-    fs_path_remove(pp);
+    fs_path_node_remove(pp);
   }
 
   fs_inode_unlock_two(parent_inode, inode);
@@ -910,8 +910,8 @@ fs_unlink(const char *path)
   fs_inode_put(inode);
   fs_inode_put(parent_inode);
 
-  fs_path_put(dir);
-  fs_path_put(pp);
+  fs_path_node_unref(dir);
+  fs_path_node_unref(pp);
 
   return r;
 }
@@ -924,11 +924,11 @@ fs_rmdir(const char *path)
   char name[NAME_MAX + 1];
   int r;
 
-  if ((r = fs_path_lookup(path, name, 0, &pp, &dir)) < 0)
+  if ((r = fs_path_node_resolve(path, name, 0, &pp, &dir)) < 0)
     return r;
 
   if (pp == NULL) {
-    fs_path_put(dir);
+    fs_path_node_unref(dir);
     return -ENOENT;
   }
 
@@ -940,7 +940,7 @@ fs_rmdir(const char *path)
   fs_inode_lock_two(parent_inode, inode);
 
   if ((r = fs_inode_rmdir(parent_inode, inode, name)) == 0) {
-    fs_path_remove(pp);
+    fs_path_node_remove(pp);
   }
 
   fs_inode_unlock_two(parent_inode, inode);
@@ -948,8 +948,8 @@ fs_rmdir(const char *path)
   fs_inode_put(inode);
   fs_inode_put(parent_inode);
 
-  fs_path_put(dir);
-  fs_path_put(pp);
+  fs_path_node_unref(dir);
+  fs_path_node_unref(pp);
 
   return r;
 }
@@ -977,7 +977,7 @@ fs_set_pwd(struct PathNode *node)
   fs_inode_unlock(inode);
   fs_inode_put(inode);
 
-  fs_path_put(current->cwd);
+  fs_path_node_unref(current->cwd);
 
   current->cwd = node;
 
@@ -990,14 +990,14 @@ fs_chdir(const char *path)
   struct PathNode *pp;
   int r;
 
-  if ((r = fs_lookup(path, 0, &pp)) < 0)
+  if ((r = fs_path_resolve(path, 0, &pp)) < 0)
     return r;
 
   if (pp == NULL)
     return -ENOENT;
 
   if ((r = fs_set_pwd(pp)) != 0)
-    fs_path_put(pp);
+    fs_path_node_unref(pp);
 
   return r;
 }

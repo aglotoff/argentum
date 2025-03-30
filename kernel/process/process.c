@@ -328,7 +328,7 @@ process_destroy(int status)
   k_spinlock_release(&pid_hash.lock);
 
   fd_close_all(current);
-  fs_path_put(current->cwd);
+  fs_path_node_unref(current->cwd);
 
   k_assert(init_process != NULL);
 
@@ -410,7 +410,7 @@ process_copy(int share_vm)
   child->rgid  = current->rgid;
   child->egid  = current->egid;
   child->cmask = current->cmask;
-  child->cwd   = fs_path_duplicate(current->cwd);
+  child->cwd   = fs_path_node_ref(current->cwd);
   child->ctty  = current->ctty;
 
   k_list_add_back(&__process_list, &child->link);
@@ -550,7 +550,7 @@ process_run(void *arg)
 
     fs_init();
 
-    if ((process->cwd == NULL) && (fs_lookup("/", 0, &process->cwd) < 0))
+    if ((process->cwd == NULL) && (fs_path_resolve("/", 0, &process->cwd) < 0))
       k_panic("root not found");
   }
 

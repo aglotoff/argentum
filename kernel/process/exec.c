@@ -209,7 +209,7 @@ resolve(const char *path, struct ExecContext *ctx)
     int r;
     char *interpreter;
 
-    if ((r = fs_lookup_inode(p, 0, &inode)) < 0)
+    if ((r = fs_path_resolve_inode(p, FS_LOOKUP_FOLLOW_LINKS, &inode)) < 0)
       return r;
 
     fs_inode_lock(inode);

@@ -1,5 +1,5 @@
-#ifndef __KERNEL_INCLUDE_KERNEL_FS_FS_H__
-#define __KERNEL_INCLUDE_KERNEL_FS_FS_H__
+#ifndef __KERNEL_INCLUDE_KERNEL_FS_H__
+#define __KERNEL_INCLUDE_KERNEL_FS_H__
 
 #ifndef __ARGENTUM_KERNEL__
 #error "This is a kernel header; user programs should not #include it"
@@ -114,9 +114,9 @@ extern struct PathNode *fs_root;
 
 void          fs_init(void);
 
-int           fs_lookup(const char *, int, struct PathNode **);
-int           fs_lookup_inode(const char *, int, struct Inode **);
-int           fs_path_lookup(const char *, char *, int, struct PathNode **, struct PathNode **);
+int           fs_path_resolve(const char *, int, struct PathNode **);
+int           fs_path_resolve_inode(const char *, int, struct Inode **);
+int           fs_path_node_resolve(const char *, char *, int, struct PathNode **, struct PathNode **);
 int           fs_set_pwd(struct PathNode *);
 
 struct Inode *fs_inode_get(ino_t ino, dev_t dev);
@@ -174,14 +174,13 @@ int              fs_fsync(struct File *);
 int              fs_chown(const char *, uid_t, gid_t);
 
 struct PathNode *fs_path_node_create(const char *, struct Inode *, struct PathNode *);
-struct PathNode *fs_path_duplicate(struct PathNode *);
-void             fs_path_remove(struct PathNode *);
-void             fs_path_put(struct PathNode *);
+struct PathNode *fs_path_node_ref(struct PathNode *);
+void             fs_path_node_remove(struct PathNode *);
+void             fs_path_node_unref(struct PathNode *);
 void             fs_path_node_lock(struct PathNode *);
 void             fs_path_node_unlock(struct PathNode *);
 void             fs_path_lock_two(struct PathNode *, struct PathNode *);
 void             fs_path_unlock_two(struct PathNode *, struct PathNode *);
-int              fs_path_mount(struct PathNode *, struct Inode *);
 int              fs_mount(const char *, const char *);
 struct Inode    *fs_path_inode(struct PathNode *);
 
@@ -300,4 +299,4 @@ enum {
   FS_MSG_RMDIR        = 14,
 };
 
-#endif  // !__KERNEL_INCLUDE_KERNEL_FS_FS_H__
+#endif  // !__KERNEL_INCLUDE_KERNEL_FS_H__

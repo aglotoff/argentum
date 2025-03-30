@@ -20,7 +20,7 @@ fs_chmod(const char *path, mode_t mode)
   struct Inode *inode;
   int r;
 
-  if ((r = fs_lookup_inode(path, 0, &inode)) < 0)
+  if ((r = fs_path_resolve_inode(path, FS_LOOKUP_FOLLOW_LINKS, &inode)) < 0)
     return r;
 
   fs_inode_lock(inode);
@@ -39,7 +39,7 @@ fs_readlink(const char *path, char *buf, size_t bufsize)
   struct Inode *inode;
   int r;
 
-  if ((r = fs_lookup_inode(path, 0, &inode)) < 0)
+  if ((r = fs_path_resolve_inode(path, 0, &inode)) < 0)
     return r;
 
   r = fs_inode_readlink(inode, buf, bufsize);
@@ -55,7 +55,7 @@ fs_access(const char *path, int amode)
   struct Inode *inode;
   int r;
 
-  if ((r = fs_lookup_inode(path, 0, &inode)) < 0)
+  if ((r = fs_path_resolve_inode(path, FS_LOOKUP_FOLLOW_LINKS, &inode)) < 0)
     return r;
 
   if (amode != F_OK)
@@ -72,7 +72,7 @@ fs_utime(const char *path, struct utimbuf *times)
   struct Inode *inode;
   int r;
 
-  if ((r = fs_lookup_inode(path, 0, &inode)) < 0)
+  if ((r = fs_path_resolve_inode(path, FS_LOOKUP_FOLLOW_LINKS, &inode)) < 0)
     return r;
 
   r = fs_inode_utime(inode, times);
@@ -88,7 +88,7 @@ fs_open(const char *path, int oflag, mode_t mode, struct File **file_store)
   struct File *file;
   struct PathNode *path_node;
   struct Inode *inode;
-  int r;
+  int r, flags;
 
   // TODO: O_NONBLOCK
 
@@ -107,8 +107,14 @@ fs_open(const char *path, int oflag, mode_t mode, struct File **file_store)
   file->node      = NULL;
   file->ref_count = 1;
 
+  flags = FS_LOOKUP_FOLLOW_LINKS;
+  if ((oflag & O_EXCL) && (oflag & O_CREAT))
+    flags &= ~FS_LOOKUP_FOLLOW_LINKS;
+  if (oflag & O_NOFOLLOW)
+    flags &= ~FS_LOOKUP_FOLLOW_LINKS;
+
   // TODO: the check and the file creation should be atomic
-  if ((r = fs_lookup(path, 0, &path_node)) < 0)
+  if ((r = fs_path_resolve(path, flags, &path_node)) < 0)
     goto out1;
 
   if (path_node == NULL) {
@@ -186,7 +192,7 @@ fs_open(const char *path, int oflag, mode_t mode, struct File **file_store)
 out2:
   fs_inode_unlock(inode);
   fs_inode_put(inode);
-  fs_path_put(path_node);
+  fs_path_node_unref(path_node);
 out1:
   file_put(file);
   return r;
@@ -200,7 +206,7 @@ fs_close(struct File *file)
 
   // TODO: add a comment, when node can be NULL?
   if (file->node != NULL) 
-    fs_path_put(file->node);
+    fs_path_node_unref(file->node);
 
   return 0;
 }
@@ -346,8 +352,8 @@ fs_fchdir(struct File *file)
   if (file->type != FD_INODE)
     k_panic("not a file");
 
-  if ((r = fs_set_pwd(fs_path_duplicate(file->node))) != 0)
-    fs_path_put(file->node);
+  if ((r = fs_set_pwd(fs_path_node_ref(file->node))) != 0)
+    fs_path_node_unref(file->node);
 
   return r;
 }
@@ -398,7 +404,7 @@ fs_chown(const char *path, uid_t uid, gid_t gid)
   struct Inode *inode;
   int r;
 
-  if ((r = fs_lookup_inode(path, 0, &inode)) < 0)
+  if ((r = fs_path_resolve_inode(path, FS_LOOKUP_FOLLOW_LINKS, &inode)) < 0)
     return r;
 
   fs_inode_lock(inode);
