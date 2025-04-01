@@ -44,6 +44,7 @@ KERNEL_SRCFILES := \
 	kernel/fs/inode.c \
 	kernel/fs/path.c \
 	kernel/fs/fs.c \
+	kernel/fs/service.c \
 	kernel/mm/object_pool.c \
 	kernel/mm/page.c \
 	kernel/mm/vm.c \

@@ -151,7 +151,7 @@ resolve_inode(struct Inode *inode, char *p, struct ExecContext *ctx, char **pp)
   if (!S_ISREG(inode->mode))
     return -ENOENT;
 
-  if (!fs_permission(inode, FS_PERM_EXEC, 0))
+  if (!fs_permission(thread_current(), inode, FS_PERM_EXEC, 0))
     return -EPERM;
 
   off = 0;

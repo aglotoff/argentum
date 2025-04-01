@@ -13,7 +13,7 @@ config: $(SRC_DIR)/Makefile
 install: all
 	make -C $(SRC_DIR) DESTDIR=$(SYSROOT) install
 	mkdir -p $(SYSROOT)/bin
-	ln -f $(SYSROOT)/usr/bin/dash $(SYSROOT)/bin/sh
+	ln -fs /usr/bin/dash $(SYSROOT)/bin/sh
 
 $(TARBALL_FILE):
 	wget "http://gondor.apana.org.au/~herbert/dash/files/${TARBALL_NAME}" -O $@

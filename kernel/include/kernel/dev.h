@@ -5,13 +5,14 @@
 
 struct Buf;
 struct timeval;
+struct Thread;
 
 struct CharDev {
-  int     (*open)(dev_t, int, mode_t);
-  ssize_t (*read)(dev_t, uintptr_t, size_t);
-  ssize_t (*write)(dev_t, uintptr_t, size_t);
-  int     (*ioctl)(dev_t, int, int);
-  int     (*select)(dev_t, struct timeval *);
+  int     (*open)(struct Thread *, dev_t, int, mode_t);
+  ssize_t (*read)(struct Thread *, dev_t, uintptr_t, size_t);
+  ssize_t (*write)(struct Thread *, dev_t, uintptr_t, size_t);
+  int     (*ioctl)(struct Thread *, dev_t, int, int);
+  int     (*select)(struct Thread *, dev_t, struct timeval *);
 };
 
 struct BlockDev {

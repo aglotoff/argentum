@@ -9,7 +9,6 @@ USER_SRCFILES += \
 	#user/hello2.cc
 
 USER_SRCFILES += \
-	user/bin/sh.c \
 	user/bin/cat.c \
 	user/bin/date.c \
   user/bin/echo.c \

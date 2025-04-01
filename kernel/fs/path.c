@@ -76,13 +76,16 @@ fs_path_node_remove(struct PathNode *path)
 }
 
 struct PathNode *
-fs_path_node_ref(struct PathNode *path)
+fs_path_node_ref(struct PathNode *node)
 {
+  k_assert(node != NULL);
+  k_assert(node->ref_count > 0);
+
   k_spinlock_acquire(&fs_path_lock);
-  path->ref_count++;
+  node->ref_count++;
   k_spinlock_release(&fs_path_lock);
 
-  return path;
+  return node;
 }
 
 void
@@ -166,15 +169,15 @@ fs_path_node_unlock(struct PathNode *node)
 }
 
 static struct PathNode *
-fs_path_parent(struct PathNode *node)
+fs_path_parent_ref(struct PathNode *node)
 {
   struct PathNode *parent;
 
   fs_path_node_lock(node);
-  parent = node->parent;
+  parent = node->parent ? fs_path_node_ref(node->parent) : NULL;
   fs_path_node_unlock(node);
 
-  return parent == NULL ? NULL : fs_path_node_ref(parent);
+  return parent;
 }
 
 static ssize_t
@@ -188,7 +191,7 @@ fs_path_resolve_symlink(struct Inode *inode,
   if ((path = (char *) k_malloc(PATH_MAX)) == NULL)
     return -ENOMEM;
 
-  if ((r = fs_inode_readlink(inode, path, PATH_MAX - 1)) < 0) {
+  if ((r = fs_inode_readlink(inode, (uintptr_t) path, PATH_MAX - 1)) < 0) {
     k_free(path);
     return r;
   }
@@ -245,15 +248,19 @@ fs_path_node_resolve_at(struct PathNode *start,
       continue;
 
     // Drop reference to the previous node
-    if (prev != NULL)
+    if (prev != NULL) {
+      // UNREF(prev)
       fs_path_node_unref(prev);
+      prev = NULL;
+    }
 
     prev = next;
     next = NULL;
 
     // Move to the parent directory
     if (strcmp(name_buf, "..") == 0) {
-      next = fs_path_parent(prev);
+      // REF(next)
+      next = fs_path_parent_ref(prev);
 
       if (next == NULL) {
         // TODO: how could this happen?
@@ -263,6 +270,7 @@ fs_path_node_resolve_at(struct PathNode *start,
       continue;
     }
 
+    // REF(next)
     r = fs_path_node_lookup(prev, name_buf, flags, &next);
 
     if (r < 0)
@@ -313,15 +321,19 @@ fs_path_node_resolve_at(struct PathNode *start,
     k_free(p);
     p = resolved_path;
 
+    // UNREF(next)
     fs_path_node_unref(next);
+    next = NULL;
 
     // Absolute symlink
     if (*p == '/') {
+      // REF(next)
       next = fs_path_node_ref(fs_root);
       continue;
     }
 
     // Relative symlink
+    // REF(next)
     next = fs_path_node_ref(prev);
   }
 
@@ -384,6 +396,7 @@ fs_path_node_lookup(struct PathNode *parent,
   
   fs_path_node_lock(parent);
 
+  // REF(child)
   child = fs_path_node_lookup_cached(parent, name);
 
   if (child == NULL) {
@@ -410,8 +423,12 @@ fs_path_node_lookup(struct PathNode *parent,
 
   fs_path_node_unlock(parent);
 
-  if (child_store != NULL)
+  if (child_store != NULL) {
     *child_store = child;
+  } else if (child != NULL) {
+    // UNREF(child)
+    fs_path_node_unref(child);
+  }
 
   return r;
 }
@@ -464,6 +481,7 @@ fs_path_resolve(const char *path, int flags, struct PathNode **store)
   char name_buf[NAME_MAX + 1];
 
   if (strcmp(path, "/") == 0) {
+    // REF(store)
     *store = fs_path_node_ref(fs_root);
     return 0;
   }
@@ -477,6 +495,7 @@ fs_path_resolve_inode(const char *path, int flags, struct Inode **inode_store)
   struct PathNode *path_node;
   int r;
   
+  // REF(path_node)
   if ((r = fs_path_resolve(path, flags, &path_node)) < 0)
     return r;
 
@@ -484,6 +503,8 @@ fs_path_resolve_inode(const char *path, int flags, struct Inode **inode_store)
     return -ENOENT;
 
   *inode_store = fs_path_inode(path_node);
+
+  // UNREF(path_node)
   fs_path_node_unref(path_node);
 
   return 0;
@@ -541,13 +562,16 @@ fs_mount(const char *type, const char *path)
   struct PathNode *node;
   struct Inode *root;
 
+  // REF(node)
   if ((fs_path_resolve(path, 0, &node) != 0) || (node == NULL))
     return -ENOENT;
 
   if (strcmp(type, "devfs") == 0) {
     root = devfs_mount(FS_DEV_DEV);
   } else {
+    // UNREF(node)
     fs_path_node_unref(node);
+
     return -EINVAL;
   }
 

@@ -131,10 +131,10 @@ devfs_readdir(struct Thread *, struct Inode *inode, void *buf, FillDirFunc filld
 }
 
 ssize_t
-devfs_readlink(struct Thread *, struct Inode *inode, char *buf, size_t n)
+devfs_readlink(struct Thread *, struct Inode *inode, uintptr_t va, size_t n)
 {
   k_assert(inode->dev == 1);
-  (void) buf;
+  (void) va;
   (void) n;
   return -ENOSYS;
 }
@@ -228,19 +228,19 @@ struct FSOps devfs_ops = {
 };
 
 int
-special_open(dev_t, int, mode_t)
+special_open(struct Thread *, dev_t, int, mode_t)
 {
   return 0;
 }
 
 int
-special_ioctl(dev_t, int, int)
+special_ioctl(struct Thread *, dev_t, int, int)
 {
   return 0;
 }
 
 ssize_t
-special_read(dev_t dev, uintptr_t, size_t)
+special_read(struct Thread *, dev_t dev, uintptr_t, size_t)
 {
   switch (dev & 0xFF) {
   case 3:
@@ -251,7 +251,7 @@ special_read(dev_t dev, uintptr_t, size_t)
 }
 
 ssize_t
-special_write(dev_t dev, uintptr_t va, size_t n)
+special_write(struct Thread *, dev_t dev, uintptr_t va, size_t n)
 {
   (void) va;
 
@@ -264,7 +264,7 @@ special_write(dev_t dev, uintptr_t va, size_t n)
 }
 
 int
-special_select(dev_t, struct timeval *)
+special_select(struct Thread *, dev_t, struct timeval *)
 {
   return -ENOSYS;
 }

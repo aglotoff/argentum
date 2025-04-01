@@ -705,7 +705,7 @@ sys_readlink(void)
     goto out2;
   }
 
-  if ((r = fs_readlink(path, buf, NAME_MAX)) < 0)
+  if ((r = fs_readlink(path, (uintptr_t) buf, NAME_MAX)) < 0)
     goto out3;
 
   buf_size = MIN(buf_size, (size_t) r);

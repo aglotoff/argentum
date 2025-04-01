@@ -328,7 +328,10 @@ process_destroy(int status)
   k_spinlock_release(&pid_hash.lock);
 
   fd_close_all(current);
+
+  // UNREF(current->cwd)
   fs_path_node_unref(current->cwd);
+  current->cwd = NULL;
 
   k_assert(init_process != NULL);
 
@@ -550,6 +553,7 @@ process_run(void *arg)
 
     fs_init();
 
+    // REF(process->cwd)
     if ((process->cwd == NULL) && (fs_path_resolve("/", 0, &process->cwd) < 0))
       k_panic("root not found");
   }

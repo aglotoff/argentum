@@ -180,8 +180,6 @@ fs_inode_lock(struct Inode *ip)
 
   fs_send_recv(ip->fs, &msg);
 
-  //ip->fs->ops->inode_read(thread_current(), ip);
-
   ip->flags |= FS_INODE_VALID;
 }
 
@@ -199,8 +197,6 @@ fs_inode_unlock(struct Inode *ip)
 
     fs_send_recv(ip->fs, &msg);
 
-    //ip->fs->ops->inode_write(thread_current(), ip);
-  
     ip->flags &= ~FS_INODE_DIRTY;
   }
 
@@ -215,8 +211,6 @@ fs_inode_open_locked(struct Inode *inode, int oflag, mode_t mode)
   if (!fs_inode_holding(inode))
     k_panic("not locked");
 
-  // TODO: check perm
-
   if (S_ISCHR(inode->mode) || S_ISBLK(inode->mode)) {
     struct CharDev *d = dev_lookup_char(inode->rdev);
 
@@ -224,7 +218,7 @@ fs_inode_open_locked(struct Inode *inode, int oflag, mode_t mode)
       return -ENODEV;
 
     fs_inode_unlock(inode);
-    ret = d->open(inode->rdev, oflag, mode);
+    ret = d->open(thread_current(), inode->rdev, oflag, mode);
     fs_inode_lock(inode);
     return ret;
   }
@@ -238,12 +232,10 @@ fs_inode_read_locked(struct Inode *ip, uintptr_t va, size_t nbyte, off_t *off)
   ssize_t ret;
   struct FSMessage msg;
 
-    
-  
   if (!fs_inode_holding(ip))
     k_panic("not locked");
 
-  if (!fs_permission(ip, FS_PERM_READ, 0))
+  if (!fs_permission(thread_current(), ip, FS_PERM_READ, 0))
     return -EPERM;
 
   // Read from the corresponding device
@@ -254,19 +246,11 @@ fs_inode_read_locked(struct Inode *ip, uintptr_t va, size_t nbyte, off_t *off)
       return -ENODEV;
 
     fs_inode_unlock(ip);
-    ret = d->read(ip->rdev, va, nbyte);
+    ret = d->read(thread_current(), ip->rdev, va, nbyte);
     fs_inode_lock(ip);
     return ret;
   }
 
-  if ((off_t) (*off + nbyte) < *off)
-    return -EINVAL;
-
-  if ((off_t) (*off + nbyte) > ip->size)
-    nbyte = ip->size - *off;
-  if (nbyte == 0)
-    return 0;
-    
   msg.type = FS_MSG_READ;
   msg.u.read.inode = ip;
   msg.u.read.va    = va;
@@ -277,12 +261,9 @@ fs_inode_read_locked(struct Inode *ip, uintptr_t va, size_t nbyte, off_t *off)
 
   ret = msg.u.read.r;
 
-  //ret = ip->fs->ops->read(thread_current(), ip, va, nbyte, *off);
-
   if (ret < 0)
     return ret;
 
-  ip->atime  = time_get_seconds();
   ip->flags |= FS_INODE_DIRTY;
 
   *off += ret;
@@ -291,35 +272,37 @@ fs_inode_read_locked(struct Inode *ip, uintptr_t va, size_t nbyte, off_t *off)
 }
 
 ssize_t
-fs_inode_write_locked(struct Inode *ip, uintptr_t va, size_t nbyte, off_t *off)
+fs_inode_write_locked(struct Inode *ip, uintptr_t va, size_t nbyte, off_t *off, int flags)
 {
   ssize_t total;
   struct FSMessage msg;
 
+  fs_inode_lock(ip);
+
   if (!fs_inode_holding(ip))
     k_panic("not locked");
 
-  if (!fs_permission(ip, FS_PERM_WRITE, 0))
+  if (flags & O_APPEND)
+    *off = ip->size;
+
+  if (!fs_permission(thread_current(), ip, FS_PERM_WRITE, 0)) {
+    fs_inode_unlock(ip);
     return -EPERM;
+  }
 
   // Write to the corresponding device
   if (S_ISCHR(ip->mode) || S_ISBLK(ip->mode)) {
     struct CharDev *d = dev_lookup_char(ip->rdev);
 
+    fs_inode_unlock(ip);
+
     if (d == NULL)
       return -ENODEV;
 
-    fs_inode_unlock(ip);
-    total = d->write(ip->rdev, va, nbyte);
-    fs_inode_lock(ip);
+    total = d->write(thread_current(), ip->rdev, va, nbyte);
+
     return total;
   }
-
-  if ((off_t) (*off + nbyte) < *off)
-    return -EINVAL;
-
-  if (nbyte == 0)
-    return 0;
 
   msg.type = FS_MSG_WRITE;
   msg.u.write.inode = ip;
@@ -331,92 +314,38 @@ fs_inode_write_locked(struct Inode *ip, uintptr_t va, size_t nbyte, off_t *off)
 
   total = msg.u.write.r;
 
-  //total = ip->fs->ops->write(thread_current(), ip, va, nbyte, *off);
-
-  if (total > 0) {
-    *off += total;
-
-    if (*off > ip->size)
-      ip->size = *off;
-
-    ip->mtime = time_get_seconds();
-    ip->flags |= FS_INODE_DIRTY;
+  if (total < 0) {
+    fs_inode_unlock(ip);
+    return total;
   }
 
+  *off += total;
+  
+  ip->flags |= FS_INODE_DIRTY;
+
+  fs_inode_unlock(ip);
+
   return total;
-}
-
-static int
-fs_filldir(void *buf, ino_t ino, const char *name, size_t name_len)
-{
-  struct dirent *dp = (struct dirent *) buf;
-
-  dp->d_reclen  = name_len + offsetof(struct dirent, d_name) + 1;
-  dp->d_ino     = ino;
-  memmove(&dp->d_name[0], name, name_len);
-  dp->d_name[name_len] = '\0';
-
-  return dp->d_reclen;
 }
 
 ssize_t
 fs_inode_read_dir_locked(struct Inode *ip, uintptr_t va, size_t nbyte, off_t *off)
 {
   ssize_t total = 0;
-
-  struct {
-    struct dirent de;
-    char buf[NAME_MAX + 1];
-  } de;
-
+  struct FSMessage msg;
+  
   if (!fs_inode_holding(ip))
     k_panic("not locked");
 
-  if (!S_ISDIR(ip->mode))
-    return -ENOTDIR;
+  msg.type = FS_MSG_READDIR;
+  msg.u.readdir.inode = ip;
+  msg.u.readdir.va    = va;
+  msg.u.readdir.nbyte = nbyte;
+  msg.u.readdir.off   = off;
 
-  if (!fs_permission(ip, FS_PERM_READ, 0))
-    return -EPERM;
+  fs_send_recv(ip->fs, &msg);
 
-  while (nbyte > 0) {
-    ssize_t nread;
-    int r;
-    struct FSMessage msg;
-
-    msg.type = FS_MSG_READDIR;
-    msg.u.readdir.inode = ip;
-    msg.u.readdir.buf   = &de;
-    msg.u.readdir.func  = fs_filldir;
-    msg.u.readdir.off   = *off;
-
-    fs_send_recv(ip->fs, &msg);
-
-    nread = msg.u.readdir.r;
-
-    // nread = ip->fs->ops->readdir(thread_current(), ip, &de, fs_filldir, *off)
-
-    if (nread < 0)
-      return nread;
-
-    if (nread == 0)
-      break;
-    
-    if (de.de.d_reclen > nbyte) {
-      if (total == 0) {
-        return -EINVAL;
-      }
-      break;
-    }
-
-    *off += nread;
-
-    if ((r = vm_space_copy_out(thread_current(), &de, va, de.de.d_reclen)) < 0)
-      return r;
-
-    va    += de.de.d_reclen;
-    total += de.de.d_reclen;
-    nbyte -= de.de.d_reclen;
-  }
+  total = msg.u.readdir.r;
 
   return total;
 }
@@ -428,6 +357,7 @@ fs_inode_stat_locked(struct Inode *ip, struct stat *buf)
     k_panic("not locked");
 
   // TODO: check permissions
+  // TODO: move into service
 
   buf->st_dev          = ip->dev;
   buf->st_ino          = ip->ino;
@@ -453,6 +383,7 @@ int
 fs_inode_truncate_locked(struct Inode *inode, off_t length)
 {
   struct FSMessage msg;
+  int r;
 
   if (!fs_inode_holding(inode))
     k_panic("not locked");
@@ -462,96 +393,39 @@ fs_inode_truncate_locked(struct Inode *inode, off_t length)
   if (length > inode->size)
     return -EFBIG;
 
-  if (!fs_permission(inode, FS_PERM_WRITE, 0))
-    return -EPERM;
-
   msg.type = FS_MSG_TRUNC;
   msg.u.trunc.inode  = inode;
   msg.u.trunc.length = length;
 
   fs_send_recv(inode->fs, &msg);
 
-  //inode->fs->ops->trunc(thread_current(), inode, length);
-  
-  inode->size = length;
-  inode->ctime = inode->mtime = time_get_seconds();
-  inode->flags |= FS_INODE_DIRTY;
+  r = msg.u.trunc.r;
+  if (r == 0)
 
-  return 0;
+    inode->flags |= FS_INODE_DIRTY;
+
+  return r;
 }
 
 int
 fs_inode_create(struct Inode *dir, char *name, mode_t mode, dev_t dev,
                 struct Inode **istore)
 {
-  struct Inode *inode;
   struct FSMessage msg;
 
   if (!fs_inode_holding(dir))
     k_panic("directory not locked");
-  
-  if (!S_ISDIR(dir->mode))
-    return -ENOTDIR;
-  if (!fs_permission(dir, FS_PERM_WRITE, 0))
-    return -EPERM;
 
-  msg.type = FS_MSG_LOOKUP;
-  msg.u.lookup.dir  = dir;
-  msg.u.lookup.name = name;
+  msg.type = FS_MSG_CREATE;
+  msg.u.create.dir    = dir;
+  msg.u.create.name   = name;
+  msg.u.create.mode   = mode;
+  msg.u.create.dev    = dev;
+  msg.u.create.istore = istore;
 
   fs_send_recv(dir->fs, &msg);
 
-  inode = msg.u.lookup.r;
-
-  // inode = dir->fs->ops->lookup(thread_current(), dir, name)
-
-  if (inode != NULL) {
-    fs_inode_put(inode);
-    return -EEXIST;
-  }
-
-  // TODO: looks like files are created even if they do exist!!!
-  // check ref_count for inode after mkdir with existing path name!
-
-  switch (mode & S_IFMT) {
-  case S_IFDIR:
-    msg.type = FS_MSG_MKDIR;
-    msg.u.mkdir.dir    = dir;
-    msg.u.mkdir.name   = name;
-    msg.u.mkdir.mode   = mode;
-    msg.u.mkdir.istore = istore;
-
-    fs_send_recv(dir->fs, &msg);
-
-    return msg.u.mkdir.r;
-
-    //return dir->fs->ops->mkdir(thread_current(), dir, name, mode, istore);
-  case S_IFREG:
-    msg.type = FS_MSG_CREATE;
-    msg.u.create.dir    = dir;
-    msg.u.create.name   = name;
-    msg.u.create.mode   = mode;
-    msg.u.create.istore = istore;
-
-    fs_send_recv(dir->fs, &msg);
-
-    return msg.u.create.r;
-
-    //return dir->fs->ops->create(thread_current(), dir, name, mode, istore);
-  default:
-    msg.type = FS_MSG_MKNOD;
-    msg.u.mknod.dir    = dir;
-    msg.u.mknod.name   = name;
-    msg.u.mknod.mode   = mode;
-    msg.u.mknod.dev    = dev;
-    msg.u.mknod.istore = istore;
-
-    fs_send_recv(dir->fs, &msg);
-
-    return msg.u.mknod.r;
-
-    //return dir->fs->ops->mknod(thread_current(), dir, name, mode, dev, istore);
-  }
+  return msg.u.create.r;
 }
 
 int
@@ -564,20 +438,6 @@ fs_inode_link(struct Inode *inode, struct Inode *dir, char *name)
     k_panic("inode not locked");
   if (!fs_inode_holding(dir))
     k_panic("directory not locked");
-  
-  if (!S_ISDIR(dir->mode))
-    return -ENOTDIR;
-  if (!fs_permission(dir, FS_PERM_WRITE, 0))
-    return -EPERM;
-  
-  // TODO: Allow links to directories?
-  if (S_ISDIR(inode->mode))
-    return -EPERM;
-  if (inode->nlink >= LINK_MAX)
-    return -EMLINK;
-
-  if (dir->dev != inode->dev)
-    return -EXDEV;
 
   msg.type = FS_MSG_LINK;
   msg.u.link.dir   = dir;
@@ -587,40 +447,23 @@ fs_inode_link(struct Inode *inode, struct Inode *dir, char *name)
   fs_send_recv(dir->fs, &msg);
 
   return msg.u.link.r;
-
-  //return dir->fs->ops->link(thread_current(), dir, name, inode);
 }
 
 int
 fs_inode_lookup_locked(struct Inode *dir_inode, const char *name, int flags,
                 struct Inode **inode_store)
 {
-  struct Inode *inode;
   struct FSMessage msg;
 
-  if (!S_ISDIR(dir_inode->mode))
-    return -ENOTDIR;
-
-  if (!fs_permission(dir_inode, FS_PERM_READ, flags & FS_LOOKUP_REAL))
-    return -EPERM;
-
   msg.type = FS_MSG_LOOKUP;
-  msg.u.lookup.dir  = dir_inode;
-  msg.u.lookup.name = name;
+  msg.u.lookup.dir    = dir_inode;
+  msg.u.lookup.name   = name;
+  msg.u.lookup.flags  = flags;
+  msg.u.lookup.istore = inode_store;
 
   fs_send_recv(dir_inode->fs, &msg);
 
-  inode = msg.u.lookup.r;
-
-  // (ref_count): +1
-  //inode = dir_inode->fs->ops->lookup(thread_current(), dir_inode, name);
-
-  if (inode_store != NULL)  // (ref_count): pass to the caller
-    *inode_store = inode;
-  else if (inode != NULL)   // (ref_count): -1
-    fs_inode_put(inode);
-
-  return 0;
+  return msg.u.lookup.r;
 }
 
 int
@@ -632,15 +475,6 @@ fs_inode_unlink(struct Inode *dir, struct Inode *inode, const char *name)
     k_panic("inode not locked");
   if (!fs_inode_holding(dir))
     k_panic("directory not locked");
-  
-  if (!S_ISDIR(dir->mode))
-    return -ENOTDIR;
-  if (!fs_permission(dir, FS_PERM_WRITE, 0))
-    return -EPERM;
-
-  // TODO: Allow links to directories?
-  if (S_ISDIR(inode->mode))
-    return -EPERM;
 
   msg.type = FS_MSG_UNLINK;
   msg.u.unlink.dir   = dir;
@@ -650,8 +484,6 @@ fs_inode_unlink(struct Inode *dir, struct Inode *inode, const char *name)
   fs_send_recv(dir->fs, &msg);
 
   return msg.u.unlink.r;
-
-  //return dir->fs->ops->unlink(thread_current(), dir, inode, name);
 }
 
 int
@@ -663,16 +495,6 @@ fs_inode_rmdir(struct Inode *dir, struct Inode *inode, const char *name)
     k_panic("inode not locked");
   if (!fs_inode_holding(dir))
     k_panic("directory not locked");
- 
-  if (!S_ISDIR(dir->mode))
-    return -ENOTDIR;
-
-  if (!fs_permission(dir, FS_PERM_WRITE, 0))
-    return -EPERM;
-
-  // TODO: Allow links to directories?
-  if (!S_ISDIR(inode->mode))
-    return -EPERM;
 
   msg.type = FS_MSG_RMDIR;
   msg.u.rmdir.dir   = dir;
@@ -682,8 +504,6 @@ fs_inode_rmdir(struct Inode *dir, struct Inode *inode, const char *name)
   fs_send_recv(dir->fs, &msg);
 
   return msg.u.rmdir.r;
-
-  //return dir->fs->ops->rmdir(thread_current(), dir, inode, name);
 }
 
 int
@@ -694,7 +514,7 @@ fs_create(const char *path, mode_t mode, dev_t dev, struct PathNode **istore)
   char name[NAME_MAX + 1];
   int r;
 
-  // (dir->ref_count): +1
+  // REF(dir)
   if ((r = fs_path_node_resolve(path, name, FS_LOOKUP_FOLLOW_LINKS, NULL, &dir)) < 0)
     return r;
 
@@ -709,6 +529,7 @@ fs_create(const char *path, mode_t mode, dev_t dev, struct PathNode **istore)
     if (istore != NULL) {
       struct PathNode *pp;
       
+      // REF(pp)
       if ((pp = fs_path_node_create(name, inode, dir)) == NULL) {
         // fs_inode_unlock(inode);
         fs_inode_put(inode);  // (inode->ref_count): -1
@@ -725,7 +546,9 @@ fs_create(const char *path, mode_t mode, dev_t dev, struct PathNode **istore)
   fs_inode_unlock(dir_inode);
   fs_inode_put(dir_inode);
 
-  fs_path_node_unref(dir); // (dir->ref_count): -1
+  // UNREF(dir)
+  fs_path_node_unref(dir);
+  dir = NULL;
 
   return r;
 }
@@ -762,11 +585,13 @@ fs_link(char *path1, char *path2)
   char name[NAME_MAX + 1];
   int r;
 
+  // REF(pp)
   if ((r = fs_path_resolve(path1, 0, &pp)) < 0)
     return r;
   if (pp == NULL)
     return -ENOENT;
 
+  // REF(dirp)
   if ((r = fs_path_node_resolve(path2, name, FS_LOOKUP_FOLLOW_LINKS, NULL, &dirp)) < 0)
     goto out1;
 
@@ -786,8 +611,10 @@ fs_link(char *path1, char *path2)
   fs_inode_put(inode);
   fs_inode_put(parent_inode);
 
+  // UNREF(dirp)
   fs_path_node_unref(dirp);
 out1:
+  // UNREF(pp)
   fs_path_node_unref(pp);
   return r;
 }
@@ -801,11 +628,13 @@ fs_rename(char *old, char *new)
   char new_name[NAME_MAX + 1];
   int r;
 
+  // REF(old_node), REF(old_dir)
   if ((r = fs_path_node_resolve(old, old_name, FS_LOOKUP_FOLLOW_LINKS, &old_node, &old_dir)) < 0)
     return r;
   if (old_node == NULL)
     return -ENOENT;
 
+  // REF(new_node), REF(new_dir)
   if ((r = fs_path_node_resolve(new, new_name, FS_LOOKUP_FOLLOW_LINKS, &new_node, &new_dir)) < 0)
     goto out1;
   if (new_dir == NULL) {
@@ -836,7 +665,9 @@ fs_rename(char *old, char *new)
     fs_inode_put(inode);
     fs_inode_put(parent_inode);
 
+    // UNREF(new_node)
     fs_path_node_unref(new_node);
+    new_node = NULL;
 
     if (r != 0)
       goto out2;
@@ -869,10 +700,14 @@ fs_rename(char *old, char *new)
 out2:
   fs_inode_put(inode);
 
+  // UNREF(new_dir)
   fs_path_node_unref(new_dir);
+
 out1:
+  // UNREF(old_dir)
   if (old_dir != NULL)
     fs_path_node_unref(old_dir);
+  // UNREF(old_node)
   if (old_node != NULL)
     fs_path_node_unref(old_node);
   return r;
@@ -886,10 +721,12 @@ fs_unlink(const char *path)
   char name[NAME_MAX + 1];
   int r;
 
+  // REF(pp), REF(dir)
   if ((r = fs_path_node_resolve(path, name, FS_LOOKUP_FOLLOW_LINKS, &pp, &dir)) < 0)
     return r;
 
   if (pp == NULL) {
+    // UNREF(dir)
     fs_path_node_unref(dir);
     return -ENOENT;
   }
@@ -910,7 +747,10 @@ fs_unlink(const char *path)
   fs_inode_put(inode);
   fs_inode_put(parent_inode);
 
+  // UNREF(dir)
   fs_path_node_unref(dir);
+
+  // UNREF(pp)
   fs_path_node_unref(pp);
 
   return r;
@@ -924,11 +764,14 @@ fs_rmdir(const char *path)
   char name[NAME_MAX + 1];
   int r;
 
+  // REF(pp), REF(dir)
   if ((r = fs_path_node_resolve(path, name, 0, &pp, &dir)) < 0)
     return r;
 
   if (pp == NULL) {
+    // UNREF(dir)
     fs_path_node_unref(dir);
+  
     return -ENOENT;
   }
 
@@ -948,7 +791,10 @@ fs_rmdir(const char *path)
   fs_inode_put(inode);
   fs_inode_put(parent_inode);
 
+  // UNREF(dir)
   fs_path_node_unref(dir);
+
+  // UNREF(pp)
   fs_path_node_unref(pp);
 
   return r;
@@ -968,7 +814,7 @@ fs_set_pwd(struct PathNode *node)
     return -ENOTDIR;
   }
 
-  if (!fs_permission(inode, FS_PERM_EXEC, 0)) {
+  if (!fs_permission(thread_current(), inode, FS_PERM_EXEC, 0)) {
     fs_inode_unlock(inode);
     fs_inode_put(inode);
     return -EPERM;
@@ -977,9 +823,12 @@ fs_set_pwd(struct PathNode *node)
   fs_inode_unlock(inode);
   fs_inode_put(inode);
 
+  // UNREF(current->cwd)
   fs_path_node_unref(current->cwd);
+  current->cwd = NULL;
 
-  current->cwd = node;
+  // REF(current->cwd)
+  current->cwd = fs_path_node_ref(node);
 
   return 0;
 }
@@ -990,14 +839,17 @@ fs_chdir(const char *path)
   struct PathNode *pp;
   int r;
 
+  // REF(pp)
   if ((r = fs_path_resolve(path, 0, &pp)) < 0)
     return r;
 
   if (pp == NULL)
     return -ENOENT;
 
-  if ((r = fs_set_pwd(pp)) != 0)
-    fs_path_node_unref(pp);
+  r = fs_set_pwd(pp);
+  
+  // UNREF(pp)
+  fs_path_node_unref(pp);
 
   return r;
 }
@@ -1023,12 +875,12 @@ fs_inode_chmod_locked(struct Inode *inode, mode_t mode)
 }
 
 int
-fs_permission(struct Inode *inode, mode_t mode, int real)
+fs_permission(struct Thread *thread, struct Inode *inode, mode_t mode, int real)
 {
-  struct Process *my_process = process_current();
+  struct Process *my_process = thread ? thread->process : NULL;
 
-  uid_t uid = real ? my_process->ruid : my_process->euid;
-  gid_t gid = real ? my_process->rgid : my_process->egid;
+  uid_t uid = my_process ? (real ? my_process->ruid : my_process->euid) : 0;
+  gid_t gid = my_process ? (real ? my_process->rgid : my_process->egid) : 0;
 
   if (uid == 0)
     return (mode & FS_PERM_EXEC)
@@ -1052,11 +904,11 @@ fs_inode_access(struct Inode *inode, int amode)
 
   fs_inode_lock(inode);
 
-  if ((amode & R_OK) && !fs_permission(inode, FS_PERM_READ, 1))
+  if ((amode & R_OK) && !fs_permission(thread_current(), inode, FS_PERM_READ, 1))
     r = -EPERM;
-  if ((amode & W_OK) && !fs_permission(inode, FS_PERM_WRITE, 1))
+  if ((amode & W_OK) && !fs_permission(thread_current(), inode, FS_PERM_WRITE, 1))
     r = -EPERM;
-  if ((amode & X_OK) && !fs_permission(inode, FS_PERM_EXEC, 1))
+  if ((amode & X_OK) && !fs_permission(thread_current(), inode, FS_PERM_EXEC, 1))
     r = -EPERM;
 
   fs_inode_unlock(inode);
@@ -1075,7 +927,7 @@ fs_inode_utime(struct Inode *inode, struct utimbuf *times)
   if (times == NULL) {
     if ((my_process->euid != 0) &&
         (my_process->euid != inode->uid) &&
-        !fs_permission(inode, FS_PERM_WRITE, 1)) {
+        !fs_permission(thread_current(), inode, FS_PERM_WRITE, 1)) {
       r = -EPERM;
       goto out;
     }
@@ -1087,7 +939,7 @@ fs_inode_utime(struct Inode *inode, struct utimbuf *times)
   } else {
     if ((my_process->euid != 0) ||
        ((my_process->euid != inode->uid) ||
-         !fs_permission(inode, FS_PERM_WRITE, 1))) {
+         !fs_permission(thread_current(), inode, FS_PERM_WRITE, 1))) {
       r = -EPERM;
       goto out;
     }
@@ -1121,7 +973,7 @@ fs_inode_ioctl_locked(struct Inode *inode, int request, int arg)
       return -ENODEV;
 
     fs_inode_unlock(inode);
-    ret = d->ioctl(inode->rdev, request, arg);
+    ret = d->ioctl(thread_current(), inode->rdev, request, arg);
     fs_inode_lock(inode);
     return ret;
   }
@@ -1146,7 +998,7 @@ fs_inode_select_locked(struct Inode *inode, struct timeval *timeout)
       return -ENODEV;
 
     fs_inode_unlock(inode);
-    ret = d->select(inode->rdev, timeout);
+    ret = d->select(thread_current(), inode->rdev, timeout);
     fs_inode_lock(inode);
     return ret;
   }
@@ -1191,26 +1043,16 @@ fs_inode_chown_locked(struct Inode *inode, uid_t uid, gid_t gid)
 }
 
 ssize_t
-fs_inode_readlink(struct Inode *inode, char *buf, size_t bufsize)
+fs_inode_readlink(struct Inode *inode, uintptr_t va, size_t nbyte)
 { 
-  ssize_t r;
-  
-  fs_inode_lock(inode);
+  struct FSMessage msg;  
 
-  if (!fs_permission(inode, FS_PERM_READ, 0)) {
-    fs_inode_unlock(inode);
-    return -EPERM;
-  }
+  msg.type = FS_MSG_READLINK;
+  msg.u.readlink.inode = inode;
+  msg.u.readlink.va    = va;
+  msg.u.readlink.nbyte = nbyte;
 
-  if (!S_ISLNK(inode->mode)) {
-    fs_inode_unlock(inode);
-    return -EINVAL;
-  }
+  fs_send_recv(inode->fs, &msg);
 
-  // FIXME: readlink
-  r = inode->fs->ops->readlink(thread_current(), inode, buf, bufsize);
-
-  fs_inode_unlock(inode);
-
-  return r;
+  return msg.u.readlink.r;
 }

@@ -189,7 +189,7 @@ ssize_t       ext2_read(struct Thread *, struct Inode *, uintptr_t, size_t, off_
 ssize_t       ext2_write(struct Thread *, struct Inode *, uintptr_t, size_t, off_t);
 
 ssize_t       ext2_readdir(struct Thread *, struct Inode *, void *, FillDirFunc, off_t);
-ssize_t       ext2_readlink(struct Thread *, struct Inode *, char *, size_t);
+ssize_t       ext2_readlink(struct Thread *, struct Inode *, uintptr_t, size_t);
 uint32_t      ext2_inode_get_block(struct Inode *, uint32_t, int);
 
 #endif  // !__KERNEL_FS_EXT2_H__

@@ -34,7 +34,7 @@ fs_chmod(const char *path, mode_t mode)
 }
 
 ssize_t
-fs_readlink(const char *path, char *buf, size_t bufsize)
+fs_readlink(const char *path, uintptr_t va, size_t bufsize)
 {
   struct Inode *inode;
   int r;
@@ -42,7 +42,7 @@ fs_readlink(const char *path, char *buf, size_t bufsize)
   if ((r = fs_path_resolve_inode(path, 0, &inode)) < 0)
     return r;
 
-  r = fs_inode_readlink(inode, buf, bufsize);
+  r = fs_inode_readlink(inode, va, bufsize);
 
   fs_inode_put(inode);
 
@@ -114,6 +114,7 @@ fs_open(const char *path, int oflag, mode_t mode, struct File **file_store)
     flags &= ~FS_LOOKUP_FOLLOW_LINKS;
 
   // TODO: the check and the file creation should be atomic
+  // REF(path_node)
   if ((r = fs_path_resolve(path, flags, &path_node)) < 0)
     goto out1;
 
@@ -125,6 +126,7 @@ fs_open(const char *path, int oflag, mode_t mode, struct File **file_store)
     
     mode &= (S_IRWXU | S_IRWXG | S_IRWXO);
 
+    // REF(path_node)
     if ((r = fs_create(path, S_IFREG | mode, 0, &path_node)) < 0)
       goto out1;
 
@@ -177,7 +179,12 @@ fs_open(const char *path, int oflag, mode_t mode, struct File **file_store)
   if ((r = fs_inode_open_locked(inode, oflag, mode)) < 0)
     goto out2;
 
-  file->node = path_node;
+  // REF(file->node)
+  file->node = fs_path_node_ref(path_node);
+
+  // UNREF(path_node)
+  fs_path_node_unref(path_node);
+  path_node = NULL;
 
   if (oflag & O_APPEND)
     file->offset = inode->size;
@@ -192,6 +199,8 @@ fs_open(const char *path, int oflag, mode_t mode, struct File **file_store)
 out2:
   fs_inode_unlock(inode);
   fs_inode_put(inode);
+
+  // UNREF(path_node)
   fs_path_node_unref(path_node);
 out1:
   file_put(file);
@@ -205,8 +214,11 @@ fs_close(struct File *file)
     k_panic("not a file");
 
   // TODO: add a comment, when node can be NULL?
-  if (file->node != NULL) 
+  if (file->node != NULL) {
+    // UNREF(file->node)
     fs_path_node_unref(file->node);
+    file->node = NULL;
+  }
 
   return 0;
 }
@@ -285,14 +297,9 @@ fs_write(struct File *file, uintptr_t va, size_t nbytes)
     return -EBADF;
 
   inode = fs_path_inode(file->node);
-  fs_inode_lock(inode);
 
-  if (file->flags & O_APPEND)
-    file->offset = inode->size;
+  r = fs_inode_write_locked(inode, va, nbytes, &file->offset, file->flags);
 
-  r = fs_inode_write_locked(inode, va, nbytes, &file->offset);
-
-  fs_inode_unlock(inode);
   fs_inode_put(inode);
 
   return r;
@@ -347,13 +354,19 @@ fs_fstat(struct File *file, struct stat *buf)
 int
 fs_fchdir(struct File *file)
 {
+  struct PathNode *node;
   int r;
 
   if (file->type != FD_INODE)
     k_panic("not a file");
 
-  if ((r = fs_set_pwd(fs_path_node_ref(file->node))) != 0)
-    fs_path_node_unref(file->node);
+  // REF(node)
+  node = fs_path_node_ref(file->node);
+
+  r = fs_set_pwd(node);
+
+  // UNREF(node)
+  fs_path_node_unref(node);
 
   return r;
 }
@@ -495,147 +508,4 @@ fs_fsync(struct File *file)
   fs_inode_put(inode);
 
   return r;
-}
-
-void
-fs_service_task(void *arg)
-{
-  struct FS *fs = (struct FS *) arg;
-  struct FSMessage *msg;
-
-  while (k_mailbox_receive(&fs->mbox, (void *) &msg) >= 0) {
-    k_assert(msg != NULL);
-
-    switch (msg->type) {
-    case FS_MSG_INODE_READ:
-      msg->u.inode_read.r = fs->ops->inode_read(msg->sender, msg->u.inode_read.inode);
-      break;
-    case FS_MSG_INODE_WRITE:
-      msg->u.inode_write.r = fs->ops->inode_write(msg->sender, msg->u.inode_write.inode);
-      break;
-    case FS_MSG_INODE_DELETE:
-      fs->ops->inode_delete(msg->sender, msg->u.inode_delete.inode);
-      break;
-    case FS_MSG_TRUNC:
-      fs->ops->trunc(msg->sender, msg->u.trunc.inode, msg->u.trunc.length);
-      break;
-    case FS_MSG_LOOKUP:
-      msg->u.lookup.r = fs->ops->lookup(msg->sender, msg->u.lookup.dir, msg->u.lookup.name);
-      break;
-    case FS_MSG_READ:
-      msg->u.read.r = fs->ops->read(msg->sender,
-                                    msg->u.read.inode,
-                                    msg->u.read.va, msg->u.read.nbyte,
-                                    msg->u.read.off);
-      break;
-    case FS_MSG_WRITE:
-      msg->u.write.r = fs->ops->write(msg->sender,
-                                      msg->u.write.inode,
-                                      msg->u.write.va,
-                                      msg->u.write.nbyte,
-                                      msg->u.write.off);
-      break;
-    case FS_MSG_READDIR:
-      msg->u.readdir.r = fs->ops->readdir(msg->sender,
-                                          msg->u.readdir.inode,
-                                          msg->u.readdir.buf,
-                                          msg->u.readdir.func,
-                                          msg->u.readdir.off);
-      break;
-    case FS_MSG_MKDIR:
-      msg->u.mkdir.r = fs->ops->mkdir(msg->sender, msg->u.mkdir.dir,
-                                      msg->u.mkdir.name,
-                                      msg->u.mkdir.mode,
-                                      msg->u.mkdir.istore);
-      break;
-    case FS_MSG_CREATE:
-      msg->u.create.r = fs->ops->create(msg->sender, msg->u.create.dir,
-                                        msg->u.create.name,
-                                        msg->u.create.mode,
-                                        msg->u.create.istore);
-      break;
-    case FS_MSG_MKNOD:
-      msg->u.mknod.r = fs->ops->mknod(msg->sender,
-                                      msg->u.mknod.dir,
-                                      msg->u.mknod.name,
-                                      msg->u.mknod.mode,
-                                      msg->u.mknod.dev,
-                                      msg->u.mknod.istore);
-      break;
-    case FS_MSG_LINK:
-      msg->u.link.r = fs->ops->link(msg->sender,
-                                    msg->u.link.dir,
-                                    msg->u.link.name,
-                                    msg->u.link.inode);
-      break;
-    case FS_MSG_UNLINK:
-      msg->u.unlink.r = fs->ops->unlink(msg->sender,
-                                        msg->u.unlink.dir,
-                                        msg->u.unlink.inode,
-                                        msg->u.unlink.name);
-      break;    
-    case FS_MSG_RMDIR:
-      msg->u.rmdir.r = fs->ops->rmdir(msg->sender,
-                                      msg->u.rmdir.dir,
-                                      msg->u.rmdir.inode,
-                                      msg->u.rmdir.name);
-      break;
-    default:
-      k_panic("bad msg type %d\n", msg->type);
-      break;
-    }
-
-    k_semaphore_put(&msg->sem);
-  }
-
-  k_panic("error");
-}
-
-struct FS *
-fs_create_service(char *name, dev_t dev, void *extra, struct FSOps *ops)
-{
-  struct FS *fs;
-  int i;
-
-  if ((fs = (struct FS *) k_malloc(sizeof(struct FS))) == NULL)
-    k_panic("cannot allocate FS");
-  
-  fs->name  = name;
-  fs->dev   = dev;
-  fs->extra = extra;
-  fs->ops   = ops;
-
-  k_mailbox_create(&fs->mbox, sizeof(void *), fs->mbox_buf, sizeof fs->mbox_buf);
-
-  for (i = 0; i < FS_MBOX_CAPACITY; i++) {
-    struct Page *kstack;
-
-    if ((kstack = page_alloc_one(0, 0)) == NULL)
-      k_panic("out of memory");
-
-    kstack->ref_count++;
-
-    k_task_create(&fs->tasks[i], NULL, fs_service_task, fs, page2kva(kstack), PAGE_SIZE, 0);
-    k_task_resume(&fs->tasks[i]);
-  }
-
-  return fs;
-}
-
-int
-fs_send_recv(struct FS *fs, struct FSMessage *msg)
-{
-  struct FSMessage *msg_ptr = msg;
-  int r;
-
-  k_semaphore_create(&msg->sem, 0);
-  msg->sender = thread_current();
-
-  if (k_mailbox_send(&fs->mbox, &msg_ptr) < 0)
-    k_panic("fail");
-
-  if ((r = k_semaphore_get(&msg->sem, K_SLEEP_UNINTERUPTIBLE)) < 0)
-    k_panic("fail %d", r);
-
-  return 0;
 }

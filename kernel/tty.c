@@ -316,10 +316,10 @@ tty_from_dev(dev_t dev)
 }
 
 int
-tty_open(dev_t dev, int oflag, mode_t)
+tty_open(struct Thread *thread, dev_t dev, int oflag, mode_t)
 {
   struct Tty *tty = tty_from_dev(dev);
-  struct Process *my_process = process_current();
+  struct Process *my_process = thread->process;
 
   if (tty == NULL)
     return -ENODEV;
@@ -340,7 +340,7 @@ tty_open(dev_t dev, int oflag, mode_t)
  * @return The number of bytes read or a negative value if an error occured.
  */
 ssize_t
-tty_read(dev_t dev, uintptr_t buf, size_t nbytes)
+tty_read(struct Thread *thread, dev_t dev, uintptr_t buf, size_t nbytes)
 {
   struct Tty *tty = tty_from_dev(dev);
   size_t i = 0;
@@ -372,7 +372,7 @@ tty_read(dev_t dev, uintptr_t buf, size_t nbytes)
       if (c == tty->termios.c_cc[VEOF])
         break;
 
-      if ((r = vm_space_copy_out(thread_current(), &c, buf++, 1)) < 0) {
+      if ((r = vm_space_copy_out(thread, &c, buf++, 1)) < 0) {
         k_mutex_unlock(&tty->in.mutex);
         return r;
       }
@@ -382,7 +382,7 @@ tty_read(dev_t dev, uintptr_t buf, size_t nbytes)
       if ((c == tty->termios.c_cc[VEOL]) || (c == '\n'))
         break;
     } else {
-      if ((r = vm_space_copy_out(thread_current(), &c, buf++, 1)) < 0) {
+      if ((r = vm_space_copy_out(thread, &c, buf++, 1)) < 0) {
         k_mutex_unlock(&tty->in.mutex);
         return r;
       }
@@ -399,7 +399,7 @@ tty_read(dev_t dev, uintptr_t buf, size_t nbytes)
 }
 
 ssize_t
-tty_write(dev_t dev, uintptr_t buf, size_t nbytes)
+tty_write(struct Thread *thread, dev_t dev, uintptr_t buf, size_t nbytes)
 {
   struct Tty *tty = tty_from_dev(dev);
   size_t i;
@@ -414,7 +414,7 @@ tty_write(dev_t dev, uintptr_t buf, size_t nbytes)
     for (i = 0; i != nbytes; i++) {
       int c, r;
 
-      if ((r = vm_space_copy_in(thread_current(), &c, buf + i, 1)) < 0) {
+      if ((r = vm_space_copy_in(thread, &c, buf + i, 1)) < 0) {
         k_mutex_unlock(&tty->out.mutex);
         return r;
       }
@@ -431,7 +431,7 @@ tty_write(dev_t dev, uintptr_t buf, size_t nbytes)
 }
 
 int
-tty_ioctl(dev_t dev, int request, int arg)
+tty_ioctl(struct Thread *thread, dev_t dev, int request, int arg)
 {
   struct Tty *tty = tty_from_dev(dev);
   struct winsize ws;
@@ -441,7 +441,7 @@ tty_ioctl(dev_t dev, int request, int arg)
 
   switch (request) {
   case TIOCGETA:
-    return vm_copy_out(process_current()->vm->pgtab,
+    return vm_copy_out(thread->process->vm->pgtab,
                        &tty->termios,
                        arg,
                        sizeof(struct termios));
@@ -449,7 +449,7 @@ tty_ioctl(dev_t dev, int request, int arg)
   case TIOCSETAW:
     // TODO: drain
   case TIOCSETA:
-    return vm_copy_in(process_current()->vm->pgtab,
+    return vm_copy_in(thread->process->vm->pgtab,
                       &tty->termios,
                       arg,
                       sizeof(struct termios));
@@ -465,10 +465,10 @@ tty_ioctl(dev_t dev, int request, int arg)
     ws.ws_row = tty_current->out.screen->rows;
     ws.ws_xpixel = tty_current->out.screen->cols * 8;  // FIXME
     ws.ws_ypixel = tty_current->out.screen->rows * 16; // FIXME
-    return vm_copy_out(process_current()->vm->pgtab, &ws, arg, sizeof ws);
+    return vm_copy_out(thread->process->vm->pgtab, &ws, arg, sizeof ws);
   case TIOCSWINSZ:
     // cprintf("set winsize\n");
-    if (vm_copy_in(process_current()->vm->pgtab, &ws, arg, sizeof ws) < 0)
+    if (vm_copy_in(thread->process->vm->pgtab, &ws, arg, sizeof ws) < 0)
       return -EFAULT;
     // cprintf("ws_col = %d\n", ws.ws_col);
     // cprintf("ws_row = %d\n", ws.ws_row);
@@ -482,7 +482,7 @@ tty_ioctl(dev_t dev, int request, int arg)
 }
 
 static int
-tty_try_select(struct Tty *tty)
+tty_try_select(struct Thread *, struct Tty *tty)
 {
   if (tty->in.size > 0) {
     if (!(tty->termios.c_lflag & ICANON)) {
@@ -496,7 +496,7 @@ tty_try_select(struct Tty *tty)
 }
 
 int
-tty_select(dev_t dev, struct timeval *timeout)
+tty_select(struct Thread *thread, dev_t dev, struct timeval *timeout)
 {
   struct Tty *tty = tty_from_dev(dev);
   int r;
@@ -506,7 +506,7 @@ tty_select(dev_t dev, struct timeval *timeout)
 
   k_mutex_lock(&tty->in.mutex);
 
-  while ((r = tty_try_select(tty)) == 0) {
+  while ((r = tty_try_select(thread, tty)) == 0) {
     unsigned long t = 0;
 
     if (timeout != NULL) {

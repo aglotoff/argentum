@@ -53,17 +53,23 @@ struct Inode {
 };
 
 struct PathNode {
-  char            name[NAME_MAX + 1];
-  int             ref_count;
+  char             name[NAME_MAX + 1];
+  int              ref_count;
 
-  struct KMutex   mutex;
+  struct KMutex    mutex;
 
-  struct PathNode    *parent;
+  struct PathNode *parent;
   struct KListLink children;
   struct KListLink siblings;
 
-  struct Inode   *inode;
-  struct Inode   *mounted;
+  struct Inode    *inode;
+  struct Inode    *mounted;
+
+  // ino_t            ino;
+  // dev_t            dev;
+
+  // ino_t            mounted_ino;
+  // dev_t            mounted_dev;
 };
 
 typedef int (*FillDirFunc)(void *, ino_t, const char *, size_t);
@@ -77,7 +83,7 @@ struct FSOps {
   ssize_t         (*write)(struct Thread *, struct Inode *, uintptr_t, size_t, off_t);
   int             (*rmdir)(struct Thread *, struct Inode *, struct Inode *, const char *);
   ssize_t         (*readdir)(struct Thread *, struct Inode *, void *, FillDirFunc, off_t);
-  ssize_t         (*readlink)(struct Thread *, struct Inode *, char *, size_t);
+  ssize_t         (*readlink)(struct Thread *, struct Inode *, uintptr_t, size_t);
   int             (*create)(struct Thread *, struct Inode *, char *, mode_t, struct Inode **);
   int             (*mkdir)(struct Thread *, struct Inode *, char *, mode_t, struct Inode **);
   int             (*mknod)(struct Thread *, struct Inode *, char *, mode_t, dev_t, struct Inode **);
@@ -131,7 +137,7 @@ int           fs_inode_lookup_locked(struct Inode *, const char *, int, struct I
 ssize_t       fs_inode_read_locked(struct Inode *, uintptr_t, size_t, off_t *);
 ssize_t       fs_inode_read_dir_locked(struct Inode *, uintptr_t, size_t, off_t *);
 int           fs_inode_open_locked(struct Inode *, int, mode_t);
-ssize_t       fs_inode_write_locked(struct Inode *, uintptr_t, size_t, off_t *);
+ssize_t       fs_inode_write_locked(struct Inode *, uintptr_t, size_t, off_t *, int);
 ssize_t       fs_inode_getdents(struct Inode *, void *, size_t, off_t *);
 int           fs_inode_stat_locked(struct Inode *, struct stat *);
 int           fs_create(const char *, mode_t, dev_t, struct PathNode **);
@@ -142,8 +148,8 @@ int           fs_inode_ioctl_locked(struct Inode *, int, int);
 int           fs_inode_select_locked(struct Inode *, struct timeval *);
 int           fs_inode_sync_locked(struct Inode *);
 int           fs_inode_chown_locked(struct Inode *, uid_t, gid_t);
-ssize_t       fs_inode_readlink(struct Inode *, char *, size_t);
-int           fs_permission(struct Inode *, mode_t, int);
+ssize_t       fs_inode_readlink(struct Inode *, uintptr_t, size_t);
+int           fs_permission(struct Thread *, struct Inode *, mode_t, int);
 
 // Path operations
 int              fs_chmod(const char *, mode_t);
@@ -154,7 +160,7 @@ int              fs_chdir(const char *);
 int              fs_unlink(const char *);
 int              fs_rmdir(const char *);
 int              fs_access(const char *, int);
-ssize_t          fs_readlink(const char *, char *, size_t);
+ssize_t          fs_readlink(const char *, uintptr_t, size_t);
 int              fs_utime(const char *, struct utimbuf *);
 
 // File operations
@@ -210,26 +216,15 @@ struct FSMessage {
     struct {
       struct Inode *inode;
       off_t length;
+      int r;
     } trunc;
     struct {
       struct Inode *dir;
       const char *name;
-      struct Inode *r;
+      struct Inode **istore;
+      int flags;
+      int r;
     } lookup;
-    struct {
-      struct Inode *dir;
-      char *name;
-      mode_t mode;
-      struct Inode **istore;
-      int r;
-    } mkdir;
-    struct {
-      struct Inode *dir;
-      char *name;
-      mode_t mode;
-      struct Inode **istore;
-      int r;
-    } create;
     struct {
       struct Inode *dir;
       char *name;
@@ -237,7 +232,7 @@ struct FSMessage {
       dev_t dev;
       struct Inode **istore;
       int r;
-    } mknod;
+    } create;
     struct {
       struct Inode *inode;
       uintptr_t va;
@@ -249,14 +244,20 @@ struct FSMessage {
       struct Inode *inode;
       uintptr_t va;
       size_t nbyte;
+      ssize_t r;
+    } readlink;
+    struct {
+      struct Inode *inode;
+      uintptr_t va;
+      size_t nbyte;
       off_t off;
       ssize_t r;
     } write;
     struct {
       struct Inode *inode;
-      void *buf;
-      FillDirFunc func;
-      off_t off;
+      uintptr_t va;
+      size_t nbyte;
+      off_t *off;
       ssize_t r;
     } readdir;
     struct {
@@ -288,15 +289,14 @@ enum {
   FS_MSG_INODE_WRITE  = 3,
   FS_MSG_TRUNC        = 4,
   FS_MSG_LOOKUP       = 5,
-  FS_MSG_MKDIR        = 6,
   FS_MSG_CREATE       = 7,
-  FS_MSG_MKNOD        = 8,
   FS_MSG_READ         = 9,
   FS_MSG_WRITE        = 10,
   FS_MSG_READDIR      = 11,
   FS_MSG_LINK         = 12,
   FS_MSG_UNLINK       = 13,
   FS_MSG_RMDIR        = 14,
+  FS_MSG_READLINK     = 15,
 };
 
 #endif  // !__KERNEL_INCLUDE_KERNEL_FS_H__

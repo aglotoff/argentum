@@ -10,6 +10,7 @@
 #include <kernel/process.h>
 #include <kernel/types.h>
 #include <kernel/time.h>
+#include <kernel/vmspace.h>
 
 #include "ext2.h"
 
@@ -482,21 +483,23 @@ ext2_readdir(struct Thread *thread, struct Inode *dir, void *buf,
 #define MAX_FAST_SYMLINK_NAMELEN  60
 
 ssize_t
-ext2_readlink(struct Thread *thread, struct Inode *inode, char *buf, size_t n)
+ext2_readlink(struct Thread *thread, struct Inode *inode, uintptr_t va, size_t n)
 {
   struct Ext2InodeExtra *extra = (struct Ext2InodeExtra *) inode->extra;
-
-  (void) thread;
+  int r;
 
   k_assert(S_ISLNK(inode->mode));
 
   if ((inode->size <= MAX_FAST_SYMLINK_NAMELEN) && (extra->blocks == 0)) {
     ssize_t nread = MIN((size_t) inode->size, n);
-    memmove(buf, extra->block, nread);
+
+    if ((r = vm_space_copy_out(thread, extra->block, va, n)) < 0)
+      return r;
+
     return nread;
   }
 
-  return ext2_read(thread, inode, (uintptr_t) buf, n, 0);
+  return ext2_read(thread, inode, va, n, 0);
 }
 
 struct FSOps ext2fs_ops = {
