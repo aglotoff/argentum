@@ -77,14 +77,7 @@ fs_open(const char *path, int oflag, mode_t mode, struct File **file_store)
     goto out2;
 
   if (file->rdev >= 0) {
-    struct CharDev *d = dev_lookup_char(file->rdev);
-
-    if (d == NULL) {
-      r = -ENODEV;
-      goto out2;
-    }
-
-    if ((r = d->open(thread_current(), file->rdev, oflag, mode)) < 0)
+    if ((r = dev_open(thread_current(), file->rdev, oflag, mode)) < 0)
       goto out2;
   }
 
@@ -324,14 +317,8 @@ fs_ioctl(struct File *file, int request, int arg)
   k_assert(file->type == FD_INODE);
   k_assert(file->inode != NULL);
 
-  if (file->rdev >= 0) {
-    struct CharDev *d = dev_lookup_char(file->rdev);
-
-    if (d == NULL)
-      return -ENODEV;
-
-    return d->ioctl(thread_current(), file->rdev, request, arg);
-  }
+  if (file->rdev >= 0)
+    return dev_ioctl(thread_current(), file->rdev, request, arg);
 
   return fs_inode_ioctl(file->inode, request, arg);
 }
@@ -347,14 +334,8 @@ fs_read(struct File *file, uintptr_t va, size_t nbytes)
     return -EBADF;
 
   // Read from the corresponding device
-  if (file->rdev >= 0) {
-    struct CharDev *d = dev_lookup_char(file->rdev);
-
-    if (d == NULL)
-      return -ENODEV;
-
-    return d->read(thread_current(), file->rdev, va, nbytes);
-  }
+  if (file->rdev >= 0)
+    return dev_read(thread_current(), file->rdev, va, nbytes);
 
   return fs_inode_read(file->inode, va, nbytes, &file->offset);
 }
@@ -362,72 +343,61 @@ fs_read(struct File *file, uintptr_t va, size_t nbytes)
 off_t
 fs_seek(struct File *file, off_t offset, int whence)
 {
-  off_t new_offset;
+  struct FSMessage msg;
 
   k_assert(file->ref_count > 0);
   k_assert(file->type == FD_INODE);
   k_assert(file->inode != NULL);
 
-  switch (whence) {
-  case SEEK_SET:
-    new_offset = offset;
-    break;
-  case SEEK_CUR:
-    new_offset = file->offset + offset;
-    break;
-  case SEEK_END:
-    new_offset = fs_inode_seek(file->inode, offset);
-    break;
-  default:
-    return -EINVAL;
-  }
+  msg.type = FS_MSG_SEEK;
+  msg.u.seek.file   = file;
+  msg.u.seek.offset = offset;
+  msg.u.seek.whence = whence;
 
-  if (new_offset < 0)
-    return -EOVERFLOW;
+  fs_send_recv(file->inode->fs, &msg);
 
-  file->offset = new_offset;
-
-  return new_offset;
+  return msg.u.seek.r;
 }
 
 int
 fs_select(struct File *file, struct timeval *timeout)
 {
+  struct FSMessage msg;
+
   k_assert(file->ref_count > 0);
   k_assert(file->type == FD_INODE);
   k_assert(file->inode != NULL);
 
-  if (file->rdev >= 0) {
-    struct CharDev *d = dev_lookup_char(file->rdev);
+  if (file->rdev >= 0)
+    return dev_select(thread_current(), file->rdev, timeout);
 
-    if (d == NULL)
-      return -ENODEV;
+  msg.type = FS_MSG_SELECT;
+  msg.u.select.file    = file;
+  msg.u.select.timeout = timeout;
 
-    return d->select(thread_current(), file->rdev, timeout);
-  }
+  fs_send_recv(file->inode->fs, &msg);
 
-  return fs_inode_select(file->inode, timeout);
+  return msg.u.select.r;
 }
 
 ssize_t
 fs_write(struct File *file, uintptr_t va, size_t nbytes)
 {
+  struct FSMessage msg;
+  
   k_assert(file->ref_count > 0);
   k_assert(file->type == FD_INODE);
   k_assert(file->inode != NULL);
 
-  if ((file->flags & O_ACCMODE) == O_RDONLY)
-    return -EBADF;
+  if (file->rdev >= 0)
+    return dev_write(thread_current(), file->rdev, va, nbytes);
 
-  // Write to the corresponding device
-  if (file->rdev >= 0) {
-    struct CharDev *d = dev_lookup_char(file->rdev);
+  msg.type = FS_MSG_WRITE;
+  msg.u.write.file  = file;
+  msg.u.write.va    = va;
+  msg.u.write.nbyte = nbytes;
 
-    if (d == NULL)
-      return -ENODEV;
+  fs_send_recv(file->inode->fs, &msg);
 
-    return d->write(thread_current(), file->rdev, va, nbytes);
-  }
-
-  return fs_inode_write(file->inode, va, nbytes, &file->offset, file->flags);
+  return msg.u.write.r;
 }

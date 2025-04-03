@@ -293,42 +293,6 @@ fs_inode_read(struct Inode *ip, uintptr_t va, size_t nbyte, off_t *off)
 }
 
 ssize_t
-fs_inode_write(struct Inode *ip, uintptr_t va, size_t nbyte, off_t *off, int flags)
-{
-  ssize_t total;
-  struct FSMessage msg;
-
-  fs_inode_lock(ip);
-
-  if (flags & O_APPEND)
-    *off = ip->size;
-
-  if (!fs_inode_permission(thread_current(), ip, FS_PERM_WRITE, 0)) {
-    fs_inode_unlock(ip);
-    return -EPERM;
-  }
-
-  msg.type = FS_MSG_WRITE;
-  msg.u.write.inode = ip;
-  msg.u.write.va    = va;
-  msg.u.write.nbyte = nbyte;
-  msg.u.write.off   = *off;
-
-  fs_send_recv(ip->fs, &msg);
-
-  total = msg.u.write.r;
-
-  if (total >= 0) {
-    *off += total;
-    ip->flags |= FS_INODE_DIRTY;
-  }
-
-  fs_inode_unlock(ip);
-
-  return total;
-}
-
-ssize_t
 fs_inode_read_dir(struct Inode *inode, uintptr_t va, size_t nbyte, off_t *off)
 {
   ssize_t total = 0;
@@ -352,14 +316,10 @@ fs_inode_read_dir(struct Inode *inode, uintptr_t va, size_t nbyte, off_t *off)
 }
 
 int
-fs_inode_stat_locked(struct Inode *ip, struct stat *buf)
+fs_inode_stat(struct Inode *ip, struct stat *buf)
 {
-  if (!fs_inode_holding(ip))
-    k_panic("not locked");
-
-  // TODO: check permissions
-  // TODO: move into service
-
+  fs_inode_lock(ip);
+  
   buf->st_dev          = ip->dev;
   buf->st_ino          = ip->ino;
   buf->st_mode         = ip->mode;
@@ -377,31 +337,9 @@ fs_inode_stat_locked(struct Inode *ip, struct stat *buf)
   buf->st_blocks       = ip->size / S_BLKSIZE;
   buf->st_blksize      = S_BLKSIZE;
 
-  return 0;
-}
-
-int
-fs_inode_seek(struct Inode *inode, off_t offset)
-{
-  off_t new_offset;
-
-  fs_inode_lock(inode);
-  new_offset = inode->size + offset;
-  fs_inode_unlock(inode);
-
-  return new_offset;
-}
-
-int
-fs_inode_stat(struct Inode *ip, struct stat *buf)
-{
-  int r;
-
-  fs_inode_lock(ip);
-  r = fs_inode_stat_locked(ip, buf);
   fs_inode_unlock(ip);
 
-  return r;
+  return 0;
 }
 
 int
@@ -963,18 +901,6 @@ fs_inode_ioctl(struct Inode *inode, int, int)
   fs_inode_unlock(inode);
 
   return -ENOTTY;
-}
-
-int
-fs_inode_select(struct Inode *inode, struct timeval *)
-{
-  fs_inode_lock(inode);
-
-  // TODO: check perm
-
-  fs_inode_unlock(inode);
-
-  return 1;
 }
 
 int

@@ -139,7 +139,6 @@ ssize_t       fs_inode_read_locked(struct Inode *, uintptr_t, size_t, off_t *);
 ssize_t       fs_inode_read(struct Inode *, uintptr_t, size_t, off_t *);
 ssize_t       fs_inode_read_dir(struct Inode *, uintptr_t, size_t, off_t *);
 int           fs_inode_open(struct Inode *, int, dev_t *);
-ssize_t       fs_inode_write(struct Inode *, uintptr_t, size_t, off_t *, int);
 ssize_t       fs_inode_getdents(struct Inode *, void *, size_t, off_t *);
 int           fs_inode_stat_locked(struct Inode *, struct stat *);
 int           fs_inode_stat(struct Inode *, struct stat *);
@@ -251,13 +250,7 @@ struct FSMessage {
       size_t nbyte;
       ssize_t r;
     } readlink;
-    struct {
-      struct Inode *inode;
-      uintptr_t va;
-      size_t nbyte;
-      off_t off;
-      ssize_t r;
-    } write;
+    
     struct {
       struct Inode *inode;
       uintptr_t va;
@@ -283,6 +276,24 @@ struct FSMessage {
       const char *name;
       int r;
     } rmdir;
+
+    struct {
+      struct File *file;
+      off_t offset;
+      int whence;
+      off_t r;
+    } seek;
+    struct {
+      struct File *file;
+      uintptr_t va;
+      size_t nbyte;
+      ssize_t r;
+    } write;
+    struct {
+      struct File *file;
+      struct timeval *timeout;
+      int r;
+    } select;
   } u;
 };
 
@@ -290,18 +301,21 @@ int              fs_send_recv(struct FS *, struct FSMessage *);
 
 enum {
   FS_MSG_INODE_READ   = 1,
-  FS_MSG_INODE_DELETE = 2,
-  FS_MSG_INODE_WRITE  = 3,
-  FS_MSG_TRUNC        = 4,
-  FS_MSG_LOOKUP       = 5,
-  FS_MSG_CREATE       = 7,
-  FS_MSG_READ         = 9,
-  FS_MSG_WRITE        = 10,
-  FS_MSG_READDIR      = 11,
-  FS_MSG_LINK         = 12,
-  FS_MSG_UNLINK       = 13,
-  FS_MSG_RMDIR        = 14,
-  FS_MSG_READLINK     = 15,
+  FS_MSG_INODE_DELETE,
+  FS_MSG_INODE_WRITE,
+  FS_MSG_TRUNC,
+  FS_MSG_LOOKUP,
+  FS_MSG_CREATE,
+  FS_MSG_READDIR,
+  FS_MSG_LINK,
+  FS_MSG_UNLINK,
+  FS_MSG_RMDIR,
+  FS_MSG_READLINK,
+
+  FS_MSG_READ,
+  FS_MSG_SEEK,
+  FS_MSG_SELECT,
+  FS_MSG_WRITE,
 };
 
 #endif  // !__KERNEL_INCLUDE_KERNEL_FS_H__

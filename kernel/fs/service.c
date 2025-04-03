@@ -1,7 +1,9 @@
 #include <dirent.h>
 #include <sys/fcntl.h>
 #include <sys/stat.h>
+#include <stdio.h>
 
+#include <kernel/fs/file.h>
 #include <kernel/page.h>
 #include <kernel/fs/fs.h>
 #include <kernel/object_pool.h>
@@ -97,35 +99,6 @@ do_read(struct FS *fs, struct Thread *sender,
 
   if (total >= 0)
     inode->atime  = time_get_seconds();
-
-  return total;
-}
-
-static ssize_t
-do_write(struct FS *fs, struct Thread *sender,
-         struct Inode *inode,
-         uintptr_t va,
-         size_t nbyte,
-         off_t off)
-{
-  ssize_t total;
-
-  if ((off_t) (off + nbyte) < off)
-    return -EINVAL;
-
-  if (nbyte == 0)
-    return 0;
-
-  total = fs->ops->write(sender, inode, va, nbyte, off);
-
-  if (total > 0) {
-    off += total;
-
-    if (off > inode->size)
-      inode->size = off;
-
-    inode->mtime = time_get_seconds();
-  }
 
   return total;
 }
@@ -302,6 +275,107 @@ do_readlink(struct FS *fs, struct Thread *sender,
   return r;
 }
 
+/*
+ * ----- File Operations -----
+ */
+
+static off_t
+do_seek(struct FS *, struct Thread *,
+        struct File *file,
+        off_t offset,
+        int whence)
+{
+  off_t new_offset;
+
+  switch (whence) {
+  case SEEK_SET:
+    new_offset = offset;
+    break;
+  case SEEK_CUR:
+    new_offset = file->offset + offset;
+    break;
+  case SEEK_END:
+    fs_inode_lock(file->inode);
+    new_offset = file->inode->size + offset;
+    fs_inode_unlock(file->inode);
+    break;
+  default:
+    return -EINVAL;
+  }
+
+  if (new_offset < 0)
+    return -EOVERFLOW;
+
+  file->offset = new_offset;
+
+  return new_offset;
+}
+
+static ssize_t
+do_write_locked(struct FS *fs, struct Thread *sender,
+                struct File *file,
+                uintptr_t va,
+                size_t nbyte)
+{
+  ssize_t total;
+
+  if (!fs_inode_permission(sender, file->inode, FS_PERM_WRITE, 0))
+    return -EPERM;
+
+  if (file->flags & O_APPEND)
+    file->offset = file->inode->size;
+
+  if ((off_t) (file->offset + nbyte) < file->offset)
+    return -EINVAL;
+
+  if (nbyte == 0)
+    return 0;
+
+  total = fs->ops->write(sender, file->inode, va, nbyte, file->offset);
+
+  if (total > 0) {
+    file->offset += total;
+
+    if (file->offset > file->inode->size)
+      file->inode->size = file->offset;
+
+    file->inode->mtime = time_get_seconds();
+    file->inode->flags |= FS_INODE_DIRTY;
+  }
+
+  return total;
+}
+
+static int
+do_select(struct FS *, struct Thread *,
+          struct File *file,
+          struct timeval *)
+{
+  fs_inode_lock(file->inode);
+  // FIXME: select
+  fs_inode_unlock(file->inode);
+
+  return 1;
+}
+
+static ssize_t
+do_write(struct FS *fs, struct Thread *sender,
+         struct File *file,
+         uintptr_t va,
+         size_t nbyte)
+{
+  ssize_t r;
+
+  if ((file->flags & O_ACCMODE) == O_RDONLY)
+    return -EBADF;
+
+  fs_inode_lock(file->inode);
+  r = do_write_locked(fs, sender, file, va, nbyte);
+  fs_inode_unlock(file->inode);
+
+  return r;
+}
+
 void
 fs_service_task(void *arg)
 {
@@ -342,13 +416,7 @@ fs_service_task(void *arg)
                               msg->u.read.va, msg->u.read.nbyte,
                               msg->u.read.off);
       break;
-    case FS_MSG_WRITE:
-      msg->u.write.r = do_write(fs, msg->sender,
-                                msg->u.write.inode,
-                                msg->u.write.va,
-                                msg->u.write.nbyte,
-                                msg->u.write.off);
-      break;
+    
     case FS_MSG_READDIR:
       msg->u.readdir.r = do_readdir(fs, msg->sender,
                                     msg->u.readdir.inode,
@@ -387,6 +455,24 @@ fs_service_task(void *arg)
                                       msg->u.readlink.inode,
                                       msg->u.readlink.va,
                                       msg->u.readlink.nbyte);
+      break;
+
+    case FS_MSG_SEEK:
+      msg->u.seek.r = do_seek(fs, msg->sender,
+                              msg->u.seek.file,
+                              msg->u.seek.offset,
+                              msg->u.seek.whence);
+      break;
+    case FS_MSG_SELECT:
+      msg->u.select.r = do_select(fs, msg->sender,
+                                  msg->u.select.file,
+                                  msg->u.select.timeout);
+      break;
+    case FS_MSG_WRITE:
+      msg->u.write.r = do_write(fs, msg->sender,
+                                msg->u.write.file,
+                                msg->u.write.va,
+                                msg->u.write.nbyte);
       break;
     default:
       k_panic("bad msg type %d\n", msg->type);

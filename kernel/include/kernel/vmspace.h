@@ -30,6 +30,8 @@ struct VMSpace {
   struct KListLink areas;
 };
 
+struct File;
+
 void              vm_space_init(void);
 struct VMSpace   *vm_space_create(void);
 void              vm_space_destroy(struct VMSpace *);

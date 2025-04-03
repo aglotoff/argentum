@@ -46,3 +46,58 @@ dev_register_block(int major, struct BlockDev *dev)
 
   dev_block[major] = dev;
 }
+
+int
+dev_open(struct Thread *thread, dev_t rdev, int oflag, mode_t mode)
+{
+  struct CharDev *d = dev_lookup_char(rdev);
+
+  if (d == NULL)
+    return -ENODEV;
+
+  return d->open(thread, rdev, oflag, mode);
+}
+
+ssize_t
+dev_read(struct Thread *thread, dev_t rdev, uintptr_t va, size_t n)
+{
+  struct CharDev *d = dev_lookup_char(rdev);
+
+  if (d == NULL)
+    return -ENODEV;
+
+  return d->read(thread, rdev, va, n);
+}
+
+ssize_t
+dev_write(struct Thread *thread, dev_t rdev, uintptr_t va, size_t n)
+{
+  struct CharDev *d = dev_lookup_char(rdev);
+
+  if (d == NULL)
+    return -ENODEV;
+
+  return d->write(thread, rdev, va, n);
+}
+
+int
+dev_ioctl(struct Thread *thread, dev_t rdev, int request, int arg)
+{
+  struct CharDev *d = dev_lookup_char(rdev);
+
+  if (d == NULL)
+    return -ENODEV;
+
+  return d->ioctl(thread, rdev, request, arg);
+}
+
+int
+dev_select(struct Thread *thread, dev_t rdev, struct timeval *timeout)
+{
+  struct CharDev *d = dev_lookup_char(rdev);
+
+  if (d == NULL)
+    return -ENODEV;
+
+  return d->select(thread, rdev, timeout);
+}
