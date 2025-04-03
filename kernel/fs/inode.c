@@ -520,7 +520,7 @@ fs_create(const char *path, mode_t mode, dev_t dev, struct PathNode **istore)
 
   mode &= ~process_current()->cmask;
 
-  dir_inode = fs_path_inode(dir);
+  dir_inode = fs_inode_duplicate(fs_path_inode(dir));
 
   fs_inode_lock(dir_inode);
 
@@ -598,8 +598,8 @@ fs_link(char *path1, char *path2)
   // TODO: check for the same node?
   // TODO: lock the namespace manager?
 
-  parent_inode = fs_path_inode(dirp);
-  inode = fs_path_inode(pp);
+  parent_inode = fs_inode_duplicate(fs_path_inode(dirp));
+  inode = fs_inode_duplicate(fs_path_inode(pp));
 
   // Always lock inodes in a specific order to avoid deadlocks
   fs_inode_lock_two(parent_inode, inode);
@@ -647,8 +647,8 @@ fs_rename(char *old, char *new)
   // TODO: should be a transaction?
 
   if (new_node != NULL) {
-    parent_inode = fs_path_inode(new_dir);
-    inode = fs_path_inode(new_node);
+    parent_inode = fs_inode_duplicate(fs_path_inode(new_dir));
+    inode = fs_inode_duplicate(fs_path_inode(new_node));
 
     // TODO: lock the namespace manager?
 
@@ -673,9 +673,8 @@ fs_rename(char *old, char *new)
       goto out2;
   }
 
-  inode = fs_path_inode(old_node);
-
-  parent_inode = fs_path_inode(new_dir);
+  inode        = fs_inode_duplicate(fs_path_inode(old_node));
+  parent_inode = fs_inode_duplicate(fs_path_inode(new_dir));
 
   fs_inode_lock_two(parent_inode, inode);
   r = fs_inode_link(inode, parent_inode, new_name);
@@ -686,7 +685,7 @@ fs_rename(char *old, char *new)
   if (r < 0)
     goto out2;
 
-  parent_inode = fs_path_inode(old_dir);
+  parent_inode = fs_inode_duplicate(fs_path_inode(old_dir));
     
   fs_inode_lock_two(parent_inode, inode);
   //cprintf("remove %s\n", );
@@ -731,14 +730,14 @@ fs_unlink(const char *path)
     return -ENOENT;
   }
 
-  parent_inode = fs_path_inode(dir);
-  inode = fs_path_inode(pp);
+  parent_inode = fs_inode_duplicate(fs_path_inode(dir));
+  inode        = fs_inode_duplicate(fs_path_inode(pp));
 
   // TODO: lock the namespace manager?
 
   fs_inode_lock_two(parent_inode, inode);
   
-  if ((r = fs_inode_unlink(parent_inode, inode, name)) == 0) {
+  if ((r = fs_inode_unlink(parent_inode, inode, pp->name)) == 0) {
     fs_path_node_remove(pp);
   }
 
@@ -777,12 +776,12 @@ fs_rmdir(const char *path)
 
   // TODO: lock the namespace manager?
 
-  parent_inode = fs_path_inode(dir);
-  inode = fs_path_inode(pp);
+  parent_inode = fs_inode_duplicate(fs_path_inode(dir));
+  inode = fs_inode_duplicate(fs_path_inode(pp));
 
   fs_inode_lock_two(parent_inode, inode);
 
-  if ((r = fs_inode_rmdir(parent_inode, inode, name)) == 0) {
+  if ((r = fs_inode_rmdir(parent_inode, inode, pp->name)) == 0) {
     fs_path_node_remove(pp);
   }
 
@@ -804,7 +803,7 @@ int
 fs_set_pwd(struct PathNode *node)
 {
   struct Process *current = process_current();
-  struct Inode *inode = fs_path_inode(node);
+  struct Inode *inode = fs_inode_duplicate(fs_path_inode(node));
 
   fs_inode_lock(inode);
 
@@ -1007,12 +1006,23 @@ fs_inode_select_locked(struct Inode *inode, struct timeval *timeout)
 }
 
 int
-fs_inode_sync_locked(struct Inode *inode)
+fs_inode_truncate(struct Inode *inode, off_t length)
 {
-  if (!fs_inode_holding(inode))
-    k_panic("not locked");
+  int r;
+  
+  fs_inode_lock(inode);
+  r = fs_inode_truncate_locked(inode, length);
+  fs_inode_unlock(inode);
 
-  // TODO: implement
+  return r;
+}
+
+int
+fs_inode_sync(struct Inode *inode)
+{
+  fs_inode_lock(inode);
+  // FIXME: implement
+  fs_inode_unlock(inode);
 
   return 0;
 }
@@ -1052,7 +1062,11 @@ fs_inode_readlink(struct Inode *inode, uintptr_t va, size_t nbyte)
   msg.u.readlink.va    = va;
   msg.u.readlink.nbyte = nbyte;
 
+  fs_inode_lock(inode);
+
   fs_send_recv(inode->fs, &msg);
+
+  fs_inode_unlock(inode);
 
   return msg.u.readlink.r;
 }

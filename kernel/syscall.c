@@ -108,8 +108,8 @@ sys_dispatch(void)
   if ((num < (int) ARRAY_SIZE(syscalls)) && syscalls[num]) {
     int r = syscalls[num]();
 
-    // if (r < 0)
-    //   cprintf("[%s] syscall(%d) -> %d\n", process_current()->name, num, r);
+    //if (r < 0)
+    //cprintf("[%d %s] syscall(%d) -> %d\n", process_current()->pid, process_current()->name, num, r);
 
     return r;
   }
@@ -546,7 +546,7 @@ sys_chmod(void)
   int r;
 
   if ((r = sys_arg_str(0, PATH_MAX, VM_READ, &path)) < 0) {
-    cprintf("%s\n", process_current()->name);
+    //cprintf("%s\n", process_current()->name);
     goto out1;
   }
 
@@ -575,6 +575,8 @@ sys_open(void)
     goto out2;
   if ((r = sys_arg_ulong(2, &mode)) < 0)
     goto out2;
+
+  //cprintf("open %s\n", path);
 
   if ((r = fs_open(path, oflag, mode, &file)) < 0) {
     //cprintf("[k] failed open %s\n", path);
@@ -663,6 +665,8 @@ sys_unlink(void)
 
   if ((r = sys_arg_str(0, PATH_MAX, VM_READ, &path)) < 0)
     return r;
+
+  //cprintf("unlink %s\n", path);
 
   r = fs_unlink(path);
 

@@ -106,6 +106,8 @@ fs_path_node_unref(struct PathNode *path)
   while ((path != NULL) && (path->ref_count < 2)) {
     struct PathNode *parent = path->parent;
 
+    k_assert(path->ref_count >= 0);
+
     if ((path->ref_count == 1) && (parent == NULL))
       // Only one link left, and this is not the parent node
       break;
@@ -147,7 +149,7 @@ fs_path_inode(struct PathNode *node)
   inode = node->mounted ? node->mounted : node->inode;
   k_spinlock_release(&fs_path_lock);
 
-  return fs_inode_duplicate(inode);
+  return inode;
 }
 
 void
@@ -285,7 +287,7 @@ fs_path_node_resolve_at(struct PathNode *start,
 
     // Check for symlinks
 
-    inode = fs_path_inode(next);
+    inode = fs_inode_duplicate(fs_path_inode(next));
     k_assert(inode != NULL);
 
     fs_inode_lock(inode);
@@ -297,8 +299,10 @@ fs_path_node_resolve_at(struct PathNode *start,
       continue;
     }
 
-    if ((*p == '\0') && !(flags & FS_LOOKUP_FOLLOW_LINKS))
+    if ((*p == '\0') && !(flags & FS_LOOKUP_FOLLOW_LINKS)) {
+      fs_inode_put(inode);
       break;
+    }
 
     // FIXME: symlinks and slashes
 
@@ -402,7 +406,7 @@ fs_path_node_lookup(struct PathNode *parent,
   if (child == NULL) {
     struct Inode *child_inode, *parent_inode;
 
-    parent_inode = fs_path_inode(parent);
+    parent_inode = fs_inode_duplicate(fs_path_inode(parent));
     fs_inode_lock(parent_inode);
 
     r = fs_inode_lookup_locked(parent_inode, name, flags, &child_inode);
@@ -502,7 +506,7 @@ fs_path_resolve_inode(const char *path, int flags, struct Inode **inode_store)
   if (path_node == NULL)
     return -ENOENT;
 
-  *inode_store = fs_path_inode(path_node);
+  *inode_store = fs_inode_duplicate(fs_path_inode(path_node));
 
   // UNREF(path_node)
   fs_path_node_unref(path_node);

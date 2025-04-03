@@ -291,21 +291,13 @@ do_readlink(struct FS *fs, struct Thread *sender,
 {
   ssize_t r;
 
-  fs_inode_lock(inode);
-
-  if (!fs_permission(sender, inode, FS_PERM_READ, 0)) {
-    fs_inode_unlock(inode);
+  if (!fs_permission(sender, inode, FS_PERM_READ, 0))
     return -EPERM;
-  }
     
-  if (!S_ISLNK(inode->mode)) {
-    fs_inode_unlock(inode);
+  if (!S_ISLNK(inode->mode))
     return -EINVAL;
-  }
 
   r = fs->ops->readlink(sender, inode, va, nbyte);
-
-  fs_inode_unlock(inode);
 
   return r;
 }
