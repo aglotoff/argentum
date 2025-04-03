@@ -11,62 +11,9 @@
 #include <kernel/page.h>
 #include <kernel/object_pool.h>
 #include <kernel/process.h>
+#include <kernel/dev.h>
 
 #define STATUS_MASK (O_APPEND | O_NONBLOCK | O_SYNC)
-
-int
-fs_chmod(const char *path, mode_t mode)
-{
-  struct Inode *inode;
-  int r;
-
-  if ((r = fs_path_resolve_inode(path, FS_LOOKUP_FOLLOW_LINKS, &inode)) < 0)
-    return r;
-
-  fs_inode_lock(inode);
-
-  r = fs_inode_chmod_locked(inode, mode);
-
-  fs_inode_unlock(inode);
-  fs_inode_put(inode);
-
-  return r;
-}
-
-int
-fs_access(const char *path, int amode)
-{
-  struct Inode *inode;
-  int r;
-
-  if ((r = fs_path_resolve_inode(path, FS_LOOKUP_FOLLOW_LINKS, &inode)) < 0)
-    return r;
-
-  if (amode != F_OK)
-    r = fs_inode_access(inode, amode);
-
-  fs_inode_put(inode);
-
-  return r;
-}
-
-int
-fs_utime(const char *path, struct utimbuf *times)
-{
-  struct Inode *inode;
-  int r;
-
-  if ((r = fs_path_resolve_inode(path, FS_LOOKUP_FOLLOW_LINKS, &inode)) < 0)
-    return r;
-
-  r = fs_inode_utime(inode, times);
-
-  fs_inode_put(inode);
-
-  return r;
-}
-
-//int eexists_cnt;
 
 int
 fs_open(const char *path, int oflag, mode_t mode, struct File **file_store)
@@ -92,6 +39,7 @@ fs_open(const char *path, int oflag, mode_t mode, struct File **file_store)
   file->type      = FD_INODE;
   file->node      = NULL;
   file->inode     = NULL;
+  file->rdev      = -1;
   file->ref_count = 1;
 
   flags = FS_LOOKUP_FOLLOW_LINKS;
@@ -116,60 +64,29 @@ fs_open(const char *path, int oflag, mode_t mode, struct File **file_store)
     // REF(path_node)
     if ((r = fs_create(path, S_IFREG | mode, 0, &path_node)) < 0)
       goto out1;
-
-    inode = fs_inode_duplicate(fs_path_inode(path_node));
-    fs_inode_lock(inode);
   } else {
-    inode = fs_inode_duplicate(fs_path_inode(path_node));
-    fs_inode_lock(inode);
-
     if ((oflag & O_CREAT) && (oflag & O_EXCL)) {
-      //k_warn("file already exists %s", path);
-      //if (eexists_cnt > 4)
-      //  k_panic("eeee");
-      //eexists_cnt++;
-
       r = -EEXIST;
       goto out2;
     }
-
-    if ((oflag & O_DIRECTORY) && !S_ISDIR(inode->mode)) {
-      r = -ENOTDIR;
-      goto out2;
-    }
   }
 
-  if (S_ISDIR(inode->mode) && (oflag & O_WRONLY)) {
-    r = -ENOTDIR;
+  inode = fs_path_inode(path_node);
+
+  if ((r = fs_inode_open(inode, oflag, &file->rdev)) < 0)
     goto out2;
-  }
 
-  // TODO: ENXIO
-  // TODO: EROFS
+  if (file->rdev >= 0) {
+    struct CharDev *d = dev_lookup_char(file->rdev);
 
-  if ((oflag & O_WRONLY) && (oflag & O_TRUNC)) {
-    if ((r = fs_inode_truncate_locked(inode, 0)) < 0)
-      goto out2;
-  }
-
-  if (oflag & O_RDONLY) {
-    // TODO: check group and other permissions
-    if (!(inode->mode & S_IRUSR)) {
-      r = -EPERM;
+    if (d == NULL) {
+      r = -ENODEV;
       goto out2;
     }
-  }
 
-  if (oflag & O_WRONLY) {
-    // TODO: check group and other permissions
-    if (!(inode->mode & S_IWUSR)) {
-      r = -EPERM;
+    if ((r = d->open(thread_current(), file->rdev, oflag, mode)) < 0)
       goto out2;
-    }
   }
-
-  if ((r = fs_inode_open_locked(inode, oflag, mode)) < 0)
-    goto out2;
 
   // REF(file->node)
   file->node  = fs_path_node_ref(path_node);
@@ -182,17 +99,10 @@ fs_open(const char *path, int oflag, mode_t mode, struct File **file_store)
   if (oflag & O_APPEND)
     file->offset = inode->size;
 
-  fs_inode_unlock(inode);
-  fs_inode_put(inode);
-
   *file_store = file;
 
   return 0;
-
 out2:
-  fs_inode_unlock(inode);
-  fs_inode_put(inode);
-
   // UNREF(path_node)
   fs_path_node_unref(path_node);
 out1:
@@ -200,209 +110,61 @@ out1:
   return r;
 }
 
-int
-fs_close(struct File *file)
-{
-  if (file->type != FD_INODE)
-    k_panic("not a file");
-
-  // TODO: add a comment, when node can be NULL?
-  if (file->node != NULL) {
-    // UNREF(file->node)
-    fs_inode_put(file->inode);
-    file->inode = NULL;
-
-    fs_path_node_unref(file->node);
-    file->node = NULL;
-  }
-
-  return 0;
-}
-
-off_t
-fs_seek(struct File *file, off_t offset, int whence)
-{
-  struct Inode *inode;
-  off_t new_offset;
-
-  if (file->type != FD_INODE)
-    k_panic("not a file");
-
-  switch (whence) {
-  case SEEK_SET:
-    new_offset = offset;
-    break;
-  case SEEK_CUR:
-    new_offset = file->offset + offset;
-    break;
-  case SEEK_END:
-    inode = fs_inode_duplicate(fs_path_inode(file->node));
-    fs_inode_lock(inode);
-
-    new_offset = inode->size + offset;
-
-    fs_inode_unlock(inode);
-    fs_inode_put(inode);
-
-    break;
-  default:
-    return -EINVAL;
-  }
-
-  if (new_offset < 0)
-    return -EOVERFLOW;
-
-  file->offset = new_offset;
-
-  return new_offset;
-}
-
-ssize_t
-fs_read(struct File *file, uintptr_t va, size_t nbytes)
-{
-  struct Inode *inode;
-  ssize_t r;
-
-  if (file->type != FD_INODE)
-    k_panic("not a file");
-
-  if ((file->flags & O_ACCMODE) == O_WRONLY)
-    return -EBADF;
-
-  inode = fs_inode_duplicate(fs_path_inode(file->node));
-  fs_inode_lock(inode);
-
-  r = fs_inode_read_locked(inode, va, nbytes, &file->offset);
-
-  fs_inode_unlock(inode);
-  fs_inode_put(inode);
-
-  return r;
-}
-
-ssize_t
-fs_write(struct File *file, uintptr_t va, size_t nbytes)
-{
-  struct Inode *inode;
-  ssize_t r;
-
-  if (file->type != FD_INODE)
-    k_panic("not a file");
-
-  if ((file->flags & O_ACCMODE) == O_RDONLY)
-    return -EBADF;
-
-  inode = fs_inode_duplicate(fs_path_inode(file->node));
-
-  r = fs_inode_write_locked(inode, va, nbytes, &file->offset, file->flags);
-
-  fs_inode_put(inode);
-
-  return r;
-}
-
-ssize_t
-fs_getdents(struct File *file, uintptr_t va, size_t nbytes)
-{
-  struct Inode *inode;
-  ssize_t r;
-
-  if (file->type != FD_INODE)
-    k_panic("not a file");
-
-  if ((file->flags & O_ACCMODE) == O_WRONLY)
-    return -EBADF;
-
-  inode = fs_inode_duplicate(fs_path_inode(file->node));
-  fs_inode_lock(inode);
-
-  r = fs_inode_read_dir_locked(inode, va, nbytes, &file->offset);
-
-  fs_inode_unlock(inode);
-  fs_inode_put(inode);
-
-  return r;
-}
+/*
+ * ----- Pathname Operations -----
+ */
 
 int
-fs_fstat(struct File *file, struct stat *buf)
-{
-  struct Inode *inode;
-  int r;
-  
-  if (file->type != FD_INODE)
-    k_panic("not a file");
-
-  inode = fs_inode_duplicate(fs_path_inode(file->node));
-  fs_inode_lock(inode);
-
-  r = fs_inode_stat_locked(inode, buf);
-
-  // if (strcmp(file->node->name, "conftest.file") == 0 || strcmp(file->node->name, "configure") == 0)
-  //   cprintf("[k] stat %s %lld %lld %lld\n", file->node->name, inode->atime, inode->ctime, inode->mtime);
-
-  fs_inode_unlock(inode);
-  fs_inode_put(inode);
-
-  return r;
-}
-
-int
-fs_fchdir(struct File *file)
+fs_access(const char *path, int amode)
 {
   struct PathNode *node;
   int r;
 
-  if (file->type != FD_INODE)
-    k_panic("not a file");
+  if ((r = fs_path_resolve(path, 0, &node)) < 0)
+    return r;
+  if (node == NULL)
+    return -ENOENT;
 
-  // REF(node)
-  node = fs_path_node_ref(file->node);
+  if (amode != F_OK)
+    r = fs_inode_access(fs_path_inode(node), amode);
 
-  r = fs_set_pwd(node);
+  fs_path_node_unref(node);
 
-  // UNREF(node)
+  return r;
+}
+ 
+int
+fs_chdir(const char *path)
+{
+  struct PathNode *node;
+  int r;
+
+  if ((r = fs_path_resolve(path, 0, &node)) < 0)
+    return r;
+  if (node == NULL)
+    return -ENOENT;
+
+  r = fs_path_set_cwd(node);
+
   fs_path_node_unref(node);
 
   return r;
 }
 
 int
-fs_fchmod(struct File *file, mode_t mode)
+fs_chmod(const char *path, mode_t mode)
 {
-  struct Inode *inode;
+  struct PathNode *node;
   int r;
 
-  if (file->type != FD_INODE)
-    k_panic("not a file");
+  if ((r = fs_path_resolve(path, 0, &node)) < 0)
+    return r;
+  if (node == NULL)
+    return -ENOENT;
 
-  inode = fs_inode_duplicate(fs_path_inode(file->node));
-  fs_inode_lock(inode);
+  r = fs_inode_chmod(fs_path_inode(node), mode);
 
-  r = fs_inode_chmod_locked(inode, mode);
-
-  fs_inode_unlock(inode);
-  fs_inode_put(inode);
-
-  return r;
-}
-
-int
-fs_fchown(struct File *file, uid_t uid, gid_t gid)
-{
-  struct Inode *inode;
-  int r;
-
-  if (file->type != FD_INODE)
-    k_panic("not a file");
-
-  inode = fs_inode_duplicate(fs_path_inode(file->node));
-  fs_inode_lock(inode);
-
-  r = fs_inode_chown_locked(inode, uid, gid);
-
-  fs_inode_unlock(inode);
-  fs_inode_put(inode);
+  fs_path_node_unref(node);
 
   return r;
 }
@@ -410,45 +172,20 @@ fs_fchown(struct File *file, uid_t uid, gid_t gid)
 int
 fs_chown(const char *path, uid_t uid, gid_t gid)
 {
-  struct Inode *inode;
+  struct PathNode *node;
   int r;
 
-  if ((r = fs_path_resolve_inode(path, FS_LOOKUP_FOLLOW_LINKS, &inode)) < 0)
+  if ((r = fs_path_resolve(path, 0, &node)) < 0)
     return r;
+  if (node == NULL)
+    return -ENOENT;
 
-  fs_inode_lock(inode);
+  r = fs_inode_chown(fs_path_inode(node), uid, gid);
 
-  r = fs_inode_chown_locked(inode, uid, gid);
-
-  fs_inode_unlock(inode);
-  fs_inode_put(inode);
-
-  return r;
-}
-
-int
-fs_ioctl(struct File *file, int request, int arg)
-{
-  struct Inode *inode;
-  int r;
-  
-  if (file->type != FD_INODE)
-    k_panic("not a file");
-
-  inode = fs_inode_duplicate(fs_path_inode(file->node));
-  fs_inode_lock(inode);
-
-  r = fs_inode_ioctl_locked(inode, request, arg);
-
-  fs_inode_unlock(inode);
-  fs_inode_put(inode);
+  fs_path_node_unref(node);
 
   return r;
 }
-
-/*
- * ----- Pathname Operations -----
- */
 
 ssize_t
 fs_readlink(const char *path, uintptr_t va, size_t bufsize)
@@ -461,9 +198,27 @@ fs_readlink(const char *path, uintptr_t va, size_t bufsize)
   if (node == NULL)
     return -ENOENT;
 
-  fs_path_node_lock(node);
   r = fs_inode_readlink(fs_path_inode(node), va, bufsize);
-  fs_path_node_unlock(node);
+
+  fs_path_node_unref(node);
+
+  return r;
+}
+
+int
+fs_utime(const char *path, struct utimbuf *times)
+{
+  struct PathNode *node;
+  int r;
+
+  if ((r = fs_path_resolve(path, 0, &node)) < 0)
+    return r;
+  if (node == NULL)
+    return -ENOENT;
+
+  r = fs_inode_utime(fs_path_inode(node), times);
+
+  fs_path_node_unref(node);
 
   return r;
 }
@@ -471,6 +226,63 @@ fs_readlink(const char *path, uintptr_t va, size_t bufsize)
 /*
  * ----- File Operations ----- 
  */
+
+int
+fs_close(struct File *file)
+{
+  k_assert(file->type == FD_INODE);
+
+  // TODO: add a comment, when node can be NULL?
+  if (file->node != NULL) {
+    fs_inode_put(file->inode);
+    file->inode = NULL;
+
+    fs_path_node_unref(file->node);
+    file->node = NULL;
+  }
+
+  return 0;
+}
+ 
+int
+fs_fchdir(struct File *file)
+{
+  k_assert(file->ref_count > 0);
+  k_assert(file->type == FD_INODE);
+  k_assert(file->inode != NULL);
+
+  return fs_path_set_cwd(file->node);
+}
+
+int
+fs_fchmod(struct File *file, mode_t mode)
+{
+  k_assert(file->ref_count > 0);
+  k_assert(file->type == FD_INODE);
+  k_assert(file->inode != NULL);
+
+  return fs_inode_chmod(file->inode, mode);
+}
+
+int
+fs_fchown(struct File *file, uid_t uid, gid_t gid)
+{
+  k_assert(file->ref_count > 0);
+  k_assert(file->type == FD_INODE);
+  k_assert(file->inode != NULL);
+
+  return fs_inode_chown(file->inode, uid, gid);
+}
+
+int
+fs_fstat(struct File *file, struct stat *buf)
+{
+  k_assert(file->ref_count > 0);
+  k_assert(file->type == FD_INODE);
+  k_assert(file->inode != NULL);
+
+  return fs_inode_stat(file->inode, buf);
+}
 
 int
 fs_fsync(struct File *file)
@@ -492,22 +304,130 @@ fs_ftruncate(struct File *file, off_t length)
   return fs_inode_truncate(file->inode, length);
 }
 
+ssize_t
+fs_getdents(struct File *file, uintptr_t va, size_t nbytes)
+{
+  k_assert(file->ref_count > 0);
+  k_assert(file->type == FD_INODE);
+  k_assert(file->inode != NULL);
+
+  if ((file->flags & O_ACCMODE) == O_WRONLY)
+    return -EBADF;
+
+  return fs_inode_read_dir(file->inode, va, nbytes, &file->offset);
+}
+
+int
+fs_ioctl(struct File *file, int request, int arg)
+{
+  k_assert(file->ref_count > 0);
+  k_assert(file->type == FD_INODE);
+  k_assert(file->inode != NULL);
+
+  if (file->rdev >= 0) {
+    struct CharDev *d = dev_lookup_char(file->rdev);
+
+    if (d == NULL)
+      return -ENODEV;
+
+    return d->ioctl(thread_current(), file->rdev, request, arg);
+  }
+
+  return fs_inode_ioctl(file->inode, request, arg);
+}
+
+ssize_t
+fs_read(struct File *file, uintptr_t va, size_t nbytes)
+{
+  k_assert(file->ref_count > 0);
+  k_assert(file->type == FD_INODE);
+  k_assert(file->inode != NULL);
+
+  if ((file->flags & O_ACCMODE) == O_WRONLY)
+    return -EBADF;
+
+  // Read from the corresponding device
+  if (file->rdev >= 0) {
+    struct CharDev *d = dev_lookup_char(file->rdev);
+
+    if (d == NULL)
+      return -ENODEV;
+
+    return d->read(thread_current(), file->rdev, va, nbytes);
+  }
+
+  return fs_inode_read(file->inode, va, nbytes, &file->offset);
+}
+
+off_t
+fs_seek(struct File *file, off_t offset, int whence)
+{
+  off_t new_offset;
+
+  k_assert(file->ref_count > 0);
+  k_assert(file->type == FD_INODE);
+  k_assert(file->inode != NULL);
+
+  switch (whence) {
+  case SEEK_SET:
+    new_offset = offset;
+    break;
+  case SEEK_CUR:
+    new_offset = file->offset + offset;
+    break;
+  case SEEK_END:
+    new_offset = fs_inode_seek(file->inode, offset);
+    break;
+  default:
+    return -EINVAL;
+  }
+
+  if (new_offset < 0)
+    return -EOVERFLOW;
+
+  file->offset = new_offset;
+
+  return new_offset;
+}
+
 int
 fs_select(struct File *file, struct timeval *timeout)
 {
-  struct Inode *inode;
-  int r;
-  
-  if (file->type != FD_INODE)
-    k_panic("not a file");
+  k_assert(file->ref_count > 0);
+  k_assert(file->type == FD_INODE);
+  k_assert(file->inode != NULL);
 
-  inode = fs_inode_duplicate(fs_path_inode(file->node));
-  fs_inode_lock(inode);
+  if (file->rdev >= 0) {
+    struct CharDev *d = dev_lookup_char(file->rdev);
 
-  r = fs_inode_select_locked(inode, timeout);
+    if (d == NULL)
+      return -ENODEV;
 
-  fs_inode_unlock(inode);
-  fs_inode_put(inode);
+    return d->select(thread_current(), file->rdev, timeout);
+  }
 
-  return r;
+  return fs_inode_select(file->inode, timeout);
+}
+
+ssize_t
+fs_write(struct File *file, uintptr_t va, size_t nbytes)
+{
+  k_assert(file->ref_count > 0);
+  k_assert(file->type == FD_INODE);
+  k_assert(file->inode != NULL);
+
+  if ((file->flags & O_ACCMODE) == O_RDONLY)
+    return -EBADF;
+
+  // Write to the corresponding device
+  if (file->rdev >= 0) {
+    struct CharDev *d = dev_lookup_char(file->rdev);
+
+    if (d == NULL)
+      return -ENODEV;
+
+    return d->write(thread_current(), file->rdev, va, nbytes);
+  }
+
+  return fs_inode_write(file->inode, va, nbytes, &file->offset, file->flags);
 }

@@ -39,6 +39,7 @@ file_alloc(struct File **fstore)
   f->offset    = 0;
   f->node      = NULL;
   f->inode     = NULL;
+  f->rdev      = -1;
   f->socket    = 0;
   f->pipe      = NULL;
 

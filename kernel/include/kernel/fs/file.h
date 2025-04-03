@@ -22,6 +22,7 @@ struct File {
   off_t            offset;       ///< Current offset within the file
   struct PathNode *node;        ///< Pointer to the corresponding inode
   struct Inode    *inode;
+  dev_t            rdev;
   int              socket;       ///< Socket ID
   struct Pipe     *pipe;         ///< Pointer to the correspondig pipe
 };

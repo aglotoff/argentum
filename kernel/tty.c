@@ -515,6 +515,7 @@ tty_select(struct Thread *thread, dev_t dev, struct timeval *timeout)
       return 0;
     }
 
+    // FIXME: use timer to wakeup thread
     if ((r = k_condvar_timed_wait(&tty->in.cond, &tty->in.mutex, t)) < 0) {
       k_mutex_unlock(&tty->in.mutex);
       return r;

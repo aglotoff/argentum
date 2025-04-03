@@ -434,16 +434,17 @@ int
 fs_send_recv(struct FS *fs, struct FSMessage *msg)
 {
   struct FSMessage *msg_ptr = msg;
+  unsigned long long timeout = seconds2ticks(10);
   int r;
 
   k_semaphore_create(&msg->sem, 0);
   msg->sender = thread_current();
 
-  if (k_mailbox_send(&fs->mbox, &msg_ptr) < 0)
-    k_panic("fail");
+  if (k_mailbox_timed_send(&fs->mbox, &msg_ptr, timeout) < 0)
+    k_panic("fail send %d: %d", msg->type, r);
 
-  if ((r = k_semaphore_get(&msg->sem, K_SLEEP_UNINTERUPTIBLE)) < 0)
-    k_panic("fail %d", r);
+  if ((r = k_semaphore_timed_get(&msg->sem, timeout, K_SLEEP_UNINTERUPTIBLE)) < 0)
+    k_panic("fail recv %d: %d", msg->type, r);
 
   return 0;
 }

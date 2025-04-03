@@ -182,6 +182,25 @@ fs_path_parent_ref(struct PathNode *node)
   return parent;
 }
 
+int
+fs_path_set_cwd(struct PathNode *node)
+{
+  struct Process *current = process_current();
+  int r;
+
+  if ((r = fs_inode_chdir(fs_path_inode(node))) < 0)
+    return r;
+
+  // UNREF(current->cwd)
+  fs_path_node_unref(current->cwd);
+  current->cwd = NULL;
+
+  // REF(current->cwd)
+  current->cwd = fs_path_node_ref(node);
+
+  return r;
+}
+
 static ssize_t
 fs_path_resolve_symlink(struct Inode *inode,
                         const char *rest,
