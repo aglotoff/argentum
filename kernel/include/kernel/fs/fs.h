@@ -133,7 +133,7 @@ void          fs_inode_lock(struct Inode *);
 int           fs_inode_access(struct Inode *, int);
 int           fs_inode_utime(struct Inode *, struct utimbuf *);
 void          fs_inode_unlock(struct Inode *);
-int           fs_inode_lookup_locked(struct Inode *, const char *, int, struct Inode **);
+int           fs_inode_lookup(struct Inode *, const char *, int, struct Inode **);
 
 ssize_t       fs_inode_read_locked(struct Inode *, uintptr_t, size_t, off_t *);
 ssize_t       fs_inode_read(struct Inode *, uintptr_t, size_t, off_t *);
@@ -154,7 +154,7 @@ int           fs_inode_sync(struct Inode *);
 int           fs_inode_truncate(struct Inode *, off_t);
 int           fs_inode_chown(struct Inode *, uid_t, gid_t);
 ssize_t       fs_inode_readlink(struct Inode *, uintptr_t, size_t);
-int           fs_permission(struct Thread *, struct Inode *, mode_t, int);
+int           fs_inode_permission(struct Thread *, struct Inode *, mode_t, int);
 
 // Path operations
 int              fs_chmod(const char *, mode_t);

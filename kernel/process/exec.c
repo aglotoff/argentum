@@ -146,17 +146,24 @@ resolve_inode(struct Inode *inode, char *p, struct ExecContext *ctx, char **pp)
 {
   char buf[1024];
   off_t off;
+  struct stat stat;
   int i, r, start;
 
-  if (!S_ISREG(inode->mode))
+  if ((r = fs_inode_stat(inode, &stat)) < 0)
+    return r;
+
+  if (!S_ISREG(stat.st_mode))
     return -ENOENT;
 
-  if (!fs_permission(thread_current(), inode, FS_PERM_EXEC, 0))
+  // FIXME: check permission
+
+  if ((stat.st_mode & (S_IXUSR | S_IXGRP | S_IXOTH)) == 0)
     return -EPERM;
 
   off = 0;
-  if ((r = fs_inode_read_locked(inode, (uintptr_t) buf, 1024, &off)) < 0) 
+  if ((r = fs_inode_read(inode, (uintptr_t) buf, 1024, &off)) < 0) {
     return r;
+  }
 
   if ((r < 3) || (buf[0] != '#') || (buf[1] != '!')) {
     *pp = NULL;
@@ -212,10 +219,7 @@ resolve(const char *path, struct ExecContext *ctx)
     if ((r = fs_path_resolve_inode(p, FS_LOOKUP_FOLLOW_LINKS, &inode)) < 0)
       return r;
 
-    fs_inode_lock(inode);
-
     if ((r = resolve_inode(inode, p, ctx, &interpreter)) < 0) {
-      fs_inode_unlock(inode);
       fs_inode_put(inode);
       return r;
     }
@@ -228,7 +232,6 @@ resolve(const char *path, struct ExecContext *ctx)
 
     p = interpreter;
 
-    fs_inode_unlock(inode);
     fs_inode_put(inode);
   }
 
@@ -250,36 +253,44 @@ load_elf(struct ExecContext *ctx)
   uintptr_t a;
 
   off = 0;
-  if ((r = fs_inode_read_locked(ctx->inode, (uintptr_t) &elf, sizeof(elf),
-                                &off)) != sizeof(elf))
+  if ((r = fs_inode_read(ctx->inode, (uintptr_t) &elf, sizeof(elf),
+                                &off)) != sizeof(elf)) {
     return -EINVAL;
+  }
 
-  if (memcmp(elf.ident, "\x7f""ELF", 4) != 0)
+  if (memcmp(elf.ident, "\x7f""ELF", 4) != 0) {
     return -EINVAL;
+  }
 
   off = elf.phoff;
   while ((size_t) off < elf.phoff + elf.phnum * sizeof(ph)) {
-    if ((r = fs_inode_read_locked(ctx->inode, (uintptr_t) &ph, sizeof(ph),
-                                  &off)) != sizeof(ph))
+    if ((r = fs_inode_read(ctx->inode, (uintptr_t) &ph, sizeof(ph),
+                                  &off)) != sizeof(ph)) {
       return r;
+    }
 
-    if (ph.type != PT_LOAD)
+    if (ph.type != PT_LOAD) {
       continue;
+    }
 
-    if (ph.filesz > ph.memsz)
+    if (ph.filesz > ph.memsz) {
       return -EINVAL;
+    }
 
-    if ((ph.vaddr >= VIRT_KERNEL_BASE) || (ph.vaddr + ph.memsz > VIRT_KERNEL_BASE))
+    if ((ph.vaddr >= VIRT_KERNEL_BASE) || (ph.vaddr + ph.memsz > VIRT_KERNEL_BASE)) {
       return -EINVAL;
+    }
 
     a = vmspace_map(ctx->vm, ph.vaddr, ph.memsz,
                     PROT_READ | PROT_WRITE | PROT_EXEC | VM_USER);
-    if (a != ph.vaddr)
+    if (a != ph.vaddr) {
       return (int) a;
+    }
 
     if ((r = vm_space_load_inode(ctx->vm->pgtab, (void *) ph.vaddr, ctx->inode,
-                                 ph.filesz, ph.offset)) < 0)
+                                 ph.filesz, ph.offset)) < 0) {
       return r;
+    }
   }
 
   ctx->entry_va = elf.entry;
@@ -396,7 +407,6 @@ process_exec(const char *path, uintptr_t argv_va, uintptr_t envp_va)
   if ((r = load_elf(&ctx)) != 0)
     goto out5;
 
-  fs_inode_unlock(ctx.inode);
   fs_inode_put(ctx.inode);
 
   sys_free_args(envp);
@@ -430,7 +440,6 @@ process_exec(const char *path, uintptr_t argv_va, uintptr_t envp_va)
                               ctx.sp_va);
 
 out5:
-  fs_inode_unlock(ctx.inode);
   fs_inode_put(ctx.inode);
 out4:
   sys_free_args(envp);

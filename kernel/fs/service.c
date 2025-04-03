@@ -32,7 +32,7 @@ do_trunc(struct FS *fs, struct Thread *sender,
          struct Inode *inode,
          off_t length)
 {
-  if (!fs_permission(sender, inode, FS_PERM_WRITE, 0))
+  if (!fs_inode_permission(sender, inode, FS_PERM_WRITE, 0))
     return -EPERM;
 
   fs->ops->trunc(sender, inode, length);
@@ -56,7 +56,7 @@ do_create(struct FS *fs, struct Thread *sender,
   if (!S_ISDIR(dir->mode))
     return -ENOTDIR;
 
-  if (!fs_permission(sender, dir, FS_PERM_WRITE, 0))
+  if (!fs_inode_permission(sender, dir, FS_PERM_WRITE, 0))
     return -EPERM;
 
   inode = fs->ops->lookup(sender, dir, name);
@@ -160,7 +160,7 @@ do_readdir(struct FS *fs, struct Thread *sender,
   if (!S_ISDIR(inode->mode))
     return -ENOTDIR;
 
-  if (!fs_permission(sender, inode, FS_PERM_READ, 0))
+  if (!fs_inode_permission(sender, inode, FS_PERM_READ, 0))
     return -EPERM;
 
   while (nbyte > 0) {
@@ -204,7 +204,7 @@ do_link(struct FS *fs, struct Thread *sender,
   if (!S_ISDIR(dir->mode))
     return -ENOTDIR;
 
-  if (!fs_permission(sender, dir, FS_PERM_WRITE, 0))
+  if (!fs_inode_permission(sender, dir, FS_PERM_WRITE, 0))
     return -EPERM;
 
   // TODO: Allow links to directories?
@@ -232,7 +232,7 @@ do_lookup(struct FS *fs, struct Thread *sender,
   if (!S_ISDIR(dir->mode))
     return -ENOTDIR;
 
-  if (!fs_permission(sender, dir, FS_PERM_READ, flags & FS_LOOKUP_REAL))
+  if (!fs_inode_permission(sender, dir, FS_PERM_READ, flags & FS_LOOKUP_REAL))
     return -EPERM;
 
   inode = fs->ops->lookup(sender, dir, name);
@@ -254,7 +254,7 @@ do_unlink(struct FS *fs, struct Thread *sender,
   if (!S_ISDIR(dir->mode))
     return -ENOTDIR;
 
-  if (!fs_permission(sender, dir, FS_PERM_WRITE, 0))
+  if (!fs_inode_permission(sender, dir, FS_PERM_WRITE, 0))
     return -EPERM;
 
   // TODO: Allow links to directories?
@@ -273,7 +273,7 @@ do_rmdir(struct FS *fs, struct Thread *sender,
   if (!S_ISDIR(dir->mode))
     return -ENOTDIR;
 
-  if (!fs_permission(sender, dir, FS_PERM_WRITE, 0))
+  if (!fs_inode_permission(sender, dir, FS_PERM_WRITE, 0))
     return -EPERM;
 
   // TODO: Allow links to directories?
@@ -291,7 +291,7 @@ do_readlink(struct FS *fs, struct Thread *sender,
 {
   ssize_t r;
 
-  if (!fs_permission(sender, inode, FS_PERM_READ, 0))
+  if (!fs_inode_permission(sender, inode, FS_PERM_READ, 0))
     return -EPERM;
     
   if (!S_ISLNK(inode->mode))

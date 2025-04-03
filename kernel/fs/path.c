@@ -260,7 +260,7 @@ fs_path_node_resolve_at(struct PathNode *start,
   prev = NULL;
 
   while ((r = fs_path_next(p, name_buf, (char **) &p)) > 0) {
-    int is_symlink;
+    struct stat stat;
     struct Inode *inode;
     char *resolved_path;
 
@@ -309,11 +309,12 @@ fs_path_node_resolve_at(struct PathNode *start,
     inode = fs_inode_duplicate(fs_path_inode(next));
     k_assert(inode != NULL);
 
-    fs_inode_lock(inode);
-    is_symlink = S_ISLNK(inode->mode);
-    fs_inode_unlock(inode);
+    if ((r = fs_inode_stat(inode, &stat)) < 0) {
+      fs_inode_put(inode);
+      break;
+    }
 
-    if (!is_symlink) {
+    if (!S_ISLNK(stat.st_mode)) {
       fs_inode_put(inode);
       continue;
     }
@@ -426,11 +427,7 @@ fs_path_node_lookup(struct PathNode *parent,
     struct Inode *child_inode, *parent_inode;
 
     parent_inode = fs_inode_duplicate(fs_path_inode(parent));
-    fs_inode_lock(parent_inode);
-
-    r = fs_inode_lookup_locked(parent_inode, name, flags, &child_inode);
-
-    fs_inode_unlock(parent_inode);
+    r = fs_inode_lookup(parent_inode, name, flags, &child_inode);
     fs_inode_put(parent_inode);
 
     if (r == 0 && child_inode != NULL) {

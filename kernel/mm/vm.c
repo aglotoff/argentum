@@ -596,7 +596,7 @@ vm_space_load_inode(void *pgtab, void *va, struct Inode *ip, size_t n, off_t off
     offset = (uintptr_t) dst % PAGE_SIZE;
     ncopy  = MIN(PAGE_SIZE - offset, n);
 
-    if ((r = fs_inode_read_locked(ip, (uintptr_t) kva + offset, ncopy, &off)) != ncopy)
+    if ((r = fs_inode_read(ip, (uintptr_t) kva + offset, ncopy, &off)) != ncopy)
       return r;
 
     dst += ncopy;

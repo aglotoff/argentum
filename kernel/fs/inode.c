@@ -257,7 +257,7 @@ fs_inode_read_locked(struct Inode *ip, uintptr_t va, size_t nbyte, off_t *off)
   if (!fs_inode_holding(ip))
     k_panic("not locked");
 
-  if (!fs_permission(thread_current(), ip, FS_PERM_READ, 0))
+  if (!fs_inode_permission(thread_current(), ip, FS_PERM_READ, 0))
     return -EPERM;
 
   msg.type = FS_MSG_READ;
@@ -303,7 +303,7 @@ fs_inode_write(struct Inode *ip, uintptr_t va, size_t nbyte, off_t *off, int fla
   if (flags & O_APPEND)
     *off = ip->size;
 
-  if (!fs_permission(thread_current(), ip, FS_PERM_WRITE, 0)) {
+  if (!fs_inode_permission(thread_current(), ip, FS_PERM_WRITE, 0)) {
     fs_inode_unlock(ip);
     return -EPERM;
   }
@@ -475,7 +475,7 @@ fs_inode_link(struct Inode *inode, struct Inode *dir, char *name)
 }
 
 int
-fs_inode_lookup_locked(struct Inode *dir_inode, const char *name, int flags,
+fs_inode_lookup(struct Inode *dir_inode, const char *name, int flags,
                 struct Inode **inode_store)
 {
   struct FSMessage msg;
@@ -486,7 +486,9 @@ fs_inode_lookup_locked(struct Inode *dir_inode, const char *name, int flags,
   msg.u.lookup.flags  = flags;
   msg.u.lookup.istore = inode_store;
 
+  fs_inode_lock(dir_inode);
   fs_send_recv(dir_inode->fs, &msg);
+  fs_inode_unlock(dir_inode);
 
   return msg.u.lookup.r;
 }
@@ -834,7 +836,7 @@ fs_inode_chdir(struct Inode *inode)
     return -ENOTDIR;
   }
 
-  if (!fs_permission(thread_current(), inode, FS_PERM_EXEC, 0)) {
+  if (!fs_inode_permission(thread_current(), inode, FS_PERM_EXEC, 0)) {
     fs_inode_unlock(inode);
     return -EPERM;
   }
@@ -870,7 +872,7 @@ fs_inode_chmod(struct Inode *inode, mode_t mode)
 }
 
 int
-fs_permission(struct Thread *thread, struct Inode *inode, mode_t mode, int real)
+fs_inode_permission(struct Thread *thread, struct Inode *inode, mode_t mode, int real)
 {
   struct Process *my_process = thread ? thread->process : NULL;
 
@@ -899,11 +901,11 @@ fs_inode_access(struct Inode *inode, int amode)
 
   fs_inode_lock(inode);
 
-  if ((amode & R_OK) && !fs_permission(thread_current(), inode, FS_PERM_READ, 1))
+  if ((amode & R_OK) && !fs_inode_permission(thread_current(), inode, FS_PERM_READ, 1))
     r = -EPERM;
-  if ((amode & W_OK) && !fs_permission(thread_current(), inode, FS_PERM_WRITE, 1))
+  if ((amode & W_OK) && !fs_inode_permission(thread_current(), inode, FS_PERM_WRITE, 1))
     r = -EPERM;
-  if ((amode & X_OK) && !fs_permission(thread_current(), inode, FS_PERM_EXEC, 1))
+  if ((amode & X_OK) && !fs_inode_permission(thread_current(), inode, FS_PERM_EXEC, 1))
     r = -EPERM;
 
   fs_inode_unlock(inode);
@@ -922,7 +924,7 @@ fs_inode_utime(struct Inode *inode, struct utimbuf *times)
   if (times == NULL) {
     if ((my_process->euid != 0) &&
         (my_process->euid != inode->uid) &&
-        !fs_permission(thread_current(), inode, FS_PERM_WRITE, 1)) {
+        !fs_inode_permission(thread_current(), inode, FS_PERM_WRITE, 1)) {
       r = -EPERM;
       goto out;
     }
@@ -934,7 +936,7 @@ fs_inode_utime(struct Inode *inode, struct utimbuf *times)
   } else {
     if ((my_process->euid != 0) ||
        ((my_process->euid != inode->uid) ||
-         !fs_permission(thread_current(), inode, FS_PERM_WRITE, 1))) {
+         !fs_inode_permission(thread_current(), inode, FS_PERM_WRITE, 1))) {
       r = -EPERM;
       goto out;
     }
