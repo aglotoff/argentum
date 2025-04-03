@@ -34,7 +34,7 @@ void              vm_space_init(void);
 struct VMSpace   *vm_space_create(void);
 void              vm_space_destroy(struct VMSpace *);
 struct VMSpace   *vm_space_clone(struct VMSpace *, int);
-int               vm_space_load_inode(void *, void *, struct Inode *,
+int               vm_space_load_file(void *, void *, struct File *,
                                       size_t, off_t);
 
 intptr_t          vmspace_map(struct VMSpace *, uintptr_t, size_t, int);

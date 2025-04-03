@@ -16,6 +16,9 @@
 #include <kernel/types.h>
 #include <kernel/core/irq.h>
 #include <kernel/signal.h>
+#include <kernel/fs/file.h>
+#include <stdio.h>
+#include <sys/fcntl.h>
 
 #include "process_private.h"
 
@@ -79,7 +82,7 @@ user_stack_put_vector(struct VMSpace *vm, uintptr_t *vec, int count,
 }
 
 struct ExecContext {
-  struct Inode   *inode;
+  struct File    *file;
   struct VMSpace *vm;
   uintptr_t      *argv;
   int             argc;
@@ -142,14 +145,13 @@ user_stack_finalize(struct ExecContext *ctx)
 }
 
 static int
-resolve_inode(struct Inode *inode, char *p, struct ExecContext *ctx, char **pp)
+resolve_file(struct File *file, char *p, struct ExecContext *ctx, char **pp)
 {
   char buf[1024];
-  off_t off;
   struct stat stat;
   int i, r, start;
 
-  if ((r = fs_inode_stat(inode, &stat)) < 0)
+  if ((r = fs_fstat(file, &stat)) < 0)
     return r;
 
   if (!S_ISREG(stat.st_mode))
@@ -160,8 +162,8 @@ resolve_inode(struct Inode *inode, char *p, struct ExecContext *ctx, char **pp)
   if ((stat.st_mode & (S_IXUSR | S_IXGRP | S_IXOTH)) == 0)
     return -EPERM;
 
-  off = 0;
-  if ((r = fs_inode_read(inode, (uintptr_t) buf, 1024, &off)) < 0) {
+  fs_seek(file, 0, SEEK_SET);
+  if ((r = fs_read(file, (uintptr_t) buf, 1024)) < 0) {
     return r;
   }
 
@@ -209,18 +211,20 @@ resolve_inode(struct Inode *inode, char *p, struct ExecContext *ctx, char **pp)
 static int
 resolve(const char *path, struct ExecContext *ctx)
 {
-  struct Inode *inode;
+  struct File *file;
   char *p = (char *) path;
 
   for (;;) {
     int r;
     char *interpreter;
 
-    if ((r = fs_path_resolve_inode(p, FS_LOOKUP_FOLLOW_LINKS, &inode)) < 0)
+
+
+    if ((r = fs_open(p, O_RDWR, 0, &file)) < 0)
       return r;
 
-    if ((r = resolve_inode(inode, p, ctx, &interpreter)) < 0) {
-      fs_inode_put(inode);
+    if ((r = resolve_file(file, p, ctx, &interpreter)) < 0) {
+      fs_close(file);
       return r;
     }
 
@@ -232,13 +236,13 @@ resolve(const char *path, struct ExecContext *ctx)
 
     p = interpreter;
 
-    fs_inode_put(inode);
+    fs_close(file);
   }
 
   if (p != path)
     k_free(p);
 
-  ctx->inode = inode;
+  ctx->file = file;
 
   return 0;
 }
@@ -252,9 +256,9 @@ load_elf(struct ExecContext *ctx)
   off_t off;
   uintptr_t a;
 
-  off = 0;
-  if ((r = fs_inode_read(ctx->inode, (uintptr_t) &elf, sizeof(elf),
-                                &off)) != sizeof(elf)) {
+  fs_seek(ctx->file, 0, SEEK_SET);
+
+  if ((r = fs_read(ctx->file, (uintptr_t) &elf, sizeof(elf))) != sizeof(elf)) {
     return -EINVAL;
   }
 
@@ -264,10 +268,13 @@ load_elf(struct ExecContext *ctx)
 
   off = elf.phoff;
   while ((size_t) off < elf.phoff + elf.phnum * sizeof(ph)) {
-    if ((r = fs_inode_read(ctx->inode, (uintptr_t) &ph, sizeof(ph),
-                                  &off)) != sizeof(ph)) {
+    fs_seek(ctx->file, off, SEEK_SET);
+
+    if ((r = fs_read(ctx->file, (uintptr_t) &ph, sizeof(ph))) != sizeof(ph)) {
       return r;
     }
+
+    off += sizeof(ph);
 
     if (ph.type != PT_LOAD) {
       continue;
@@ -287,8 +294,8 @@ load_elf(struct ExecContext *ctx)
       return (int) a;
     }
 
-    if ((r = vm_space_load_inode(ctx->vm->pgtab, (void *) ph.vaddr, ctx->inode,
-                                 ph.filesz, ph.offset)) < 0) {
+    if ((r = vm_space_load_file(ctx->vm->pgtab, (void *) ph.vaddr, ctx->file,
+                                ph.filesz, ph.offset)) < 0) {
       return r;
     }
   }
@@ -407,7 +414,7 @@ process_exec(const char *path, uintptr_t argv_va, uintptr_t envp_va)
   if ((r = load_elf(&ctx)) != 0)
     goto out5;
 
-  fs_inode_put(ctx.inode);
+  fs_close(ctx.file);
 
   sys_free_args(envp);
   sys_free_args(argv);
@@ -440,7 +447,7 @@ process_exec(const char *path, uintptr_t argv_va, uintptr_t envp_va)
                               ctx.sp_va);
 
 out5:
-  fs_inode_put(ctx.inode);
+  fs_close(ctx.file);
 out4:
   sys_free_args(envp);
 out3:

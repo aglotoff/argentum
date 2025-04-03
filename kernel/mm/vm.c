@@ -7,6 +7,8 @@
 #include <string.h>
 #include <sys/mman.h>
 #include <kernel/fs/fs.h>
+#include <kernel/fs/file.h>
+#include <stdio.h>
 #include <kernel/process.h>
 
 struct KSpinLock vm_lock = K_SPINLOCK_INITIALIZER("vm_lock");
@@ -570,7 +572,7 @@ vm_handle_fault(void *pgtab, uintptr_t va)
 }
 
 int
-vm_space_load_inode(void *pgtab, void *va, struct Inode *ip, size_t n, off_t off)
+vm_space_load_file(void *pgtab, void *va, struct File *file, size_t n, off_t off)
 {
   struct Page *page;
   uint8_t *dst, *kva;
@@ -578,6 +580,8 @@ vm_space_load_inode(void *pgtab, void *va, struct Inode *ip, size_t n, off_t off
   int r;
 
   dst = (uint8_t *) va;
+
+  fs_seek(file, off, SEEK_SET);
 
   while (n != 0) {
     k_spinlock_acquire(&vm_lock);
@@ -596,7 +600,7 @@ vm_space_load_inode(void *pgtab, void *va, struct Inode *ip, size_t n, off_t off
     offset = (uintptr_t) dst % PAGE_SIZE;
     ncopy  = MIN(PAGE_SIZE - offset, n);
 
-    if ((r = fs_inode_read(ip, (uintptr_t) kva + offset, ncopy, &off)) != ncopy)
+    if ((r = fs_read(file, (uintptr_t) kva + offset, ncopy)) != ncopy)
       return r;
 
     dst += ncopy;
