@@ -223,6 +223,10 @@ do_open_locked(struct FS *fs, struct Thread *sender,
 
   if ((oflag & O_WRONLY) && (oflag & O_TRUNC)) {
     fs->ops->trunc(sender, inode, 0);
+
+    inode->size = 0;
+    inode->ctime = inode->mtime = time_get_seconds();
+    inode->flags |= FS_INODE_DIRTY;
   }
 
   if (S_ISCHR(inode->mode) || S_ISBLK(inode->mode))
