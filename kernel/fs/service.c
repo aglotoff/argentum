@@ -30,22 +30,6 @@ do_inode_delete(struct FS *fs, struct Thread *sender, struct Inode *inode)
 }
 
 static int
-do_trunc(struct FS *fs, struct Thread *sender,
-         struct Inode *inode,
-         off_t length)
-{
-  if (!fs_inode_permission(sender, inode, FS_PERM_WRITE, 0))
-    return -EPERM;
-
-  fs->ops->trunc(sender, inode, length);
-
-  inode->size = length;
-  inode->ctime = inode->mtime = time_get_seconds();
-
-  return 0;
-}
-
-static int
 do_create(struct FS *fs, struct Thread *sender,
           struct Inode *dir,
           char *name,
@@ -78,31 +62,6 @@ do_create(struct FS *fs, struct Thread *sender,
   }
 }
 
-static ssize_t
-do_read(struct FS *fs, struct Thread *sender,
-        struct Inode *inode,
-        uintptr_t va,
-        size_t nbyte,
-        off_t off)
-{
-  ssize_t total;
-
-  if ((off_t) (off + nbyte) < off)
-    return -EINVAL;
-
-  if ((off_t) (off + nbyte) > inode->size)
-    nbyte = inode->size - off;
-  if (nbyte == 0)
-    return 0;
-
-  total = fs->ops->read(sender, inode, va, nbyte, off);
-
-  if (total >= 0)
-    inode->atime  = time_get_seconds();
-
-  return total;
-}
-
 static int
 fs_filldir(void *buf, ino_t ino, const char *name, size_t name_len)
 {
@@ -114,58 +73,6 @@ fs_filldir(void *buf, ino_t ino, const char *name, size_t name_len)
   dp->d_name[name_len] = '\0';
 
   return dp->d_reclen;
-}
-
-static ssize_t
-do_readdir(struct FS *fs, struct Thread *sender,
-           struct Inode *inode,
-           uintptr_t va,
-           size_t nbyte,
-           off_t *off)
-{
-  ssize_t total = 0;
-
-  struct {
-    struct dirent de;
-    char buf[NAME_MAX + 1];
-  } de;
-
-  if (!S_ISDIR(inode->mode))
-    return -ENOTDIR;
-
-  if (!fs_inode_permission(sender, inode, FS_PERM_READ, 0))
-    return -EPERM;
-
-  while (nbyte > 0) {
-    ssize_t nread;
-    int r;
-
-    nread = fs->ops->readdir(sender, inode, &de, fs_filldir, *off);
-
-    if (nread < 0)
-      return nread;
-
-    if (nread == 0)
-      break;
-    
-    if (de.de.d_reclen > nbyte) {
-      if (total == 0) {
-        return -EINVAL;
-      }
-      break;
-    }
-
-    *off += nread;
-
-    if ((r = vm_space_copy_out(sender, &de, va, de.de.d_reclen)) < 0)
-      return r;
-
-    va    += de.de.d_reclen;
-    total += de.de.d_reclen;
-    nbyte -= de.de.d_reclen;
-  }
-
-  return total;
 }
 
 static int
@@ -279,6 +186,183 @@ do_readlink(struct FS *fs, struct Thread *sender,
  * ----- File Operations -----
  */
 
+static int
+do_ioctl(struct FS *, struct Thread *,
+         struct File *file, int, int)
+{
+  fs_inode_lock(file->inode);
+  // FIXME: ioctl
+  fs_inode_unlock(file->inode);
+
+  return -ENOTTY;
+}
+
+static int
+do_open_locked(struct FS *fs, struct Thread *sender,
+               struct File *file, 
+               struct Inode *inode,
+               int oflag)
+{
+  if ((oflag & O_DIRECTORY) && !S_ISDIR(inode->mode))
+    return -ENOTDIR;
+
+  if (S_ISDIR(inode->mode) && (oflag & O_WRONLY))
+    return -ENOTDIR;
+
+  if (oflag & O_RDONLY) {
+    // TODO: check group and other permissions
+    if (!(inode->mode & S_IRUSR))
+      return -EPERM;
+  }
+
+  if (oflag & O_WRONLY) {
+    // TODO: check group and other permissions
+    if (!(inode->mode & S_IWUSR))
+      return -EPERM;
+  }
+
+  if ((oflag & O_WRONLY) && (oflag & O_TRUNC)) {
+    fs->ops->trunc(sender, inode, 0);
+  }
+
+  if (S_ISCHR(inode->mode) || S_ISBLK(inode->mode))
+    file->rdev = inode->rdev;
+
+  file->inode = fs_inode_duplicate(inode);
+
+  return 0;
+}
+
+static int
+do_open(struct FS *fs, struct Thread *sender,
+        struct File *file, 
+        struct Inode *inode,
+        int oflag)
+{
+  int r;
+
+  fs_inode_lock(inode);
+  r = do_open_locked(fs, sender, file, inode, oflag);
+  fs_inode_unlock(inode);
+
+  return r;
+}
+
+static ssize_t
+do_read_locked(struct FS *fs, struct Thread *sender,
+               struct File *file,
+               uintptr_t va,
+               size_t nbyte)
+{
+  ssize_t total;
+
+  if (!fs_inode_permission(sender, file->inode, FS_PERM_READ, 0))
+    return -EPERM;
+
+  if ((off_t) (file->offset + nbyte) < file->offset)
+    return -EINVAL;
+
+  if ((off_t) (file->offset + nbyte) > file->inode->size)
+    nbyte = file->inode->size - file->offset;
+  if (nbyte == 0)
+    return 0;
+
+  total = fs->ops->read(sender, file->inode, va, nbyte, file->offset);
+
+  if (total >= 0) {
+    file->offset += total;
+  
+    file->inode->atime  = time_get_seconds();
+    file->inode->flags |= FS_INODE_DIRTY;
+  }
+
+  return total;
+}
+
+static ssize_t
+do_read(struct FS *fs, struct Thread *sender,
+        struct File *file,
+        uintptr_t va,
+        size_t nbyte)
+{
+  ssize_t r;
+
+  if ((file->flags & O_ACCMODE) == O_WRONLY)
+    return -EBADF;
+
+  fs_inode_lock(file->inode);
+  r = do_read_locked(fs, sender, file, va, nbyte);
+  fs_inode_unlock(file->inode);
+
+  return r;
+}
+
+static ssize_t
+do_readdir_locked(struct FS *fs, struct Thread *sender,
+                  struct File *file,
+                  uintptr_t va,
+                  size_t nbyte)
+{
+  ssize_t total = 0;
+
+  struct {
+    struct dirent de;
+    char buf[NAME_MAX + 1];
+  } de;
+
+  if (!S_ISDIR(file->inode->mode))
+    return -ENOTDIR;
+
+  if (!fs_inode_permission(sender, file->inode, FS_PERM_READ, 0))
+    return -EPERM;
+
+  while (nbyte > 0) {
+    ssize_t nread;
+    int r;
+
+    nread = fs->ops->readdir(sender, file->inode, &de, fs_filldir, file->offset);
+
+    if (nread < 0)
+      return nread;
+
+    if (nread == 0)
+      break;
+    
+    if (de.de.d_reclen > nbyte) {
+      if (total == 0) {
+        return -EINVAL;
+      }
+      break;
+    }
+
+    file->offset += nread;
+
+    if ((r = vm_space_copy_out(sender, &de, va, de.de.d_reclen)) < 0)
+      return r;
+
+    va    += de.de.d_reclen;
+    total += de.de.d_reclen;
+    nbyte -= de.de.d_reclen;
+  }
+
+  return total;
+}
+
+static ssize_t
+do_readdir(struct FS *fs, struct Thread *sender,
+           struct File *file,
+           uintptr_t va,
+           size_t nbyte)
+{
+  ssize_t r;
+
+  fs_inode_lock(file->inode);
+  r = do_readdir_locked(fs, sender, file, va, nbyte);
+  fs_inode_unlock(file->inode);
+
+  return r;
+}
+
 static off_t
 do_seek(struct FS *, struct Thread *,
         struct File *file,
@@ -309,6 +393,50 @@ do_seek(struct FS *, struct Thread *,
   file->offset = new_offset;
 
   return new_offset;
+}
+
+static int
+do_select(struct FS *, struct Thread *,
+          struct File *file,
+          struct timeval *)
+{
+  fs_inode_lock(file->inode);
+  // FIXME: select
+  fs_inode_unlock(file->inode);
+
+  return 1;
+}
+
+static int
+do_trunc(struct FS *fs, struct Thread *sender,
+         struct File *file,
+         off_t length)
+{
+  if (length < 0)
+    return -EINVAL;
+
+  fs_inode_lock(file->inode);
+
+  if (length > file->inode->size) {
+    fs_inode_unlock(file->inode);
+    return -EFBIG;
+  }
+
+  if (!fs_inode_permission(sender, file->inode, FS_PERM_WRITE, 0)) {
+    fs_inode_unlock(file->inode);
+    return -EPERM;
+  }
+
+  fs->ops->trunc(sender, file->inode, length);
+
+  file->inode->size = length;
+  file->inode->ctime = file->inode->mtime = time_get_seconds();
+
+  file->inode->flags |= FS_INODE_DIRTY;
+
+  fs_inode_unlock(file->inode);
+
+  return 0;
 }
 
 static ssize_t
@@ -344,18 +472,6 @@ do_write_locked(struct FS *fs, struct Thread *sender,
   }
 
   return total;
-}
-
-static int
-do_select(struct FS *, struct Thread *,
-          struct File *file,
-          struct timeval *)
-{
-  fs_inode_lock(file->inode);
-  // FIXME: select
-  fs_inode_unlock(file->inode);
-
-  return 1;
 }
 
 static ssize_t
@@ -398,31 +514,12 @@ fs_service_task(void *arg)
       do_inode_delete(fs, msg->sender,
                       msg->u.inode_delete.inode);
       break;
-    case FS_MSG_TRUNC:
-    msg->u.trunc.r = do_trunc(fs, msg->sender,
-                              msg->u.trunc.inode,
-                              msg->u.trunc.length);
-      break;
     case FS_MSG_LOOKUP:
       msg->u.lookup.r = do_lookup(fs, msg->sender,
                                   msg->u.lookup.dir,
                                   msg->u.lookup.name,
                                   msg->u.lookup.flags,
                                   msg->u.lookup.istore);
-      break;
-    case FS_MSG_READ:
-      msg->u.read.r = do_read(fs, msg->sender,
-                              msg->u.read.inode,
-                              msg->u.read.va, msg->u.read.nbyte,
-                              msg->u.read.off);
-      break;
-    
-    case FS_MSG_READDIR:
-      msg->u.readdir.r = do_readdir(fs, msg->sender,
-                                    msg->u.readdir.inode,
-                                    msg->u.readdir.va,
-                                    msg->u.readdir.nbyte,
-                                    msg->u.readdir.off);
       break;
     case FS_MSG_CREATE:
       msg->u.create.r = do_create(fs, msg->sender,
@@ -457,6 +554,33 @@ fs_service_task(void *arg)
                                       msg->u.readlink.nbyte);
       break;
 
+
+
+
+    case FS_MSG_IOCTL:
+      msg->u.ioctl.r = do_ioctl(fs, msg->sender,
+                                msg->u.ioctl.file,
+                                msg->u.ioctl.request,
+                                msg->u.ioctl.arg);
+      break;
+    case FS_MSG_OPEN:
+      msg->u.open.r = do_open(fs, msg->sender,
+                              msg->u.open.file,
+                              msg->u.open.inode,
+                              msg->u.open.oflag);
+      break;
+    case FS_MSG_READ:
+      msg->u.read.r = do_read(fs, msg->sender,
+                              msg->u.read.file,
+                              msg->u.read.va,
+                              msg->u.read.nbyte);
+      break;
+    case FS_MSG_READDIR:
+      msg->u.readdir.r = do_readdir(fs, msg->sender,
+                                    msg->u.readdir.file,
+                                    msg->u.readdir.va,
+                                    msg->u.readdir.nbyte);
+      break;
     case FS_MSG_SEEK:
       msg->u.seek.r = do_seek(fs, msg->sender,
                               msg->u.seek.file,
@@ -467,6 +591,11 @@ fs_service_task(void *arg)
       msg->u.select.r = do_select(fs, msg->sender,
                                   msg->u.select.file,
                                   msg->u.select.timeout);
+      break;
+    case FS_MSG_TRUNC:
+      msg->u.trunc.r = do_trunc(fs, msg->sender,
+                                msg->u.trunc.file,
+                                msg->u.trunc.length);
       break;
     case FS_MSG_WRITE:
       msg->u.write.r = do_write(fs, msg->sender,
@@ -520,7 +649,7 @@ int
 fs_send_recv(struct FS *fs, struct FSMessage *msg)
 {
   struct FSMessage *msg_ptr = msg;
-  unsigned long long timeout = seconds2ticks(10);
+  unsigned long long timeout = seconds2ticks(5);
   int r;
 
   k_semaphore_create(&msg->sem, 0);

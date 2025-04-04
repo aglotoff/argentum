@@ -18,6 +18,7 @@
 int
 fs_open(const char *path, int oflag, mode_t mode, struct File **file_store)
 {
+  struct FSMessage msg;
   struct File *file;
   struct PathNode *path_node;
   struct Inode *inode;
@@ -73,7 +74,14 @@ fs_open(const char *path, int oflag, mode_t mode, struct File **file_store)
 
   inode = fs_path_inode(path_node);
 
-  if ((r = fs_inode_open(inode, oflag, &file->rdev)) < 0)
+  msg.type = FS_MSG_OPEN;
+  msg.u.open.file  = file;
+  msg.u.open.inode = inode;
+  msg.u.open.oflag = oflag;
+
+  fs_send_recv(inode->fs, &msg);
+
+  if ((r = msg.u.open.r) < 0)
     goto out2;
 
   if (file->rdev >= 0) {
@@ -83,7 +91,6 @@ fs_open(const char *path, int oflag, mode_t mode, struct File **file_store)
 
   // REF(file->node)
   file->node  = fs_path_node_ref(path_node);
-  file->inode = fs_inode_duplicate(inode);
 
   // UNREF(path_node)
   fs_path_node_unref(path_node);
@@ -290,16 +297,26 @@ fs_fsync(struct File *file)
 int
 fs_ftruncate(struct File *file, off_t length)
 {
+  struct FSMessage msg;
+
   k_assert(file->ref_count > 0);
   k_assert(file->type == FD_INODE);
   k_assert(file->inode != NULL);
 
-  return fs_inode_truncate(file->inode, length);
+  msg.type = FS_MSG_TRUNC;
+  msg.u.trunc.file   = file;
+  msg.u.trunc.length = length;
+
+  fs_send_recv(file->inode->fs, &msg);
+
+  return msg.u.trunc.r;
 }
 
 ssize_t
-fs_getdents(struct File *file, uintptr_t va, size_t nbytes)
+fs_getdents(struct File *file, uintptr_t va, size_t nbyte)
 {
+  struct FSMessage msg;
+
   k_assert(file->ref_count > 0);
   k_assert(file->type == FD_INODE);
   k_assert(file->inode != NULL);
@@ -307,12 +324,21 @@ fs_getdents(struct File *file, uintptr_t va, size_t nbytes)
   if ((file->flags & O_ACCMODE) == O_WRONLY)
     return -EBADF;
 
-  return fs_inode_read_dir(file->inode, va, nbytes, &file->offset);
+  msg.type = FS_MSG_READDIR;
+  msg.u.readdir.file = file;
+  msg.u.readdir.va    = va;
+  msg.u.readdir.nbyte = nbyte;
+  
+  fs_send_recv(file->inode->fs, &msg);
+
+  return msg.u.readdir.r;
 }
 
 int
 fs_ioctl(struct File *file, int request, int arg)
 {
+  struct FSMessage msg;
+  
   k_assert(file->ref_count > 0);
   k_assert(file->type == FD_INODE);
   k_assert(file->inode != NULL);
@@ -320,24 +346,36 @@ fs_ioctl(struct File *file, int request, int arg)
   if (file->rdev >= 0)
     return dev_ioctl(thread_current(), file->rdev, request, arg);
 
-  return fs_inode_ioctl(file->inode, request, arg);
+  msg.type = FS_MSG_IOCTL;
+  msg.u.ioctl.file    = file;
+  msg.u.ioctl.request = request;
+  msg.u.ioctl.arg     = arg;
+
+  fs_send_recv(file->inode->fs, &msg);
+
+  return msg.u.ioctl.r;
 }
 
 ssize_t
 fs_read(struct File *file, uintptr_t va, size_t nbytes)
 {
+  struct FSMessage msg;
+
   k_assert(file->ref_count > 0);
   k_assert(file->type == FD_INODE);
   k_assert(file->inode != NULL);
 
-  if ((file->flags & O_ACCMODE) == O_WRONLY)
-    return -EBADF;
-
-  // Read from the corresponding device
   if (file->rdev >= 0)
     return dev_read(thread_current(), file->rdev, va, nbytes);
 
-  return fs_inode_read(file->inode, va, nbytes, &file->offset);
+  msg.type = FS_MSG_READ;
+  msg.u.read.file  = file;
+  msg.u.read.va    = va;
+  msg.u.read.nbyte = nbytes;
+
+  fs_send_recv(file->inode->fs, &msg);
+
+  return msg.u.read.r;
 }
 
 off_t

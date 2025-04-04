@@ -93,7 +93,7 @@ struct FSOps {
   void            (*trunc)(struct Thread *, struct Inode *, off_t);
 };
 
-#define FS_MBOX_CAPACITY  4
+#define FS_MBOX_CAPACITY  20
 
 struct FS {
   dev_t           dev;
@@ -135,19 +135,12 @@ int           fs_inode_utime(struct Inode *, struct utimbuf *);
 void          fs_inode_unlock(struct Inode *);
 int           fs_inode_lookup(struct Inode *, const char *, int, struct Inode **);
 
-ssize_t       fs_inode_read_locked(struct Inode *, uintptr_t, size_t, off_t *);
-ssize_t       fs_inode_read(struct Inode *, uintptr_t, size_t, off_t *);
-ssize_t       fs_inode_read_dir(struct Inode *, uintptr_t, size_t, off_t *);
-int           fs_inode_open(struct Inode *, int, dev_t *);
 ssize_t       fs_inode_getdents(struct Inode *, void *, size_t, off_t *);
 int           fs_inode_stat_locked(struct Inode *, struct stat *);
 int           fs_inode_stat(struct Inode *, struct stat *);
 int           fs_create(const char *, mode_t, dev_t, struct PathNode **);
 void          fs_inode_cache_init(void);
-int           fs_inode_truncate_locked(struct Inode *, off_t length);
 int           fs_inode_chmod(struct Inode *, mode_t);
-int           fs_inode_seek(struct Inode *, off_t);
-int           fs_inode_ioctl(struct Inode *, int, int);
 int           fs_inode_select(struct Inode *, struct timeval *);
 int           fs_inode_sync(struct Inode *);
 int           fs_inode_truncate(struct Inode *, off_t);
@@ -218,11 +211,6 @@ struct FSMessage {
       int r;
     } inode_write;
     struct {
-      struct Inode *inode;
-      off_t length;
-      int r;
-    } trunc;
-    struct {
       struct Inode *dir;
       const char *name;
       struct Inode **istore;
@@ -237,13 +225,7 @@ struct FSMessage {
       struct Inode **istore;
       int r;
     } create;
-    struct {
-      struct Inode *inode;
-      uintptr_t va;
-      size_t nbyte;
-      off_t off;
-      ssize_t r;
-    } read;
+    
     struct {
       struct Inode *inode;
       uintptr_t va;
@@ -251,13 +233,7 @@ struct FSMessage {
       ssize_t r;
     } readlink;
     
-    struct {
-      struct Inode *inode;
-      uintptr_t va;
-      size_t nbyte;
-      off_t *off;
-      ssize_t r;
-    } readdir;
+    
     struct {
       struct Inode *dir;
       char *name;
@@ -276,7 +252,30 @@ struct FSMessage {
       const char *name;
       int r;
     } rmdir;
-
+    struct {
+      struct File *file;
+      int request;
+      int arg;
+      int r;
+    } ioctl;
+    struct {
+      struct File *file;
+      struct Inode *inode;
+      int oflag;
+      int r;
+    } open;
+    struct {
+      struct File *file;
+      uintptr_t va;
+      size_t nbyte;
+      ssize_t r;
+    } read;
+    struct {
+      struct File *file;
+      uintptr_t va;
+      size_t nbyte;
+      ssize_t r;
+    } readdir;
     struct {
       struct File *file;
       off_t offset;
@@ -285,15 +284,20 @@ struct FSMessage {
     } seek;
     struct {
       struct File *file;
+      struct timeval *timeout;
+      int r;
+    } select;
+    struct {
+      struct File *file;
+      off_t length;
+      int r;
+    } trunc;
+    struct {
+      struct File *file;
       uintptr_t va;
       size_t nbyte;
       ssize_t r;
     } write;
-    struct {
-      struct File *file;
-      struct timeval *timeout;
-      int r;
-    } select;
   } u;
 };
 
@@ -303,18 +307,21 @@ enum {
   FS_MSG_INODE_READ   = 1,
   FS_MSG_INODE_DELETE,
   FS_MSG_INODE_WRITE,
-  FS_MSG_TRUNC,
+  
   FS_MSG_LOOKUP,
   FS_MSG_CREATE,
-  FS_MSG_READDIR,
   FS_MSG_LINK,
   FS_MSG_UNLINK,
   FS_MSG_RMDIR,
   FS_MSG_READLINK,
 
+  FS_MSG_IOCTL,
+  FS_MSG_OPEN,
   FS_MSG_READ,
+  FS_MSG_READDIR,
   FS_MSG_SEEK,
   FS_MSG_SELECT,
+  FS_MSG_TRUNC,
   FS_MSG_WRITE,
 };
 

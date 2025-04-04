@@ -163,7 +163,7 @@ fs_inode_holding(struct Inode *ip)
 void
 fs_inode_lock(struct Inode *ip)
 {
-  struct FSMessage msg;
+  //struct FSMessage msg;
 
   if (k_mutex_lock(&ip->mutex) < 0)
     k_panic("TODO");
@@ -174,10 +174,12 @@ fs_inode_lock(struct Inode *ip)
   if (ip->flags & FS_INODE_DIRTY)
     k_panic("inode dirty");
 
-  msg.type = FS_MSG_INODE_READ;
-  msg.u.inode_read.inode = ip;
+  ip->fs->ops->inode_read(thread_current(), ip);
 
-  fs_send_recv(ip->fs, &msg);
+  //msg.type = FS_MSG_INODE_READ;
+  //msg.u.inode_read.inode = ip;
+
+  //fs_send_recv(ip->fs, &msg);
 
   ip->flags |= FS_INODE_VALID;
 }
@@ -189,130 +191,19 @@ fs_inode_unlock(struct Inode *ip)
     k_panic("inode not valid");
 
   if (ip->flags & FS_INODE_DIRTY) {
-    struct FSMessage msg;
+    ip->fs->ops->inode_write(thread_current(), ip);
 
-    msg.type = FS_MSG_INODE_WRITE;
-    msg.u.inode_read.inode = ip;
+    // struct FSMessage msg;
 
-    fs_send_recv(ip->fs, &msg);
+    // msg.type = FS_MSG_INODE_WRITE;
+    // msg.u.inode_read.inode = ip;
+
+    // fs_send_recv(ip->fs, &msg);
 
     ip->flags &= ~FS_INODE_DIRTY;
   }
 
   k_mutex_unlock(&ip->mutex);
-}
-
-static int
-fs_inode_open_locked(struct Inode *inode, int oflag, dev_t *rdev)
-{
-  int r;
-
-  if ((oflag & O_DIRECTORY) && !S_ISDIR(inode->mode))
-    return -ENOTDIR;
-
-  if (S_ISDIR(inode->mode) && (oflag & O_WRONLY))
-    return -ENOTDIR;
-
-  if ((oflag & O_WRONLY) && (oflag & O_TRUNC)) {
-    if ((r = fs_inode_truncate_locked(inode, 0)) < 0)
-      return r;
-  }
-
-  if (oflag & O_RDONLY) {
-    // TODO: check group and other permissions
-    if (!(inode->mode & S_IRUSR))
-      return -EPERM;
-  }
-
-  if (oflag & O_WRONLY) {
-    // TODO: check group and other permissions
-    if (!(inode->mode & S_IWUSR))
-      return -EPERM;
-  }
-
-  if (S_ISCHR(inode->mode) || S_ISBLK(inode->mode))
-    *rdev = inode->rdev;
-
-  return 0;
-}
-
-int
-fs_inode_open(struct Inode *inode, int oflag, dev_t *rdev)
-{
-  int r;
-
-  fs_inode_lock(inode);
-  r = fs_inode_open_locked(inode, oflag, rdev);
-  fs_inode_unlock(inode);
-
-  return r;
-}
-
-ssize_t
-fs_inode_read_locked(struct Inode *ip, uintptr_t va, size_t nbyte, off_t *off)
-{
-  ssize_t ret;
-  struct FSMessage msg;
-
-  if (!fs_inode_holding(ip))
-    k_panic("not locked");
-
-  if (!fs_inode_permission(thread_current(), ip, FS_PERM_READ, 0))
-    return -EPERM;
-
-  msg.type = FS_MSG_READ;
-  msg.u.read.inode = ip;
-  msg.u.read.va    = va;
-  msg.u.read.nbyte = nbyte;
-  msg.u.read.off   = *off;
-
-  fs_send_recv(ip->fs, &msg);
-
-  ret = msg.u.read.r;
-
-  if (ret < 0)
-    return ret;
-
-  ip->flags |= FS_INODE_DIRTY;
-
-  *off += ret;
-
-  return ret;
-}
-
-ssize_t
-fs_inode_read(struct Inode *ip, uintptr_t va, size_t nbyte, off_t *off)
-{
-  ssize_t r;
-
-  fs_inode_lock(ip);
-  r = fs_inode_read_locked(ip, va, nbyte, off);
-  fs_inode_unlock(ip);
-
-  return r;
-}
-
-ssize_t
-fs_inode_read_dir(struct Inode *inode, uintptr_t va, size_t nbyte, off_t *off)
-{
-  ssize_t total = 0;
-  struct FSMessage msg;
-  
-  msg.type = FS_MSG_READDIR;
-  msg.u.readdir.inode = inode;
-  msg.u.readdir.va    = va;
-  msg.u.readdir.nbyte = nbyte;
-  msg.u.readdir.off   = off;
-
-  fs_inode_lock(inode);
-
-  fs_send_recv(inode->fs, &msg);
-
-  fs_inode_unlock(inode);
-
-  total = msg.u.readdir.r;
-
-  return total;
 }
 
 int
@@ -340,34 +231,6 @@ fs_inode_stat(struct Inode *ip, struct stat *buf)
   fs_inode_unlock(ip);
 
   return 0;
-}
-
-int
-fs_inode_truncate_locked(struct Inode *inode, off_t length)
-{
-  struct FSMessage msg;
-  int r;
-
-  if (!fs_inode_holding(inode))
-    k_panic("not locked");
-
-  if (length < 0)
-    return -EINVAL;
-  if (length > inode->size)
-    return -EFBIG;
-
-  msg.type = FS_MSG_TRUNC;
-  msg.u.trunc.inode  = inode;
-  msg.u.trunc.length = length;
-
-  fs_send_recv(inode->fs, &msg);
-
-  r = msg.u.trunc.r;
-  if (r == 0)
-
-    inode->flags |= FS_INODE_DIRTY;
-
-  return r;
 }
 
 int
@@ -886,30 +749,6 @@ fs_inode_utime(struct Inode *inode, struct utimbuf *times)
   }
 
 out:
-  fs_inode_unlock(inode);
-
-  return r;
-}
-
-int
-fs_inode_ioctl(struct Inode *inode, int, int)
-{
-  fs_inode_lock(inode);
-
-  // TODO: check perm
-
-  fs_inode_unlock(inode);
-
-  return -ENOTTY;
-}
-
-int
-fs_inode_truncate(struct Inode *inode, off_t length)
-{
-  int r;
-  
-  fs_inode_lock(inode);
-  r = fs_inode_truncate_locked(inode, length);
   fs_inode_unlock(inode);
 
   return r;
