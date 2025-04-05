@@ -13,103 +13,6 @@
 #include <kernel/process.h>
 #include <kernel/dev.h>
 
-#define STATUS_MASK (O_APPEND | O_NONBLOCK | O_SYNC)
-
-int
-fs_open(const char *path, int oflag, mode_t mode, struct File **file_store)
-{
-  struct FSMessage msg;
-  struct File *file;
-  struct PathNode *path_node;
-  struct Inode *inode;
-  int r, flags;
-
-  // TODO: O_NONBLOCK
-
-  //if (oflag & O_SEARCH) k_panic("O_SEARCH %s", path);
-  //if (oflag & O_EXEC) k_panic("O_EXEC %s", path);
-  //if (oflag & O_NOFOLLOW) k_panic("O_NOFOLLOW %s", path);
-  if (oflag & O_SYNC) k_panic("O_SYNC %s", path);
-  if (oflag & O_DIRECT) k_panic("O_DIRECT %s", path);
-
-  // TODO: ENFILE
-  if ((r = file_alloc(&file)) != 0)
-    return r;
-
-  file->flags     = oflag & (STATUS_MASK | O_ACCMODE);
-  file->type      = FD_INODE;
-  file->node      = NULL;
-  file->inode     = NULL;
-  file->rdev      = -1;
-  file->ref_count = 1;
-
-  flags = FS_LOOKUP_FOLLOW_LINKS;
-  if ((oflag & O_EXCL) && (oflag & O_CREAT))
-    flags &= ~FS_LOOKUP_FOLLOW_LINKS;
-  if (oflag & O_NOFOLLOW)
-    flags &= ~FS_LOOKUP_FOLLOW_LINKS;
-
-  // TODO: the check and the file creation should be atomic
-  // REF(path_node)
-  if ((r = fs_path_resolve(path, flags, &path_node)) < 0)
-    goto out1;
-
-  if (path_node == NULL) {
-    if (!(oflag & O_CREAT)) {
-      r = -ENOENT;
-      goto out1;
-    }
-    
-    mode &= (S_IRWXU | S_IRWXG | S_IRWXO);
-
-    // REF(path_node)
-    if ((r = fs_create(path, S_IFREG | mode, 0, &path_node)) < 0)
-      goto out1;
-  } else {
-    if ((oflag & O_CREAT) && (oflag & O_EXCL)) {
-      r = -EEXIST;
-      goto out2;
-    }
-  }
-
-  inode = fs_path_inode(path_node);
-
-  msg.type = FS_MSG_OPEN;
-  msg.u.open.file  = file;
-  msg.u.open.inode = inode;
-  msg.u.open.oflag = oflag;
-
-  fs_send_recv(inode->fs, &msg);
-
-  if ((r = msg.u.open.r) < 0)
-    goto out2;
-
-  if (file->rdev >= 0) {
-    if ((r = dev_open(thread_current(), file->rdev, oflag, mode)) < 0)
-      goto out2;
-  }
-
-  // REF(file->node)
-  file->node  = fs_path_node_ref(path_node);
-
-  // UNREF(path_node)
-  fs_path_node_unref(path_node);
-  path_node = NULL;
-
-  if (oflag & O_APPEND)
-    file->offset = inode->size;
-
-  *file_store = file;
-
-  return 0;
-out2:
-  // UNREF(path_node)
-  fs_path_node_unref(path_node);
-out1:
-  file_put(file);
-  return r;
-}
-
 /*
  * ----- Pathname Operations -----
  */
@@ -117,7 +20,9 @@ out1:
 int
 fs_access(const char *path, int amode)
 {
+  struct FSMessage msg;
   struct PathNode *node;
+  struct Inode *inode;
   int r;
 
   if ((r = fs_path_resolve(path, 0, &node)) < 0)
@@ -125,12 +30,17 @@ fs_access(const char *path, int amode)
   if (node == NULL)
     return -ENOENT;
 
-  if (amode != F_OK)
-    r = fs_inode_access(fs_path_inode(node), amode);
+  inode = fs_path_inode(node);
+
+  msg.type = FS_MSG_ACCESS;
+  msg.u.access.inode = inode;
+  msg.u.access.amode = amode;
+
+  fs_send_recv(inode->fs, &msg);
 
   fs_path_node_unref(node);
 
-  return r;
+  return msg.u.access.r;
 }
  
 int
@@ -154,7 +64,9 @@ fs_chdir(const char *path)
 int
 fs_chmod(const char *path, mode_t mode)
 {
+  struct FSMessage msg;
   struct PathNode *node;
+  struct Inode *inode;
   int r;
 
   if ((r = fs_path_resolve(path, 0, &node)) < 0)
@@ -162,17 +74,25 @@ fs_chmod(const char *path, mode_t mode)
   if (node == NULL)
     return -ENOENT;
 
-  r = fs_inode_chmod(fs_path_inode(node), mode);
+  inode = fs_path_inode(node);
+
+  msg.type = FS_MSG_CHMOD;
+  msg.u.chmod.inode = inode;
+  msg.u.chmod.mode  = mode;
+
+  fs_send_recv(inode->fs, &msg);
 
   fs_path_node_unref(node);
 
-  return r;
+  return msg.u.chmod.r;
 }
 
 int
 fs_chown(const char *path, uid_t uid, gid_t gid)
 {
+  struct FSMessage msg;
   struct PathNode *node;
+  struct Inode *inode;
   int r;
 
   if ((r = fs_path_resolve(path, 0, &node)) < 0)
@@ -180,11 +100,18 @@ fs_chown(const char *path, uid_t uid, gid_t gid)
   if (node == NULL)
     return -ENOENT;
 
-  r = fs_inode_chown(fs_path_inode(node), uid, gid);
+  inode = fs_path_inode(node);
+
+  msg.type = FS_MSG_CHOWN;
+  msg.u.chown.inode = inode;
+  msg.u.chown.uid   = uid;
+  msg.u.chown.gid   = gid;
+
+  fs_send_recv(inode->fs, &msg);
 
   fs_path_node_unref(node);
 
-  return r;
+  return msg.u.chown.r;
 }
 
 ssize_t
@@ -257,21 +184,38 @@ fs_fchdir(struct File *file)
 int
 fs_fchmod(struct File *file, mode_t mode)
 {
+  struct FSMessage msg;
+
   k_assert(file->ref_count > 0);
   k_assert(file->type == FD_INODE);
   k_assert(file->inode != NULL);
 
-  return fs_inode_chmod(file->inode, mode);
+  msg.type = FS_MSG_FCHMOD;
+  msg.u.fchmod.file = file;
+  msg.u.fchmod.mode = mode;
+
+  fs_send_recv(file->inode->fs, &msg);
+
+  return msg.u.fchmod.r;
 }
 
 int
 fs_fchown(struct File *file, uid_t uid, gid_t gid)
 {
+  struct FSMessage msg;
+
   k_assert(file->ref_count > 0);
   k_assert(file->type == FD_INODE);
   k_assert(file->inode != NULL);
 
-  return fs_inode_chown(file->inode, uid, gid);
+  msg.type = FS_MSG_FCHOWN;
+  msg.u.fchown.file = file;
+  msg.u.fchown.uid  = uid;
+  msg.u.fchown.gid  = gid;
+
+  fs_send_recv(file->inode->fs, &msg);
+
+  return msg.u.fchown.r;
 }
 
 int
@@ -354,6 +298,103 @@ fs_ioctl(struct File *file, int request, int arg)
   fs_send_recv(file->inode->fs, &msg);
 
   return msg.u.ioctl.r;
+}
+
+#define OPEN_TIME_FLAGS (O_CREAT | O_EXCL | O_DIRECTORY | O_NOFOLLOW | O_NOCTTY | O_TRUNC)
+
+int
+fs_open(const char *path, int oflag, mode_t mode, struct File **file_store)
+{
+  struct FSMessage msg;
+  struct File *file;
+  struct PathNode *path_node;
+  struct Inode *inode;
+  int r, flags;
+
+  // TODO: O_NONBLOCK
+
+  //if (oflag & O_SEARCH) k_panic("O_SEARCH %s", path);
+  //if (oflag & O_EXEC) k_panic("O_EXEC %s", path);
+  //if (oflag & O_NOFOLLOW) k_panic("O_NOFOLLOW %s", path);
+  if (oflag & O_SYNC) k_panic("O_SYNC %s", path);
+  if (oflag & O_DIRECT) k_panic("O_DIRECT %s", path);
+
+  // TODO: ENFILE
+  if ((r = file_alloc(&file)) != 0)
+    return r;
+
+  file->flags     = oflag & ~OPEN_TIME_FLAGS;
+  file->type      = FD_INODE;
+  file->node      = NULL;
+  file->inode     = NULL;
+  file->rdev      = -1;
+  file->ref_count = 1;
+
+  flags = FS_LOOKUP_FOLLOW_LINKS;
+  if ((oflag & O_EXCL) && (oflag & O_CREAT))
+    flags &= ~FS_LOOKUP_FOLLOW_LINKS;
+  if (oflag & O_NOFOLLOW)
+    flags &= ~FS_LOOKUP_FOLLOW_LINKS;
+
+  // TODO: the check and the file creation should be atomic
+  // REF(path_node)
+  if ((r = fs_path_resolve(path, flags, &path_node)) < 0)
+    goto out1;
+
+  if (path_node == NULL) {
+    if (!(oflag & O_CREAT)) {
+      r = -ENOENT;
+      goto out1;
+    }
+    
+    mode &= (S_IRWXU | S_IRWXG | S_IRWXO);
+
+    // REF(path_node)
+    if ((r = fs_create(path, S_IFREG | mode, 0, &path_node)) < 0)
+      goto out1;
+  } else {
+    if ((oflag & O_CREAT) && (oflag & O_EXCL)) {
+      r = -EEXIST;
+      goto out2;
+    }
+  }
+
+  inode = fs_path_inode(path_node);
+
+  msg.type = FS_MSG_OPEN;
+  msg.u.open.file  = file;
+  msg.u.open.inode = inode;
+  msg.u.open.oflag = oflag;
+
+  fs_send_recv(inode->fs, &msg);
+
+  if ((r = msg.u.open.r) < 0)
+    goto out2;
+
+  if (file->rdev >= 0) {
+    if ((r = dev_open(thread_current(), file->rdev, oflag, mode)) < 0)
+      goto out2;
+  }
+
+  // REF(file->node)
+  file->node  = fs_path_node_ref(path_node);
+
+  // UNREF(path_node)
+  fs_path_node_unref(path_node);
+  path_node = NULL;
+
+  if (oflag & O_APPEND)
+    file->offset = inode->size;
+
+  *file_store = file;
+
+  return 0;
+out2:
+  // UNREF(path_node)
+  fs_path_node_unref(path_node);
+out1:
+  file_put(file);
+  return r;
 }
 
 ssize_t

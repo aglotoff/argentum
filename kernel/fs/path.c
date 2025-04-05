@@ -186,9 +186,18 @@ int
 fs_path_set_cwd(struct PathNode *node)
 {
   struct Process *current = process_current();
+  struct FSMessage msg;
+  struct Inode *inode;
   int r;
 
-  if ((r = fs_inode_chdir(fs_path_inode(node))) < 0)
+  inode = fs_path_inode(node);
+
+  msg.type = FS_MSG_CHDIR;
+  msg.u.chdir.inode = inode;
+
+  fs_send_recv(inode->fs, &msg);
+
+  if ((r = msg.u.chdir.r) < 0)
     return r;
 
   // UNREF(current->cwd)

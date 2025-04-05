@@ -123,15 +123,7 @@ fs_inode_put(struct Inode *inode)
 
     // If this is the last reference to this inode
     if (ref_count == 1) {
-      struct FSMessage msg;
-
-      msg.type = FS_MSG_INODE_DELETE;
-      msg.u.inode_delete.inode = inode;
-
-      fs_send_recv(inode->fs, &msg);
-
-      //inode->fs->ops->inode_delete(thread_current(), inode);
-
+      inode->fs->ops->inode_delete(thread_current(), inode);
       inode->flags &= ~FS_INODE_VALID;
     }
   }
@@ -628,51 +620,6 @@ fs_rmdir(const char *path)
 }
 
 int
-fs_inode_chdir(struct Inode *inode)
-{
-  fs_inode_lock(inode);
-
-  if (!S_ISDIR(inode->mode)) {
-    fs_inode_unlock(inode);
-    return -ENOTDIR;
-  }
-
-  if (!fs_inode_permission(thread_current(), inode, FS_PERM_EXEC, 0)) {
-    fs_inode_unlock(inode);
-    return -EPERM;
-  }
-
-  fs_inode_unlock(inode);
-
-  return 0;
-}
-
-#define CHMOD_MASK  (S_IRWXU | S_IRWXG | S_IRWXO | S_ISUID | S_ISGID)
-
-int
-fs_inode_chmod(struct Inode *inode, mode_t mode)
-{
-  struct Process *current = process_current();
-
-  fs_inode_lock(inode);
-
-  if ((current->euid != 0) && (inode->uid != current->euid)) {
-    fs_inode_unlock(inode);
-    return -EPERM;
-  }
-
-  // TODO: additional permission checks
-
-  inode->mode  = (inode->mode & ~CHMOD_MASK) | (mode & CHMOD_MASK);
-  inode->ctime = time_get_seconds();
-  inode->flags |= FS_INODE_DIRTY;
-
-  fs_inode_unlock(inode);
-
-  return 0;
-}
-
-int
 fs_inode_permission(struct Thread *thread, struct Inode *inode, mode_t mode, int real)
 {
   struct Process *my_process = thread ? thread->process : NULL;
@@ -693,25 +640,6 @@ fs_inode_permission(struct Thread *thread, struct Inode *inode, mode_t mode, int
     mode <<= 3;
 
   return (inode->mode & mode) == mode;
-}
-
-int
-fs_inode_access(struct Inode *inode, int amode)
-{
-  int r = 0;
-
-  fs_inode_lock(inode);
-
-  if ((amode & R_OK) && !fs_inode_permission(thread_current(), inode, FS_PERM_READ, 1))
-    r = -EPERM;
-  if ((amode & W_OK) && !fs_inode_permission(thread_current(), inode, FS_PERM_WRITE, 1))
-    r = -EPERM;
-  if ((amode & X_OK) && !fs_inode_permission(thread_current(), inode, FS_PERM_EXEC, 1))
-    r = -EPERM;
-
-  fs_inode_unlock(inode);
-
-  return r;
 }
 
 int
@@ -762,43 +690,6 @@ fs_inode_sync(struct Inode *inode)
   fs_inode_unlock(inode);
 
   return 0;
-}
-
-static int
-fs_inode_chown_locked(struct Inode *inode, uid_t uid, gid_t gid)
-{
-  struct Process *current = process_current();
-
-  if ((uid != (uid_t) -1) &&
-      (current->euid != 0) &&
-      (current->euid != inode->uid))
-    return -EPERM;
-
-  if ((gid != (gid_t) -1) &&
-      (current->euid != 0) &&
-      (current->euid != inode->uid) &&
-      ((uid != (uid_t) -1) || (current->egid != inode->gid)))
-    return -EPERM;
-
-  if (uid != (uid_t) -1)
-    inode->uid = uid;
-
-  if (gid != (gid_t) -1)
-    inode->gid = gid;
-
-  return 0;
-}
-
-int
-fs_inode_chown(struct Inode *inode, uid_t uid, gid_t gid)
-{
-  int r;
-
-  fs_inode_lock(inode);
-  r = fs_inode_chown_locked(inode, uid, gid);
-  fs_inode_unlock(inode);
-
-  return r;
 }
 
 ssize_t

@@ -124,7 +124,6 @@ int           fs_path_resolve(const char *, int, struct PathNode **);
 int           fs_path_resolve_inode(const char *, int, struct Inode **);
 int           fs_path_node_resolve(const char *, char *, int, struct PathNode **, struct PathNode **);
 int           fs_path_set_cwd(struct PathNode *);
-int           fs_inode_chdir(struct Inode *);
 
 struct Inode *fs_inode_get(ino_t ino, dev_t dev);
 void          fs_inode_put(struct Inode *);
@@ -200,17 +199,6 @@ struct FSMessage {
   
   union {
     struct {
-      struct Inode *inode;
-      int r;
-    } inode_read;
-    struct {
-      struct Inode *inode;
-    } inode_delete;
-    struct {
-      struct Inode *inode;
-      int r;
-    } inode_write;
-    struct {
       struct Inode *dir;
       const char *name;
       struct Inode **istore;
@@ -225,15 +213,12 @@ struct FSMessage {
       struct Inode **istore;
       int r;
     } create;
-    
     struct {
       struct Inode *inode;
       uintptr_t va;
       size_t nbyte;
       ssize_t r;
     } readlink;
-    
-    
     struct {
       struct Inode *dir;
       char *name;
@@ -252,6 +237,39 @@ struct FSMessage {
       const char *name;
       int r;
     } rmdir;
+
+    struct {
+      struct Inode *inode;
+      int amode;
+      int r;
+    } access;
+    struct {
+      struct Inode *inode;
+      int r;
+    } chdir;
+    struct {
+      struct Inode *inode;
+      mode_t mode;
+      int r;
+    } chmod;
+    struct {
+      struct Inode *inode;
+      uid_t uid;
+      gid_t gid;
+      int r;
+    } chown;
+
+    struct {
+      struct File *file;
+      mode_t mode;
+      int r;
+    } fchmod;
+    struct {
+      struct File *file;
+      uid_t uid;
+      gid_t gid;
+      int r;
+    } fchown;
     struct {
       struct File *file;
       int request;
@@ -304,10 +322,6 @@ struct FSMessage {
 int              fs_send_recv(struct FS *, struct FSMessage *);
 
 enum {
-  FS_MSG_INODE_READ   = 1,
-  FS_MSG_INODE_DELETE,
-  FS_MSG_INODE_WRITE,
-  
   FS_MSG_LOOKUP,
   FS_MSG_CREATE,
   FS_MSG_LINK,
@@ -315,6 +329,13 @@ enum {
   FS_MSG_RMDIR,
   FS_MSG_READLINK,
 
+  FS_MSG_ACCESS,
+  FS_MSG_CHDIR,
+  FS_MSG_CHMOD,
+  FS_MSG_CHOWN,
+  
+  FS_MSG_FCHMOD,
+  FS_MSG_FCHOWN,
   FS_MSG_IOCTL,
   FS_MSG_OPEN,
   FS_MSG_READ,

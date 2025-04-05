@@ -2,6 +2,7 @@
 #include <sys/fcntl.h>
 #include <sys/stat.h>
 #include <stdio.h>
+#include <unistd.h>
 
 #include <kernel/fs/file.h>
 #include <kernel/page.h>
@@ -10,24 +11,6 @@
 #include <kernel/process.h>
 #include <kernel/time.h>
 #include <kernel/vmspace.h>
-
-static int
-do_inode_read(struct FS *fs, struct Thread *sender, struct Inode *inode)
-{
-  return fs->ops->inode_read(sender, inode);
-}
-
-static int
-do_inode_write(struct FS *fs, struct Thread *sender, struct Inode *inode)
-{
-  return fs->ops->inode_write(sender, inode);
-}
-
-static void
-do_inode_delete(struct FS *fs, struct Thread *sender, struct Inode *inode)
-{
-  fs->ops->inode_delete(sender, inode);
-}
 
 static int
 do_create(struct FS *fs, struct Thread *sender,
@@ -178,6 +161,124 @@ do_readlink(struct FS *fs, struct Thread *sender,
     return -EINVAL;
 
   r = fs->ops->readlink(sender, inode, va, nbyte);
+
+  return r;
+}
+
+/*
+ * ----- Inode Operations -----
+ */
+
+int
+do_access(struct FS *, struct Thread *sender,
+          struct Inode *inode,
+          int amode)
+{
+  int r = 0;
+
+  if (amode == F_OK)
+    return r;
+
+  fs_inode_lock(inode);
+
+  if ((amode & R_OK) && !fs_inode_permission(sender, inode, FS_PERM_READ, 1))
+    r = -EPERM;
+  if ((amode & W_OK) && !fs_inode_permission(sender, inode, FS_PERM_WRITE, 1))
+    r = -EPERM;
+  if ((amode & X_OK) && !fs_inode_permission(sender, inode, FS_PERM_EXEC, 1))
+    r = -EPERM;
+
+  fs_inode_unlock(inode);
+
+  return r;
+}
+
+int
+do_chdir(struct FS *, struct Thread *sender,
+         struct Inode *inode)
+{
+  fs_inode_lock(inode);
+
+  if (!S_ISDIR(inode->mode)) {
+    fs_inode_unlock(inode);
+    return -ENOTDIR;
+  }
+
+  if (!fs_inode_permission(sender, inode, FS_PERM_EXEC, 0)) {
+    fs_inode_unlock(inode);
+    return -EPERM;
+  }
+
+  fs_inode_unlock(inode);
+
+  return 0;
+}
+
+#define CHMOD_MASK  (S_IRWXU | S_IRWXG | S_IRWXO | S_ISUID | S_ISGID)
+
+int
+do_chmod(struct FS *, struct Thread *sender,
+         struct Inode *inode, mode_t mode)
+{
+  uid_t euid = sender ? sender->process->euid : 0;
+
+  fs_inode_lock(inode);
+
+  if ((euid != 0) && (inode->uid != euid)) {
+    fs_inode_unlock(inode);
+    return -EPERM;
+  }
+
+  // TODO: additional permission checks
+
+  inode->mode  = (inode->mode & ~CHMOD_MASK) | (mode & CHMOD_MASK);
+  inode->ctime = time_get_seconds();
+  inode->flags |= FS_INODE_DIRTY;
+
+  fs_inode_unlock(inode);
+
+  return 0;
+}
+
+static int
+do_chown_locked(struct FS *, struct Thread *sender,
+                struct Inode *inode,
+                uid_t uid,
+                gid_t gid)
+{
+  uid_t euid = sender ? sender->process->euid : 0;
+  uid_t egid = sender ? sender->process->egid : 0;
+
+  if ((uid != (uid_t) -1) &&
+      (euid != 0) &&
+      (euid != inode->uid))
+    return -EPERM;
+
+  if ((gid != (gid_t) -1) &&
+      (euid != 0) &&
+      (euid != inode->uid) &&
+      ((uid != (uid_t) -1) || (egid != inode->gid)))
+    return -EPERM;
+
+  if (uid != (uid_t) -1)
+    inode->uid = uid;
+
+  if (gid != (gid_t) -1)
+    inode->gid = gid;
+
+  return 0;
+}
+
+int
+do_chown(struct FS *fs, struct Thread *sender,
+        struct Inode *inode,
+        uid_t uid, gid_t gid)
+{
+  int r;
+
+  fs_inode_lock(inode);
+  r = do_chown_locked(fs, sender, inode, uid, gid);
+  fs_inode_unlock(inode);
 
   return r;
 }
@@ -506,18 +607,6 @@ fs_service_task(void *arg)
     k_assert(msg != NULL);
 
     switch (msg->type) {
-    case FS_MSG_INODE_READ:
-      msg->u.inode_read.r = do_inode_read(fs, msg->sender,
-                                          msg->u.inode_read.inode);
-      break;
-    case FS_MSG_INODE_WRITE:
-      msg->u.inode_write.r = do_inode_write(fs, msg->sender,
-                                            msg->u.inode_write.inode);
-      break;
-    case FS_MSG_INODE_DELETE:
-      do_inode_delete(fs, msg->sender,
-                      msg->u.inode_delete.inode);
-      break;
     case FS_MSG_LOOKUP:
       msg->u.lookup.r = do_lookup(fs, msg->sender,
                                   msg->u.lookup.dir,
@@ -544,7 +633,7 @@ fs_service_task(void *arg)
                                   msg->u.unlink.dir,
                                   msg->u.unlink.inode,
                                   msg->u.unlink.name);
-      break;    
+      break;
     case FS_MSG_RMDIR:
       msg->u.rmdir.r = do_rmdir(fs, msg->sender,
                                 msg->u.rmdir.dir,
@@ -559,8 +648,38 @@ fs_service_task(void *arg)
       break;
 
 
+    case FS_MSG_ACCESS:
+      msg->u.access.r = do_access(fs, msg->sender,
+                                  msg->u.access.inode,
+                                  msg->u.access.amode);
+      break;
+    case FS_MSG_CHDIR:
+      msg->u.chdir.r = do_chdir(fs, msg->sender,
+                                msg->u.chdir.inode);
+      break;
+    case FS_MSG_CHMOD:
+      msg->u.chmod.r = do_chmod(fs, msg->sender,
+                                msg->u.chmod.inode,
+                                msg->u.chmod.mode);
+      break;
+    case FS_MSG_CHOWN:
+      msg->u.chown.r = do_chown(fs, msg->sender,
+                                msg->u.chown.inode,
+                                msg->u.chown.uid,
+                                msg->u.chown.gid);
+      break;
 
-
+    case FS_MSG_FCHMOD:
+      msg->u.fchmod.r = do_chmod(fs, msg->sender,
+                                 msg->u.fchmod.file->inode,
+                                 msg->u.fchmod.mode);
+      break;
+    case FS_MSG_FCHOWN:
+      msg->u.fchown.r = do_chown(fs, msg->sender,
+                                 msg->u.fchown.file->inode,
+                                 msg->u.fchown.uid,
+                                 msg->u.fchown.gid);
+      break;
     case FS_MSG_IOCTL:
       msg->u.ioctl.r = do_ioctl(fs, msg->sender,
                                 msg->u.ioctl.file,
