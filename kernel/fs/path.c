@@ -439,6 +439,7 @@ fs_path_node_lookup(struct PathNode *parent,
                     int flags,
                     struct PathNode **child_store)
 {
+  struct FSMessage msg;
   struct PathNode *child;
   int r = 0;
   
@@ -451,7 +452,17 @@ fs_path_node_lookup(struct PathNode *parent,
     struct Inode *child_inode, *parent_inode;
 
     parent_inode = fs_inode_duplicate(fs_path_inode(parent));
-    r = fs_inode_lookup(parent_inode, name, flags, &child_inode);
+
+    msg.type = FS_MSG_LOOKUP;
+    msg.u.lookup.dir    = parent_inode;
+    msg.u.lookup.name   = name;
+    msg.u.lookup.flags  = flags;
+    msg.u.lookup.istore = &child_inode;
+
+    fs_send_recv(parent_inode->fs, &msg);
+
+    r = msg.u.lookup.r;
+
     fs_inode_put(parent_inode);
 
     if (r == 0 && child_inode != NULL) {
@@ -531,27 +542,6 @@ fs_path_resolve(const char *path, int flags, struct PathNode **store)
   }
 
   return fs_path_node_resolve(path, name_buf, flags, store, NULL);
-}
-
-int
-fs_path_resolve_inode(const char *path, int flags, struct Inode **inode_store)
-{
-  struct PathNode *path_node;
-  int r;
-  
-  // REF(path_node)
-  if ((r = fs_path_resolve(path, flags, &path_node)) < 0)
-    return r;
-
-  if (path_node == NULL)
-    return -ENOENT;
-
-  *inode_store = fs_inode_duplicate(fs_path_inode(path_node));
-
-  // UNREF(path_node)
-  fs_path_node_unref(path_node);
-
-  return 0;
 }
 
 #define FS_ROOT_DEV 0

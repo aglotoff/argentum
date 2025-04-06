@@ -168,6 +168,51 @@ fs_create(const char *path, mode_t mode, dev_t dev, struct PathNode **istore)
   return r;
 }
 
+int
+fs_link(char *path1, char *path2)
+{
+  struct FSMessage msg;
+  struct PathNode *dirp, *pp;
+  struct Inode *inode, *parent_inode;
+  char name[NAME_MAX + 1];
+  int r;
+
+  // REF(pp)
+  if ((r = fs_path_resolve(path1, 0, &pp)) < 0)
+    return r;
+  if (pp == NULL)
+    return -ENOENT;
+
+  // REF(dirp)
+  if ((r = fs_path_node_resolve(path2, name, FS_LOOKUP_FOLLOW_LINKS, NULL, &dirp)) < 0)
+    goto out1;
+
+  // TODO: check for the same node?
+  // TODO: lock the namespace manager?
+
+  parent_inode = fs_inode_duplicate(fs_path_inode(dirp));
+  inode = fs_inode_duplicate(fs_path_inode(pp));
+
+  msg.type = FS_MSG_LINK;
+  msg.u.link.dir   = parent_inode;
+  msg.u.link.name  = name;
+  msg.u.link.inode = inode;
+
+  fs_send_recv(parent_inode->fs, &msg);
+
+  r = msg.u.link.r;
+
+  fs_inode_put(inode);
+  fs_inode_put(parent_inode);
+
+  // UNREF(dirp)
+  fs_path_node_unref(dirp);
+out1:
+  // UNREF(pp)
+  fs_path_node_unref(pp);
+  return r;
+}
+
 ssize_t
 fs_readlink(const char *path, uintptr_t va, size_t bufsize)
 {
@@ -193,6 +238,206 @@ fs_readlink(const char *path, uintptr_t va, size_t bufsize)
   fs_path_node_unref(node);
 
   return msg.u.readlink.r;
+}
+
+int
+fs_rename(char *old, char *new)
+{
+  struct PathNode *old_dir, *new_dir, *old_node, *new_node;
+  struct Inode *inode, *parent_inode;
+  struct FSMessage msg;
+  char old_name[NAME_MAX + 1];
+  char new_name[NAME_MAX + 1];
+  int r;
+
+  // REF(old_node), REF(old_dir)
+  if ((r = fs_path_node_resolve(old, old_name, FS_LOOKUP_FOLLOW_LINKS, &old_node, &old_dir)) < 0)
+    return r;
+  if (old_node == NULL)
+    return -ENOENT;
+
+  // REF(new_node), REF(new_dir)
+  if ((r = fs_path_node_resolve(new, new_name, FS_LOOKUP_FOLLOW_LINKS, &new_node, &new_dir)) < 0)
+    goto out1;
+  if (new_dir == NULL) {
+    r = -ENOENT;
+    goto out1;
+  }
+
+  // TODO: check for the same node?
+  // TODO: lock the namespace manager?
+  // TODO: should be a transaction?
+
+  if (new_node != NULL) {
+    parent_inode = fs_inode_duplicate(fs_path_inode(new_dir));
+    inode = fs_inode_duplicate(fs_path_inode(new_node));
+
+    // TODO: lock the namespace manager?
+    // FIXME: check if is dir
+
+    msg.type = FS_MSG_UNLINK;
+    msg.u.unlink.dir = parent_inode;
+    msg.u.unlink.inode = inode;
+    msg.u.unlink.name = new_name;
+    
+    fs_send_recv(parent_inode->fs, &msg);
+
+    if ((r = msg.u.unlink.r) == 0) {
+      fs_path_node_remove(new_node);
+    }
+
+    fs_inode_put(inode);
+    fs_inode_put(parent_inode);
+
+    // UNREF(new_node)
+    fs_path_node_unref(new_node);
+    new_node = NULL;
+
+    if (r != 0)
+      goto out2;
+  }
+
+  inode        = fs_inode_duplicate(fs_path_inode(old_node));
+  parent_inode = fs_inode_duplicate(fs_path_inode(new_dir));
+
+  msg.type = FS_MSG_LINK;
+  msg.u.link.dir   = parent_inode;
+  msg.u.link.name  = new_name;
+  msg.u.link.inode = inode;
+
+  fs_send_recv(parent_inode->fs, &msg);
+
+  r = msg.u.link.r;
+
+  fs_inode_put(parent_inode);
+
+  if (r < 0)
+    goto out2;
+
+  parent_inode = fs_inode_duplicate(fs_path_inode(old_dir));
+    
+  msg.type = FS_MSG_UNLINK;
+  msg.u.unlink.dir = parent_inode;
+  msg.u.unlink.inode = inode;
+  msg.u.unlink.name = old_name;
+
+  fs_send_recv(parent_inode->fs, &msg);
+
+  if ((r = msg.u.unlink.r) == 0) {
+    fs_path_node_remove(old_node);
+  }
+
+  fs_inode_put(parent_inode);
+
+out2:
+  fs_inode_put(inode);
+
+  // UNREF(new_dir)
+  fs_path_node_unref(new_dir);
+
+out1:
+  // UNREF(old_dir)
+  if (old_dir != NULL)
+    fs_path_node_unref(old_dir);
+  // UNREF(old_node)
+  if (old_node != NULL)
+    fs_path_node_unref(old_node);
+  return r;
+}
+
+int
+fs_rmdir(const char *path)
+{
+  struct FSMessage msg;
+  struct PathNode *dir, *pp;
+  struct Inode *inode, *parent_inode;
+  char name[NAME_MAX + 1];
+  int r;
+
+  // REF(pp), REF(dir)
+  if ((r = fs_path_node_resolve(path, name, 0, &pp, &dir)) < 0)
+    return r;
+
+  if (pp == NULL) {
+    // UNREF(dir)
+    fs_path_node_unref(dir);
+  
+    return -ENOENT;
+  }
+
+  // TODO: lock the namespace manager?
+
+  parent_inode = fs_inode_duplicate(fs_path_inode(dir));
+  inode = fs_inode_duplicate(fs_path_inode(pp));
+
+  msg.type = FS_MSG_RMDIR;
+  msg.u.rmdir.dir   = parent_inode;
+  msg.u.rmdir.inode = inode;
+  msg.u.rmdir.name  = pp->name;
+
+  fs_send_recv(parent_inode->fs, &msg);
+
+  if ((r = msg.u.rmdir.r) == 0) {
+    fs_path_node_remove(pp);
+  }
+
+  fs_inode_put(inode);
+  fs_inode_put(parent_inode);
+
+  // UNREF(dir)
+  fs_path_node_unref(dir);
+
+  // UNREF(pp)
+  fs_path_node_unref(pp);
+
+  return r;
+}
+
+int
+fs_unlink(const char *path)
+{
+  struct FSMessage msg;
+  struct PathNode *dir, *pp;
+  struct Inode *inode, *parent_inode;
+  char name[NAME_MAX + 1];
+  int r;
+
+  // REF(pp), REF(dir)
+  if ((r = fs_path_node_resolve(path, name, FS_LOOKUP_FOLLOW_LINKS, &pp, &dir)) < 0)
+    return r;
+
+  if (pp == NULL) {
+    // UNREF(dir)
+    fs_path_node_unref(dir);
+    return -ENOENT;
+  }
+
+  parent_inode = fs_inode_duplicate(fs_path_inode(dir));
+  inode        = fs_inode_duplicate(fs_path_inode(pp));
+
+  // TODO: lock the namespace manager?
+
+  msg.type = FS_MSG_UNLINK;
+  msg.u.unlink.dir = parent_inode;
+  msg.u.unlink.inode = inode;
+  msg.u.unlink.name = pp->name;
+    
+  fs_send_recv(parent_inode->fs, &msg);
+
+  if ((r = msg.u.unlink.r) == 0) {
+    fs_path_node_remove(pp);
+  }
+
+  fs_inode_put(inode);
+  fs_inode_put(parent_inode);
+
+  // UNREF(dir)
+  fs_path_node_unref(dir);
+
+  // UNREF(pp)
+  fs_path_node_unref(pp);
+
+  return r;
 }
 
 int
