@@ -114,10 +114,66 @@ fs_chown(const char *path, uid_t uid, gid_t gid)
   return msg.u.chown.r;
 }
 
+int
+fs_create(const char *path, mode_t mode, dev_t dev, struct PathNode **istore)
+{
+  struct FSMessage msg;
+  struct PathNode *dir;
+  struct Inode *inode, *dir_inode;
+  char name[NAME_MAX + 1];
+  int r;
+
+  // REF(dir)
+  if ((r = fs_path_node_resolve(path, name, FS_LOOKUP_FOLLOW_LINKS, NULL, &dir)) < 0)
+    return r;
+
+  mode &= ~process_current()->cmask;
+
+  dir_inode = fs_inode_duplicate(fs_path_inode(dir));
+
+  msg.type = FS_MSG_CREATE;
+  msg.u.create.dir    = dir_inode;
+  msg.u.create.name   = name;
+  msg.u.create.mode   = mode;
+  msg.u.create.dev    = dev;
+  msg.u.create.istore = &inode;
+
+  fs_send_recv(dir_inode->fs, &msg);
+
+  fs_inode_put(dir_inode);
+
+  // (inode->ref_count): +1
+  if ((r = msg.u.create.r) == 0) {
+    if (istore != NULL) {
+      struct PathNode *pp;
+      
+      // REF(pp)
+      if ((pp = fs_path_node_create(name, inode, dir)) == NULL) {
+        // fs_inode_unlock(inode);
+        fs_inode_put(inode);  // (inode->ref_count): -1
+        r = -ENOMEM;
+      } else {
+        *istore = pp;
+      }
+    } else {
+      // fs_inode_unlock(inode);
+      fs_inode_put(inode);  // (inode->ref_count): -1
+    }
+  }
+
+  // UNREF(dir)
+  fs_path_node_unref(dir);
+  dir = NULL;
+
+  return r;
+}
+
 ssize_t
 fs_readlink(const char *path, uintptr_t va, size_t bufsize)
 {
+  struct FSMessage msg;  
   struct PathNode *node;
+  struct Inode *inode;
   int r;
 
   if ((r = fs_path_resolve(path, 0, &node)) < 0)
@@ -125,17 +181,26 @@ fs_readlink(const char *path, uintptr_t va, size_t bufsize)
   if (node == NULL)
     return -ENOENT;
 
-  r = fs_inode_readlink(fs_path_inode(node), va, bufsize);
+  inode = fs_path_inode(node);
+
+  msg.type = FS_MSG_READLINK;
+  msg.u.readlink.inode = inode;
+  msg.u.readlink.va    = va;
+  msg.u.readlink.nbyte = bufsize;
+
+  fs_send_recv(inode->fs, &msg);
 
   fs_path_node_unref(node);
 
-  return r;
+  return msg.u.readlink.r;
 }
 
 int
 fs_utime(const char *path, struct utimbuf *times)
 {
+  struct FSMessage msg;
   struct PathNode *node;
+  struct Inode *inode;
   int r;
 
   if ((r = fs_path_resolve(path, 0, &node)) < 0)
@@ -143,11 +208,17 @@ fs_utime(const char *path, struct utimbuf *times)
   if (node == NULL)
     return -ENOENT;
 
-  r = fs_inode_utime(fs_path_inode(node), times);
+  inode = fs_path_inode(node);
+
+  msg.type = FS_MSG_UTIME;
+  msg.u.utime.inode = inode;
+  msg.u.utime.times = times;
+
+  fs_send_recv(inode->fs, &msg);
 
   fs_path_node_unref(node);
 
-  return r;
+  return msg.u.utime.r;
 }
 
 /*
@@ -221,21 +292,36 @@ fs_fchown(struct File *file, uid_t uid, gid_t gid)
 int
 fs_fstat(struct File *file, struct stat *buf)
 {
+  struct FSMessage msg;
+
   k_assert(file->ref_count > 0);
   k_assert(file->type == FD_INODE);
   k_assert(file->inode != NULL);
 
-  return fs_inode_stat(file->inode, buf);
+  msg.type = FS_MSG_FSTAT;
+  msg.u.fstat.file = file;
+  msg.u.fstat.buf  = buf;
+
+  fs_send_recv(file->inode->fs, &msg);
+
+  return msg.u.fstat.r;
 }
 
 int
 fs_fsync(struct File *file)
 {
+  struct FSMessage msg;
+
   k_assert(file->ref_count > 0);
   k_assert(file->type == FD_INODE);
   k_assert(file->inode != NULL);
 
-  return fs_inode_sync(file->inode);
+  msg.type = FS_MSG_FSYNC;
+  msg.u.fsync.file = file;
+
+  fs_send_recv(file->inode->fs, &msg);
+
+  return msg.u.fsync.r;
 }
 
 int

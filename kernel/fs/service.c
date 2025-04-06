@@ -13,39 +13,6 @@
 #include <kernel/vmspace.h>
 
 static int
-do_create(struct FS *fs, struct Thread *sender,
-          struct Inode *dir,
-          char *name,
-          mode_t mode,
-          dev_t dev,
-          struct Inode **istore)
-{
-  struct Inode *inode;
-
-  if (!S_ISDIR(dir->mode))
-    return -ENOTDIR;
-
-  if (!fs_inode_permission(sender, dir, FS_PERM_WRITE, 0))
-    return -EPERM;
-
-  inode = fs->ops->lookup(sender, dir, name);
-
-  if (inode != NULL) {
-    fs_inode_put(inode);
-    return -EEXIST;
-  }
-
-  switch (mode & S_IFMT) {
-    case S_IFDIR:
-      return fs->ops->mkdir(sender, dir, name, mode, istore);
-    case S_IFREG:
-      return fs->ops->create(sender, dir, name, mode, istore);
-    default:
-      return fs->ops->mknod(sender, dir, name, mode, dev, istore);
-  }
-}
-
-static int
 fs_filldir(void *buf, ino_t ino, const char *name, size_t name_len)
 {
   struct dirent *dp = (struct dirent *) buf;
@@ -144,25 +111,6 @@ do_rmdir(struct FS *fs, struct Thread *sender,
     return -EPERM;
 
   return fs->ops->rmdir(sender, dir, inode, name);
-}
-
-static ssize_t
-do_readlink(struct FS *fs, struct Thread *sender,
-            struct Inode *inode,
-            uintptr_t va,
-            size_t nbyte)
-{
-  ssize_t r;
-
-  if (!fs_inode_permission(sender, inode, FS_PERM_READ, 0))
-    return -EPERM;
-    
-  if (!S_ISLNK(inode->mode))
-    return -EINVAL;
-
-  r = fs->ops->readlink(sender, inode, va, nbyte);
-
-  return r;
 }
 
 /*
@@ -283,9 +231,167 @@ do_chown(struct FS *fs, struct Thread *sender,
   return r;
 }
 
+static int
+do_create_locked(struct FS *fs, struct Thread *sender,
+                 struct Inode *dir,
+                 char *name,
+                 mode_t mode,
+                 dev_t dev,
+                 struct Inode **istore)
+{
+  struct Inode *inode;
+
+  if (!S_ISDIR(dir->mode))
+    return -ENOTDIR;
+
+  if (!fs_inode_permission(sender, dir, FS_PERM_WRITE, 0))
+    return -EPERM;
+
+  inode = fs->ops->lookup(sender, dir, name);
+
+  if (inode != NULL) {
+    fs_inode_put(inode);
+    return -EEXIST;
+  }
+
+  switch (mode & S_IFMT) {
+    case S_IFDIR:
+      return fs->ops->mkdir(sender, dir, name, mode, istore);
+    case S_IFREG:
+      return fs->ops->create(sender, dir, name, mode, istore);
+    default:
+      return fs->ops->mknod(sender, dir, name, mode, dev, istore);
+  }
+}
+
+static int
+do_create(struct FS *fs, struct Thread *sender,
+          struct Inode *dir,
+          char *name,
+          mode_t mode,
+          dev_t dev,
+          struct Inode **istore)
+{
+  int r;
+
+  fs_inode_lock(dir);
+  r = do_create_locked(fs, sender, dir, name, mode, dev, istore);
+  fs_inode_unlock(dir);
+
+  return r;
+}
+
+static ssize_t
+do_readlink(struct FS *fs, struct Thread *sender,
+            struct Inode *inode,
+            uintptr_t va,
+            size_t nbyte)
+{
+  ssize_t r;
+
+  fs_inode_lock(inode);
+
+  if (!fs_inode_permission(sender, inode, FS_PERM_READ, 0)) {
+    fs_inode_unlock(inode);
+    return -EPERM;
+  }
+    
+  if (!S_ISLNK(inode->mode)) {
+    fs_inode_unlock(inode);
+    return -EINVAL;
+  }
+
+  r = fs->ops->readlink(sender, inode, va, nbyte);
+
+  fs_inode_lock(inode);
+
+  return r;
+}
+
+int
+do_stat(struct FS *, struct Thread *,
+        struct Inode *inode,
+        struct stat *buf)
+{
+  fs_inode_lock(inode);
+  
+  buf->st_dev          = inode->dev;
+  buf->st_ino          = inode->ino;
+  buf->st_mode         = inode->mode;
+  buf->st_nlink        = inode->nlink;
+  buf->st_uid          = inode->uid;
+  buf->st_gid          = inode->gid;
+  buf->st_rdev         = inode->rdev;
+  buf->st_size         = inode->size;
+  buf->st_atim.tv_sec  = inode->atime;
+  buf->st_atim.tv_nsec = 0;
+  buf->st_mtim.tv_sec  = inode->mtime;
+  buf->st_mtim.tv_nsec = 0;
+  buf->st_ctim.tv_sec  = inode->ctime;
+  buf->st_ctim.tv_nsec = 0;
+  buf->st_blocks       = inode->size / S_BLKSIZE;
+  buf->st_blksize      = S_BLKSIZE;
+
+  fs_inode_unlock(inode);
+
+  return 0;
+}
+
+int
+do_utime(struct FS *, struct Thread *sender,
+         struct Inode *inode, struct utimbuf *times)
+{
+  uid_t euid = sender ? sender->process->euid : 0;
+  int r = 0;
+
+  fs_inode_lock(inode);
+
+  if (times == NULL) {
+    if ((euid != 0) &&
+        (euid != inode->uid) &&
+        !fs_inode_permission(sender, inode, FS_PERM_WRITE, 1)) {
+      r = -EPERM;
+      goto out;
+    }
+
+    inode->atime = time_get_seconds();
+    inode->mtime = time_get_seconds();
+
+    inode->flags |= FS_INODE_DIRTY;
+  } else {
+    if ((euid != 0) ||
+       ((euid != inode->uid) ||
+         !fs_inode_permission(sender, inode, FS_PERM_WRITE, 1))) {
+      r = -EPERM;
+      goto out;
+    }
+
+    inode->atime = times->actime;
+    inode->mtime = times->modtime;
+
+    inode->flags |= FS_INODE_DIRTY;
+  }
+
+out:
+  fs_inode_unlock(inode);
+
+  return r;
+}
+
 /*
  * ----- File Operations -----
  */
+
+int
+do_fsync(struct FS *, struct Thread *,
+         struct File *file)
+{
+  fs_inode_lock(file->inode);
+  // FIXME: fsync
+  fs_inode_unlock(file->inode);
+
+  return 0;
+}
 
 static int
 do_ioctl(struct FS *, struct Thread *,
@@ -614,14 +720,6 @@ fs_service_task(void *arg)
                                   msg->u.lookup.flags,
                                   msg->u.lookup.istore);
       break;
-    case FS_MSG_CREATE:
-      msg->u.create.r = do_create(fs, msg->sender,
-                                  msg->u.create.dir,
-                                  msg->u.create.name,
-                                  msg->u.create.mode,
-                                  msg->u.create.dev,
-                                  msg->u.create.istore);
-      break;
     case FS_MSG_LINK:
       msg->u.link.r = do_link(fs, msg->sender,
                               msg->u.link.dir,
@@ -640,12 +738,7 @@ fs_service_task(void *arg)
                                 msg->u.rmdir.inode,
                                 msg->u.rmdir.name);
       break;
-    case FS_MSG_READLINK:
-      msg->u.readlink.r = do_readlink(fs, msg->sender,
-                                      msg->u.readlink.inode,
-                                      msg->u.readlink.va,
-                                      msg->u.readlink.nbyte);
-      break;
+    
 
 
     case FS_MSG_ACCESS:
@@ -668,7 +761,30 @@ fs_service_task(void *arg)
                                 msg->u.chown.uid,
                                 msg->u.chown.gid);
       break;
-
+    case FS_MSG_CREATE:
+      msg->u.create.r = do_create(fs, msg->sender,
+                                  msg->u.create.dir,
+                                  msg->u.create.name,
+                                  msg->u.create.mode,
+                                  msg->u.create.dev,
+                                  msg->u.create.istore);
+      break;
+    case FS_MSG_READLINK:
+      msg->u.readlink.r = do_readlink(fs, msg->sender,
+                                      msg->u.readlink.inode,
+                                      msg->u.readlink.va,
+                                      msg->u.readlink.nbyte);
+      break;
+    case FS_MSG_STAT:
+      msg->u.stat.r = do_stat(fs, msg->sender,
+                              msg->u.stat.inode,
+                              msg->u.stat.buf);
+      break;
+    case FS_MSG_UTIME:
+      msg->u.utime.r = do_utime(fs, msg->sender,
+                                msg->u.utime.inode,
+                                msg->u.utime.times);
+      break;
     case FS_MSG_FCHMOD:
       msg->u.fchmod.r = do_chmod(fs, msg->sender,
                                  msg->u.fchmod.file->inode,
@@ -679,6 +795,15 @@ fs_service_task(void *arg)
                                  msg->u.fchown.file->inode,
                                  msg->u.fchown.uid,
                                  msg->u.fchown.gid);
+      break;
+    case FS_MSG_FSTAT:
+      msg->u.fstat.r = do_stat(fs, msg->sender,
+                                msg->u.fstat.file->inode,
+                                msg->u.fstat.buf);
+      break;
+    case FS_MSG_FSYNC:
+      msg->u.fsync.r = do_fsync(fs, msg->sender,
+                                msg->u.fsync.file);
       break;
     case FS_MSG_IOCTL:
       msg->u.ioctl.r = do_ioctl(fs, msg->sender,

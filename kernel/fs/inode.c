@@ -199,54 +199,6 @@ fs_inode_unlock(struct Inode *ip)
 }
 
 int
-fs_inode_stat(struct Inode *ip, struct stat *buf)
-{
-  fs_inode_lock(ip);
-  
-  buf->st_dev          = ip->dev;
-  buf->st_ino          = ip->ino;
-  buf->st_mode         = ip->mode;
-  buf->st_nlink        = ip->nlink;
-  buf->st_uid          = ip->uid;
-  buf->st_gid          = ip->gid;
-  buf->st_rdev         = ip->rdev;
-  buf->st_size         = ip->size;
-  buf->st_atim.tv_sec  = ip->atime;
-  buf->st_atim.tv_nsec = 0;
-  buf->st_mtim.tv_sec  = ip->mtime;
-  buf->st_mtim.tv_nsec = 0;
-  buf->st_ctim.tv_sec  = ip->ctime;
-  buf->st_ctim.tv_nsec = 0;
-  buf->st_blocks       = ip->size / S_BLKSIZE;
-  buf->st_blksize      = S_BLKSIZE;
-
-  fs_inode_unlock(ip);
-
-  return 0;
-}
-
-int
-fs_inode_create(struct Inode *dir, char *name, mode_t mode, dev_t dev,
-                struct Inode **istore)
-{
-  struct FSMessage msg;
-
-  if (!fs_inode_holding(dir))
-    k_panic("directory not locked");
-
-  msg.type = FS_MSG_CREATE;
-  msg.u.create.dir    = dir;
-  msg.u.create.name   = name;
-  msg.u.create.mode   = mode;
-  msg.u.create.dev    = dev;
-  msg.u.create.istore = istore;
-
-  fs_send_recv(dir->fs, &msg);
-
-  return msg.u.create.r;
-}
-
-int
 fs_inode_link(struct Inode *inode, struct Inode *dir, char *name)
 {
   // FIXME: works only in the same filesystem!
@@ -324,53 +276,6 @@ fs_inode_rmdir(struct Inode *dir, struct Inode *inode, const char *name)
   fs_send_recv(dir->fs, &msg);
 
   return msg.u.rmdir.r;
-}
-
-int
-fs_create(const char *path, mode_t mode, dev_t dev, struct PathNode **istore)
-{
-  struct PathNode *dir;
-  struct Inode *inode, *dir_inode;
-  char name[NAME_MAX + 1];
-  int r;
-
-  // REF(dir)
-  if ((r = fs_path_node_resolve(path, name, FS_LOOKUP_FOLLOW_LINKS, NULL, &dir)) < 0)
-    return r;
-
-  mode &= ~process_current()->cmask;
-
-  dir_inode = fs_inode_duplicate(fs_path_inode(dir));
-
-  fs_inode_lock(dir_inode);
-
-  // (inode->ref_count): +1
-  if ((r = fs_inode_create(dir_inode, name, mode, dev, &inode)) == 0) {
-    if (istore != NULL) {
-      struct PathNode *pp;
-      
-      // REF(pp)
-      if ((pp = fs_path_node_create(name, inode, dir)) == NULL) {
-        // fs_inode_unlock(inode);
-        fs_inode_put(inode);  // (inode->ref_count): -1
-        r = -ENOMEM;
-      } else {
-        *istore = pp;
-      }
-    } else {
-      // fs_inode_unlock(inode);
-      fs_inode_put(inode);  // (inode->ref_count): -1
-    }
-  }
-
-  fs_inode_unlock(dir_inode);
-  fs_inode_put(dir_inode);
-
-  // UNREF(dir)
-  fs_path_node_unref(dir);
-  dir = NULL;
-
-  return r;
 }
 
 static void
@@ -640,73 +545,4 @@ fs_inode_permission(struct Thread *thread, struct Inode *inode, mode_t mode, int
     mode <<= 3;
 
   return (inode->mode & mode) == mode;
-}
-
-int
-fs_inode_utime(struct Inode *inode, struct utimbuf *times)
-{
-  struct Process *my_process = process_current();
-  int r = 0;
-
-  fs_inode_lock(inode);
-
-  if (times == NULL) {
-    if ((my_process->euid != 0) &&
-        (my_process->euid != inode->uid) &&
-        !fs_inode_permission(thread_current(), inode, FS_PERM_WRITE, 1)) {
-      r = -EPERM;
-      goto out;
-    }
-
-    inode->atime = time_get_seconds();
-    inode->mtime = time_get_seconds();
-
-    inode->flags |= FS_INODE_DIRTY;
-  } else {
-    if ((my_process->euid != 0) ||
-       ((my_process->euid != inode->uid) ||
-         !fs_inode_permission(thread_current(), inode, FS_PERM_WRITE, 1))) {
-      r = -EPERM;
-      goto out;
-    }
-
-    inode->atime = times->actime;
-    inode->mtime = times->modtime;
-
-    inode->flags |= FS_INODE_DIRTY;
-  }
-
-out:
-  fs_inode_unlock(inode);
-
-  return r;
-}
-
-int
-fs_inode_sync(struct Inode *inode)
-{
-  fs_inode_lock(inode);
-  // FIXME: implement
-  fs_inode_unlock(inode);
-
-  return 0;
-}
-
-ssize_t
-fs_inode_readlink(struct Inode *inode, uintptr_t va, size_t nbyte)
-{ 
-  struct FSMessage msg;  
-
-  fs_inode_lock(inode);
-
-  msg.type = FS_MSG_READLINK;
-  msg.u.readlink.inode = inode;
-  msg.u.readlink.va    = va;
-  msg.u.readlink.nbyte = nbyte;
-
-  fs_send_recv(inode->fs, &msg);
-
-  fs_inode_unlock(inode);
-
-  return msg.u.readlink.r;
 }

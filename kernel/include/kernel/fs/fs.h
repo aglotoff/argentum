@@ -129,22 +129,10 @@ struct Inode *fs_inode_get(ino_t ino, dev_t dev);
 void          fs_inode_put(struct Inode *);
 struct Inode *fs_inode_duplicate(struct Inode *);
 void          fs_inode_lock(struct Inode *);
-int           fs_inode_access(struct Inode *, int);
-int           fs_inode_utime(struct Inode *, struct utimbuf *);
 void          fs_inode_unlock(struct Inode *);
 int           fs_inode_lookup(struct Inode *, const char *, int, struct Inode **);
-
-ssize_t       fs_inode_getdents(struct Inode *, void *, size_t, off_t *);
-int           fs_inode_stat_locked(struct Inode *, struct stat *);
-int           fs_inode_stat(struct Inode *, struct stat *);
 int           fs_create(const char *, mode_t, dev_t, struct PathNode **);
 void          fs_inode_cache_init(void);
-int           fs_inode_chmod(struct Inode *, mode_t);
-int           fs_inode_select(struct Inode *, struct timeval *);
-int           fs_inode_sync(struct Inode *);
-int           fs_inode_truncate(struct Inode *, off_t);
-int           fs_inode_chown(struct Inode *, uid_t, gid_t);
-ssize_t       fs_inode_readlink(struct Inode *, uintptr_t, size_t);
 int           fs_inode_permission(struct Thread *, struct Inode *, mode_t, int);
 
 // Path operations
@@ -208,20 +196,6 @@ struct FSMessage {
     struct {
       struct Inode *dir;
       char *name;
-      mode_t mode;
-      dev_t dev;
-      struct Inode **istore;
-      int r;
-    } create;
-    struct {
-      struct Inode *inode;
-      uintptr_t va;
-      size_t nbyte;
-      ssize_t r;
-    } readlink;
-    struct {
-      struct Inode *dir;
-      char *name;
       struct Inode *inode;
       int r;
     } link;
@@ -258,6 +232,30 @@ struct FSMessage {
       gid_t gid;
       int r;
     } chown;
+    struct {
+      struct Inode *dir;
+      char *name;
+      mode_t mode;
+      dev_t dev;
+      struct Inode **istore;
+      int r;
+    } create;
+    struct {
+      struct Inode *inode;
+      uintptr_t va;
+      size_t nbyte;
+      ssize_t r;
+    } readlink;
+    struct {
+      struct Inode *inode;
+      struct stat *buf;
+      int r;
+    } stat;
+    struct {
+      struct Inode *inode;
+      struct utimbuf *times;
+      int r;
+    } utime;
 
     struct {
       struct File *file;
@@ -270,6 +268,15 @@ struct FSMessage {
       gid_t gid;
       int r;
     } fchown;
+    struct {
+      struct File *file;
+      struct stat *buf;
+      int r;
+    } fstat;
+    struct {
+      struct File *file;
+      int r;
+    } fsync;
     struct {
       struct File *file;
       int request;
@@ -323,19 +330,24 @@ int              fs_send_recv(struct FS *, struct FSMessage *);
 
 enum {
   FS_MSG_LOOKUP,
-  FS_MSG_CREATE,
   FS_MSG_LINK,
   FS_MSG_UNLINK,
   FS_MSG_RMDIR,
-  FS_MSG_READLINK,
+  
 
   FS_MSG_ACCESS,
   FS_MSG_CHDIR,
   FS_MSG_CHMOD,
   FS_MSG_CHOWN,
+  FS_MSG_CREATE,
+  FS_MSG_STAT,
+  FS_MSG_READLINK,
+  FS_MSG_UTIME,
   
   FS_MSG_FCHMOD,
   FS_MSG_FCHOWN,
+  FS_MSG_FSTAT,
+  FS_MSG_FSYNC,
   FS_MSG_IOCTL,
   FS_MSG_OPEN,
   FS_MSG_READ,

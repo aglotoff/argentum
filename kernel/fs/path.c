@@ -215,13 +215,21 @@ fs_path_resolve_symlink(struct Inode *inode,
                         const char *rest,
                         char **path_store)
 {
+  struct FSMessage msg;  
   char *path;
   ssize_t r;
 
   if ((path = (char *) k_malloc(PATH_MAX)) == NULL)
     return -ENOMEM;
 
-  if ((r = fs_inode_readlink(inode, (uintptr_t) path, PATH_MAX - 1)) < 0) {
+  msg.type = FS_MSG_READLINK;
+  msg.u.readlink.inode = inode;
+  msg.u.readlink.va    = (uintptr_t) path;
+  msg.u.readlink.nbyte = PATH_MAX - 1;
+
+  fs_send_recv(inode->fs, &msg);
+
+  if ((r = msg.u.readlink.r) < 0) {
     k_free(path);
     return r;
   }
@@ -269,6 +277,7 @@ fs_path_node_resolve_at(struct PathNode *start,
   prev = NULL;
 
   while ((r = fs_path_next(p, name_buf, (char **) &p)) > 0) {
+    struct FSMessage msg;
     struct stat stat;
     struct Inode *inode;
     char *resolved_path;
@@ -318,7 +327,13 @@ fs_path_node_resolve_at(struct PathNode *start,
     inode = fs_inode_duplicate(fs_path_inode(next));
     k_assert(inode != NULL);
 
-    if ((r = fs_inode_stat(inode, &stat)) < 0) {
+    msg.type = FS_MSG_STAT;
+    msg.u.stat.inode = inode;
+    msg.u.stat.buf   = &stat;
+
+    fs_send_recv(inode->fs, &msg);
+
+    if ((r = msg.u.stat.r) < 0) {
       fs_inode_put(inode);
       break;
     }
