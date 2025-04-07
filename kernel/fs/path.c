@@ -152,6 +152,21 @@ fs_path_inode(struct PathNode *node)
   return inode;
 }
 
+ino_t
+fs_path_ino(struct PathNode *node, struct FS **fs)
+{
+  struct Inode *inode;
+
+  k_spinlock_acquire(&fs_path_lock);
+  inode = node->mounted ? node->mounted : node->inode;
+  k_spinlock_release(&fs_path_lock);
+
+  if (fs)
+    *fs = inode->fs;
+
+  return inode->ino;
+}
+
 void
 fs_path_node_lock(struct PathNode *node)
 {
@@ -187,15 +202,16 @@ fs_path_set_cwd(struct PathNode *node)
 {
   struct Process *current = process_current();
   struct FSMessage msg;
-  struct Inode *inode;
+  ino_t ino;
+  struct FS *fs;
   int r;
 
-  inode = fs_path_inode(node);
+  ino = fs_path_ino(node, &fs);
 
   msg.type = FS_MSG_CHDIR;
-  msg.u.chdir.ino = inode->ino;
+  msg.u.chdir.ino = ino;
 
-  fs_send_recv(inode->fs, &msg);
+  fs_send_recv(fs, &msg);
 
   if ((r = msg.u.chdir.r) < 0)
     return r;
@@ -211,7 +227,8 @@ fs_path_set_cwd(struct PathNode *node)
 }
 
 static ssize_t
-fs_path_resolve_symlink(struct Inode *inode,
+fs_path_resolve_symlink(ino_t ino,
+                        struct FS *fs,
                         const char *rest,
                         char **path_store)
 {
@@ -223,11 +240,11 @@ fs_path_resolve_symlink(struct Inode *inode,
     return -ENOMEM;
 
   msg.type = FS_MSG_READLINK;
-  msg.u.readlink.ino   = inode->ino;
+  msg.u.readlink.ino   = ino;
   msg.u.readlink.va    = (uintptr_t) path;
   msg.u.readlink.nbyte = PATH_MAX - 1;
 
-  fs_send_recv(inode->fs, &msg);
+  fs_send_recv(fs, &msg);
 
   if ((r = msg.u.readlink.r) < 0) {
     k_free(path);
@@ -279,7 +296,8 @@ fs_path_node_resolve_at(struct PathNode *start,
   while ((r = fs_path_next(p, name_buf, (char **) &p)) > 0) {
     struct FSMessage msg;
     struct stat stat;
-    struct Inode *inode;
+    ino_t ino;
+    struct FS *fs;
     char *resolved_path;
 
     // Stay in the current directory
@@ -324,14 +342,13 @@ fs_path_node_resolve_at(struct PathNode *start,
 
     // Check for symlinks
 
-    inode = fs_path_inode(next);
-    k_assert(inode != NULL);
+    ino = fs_path_ino(next, &fs);
 
     msg.type = FS_MSG_STAT;
-    msg.u.stat.ino = inode->ino;
+    msg.u.stat.ino = ino;
     msg.u.stat.buf = &stat;
 
-    fs_send_recv(inode->fs, &msg);
+    fs_send_recv(fs, &msg);
 
     if ((r = msg.u.stat.r) < 0) {
       break;
@@ -355,7 +372,7 @@ fs_path_node_resolve_at(struct PathNode *start,
 
     // Resolve the symlink
 
-    if ((r = fs_path_resolve_symlink(inode, p, &resolved_path)) < 0) {
+    if ((r = fs_path_resolve_symlink(ino, fs, p, &resolved_path)) < 0) {
       break;
     }
 
@@ -442,17 +459,19 @@ fs_path_node_lookup(struct PathNode *parent,
   child = fs_path_node_lookup_cached(parent, name);
 
   if (child == NULL) {
-    struct Inode *child_inode, *parent_inode;
+    ino_t parent_ino;
+    struct FS *fs;
+    struct Inode *child_inode;
 
-    parent_inode = fs_path_inode(parent);
+    parent_ino = fs_path_ino(parent, &fs);
 
     msg.type = FS_MSG_LOOKUP;
-    msg.u.lookup.dir_ino = parent_inode->ino;
+    msg.u.lookup.dir_ino = parent_ino;
     msg.u.lookup.name    = name;
     msg.u.lookup.flags   = flags;
     msg.u.lookup.istore  = &child_inode;
 
-    fs_send_recv(parent_inode->fs, &msg);
+    fs_send_recv(fs, &msg);
 
     r = msg.u.lookup.r;
 

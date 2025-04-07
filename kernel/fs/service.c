@@ -220,15 +220,22 @@ do_create(struct FS *fs, struct Thread *sender,
           char *name,
           mode_t mode,
           dev_t dev,
-          struct Inode **istore)
+          ino_t *istore)
 {
   int r;
 
   struct Inode *dir = fs->ops->inode_get(fs, dir_ino);
+  struct Inode *inode = NULL;
 
   fs_inode_lock(dir);
-  r = do_create_locked(fs, sender, dir, name, mode, dev, istore);
+  r = do_create_locked(fs, sender, dir, name, mode, dev, &inode);
   fs_inode_unlock(dir);
+
+  if (inode != NULL) {
+    if (istore)
+      *istore = inode->ino;
+    fs_inode_put(inode);
+  }
 
   fs_inode_put(dir);
 
@@ -597,14 +604,18 @@ do_open_locked(struct FS *fs, struct Thread *sender,
 static int
 do_open(struct FS *fs, struct Thread *sender,
         struct File *file, 
-        struct Inode *inode,
+        ino_t ino,
         int oflag)
 {
   int r;
 
+  struct Inode *inode = fs->ops->inode_get(fs, ino);
+
   fs_inode_lock(inode);
   r = do_open_locked(fs, sender, file, inode, oflag);
   fs_inode_unlock(inode);
+
+  fs_inode_put(inode);
 
   return r;
 }
@@ -962,7 +973,7 @@ fs_service_task(void *arg)
     case FS_MSG_OPEN:
       msg->u.open.r = do_open(fs, msg->sender,
                               msg->u.open.file,
-                              msg->u.open.inode,
+                              msg->u.open.ino,
                               msg->u.open.oflag);
       break;
     case FS_MSG_READ:

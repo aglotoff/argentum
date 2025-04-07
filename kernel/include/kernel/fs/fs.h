@@ -173,6 +173,7 @@ struct Inode    *fs_path_inode(struct PathNode *);
 int              fs_path_resolve(const char *, int, struct PathNode **);
 int              fs_path_node_resolve(const char *, char *, int, struct PathNode **, struct PathNode **);
 int              fs_path_set_cwd(struct PathNode *);
+ino_t            fs_path_ino(struct PathNode *, struct FS **);
 
 struct FS *      fs_create_service(char *, dev_t, void *, struct FSOps *);
 void             fs_service_task(void *);
@@ -219,7 +220,7 @@ struct FSMessage {
       char *name;
       mode_t mode;
       dev_t dev;
-      struct Inode **istore;
+      ino_t *istore;
       int r;
     } create;
     struct {
@@ -285,7 +286,7 @@ struct FSMessage {
     } ioctl;
     struct {
       struct File *file;
-      struct Inode *inode;
+      ino_t ino;
       int oflag;
       int r;
     } open;
