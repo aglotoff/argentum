@@ -141,7 +141,7 @@ fs_inode_put(struct Inode *inode)
   k_spinlock_release(&inode_cache.lock);
 }
 
-static int
+int
 fs_inode_holding(struct Inode *ip)
 {
   return k_mutex_holding(&ip->mutex);
@@ -188,26 +188,6 @@ fs_inode_unlock(struct Inode *ip)
   }
 
   k_mutex_unlock(&ip->mutex);
-}
-
-int
-fs_inode_unlink(struct Inode *dir, struct Inode *inode, const char *name)
-{
-  struct FSMessage msg;
-
-  if (!fs_inode_holding(inode))
-    k_panic("inode not locked");
-  if (!fs_inode_holding(dir))
-    k_panic("directory not locked");
-
-  msg.type = FS_MSG_UNLINK;
-  msg.u.unlink.dir   = dir;
-  msg.u.unlink.inode = inode;
-  msg.u.unlink.name  = name;
-
-  fs_send_recv(dir->fs, &msg);
-
-  return msg.u.unlink.r;
 }
 
 void

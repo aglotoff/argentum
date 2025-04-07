@@ -34,7 +34,7 @@ static struct DevfsNode {
 
 #define NDEV  (sizeof(devices) / sizeof devices[0])
 
-static struct Inode *
+struct Inode *
 devfs_inode_get(struct FS *fs, ino_t inum)
 {
   struct Inode *inode = fs_inode_get(inum, fs->dev);
@@ -210,6 +210,7 @@ devfs_trunc(struct Thread *, struct Inode *inode, off_t size)
 }
 
 struct FSOps devfs_ops = {
+  .inode_get    = devfs_inode_get,
   .inode_read   = devfs_inode_read,
   .inode_write  = devfs_inode_write,
   .inode_delete = devfs_inode_delete,

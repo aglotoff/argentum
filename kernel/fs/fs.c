@@ -33,7 +33,7 @@ fs_access(const char *path, int amode)
   inode = fs_path_inode(node);
 
   msg.type = FS_MSG_ACCESS;
-  msg.u.access.inode = inode;
+  msg.u.access.ino   = inode->ino;
   msg.u.access.amode = amode;
 
   fs_send_recv(inode->fs, &msg);
@@ -77,8 +77,8 @@ fs_chmod(const char *path, mode_t mode)
   inode = fs_path_inode(node);
 
   msg.type = FS_MSG_CHMOD;
-  msg.u.chmod.inode = inode;
-  msg.u.chmod.mode  = mode;
+  msg.u.chmod.ino  = inode->ino;
+  msg.u.chmod.mode = mode;
 
   fs_send_recv(inode->fs, &msg);
 
@@ -103,9 +103,9 @@ fs_chown(const char *path, uid_t uid, gid_t gid)
   inode = fs_path_inode(node);
 
   msg.type = FS_MSG_CHOWN;
-  msg.u.chown.inode = inode;
-  msg.u.chown.uid   = uid;
-  msg.u.chown.gid   = gid;
+  msg.u.chown.ino = inode->ino;
+  msg.u.chown.uid = uid;
+  msg.u.chown.gid = gid;
 
   fs_send_recv(inode->fs, &msg);
 
@@ -132,11 +132,11 @@ fs_create(const char *path, mode_t mode, dev_t dev, struct PathNode **istore)
   dir_inode = fs_path_inode(dir);
 
   msg.type = FS_MSG_CREATE;
-  msg.u.create.dir    = dir_inode;
-  msg.u.create.name   = name;
-  msg.u.create.mode   = mode;
-  msg.u.create.dev    = dev;
-  msg.u.create.istore = &inode;
+  msg.u.create.dir_ino = dir_inode->ino;
+  msg.u.create.name    = name;
+  msg.u.create.mode    = mode;
+  msg.u.create.dev     = dev;
+  msg.u.create.istore  = &inode;
 
   fs_send_recv(dir_inode->fs, &msg);
 
@@ -192,9 +192,9 @@ fs_link(char *path1, char *path2)
   inode = fs_path_inode(pp);
 
   msg.type = FS_MSG_LINK;
-  msg.u.link.dir   = parent_inode;
-  msg.u.link.name  = name;
-  msg.u.link.inode = inode;
+  msg.u.link.dir_ino = parent_inode->ino;
+  msg.u.link.name    = name;
+  msg.u.link.ino     = inode->ino;
 
   fs_send_recv(parent_inode->fs, &msg);
 
@@ -224,7 +224,7 @@ fs_readlink(const char *path, uintptr_t va, size_t bufsize)
   inode = fs_path_inode(node);
 
   msg.type = FS_MSG_READLINK;
-  msg.u.readlink.inode = inode;
+  msg.u.readlink.ino   = inode->ino;
   msg.u.readlink.va    = va;
   msg.u.readlink.nbyte = bufsize;
 
@@ -271,9 +271,9 @@ fs_rename(char *old, char *new)
     // FIXME: check if is dir
 
     msg.type = FS_MSG_UNLINK;
-    msg.u.unlink.dir = parent_inode;
-    msg.u.unlink.inode = inode;
-    msg.u.unlink.name = new_name;
+    msg.u.unlink.dir_ino = parent_inode->ino;
+    msg.u.unlink.ino     = inode->ino;
+    msg.u.unlink.name    = new_name;
     
     fs_send_recv(parent_inode->fs, &msg);
 
@@ -293,9 +293,9 @@ fs_rename(char *old, char *new)
   parent_inode = fs_path_inode(new_dir);
 
   msg.type = FS_MSG_LINK;
-  msg.u.link.dir   = parent_inode;
-  msg.u.link.name  = new_name;
-  msg.u.link.inode = inode;
+  msg.u.link.dir_ino = parent_inode->ino;
+  msg.u.link.name    = new_name;
+  msg.u.link.ino     = inode->ino;
 
   fs_send_recv(parent_inode->fs, &msg);
 
@@ -307,9 +307,9 @@ fs_rename(char *old, char *new)
   parent_inode = fs_path_inode(old_dir);
     
   msg.type = FS_MSG_UNLINK;
-  msg.u.unlink.dir = parent_inode;
-  msg.u.unlink.inode = inode;
-  msg.u.unlink.name = old_name;
+  msg.u.unlink.dir_ino = parent_inode->ino;
+  msg.u.unlink.ino     = inode->ino;
+  msg.u.unlink.name    = old_name;
 
   fs_send_recv(parent_inode->fs, &msg);
 
@@ -357,9 +357,9 @@ fs_rmdir(const char *path)
   inode = fs_path_inode(pp);
 
   msg.type = FS_MSG_RMDIR;
-  msg.u.rmdir.dir   = parent_inode;
-  msg.u.rmdir.inode = inode;
-  msg.u.rmdir.name  = pp->name;
+  msg.u.rmdir.dir_ino = parent_inode->ino;
+  msg.u.rmdir.ino     = inode->ino;
+  msg.u.rmdir.name    = pp->name;
 
   fs_send_recv(parent_inode->fs, &msg);
 
@@ -401,9 +401,9 @@ fs_unlink(const char *path)
   // TODO: lock the namespace manager?
 
   msg.type = FS_MSG_UNLINK;
-  msg.u.unlink.dir = parent_inode;
-  msg.u.unlink.inode = inode;
-  msg.u.unlink.name = pp->name;
+  msg.u.unlink.dir_ino = parent_inode->ino;
+  msg.u.unlink.ino     = inode->ino;
+  msg.u.unlink.name    = pp->name;
     
   fs_send_recv(parent_inode->fs, &msg);
 
@@ -436,7 +436,7 @@ fs_utime(const char *path, struct utimbuf *times)
   inode = fs_path_inode(node);
 
   msg.type = FS_MSG_UTIME;
-  msg.u.utime.inode = inode;
+  msg.u.utime.ino   = inode->ino;
   msg.u.utime.times = times;
 
   fs_send_recv(inode->fs, &msg);
@@ -693,9 +693,6 @@ fs_open(const char *path, int oflag, mode_t mode, struct File **file_store)
   // UNREF(path_node)
   fs_path_node_unref(path_node);
   path_node = NULL;
-
-  if (oflag & O_APPEND)
-    file->offset = inode->size;
 
   *file_store = file;
 

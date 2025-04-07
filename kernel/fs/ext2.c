@@ -20,7 +20,7 @@
  * ----------------------------------------------------------------------------
  */
 
-static struct Inode *
+struct Inode *
 ext2_inode_get(struct FS *fs, ino_t inum)
 {
   struct Inode *inode = fs_inode_get(inum, fs->dev);
@@ -503,6 +503,7 @@ ext2_readlink(struct Thread *thread, struct Inode *inode, uintptr_t va, size_t n
 }
 
 struct FSOps ext2fs_ops = {
+  .inode_get    = ext2_inode_get,
   .inode_read   = ext2_inode_read,
   .inode_write  = ext2_inode_write,
   .inode_delete = ext2_inode_delete,

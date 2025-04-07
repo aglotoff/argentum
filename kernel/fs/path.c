@@ -193,7 +193,7 @@ fs_path_set_cwd(struct PathNode *node)
   inode = fs_path_inode(node);
 
   msg.type = FS_MSG_CHDIR;
-  msg.u.chdir.inode = inode;
+  msg.u.chdir.ino = inode->ino;
 
   fs_send_recv(inode->fs, &msg);
 
@@ -223,7 +223,7 @@ fs_path_resolve_symlink(struct Inode *inode,
     return -ENOMEM;
 
   msg.type = FS_MSG_READLINK;
-  msg.u.readlink.inode = inode;
+  msg.u.readlink.ino   = inode->ino;
   msg.u.readlink.va    = (uintptr_t) path;
   msg.u.readlink.nbyte = PATH_MAX - 1;
 
@@ -328,8 +328,8 @@ fs_path_node_resolve_at(struct PathNode *start,
     k_assert(inode != NULL);
 
     msg.type = FS_MSG_STAT;
-    msg.u.stat.inode = inode;
-    msg.u.stat.buf   = &stat;
+    msg.u.stat.ino = inode->ino;
+    msg.u.stat.buf = &stat;
 
     fs_send_recv(inode->fs, &msg);
 
@@ -447,10 +447,10 @@ fs_path_node_lookup(struct PathNode *parent,
     parent_inode = fs_path_inode(parent);
 
     msg.type = FS_MSG_LOOKUP;
-    msg.u.lookup.dir    = parent_inode;
-    msg.u.lookup.name   = name;
-    msg.u.lookup.flags  = flags;
-    msg.u.lookup.istore = &child_inode;
+    msg.u.lookup.dir_ino = parent_inode->ino;
+    msg.u.lookup.name    = name;
+    msg.u.lookup.flags   = flags;
+    msg.u.lookup.istore  = &child_inode;
 
     fs_send_recv(parent_inode->fs, &msg);
 

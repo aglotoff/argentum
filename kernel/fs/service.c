@@ -30,10 +30,11 @@ fs_filldir(void *buf, ino_t ino, const char *name, size_t name_len)
  */
 
 int
-do_access(struct FS *, struct Thread *sender,
-          struct Inode *inode,
+do_access(struct FS *fs, struct Thread *sender,
+          ino_t ino,
           int amode)
 {
+  struct Inode *inode = fs->ops->inode_get(fs, ino);
   int r = 0;
 
   if (amode == F_OK)
@@ -49,27 +50,33 @@ do_access(struct FS *, struct Thread *sender,
     r = -EPERM;
 
   fs_inode_unlock(inode);
+  fs_inode_put(inode);
 
   return r;
 }
 
 int
-do_chdir(struct FS *, struct Thread *sender,
-         struct Inode *inode)
+do_chdir(struct FS *fs, struct Thread *sender,
+         ino_t ino)
 {
+  struct Inode *inode = fs->ops->inode_get(fs, ino);
+
   fs_inode_lock(inode);
 
   if (!S_ISDIR(inode->mode)) {
     fs_inode_unlock(inode);
+    fs_inode_put(inode);
     return -ENOTDIR;
   }
 
   if (!fs_inode_permission(sender, inode, FS_PERM_EXEC, 0)) {
     fs_inode_unlock(inode);
+    fs_inode_put(inode);
     return -EPERM;
   }
 
   fs_inode_unlock(inode);
+  fs_inode_put(inode);
 
   return 0;
 }
@@ -77,8 +84,8 @@ do_chdir(struct FS *, struct Thread *sender,
 #define CHMOD_MASK  (S_IRWXU | S_IRWXG | S_IRWXO | S_ISUID | S_ISGID)
 
 int
-do_chmod(struct FS *, struct Thread *sender,
-         struct Inode *inode, mode_t mode)
+do_inode_chmod(struct FS *, struct Thread *sender,
+               struct Inode *inode, mode_t mode)
 {
   uid_t euid = sender ? sender->process->euid : 0;
 
@@ -99,6 +106,22 @@ do_chmod(struct FS *, struct Thread *sender,
 
   return 0;
 }
+
+int
+do_chmod(struct FS *fs, struct Thread *sender,
+        ino_t ino,
+        mode_t mode)
+{
+  int r;
+  struct Inode *inode = fs->ops->inode_get(fs, ino);
+
+  r = do_inode_chmod(fs, sender, inode, mode);
+
+  fs_inode_put(inode);
+
+  return r;
+}
+
 
 static int
 do_chown_locked(struct FS *, struct Thread *sender,
@@ -130,15 +153,30 @@ do_chown_locked(struct FS *, struct Thread *sender,
 }
 
 int
-do_chown(struct FS *fs, struct Thread *sender,
-        struct Inode *inode,
-        uid_t uid, gid_t gid)
+do_inode_chown(struct FS *fs, struct Thread *sender,
+               struct Inode *inode,
+               uid_t uid, gid_t gid)
 {
   int r;
 
   fs_inode_lock(inode);
   r = do_chown_locked(fs, sender, inode, uid, gid);
   fs_inode_unlock(inode);
+
+  return r;
+}
+
+int
+do_chown(struct FS *fs, struct Thread *sender,
+        ino_t ino,
+        uid_t uid, gid_t gid)
+{
+  int r;
+  struct Inode *inode = fs->ops->inode_get(fs, ino);
+
+  r = do_inode_chown(fs, sender, inode, uid, gid);
+
+  fs_inode_put(inode);
 
   return r;
 }
@@ -178,7 +216,7 @@ do_create_locked(struct FS *fs, struct Thread *sender,
 
 static int
 do_create(struct FS *fs, struct Thread *sender,
-          struct Inode *dir,
+          ino_t dir_ino,
           char *name,
           mode_t mode,
           dev_t dev,
@@ -186,9 +224,13 @@ do_create(struct FS *fs, struct Thread *sender,
 {
   int r;
 
+  struct Inode *dir = fs->ops->inode_get(fs, dir_ino);
+
   fs_inode_lock(dir);
   r = do_create_locked(fs, sender, dir, name, mode, dev, istore);
   fs_inode_unlock(dir);
+
+  fs_inode_put(dir);
 
   return r;
 }
@@ -220,37 +262,47 @@ do_link_locked(struct FS *fs, struct Thread *sender,
 
 static int
 do_link(struct FS *fs, struct Thread *sender,
-        struct Inode *dir,
+        ino_t dir_ino,
         char *name,
-        struct Inode *inode)
+        ino_t ino)
 {
   int r;
+
+  struct Inode *dir = fs->ops->inode_get(fs, dir_ino);
+  struct Inode *inode = fs->ops->inode_get(fs, ino);
 
   fs_inode_lock_two(dir, inode);
   r = do_link_locked(fs, sender, dir, name, inode);
   fs_inode_unlock_two(dir, inode);
+
+  fs_inode_put(dir);
+  fs_inode_put(inode);
 
   return r;
 }
 
 static int
 do_lookup(struct FS *fs, struct Thread *sender,
-          struct Inode *dir,
+          ino_t dir_ino,
           const char *name,
           int flags,
           struct Inode **inode_store)
 {
-  struct Inode *inode;
+  struct Inode *inode, *dir;
+
+  dir = fs->ops->inode_get(fs, dir_ino);
 
   fs_inode_lock(dir);
 
   if (!S_ISDIR(dir->mode)) {
     fs_inode_unlock(dir);
+    fs_inode_put(dir);
     return -ENOTDIR;
   }
 
   if (!fs_inode_permission(sender, dir, FS_PERM_READ, flags & FS_LOOKUP_REAL)) {
     fs_inode_unlock(dir);
+    fs_inode_put(dir);
     return -EPERM;
   }
     
@@ -262,74 +314,90 @@ do_lookup(struct FS *fs, struct Thread *sender,
     fs_inode_put(inode);
 
   fs_inode_unlock(dir);
+  fs_inode_put(dir);
 
   return 0;
 }
 
 static ssize_t
 do_readlink(struct FS *fs, struct Thread *sender,
-            struct Inode *inode,
+            ino_t ino,
             uintptr_t va,
             size_t nbyte)
 {
   ssize_t r;
+  struct Inode *inode = fs->ops->inode_get(fs, ino);
 
   fs_inode_lock(inode);
 
   if (!fs_inode_permission(sender, inode, FS_PERM_READ, 0)) {
     fs_inode_unlock(inode);
+    fs_inode_put(inode);
     return -EPERM;
   }
     
   if (!S_ISLNK(inode->mode)) {
     fs_inode_unlock(inode);
+    fs_inode_put(inode);
     return -EINVAL;
   }
 
   r = fs->ops->readlink(sender, inode, va, nbyte);
 
   fs_inode_unlock(inode);
+  fs_inode_put(inode);
 
   return r;
 }
 
 static int
 do_rmdir(struct FS *fs, struct Thread *sender,
-         struct Inode *dir,
-         struct Inode *inode,
+         ino_t dir_ino,
+         ino_t ino,
          const char *name)
 {
   int r;
+
+  struct Inode *dir = fs->ops->inode_get(fs, dir_ino);
+  struct Inode *inode = fs->ops->inode_get(fs, ino);
 
   fs_inode_lock_two(dir, inode);
 
   if (!S_ISDIR(dir->mode)) {
     fs_inode_unlock_two(dir, inode);
+    fs_inode_put(dir);
+    fs_inode_put(inode);
     return -ENOTDIR;
   }
 
   if (!fs_inode_permission(sender, dir, FS_PERM_WRITE, 0)) {
     fs_inode_unlock_two(dir, inode);
+    fs_inode_put(dir);
+    fs_inode_put(inode);
     return -EPERM;
   }
 
   // TODO: Allow links to directories?
   if (!S_ISDIR(inode->mode)) {
     fs_inode_unlock_two(dir, inode);
+    fs_inode_put(dir);
+    fs_inode_put(inode);
     return -EPERM;
   }
 
   r = fs->ops->rmdir(sender, dir, inode, name);
 
   fs_inode_unlock_two(dir, inode);
+  fs_inode_put(dir);
+  fs_inode_put(inode);
 
   return r;
 }
 
 int
-do_stat(struct FS *, struct Thread *,
-        struct Inode *inode,
-        struct stat *buf)
+do_inode_stat(struct FS *, struct Thread *,
+              struct Inode *inode,
+              struct stat *buf)
 {
   fs_inode_lock(inode);
   
@@ -355,43 +423,70 @@ do_stat(struct FS *, struct Thread *,
   return 0;
 }
 
+int
+do_stat(struct FS *fs, struct Thread *sender,
+        ino_t ino,
+        struct stat *buf)
+{
+  int r;
+  struct Inode *inode = fs->ops->inode_get(fs, ino);
+
+  r = do_inode_stat(fs, sender, inode, buf);
+  
+  fs_inode_put(inode);
+
+  return r;
+}
+
 static int
 do_unlink(struct FS *fs, struct Thread *sender,
-          struct Inode *dir,
-          struct Inode *inode,
+          ino_t dir_ino,
+          ino_t ino,
           const char *name)
 {
   int r;
+
+  struct Inode *dir = fs->ops->inode_get(fs, dir_ino);
+  struct Inode *inode = fs->ops->inode_get(fs, ino);
 
   fs_inode_lock_two(dir, inode);
 
   if (!S_ISDIR(dir->mode)) {
     fs_inode_unlock_two(dir, inode);
+    fs_inode_put(dir);
+    fs_inode_put(inode);
     return -ENOTDIR;
   }
 
   if (!fs_inode_permission(sender, dir, FS_PERM_WRITE, 0)) {
     fs_inode_unlock_two(dir, inode);
+    fs_inode_put(dir);
+    fs_inode_put(inode);
     return -EPERM;
   }
 
   // TODO: Allow links to directories?
   if (S_ISDIR(inode->mode)) {
     fs_inode_unlock_two(dir, inode);
+    fs_inode_put(dir);
+    fs_inode_put(inode);
     return -EPERM;
   }
 
   r = fs->ops->unlink(sender, dir, inode, name);
 
   fs_inode_unlock_two(dir, inode);
+  fs_inode_put(dir);
+  fs_inode_put(inode);
 
   return r;
 }
 
 int
-do_utime(struct FS *, struct Thread *sender,
-         struct Inode *inode, struct utimbuf *times)
+do_utime(struct FS *fs, struct Thread *sender,
+         ino_t ino, struct utimbuf *times)
 {
+  struct Inode *inode = fs->ops->inode_get(fs, ino);
   uid_t euid = sender ? sender->process->euid : 0;
   int r = 0;
 
@@ -425,6 +520,7 @@ do_utime(struct FS *, struct Thread *sender,
 
 out:
   fs_inode_unlock(inode);
+  fs_inode_put(inode);
 
   return r;
 }
@@ -489,6 +585,9 @@ do_open_locked(struct FS *fs, struct Thread *sender,
 
   if (S_ISCHR(inode->mode) || S_ISBLK(inode->mode))
     file->rdev = inode->rdev;
+
+  if (oflag & O_APPEND)
+    file->offset = inode->size;
 
   file->inode = fs_inode_duplicate(inode);
 
@@ -766,27 +865,27 @@ fs_service_task(void *arg)
     switch (msg->type) {
     case FS_MSG_ACCESS:
       msg->u.access.r = do_access(fs, msg->sender,
-                                  msg->u.access.inode,
+                                  msg->u.access.ino,
                                   msg->u.access.amode);
       break;
     case FS_MSG_CHDIR:
       msg->u.chdir.r = do_chdir(fs, msg->sender,
-                                msg->u.chdir.inode);
+                                msg->u.chdir.ino);
       break;
     case FS_MSG_CHMOD:
       msg->u.chmod.r = do_chmod(fs, msg->sender,
-                                msg->u.chmod.inode,
+                                msg->u.chmod.ino,
                                 msg->u.chmod.mode);
       break;
     case FS_MSG_CHOWN:
       msg->u.chown.r = do_chown(fs, msg->sender,
-                                msg->u.chown.inode,
+                                msg->u.chown.ino,
                                 msg->u.chown.uid,
                                 msg->u.chown.gid);
       break;
     case FS_MSG_CREATE:
       msg->u.create.r = do_create(fs, msg->sender,
-                                  msg->u.create.dir,
+                                  msg->u.create.dir_ino,
                                   msg->u.create.name,
                                   msg->u.create.mode,
                                   msg->u.create.dev,
@@ -794,61 +893,61 @@ fs_service_task(void *arg)
       break;
     case FS_MSG_LINK:
       msg->u.link.r = do_link(fs, msg->sender,
-                              msg->u.link.dir,
+                              msg->u.link.dir_ino,
                               msg->u.link.name,
-                              msg->u.link.inode);
+                              msg->u.link.ino);
       break;
     case FS_MSG_LOOKUP:
       msg->u.lookup.r = do_lookup(fs, msg->sender,
-                                  msg->u.lookup.dir,
+                                  msg->u.lookup.dir_ino,
                                   msg->u.lookup.name,
                                   msg->u.lookup.flags,
                                   msg->u.lookup.istore);
       break;
     case FS_MSG_READLINK:
       msg->u.readlink.r = do_readlink(fs, msg->sender,
-                                      msg->u.readlink.inode,
+                                      msg->u.readlink.ino,
                                       msg->u.readlink.va,
                                       msg->u.readlink.nbyte);
       break;
     case FS_MSG_RMDIR:
       msg->u.rmdir.r = do_rmdir(fs, msg->sender,
-                                msg->u.rmdir.dir,
-                                msg->u.rmdir.inode,
+                                msg->u.rmdir.dir_ino,
+                                msg->u.rmdir.ino,
                                 msg->u.rmdir.name);
       break;
     case FS_MSG_STAT:
       msg->u.stat.r = do_stat(fs, msg->sender,
-                              msg->u.stat.inode,
+                              msg->u.stat.ino,
                               msg->u.stat.buf);
       break;
     case FS_MSG_UNLINK:
       msg->u.unlink.r = do_unlink(fs, msg->sender,
-                                  msg->u.unlink.dir,
-                                  msg->u.unlink.inode,
+                                  msg->u.unlink.dir_ino,
+                                  msg->u.unlink.ino,
                                   msg->u.unlink.name);
       break;
     case FS_MSG_UTIME:
       msg->u.utime.r = do_utime(fs, msg->sender,
-                                msg->u.utime.inode,
+                                msg->u.utime.ino,
                                 msg->u.utime.times);
       break;
 
     case FS_MSG_FCHMOD:
-      msg->u.fchmod.r = do_chmod(fs, msg->sender,
-                                 msg->u.fchmod.file->inode,
-                                 msg->u.fchmod.mode);
+      msg->u.fchmod.r = do_inode_chmod(fs, msg->sender,
+                                       msg->u.fchmod.file->inode,
+                                       msg->u.fchmod.mode);
       break;
     case FS_MSG_FCHOWN:
-      msg->u.fchown.r = do_chown(fs, msg->sender,
-                                 msg->u.fchown.file->inode,
-                                 msg->u.fchown.uid,
-                                 msg->u.fchown.gid);
+      msg->u.fchown.r = do_inode_chown(fs, msg->sender,
+                                       msg->u.fchown.file->inode,
+                                       msg->u.fchown.uid,
+                                       msg->u.fchown.gid);
       break;
     case FS_MSG_FSTAT:
-      msg->u.fstat.r = do_stat(fs, msg->sender,
-                                msg->u.fstat.file->inode,
-                                msg->u.fstat.buf);
+      msg->u.fstat.r = do_inode_stat(fs, msg->sender,
+                                     msg->u.fstat.file->inode,
+                                     msg->u.fstat.buf);
       break;
     case FS_MSG_FSYNC:
       msg->u.fsync.r = do_fsync(fs, msg->sender,

@@ -76,6 +76,7 @@ typedef int (*FillDirFunc)(void *, ino_t, const char *, size_t);
 
 struct FSOps {
   char             *name;
+  struct Inode *  (*inode_get)(struct FS *, ino_t);
   int             (*inode_read)(struct Thread *, struct Inode *);
   int             (*inode_write)(struct Thread *, struct Inode *);
   void            (*inode_delete)(struct Thread *, struct Inode *);
@@ -186,7 +187,7 @@ struct FSMessage {
   
   union {
     struct {
-      struct Inode *dir;
+      ino_t dir_ino;
       const char *name;
       struct Inode **istore;
       int flags;
@@ -194,27 +195,27 @@ struct FSMessage {
     } lookup;
     
     struct {
-      struct Inode *inode;
+      ino_t ino;
       int amode;
       int r;
     } access;
     struct {
-      struct Inode *inode;
+      ino_t ino;
       int r;
     } chdir;
     struct {
-      struct Inode *inode;
+      ino_t ino;
       mode_t mode;
       int r;
     } chmod;
     struct {
-      struct Inode *inode;
+      ino_t ino;
       uid_t uid;
       gid_t gid;
       int r;
     } chown;
     struct {
-      struct Inode *dir;
+      ino_t dir_ino;
       char *name;
       mode_t mode;
       dev_t dev;
@@ -222,36 +223,36 @@ struct FSMessage {
       int r;
     } create;
     struct {
-      struct Inode *dir;
+      ino_t dir_ino;
       char *name;
-      struct Inode *inode;
+      ino_t ino;
       int r;
     } link;
     struct {
-      struct Inode *inode;
+      ino_t ino;
       uintptr_t va;
       size_t nbyte;
       ssize_t r;
     } readlink;
     struct {
-      struct Inode *dir;
-      struct Inode *inode;
+      ino_t dir_ino;
+      ino_t ino;
       const char *name;
       int r;
     } rmdir;
     struct {
-      struct Inode *inode;
+      ino_t ino;
       struct stat *buf;
       int r;
     } stat;
     struct {
-      struct Inode *dir;
-      struct Inode *inode;
+      ino_t dir_ino;
+      ino_t ino;
       const char *name;
       int r;
     } unlink;
     struct {
-      struct Inode *inode;
+      ino_t ino;
       struct utimbuf *times;
       int r;
     } utime;
