@@ -324,7 +324,7 @@ fs_path_node_resolve_at(struct PathNode *start,
 
     // Check for symlinks
 
-    inode = fs_inode_duplicate(fs_path_inode(next));
+    inode = fs_path_inode(next);
     k_assert(inode != NULL);
 
     msg.type = FS_MSG_STAT;
@@ -334,17 +334,14 @@ fs_path_node_resolve_at(struct PathNode *start,
     fs_send_recv(inode->fs, &msg);
 
     if ((r = msg.u.stat.r) < 0) {
-      fs_inode_put(inode);
       break;
     }
 
     if (!S_ISLNK(stat.st_mode)) {
-      fs_inode_put(inode);
       continue;
     }
 
     if ((*p == '\0') && !(flags & FS_LOOKUP_FOLLOW_LINKS)) {
-      fs_inode_put(inode);
       break;
     }
 
@@ -352,7 +349,6 @@ fs_path_node_resolve_at(struct PathNode *start,
 
     // FIXME: must be a defined constant
     if (++symlink_count > 20) {
-      fs_inode_put(inode);
       r = -ELOOP;
       break;
     }
@@ -360,11 +356,8 @@ fs_path_node_resolve_at(struct PathNode *start,
     // Resolve the symlink
 
     if ((r = fs_path_resolve_symlink(inode, p, &resolved_path)) < 0) {
-      fs_inode_put(inode);
       break;
     }
-
-    fs_inode_put(inode);
 
     k_free(p);
     p = resolved_path;
@@ -451,7 +444,7 @@ fs_path_node_lookup(struct PathNode *parent,
   if (child == NULL) {
     struct Inode *child_inode, *parent_inode;
 
-    parent_inode = fs_inode_duplicate(fs_path_inode(parent));
+    parent_inode = fs_path_inode(parent);
 
     msg.type = FS_MSG_LOOKUP;
     msg.u.lookup.dir    = parent_inode;
@@ -462,8 +455,6 @@ fs_path_node_lookup(struct PathNode *parent,
     fs_send_recv(parent_inode->fs, &msg);
 
     r = msg.u.lookup.r;
-
-    fs_inode_put(parent_inode);
 
     if (r == 0 && child_inode != NULL) {
       // Insert new node
