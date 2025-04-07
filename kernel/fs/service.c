@@ -293,7 +293,7 @@ do_lookup(struct FS *fs, struct Thread *sender,
           ino_t dir_ino,
           const char *name,
           int flags,
-          struct Inode **inode_store)
+          ino_t *istore)
 {
   struct Inode *inode, *dir;
 
@@ -315,9 +315,9 @@ do_lookup(struct FS *fs, struct Thread *sender,
     
   inode = fs->ops->lookup(sender, dir, name);
 
-  if (inode_store != NULL)
-    *inode_store = inode;
-  else if (inode != NULL)
+  if (istore != NULL)
+    *istore = inode ? inode->ino : 0;
+  if (inode != NULL)
     fs_inode_put(inode);
 
   fs_inode_unlock(dir);

@@ -23,14 +23,15 @@ static struct KSpinLock fs_path_lock = K_SPINLOCK_INITIALIZER("fs_path");
 static int              fs_path_next(const char *, char *, char **);
 static void             fs_path_node_ctor(void *, size_t);
 static void             fs_path_node_dtor(void *, size_t);
-static int              fs_path_mount(struct PathNode *, struct Inode *);
+static int              fs_path_mount(struct PathNode *, ino_t, struct FS *);
 static struct PathNode *fs_path_node_lookup_cached(struct PathNode *,
                                                    const char *);
 static int              fs_path_node_lookup(struct PathNode *, const char *,
                                             int, struct PathNode **);
 struct PathNode *
 fs_path_node_create(const char *name,
-                    struct Inode *inode,
+                    ino_t ino,
+                    struct FS *fs,
                     struct PathNode *parent)
 {
   struct PathNode *node;
@@ -41,7 +42,10 @@ fs_path_node_create(const char *name,
   if (name != NULL)
     strncpy(node->name, name, NAME_MAX);
 
-  node->inode  = inode;
+  node->ino    = ino;
+  node->fs     = fs;
+  node->mounted_fs = NULL;
+  node->mounted_ino = 0;
   node->parent = parent;
   node->ref_count++;
 
@@ -121,11 +125,13 @@ fs_path_node_unref(struct PathNode *path)
     k_spinlock_release(&fs_path_lock);
 
     // TODO: ???
-    if (path->mounted != NULL)
+    if (path->mounted_fs != NULL)
       k_panic("mounted");
 
-    if (path->inode != NULL)
-      fs_inode_put(path->inode);
+    //if (path->inode != NULL)
+    //  fs_inode_put(path->inode);
+
+    path->ino = 0;
 
     k_object_pool_put(fs_path_pool, path);
     
@@ -140,31 +146,33 @@ fs_path_node_unref(struct PathNode *path)
   k_spinlock_release(&fs_path_lock);
 }
 
-struct Inode *
-fs_path_inode(struct PathNode *node)
-{
-  struct Inode *inode;
+// struct Inode *
+// fs_path_inode(struct PathNode *node)
+// {
+//   struct Inode *inode;
 
-  k_spinlock_acquire(&fs_path_lock);
-  inode = node->mounted ? node->mounted : node->inode;
-  k_spinlock_release(&fs_path_lock);
+//   k_spinlock_acquire(&fs_path_lock);
+//   inode = node->mounted ? node->mounted : node->inode;
+//   k_spinlock_release(&fs_path_lock);
 
-  return inode;
-}
+//   return inode;
+// }
 
 ino_t
-fs_path_ino(struct PathNode *node, struct FS **fs)
+fs_path_ino(struct PathNode *node, struct FS **fsp)
 {
-  struct Inode *inode;
+  ino_t ino;
+  struct FS *fs;
 
   k_spinlock_acquire(&fs_path_lock);
-  inode = node->mounted ? node->mounted : node->inode;
+  ino = node->mounted_ino ? node->mounted_ino : node->ino;
+  fs  = node->mounted_fs  ? node->mounted_fs  : node->fs;
   k_spinlock_release(&fs_path_lock);
 
-  if (fs)
-    *fs = inode->fs;
+  if (fsp)
+    *fsp = fs;
 
-  return inode->ino;
+  return ino;
 }
 
 void
@@ -459,9 +467,8 @@ fs_path_node_lookup(struct PathNode *parent,
   child = fs_path_node_lookup_cached(parent, name);
 
   if (child == NULL) {
-    ino_t parent_ino;
+    ino_t parent_ino, child_ino;
     struct FS *fs;
-    struct Inode *child_inode;
 
     parent_ino = fs_path_ino(parent, &fs);
 
@@ -469,16 +476,15 @@ fs_path_node_lookup(struct PathNode *parent,
     msg.u.lookup.dir_ino = parent_ino;
     msg.u.lookup.name    = name;
     msg.u.lookup.flags   = flags;
-    msg.u.lookup.istore  = &child_inode;
+    msg.u.lookup.istore  = &child_ino;
 
     fs_send_recv(fs, &msg);
 
     r = msg.u.lookup.r;
 
-    if (r == 0 && child_inode != NULL) {
+    if (r == 0 && child_ino != 0) {
       // Insert new node
-      if ((child = fs_path_node_create(name, child_inode, parent)) == NULL) {
-        fs_inode_put(child_inode);
+      if ((child = fs_path_node_create(name, child_ino, fs, parent)) == NULL) {
         r = -ENOMEM;
       }
     } else {
@@ -560,6 +566,8 @@ fs_path_resolve(const char *path, int flags, struct PathNode **store)
 void
 fs_init(void)
 { 
+  struct Inode *root;
+
   fs_inode_cache_init();
 
   fs_path_pool = k_object_pool_create("fs_path_pool",
@@ -570,7 +578,9 @@ fs_init(void)
   if (fs_path_pool == NULL)
     k_panic("cannot allocate fs_path_pool");
 
-  if ((fs_root = fs_path_node_create("/", ext2_mount(FS_ROOT_DEV), NULL)) == NULL)
+  root = ext2_mount(FS_ROOT_DEV);
+
+  if ((fs_root = fs_path_node_create("/", root->ino, root->fs, NULL)) == NULL)
     k_panic("cannot allocate fs root");
 
   fs_root->parent = fs_path_node_ref(fs_root);
@@ -581,7 +591,8 @@ fs_path_node_ctor(void *ptr, size_t)
 {
   struct PathNode *node = (struct PathNode *) ptr;
 
-  node->mounted = NULL;
+  node->mounted_fs = NULL;
+  node->mounted_ino = 0;
   node->ref_count = 0;
   k_list_init(&node->children);
   k_list_null(&node->siblings);
@@ -593,7 +604,7 @@ fs_path_node_dtor(void *ptr, size_t)
 {
   struct PathNode *node = (struct PathNode *) ptr;
 
-  k_assert(node->mounted == NULL);
+  k_assert(node->mounted_fs == NULL);
   k_assert(node->ref_count == 0);
   k_assert(k_list_is_empty(&node->children));
   k_assert(k_list_is_empty(&node->siblings));
@@ -621,19 +632,20 @@ fs_mount(const char *type, const char *path)
 
   // TODO: add to the list of mount points
 
-  return fs_path_mount(node, root);
+  return fs_path_mount(node, root->ino, root->fs);
 }
 
 static int
-fs_path_mount(struct PathNode *node, struct Inode *inode)
+fs_path_mount(struct PathNode *node, ino_t ino, struct FS *fs)
 {
   // TODO: support multiple mountpoints
   // TODO: lock
 
-  if (node->mounted)
+  if (node->mounted_fs)
     k_panic("already mounted");
 
-  node->mounted = inode;
+  node->mounted_ino = ino;
+  node->mounted_fs  = fs;
 
   // TODO: remove cached entries?
 

@@ -62,14 +62,14 @@ struct PathNode {
   struct KListLink children;
   struct KListLink siblings;
 
-  struct Inode    *inode;
-  struct Inode    *mounted;
+  // struct Inode    *inode;
+  // struct Inode    *mounted;
 
-  // ino_t            ino;
-  // dev_t            dev;
+  ino_t            ino;
+  struct FS       *fs;
 
-  // ino_t            mounted_ino;
-  // dev_t            mounted_dev;
+  ino_t            mounted_ino;
+  struct FS       *mounted_fs;
 };
 
 typedef int (*FillDirFunc)(void *, ino_t, const char *, size_t);
@@ -160,7 +160,7 @@ int              fs_select(struct File *, struct timeval *);
 int              fs_ftruncate(struct File *, off_t);
 int              fs_fsync(struct File *);
 
-struct PathNode *fs_path_node_create(const char *, struct Inode *, struct PathNode *);
+struct PathNode *fs_path_node_create(const char *, ino_t, struct FS *, struct PathNode *);
 struct PathNode *fs_path_node_ref(struct PathNode *);
 void             fs_path_node_remove(struct PathNode *);
 void             fs_path_node_unref(struct PathNode *);
@@ -190,7 +190,7 @@ struct FSMessage {
     struct {
       ino_t dir_ino;
       const char *name;
-      struct Inode **istore;
+      ino_t *istore;
       int flags;
       int r;
     } lookup;

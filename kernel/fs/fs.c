@@ -148,12 +148,10 @@ fs_create(const char *path, mode_t mode, dev_t dev, struct PathNode **istore)
   if ((r = msg.u.create.r) == 0) {
     if (istore != NULL) {
       struct PathNode *pp;
-      struct Inode *inode = fs->ops->inode_get(fs, ino);
       
       // REF(pp)
-      if ((pp = fs_path_node_create(name, inode, dir)) == NULL) {
+      if ((pp = fs_path_node_create(name, ino, fs, dir)) == NULL) {
         // fs_inode_unlock(inode);
-        fs_inode_put(inode);  // (inode->ref_count): -1
         r = -ENOMEM;
       } else {
         *istore = pp;
@@ -176,7 +174,8 @@ fs_link(char *path1, char *path2)
 {
   struct FSMessage msg;
   struct PathNode *dirp, *pp;
-  struct Inode *inode, *parent_inode;
+  ino_t ino, parent_ino;
+  struct FS *fs, *parent_fs;
   char name[NAME_MAX + 1];
   int r;
 
@@ -193,15 +192,17 @@ fs_link(char *path1, char *path2)
   // TODO: check for the same node?
   // TODO: lock the namespace manager?
 
-  parent_inode = fs_path_inode(dirp);
-  inode = fs_path_inode(pp);
+  parent_ino = fs_path_ino(dirp, &parent_fs);
+  ino = fs_path_ino(pp, &fs);
+
+  k_assert(fs == parent_fs);
 
   msg.type = FS_MSG_LINK;
-  msg.u.link.dir_ino = parent_inode->ino;
+  msg.u.link.dir_ino = parent_ino;
   msg.u.link.name    = name;
-  msg.u.link.ino     = inode->ino;
+  msg.u.link.ino     = ino;
 
-  fs_send_recv(parent_inode->fs, &msg);
+  fs_send_recv(parent_fs, &msg);
 
   r = msg.u.link.r;
 
@@ -245,7 +246,8 @@ int
 fs_rename(char *old, char *new)
 {
   struct PathNode *old_dir, *new_dir, *old_node, *new_node;
-  struct Inode *inode, *parent_inode;
+  ino_t ino, parent_ino;
+  struct FS *fs, *parent_fs;
   struct FSMessage msg;
   char old_name[NAME_MAX + 1];
   char new_name[NAME_MAX + 1];
@@ -270,18 +272,20 @@ fs_rename(char *old, char *new)
   // TODO: should be a transaction?
 
   if (new_node != NULL) {
-    parent_inode = fs_path_inode(new_dir);
-    inode = fs_path_inode(new_node);
+    parent_ino = fs_path_ino(new_dir, &parent_fs);
+    ino = fs_path_ino(new_node, &fs);
 
     // TODO: lock the namespace manager?
     // FIXME: check if is dir
 
+    k_assert(parent_fs == fs);
+
     msg.type = FS_MSG_UNLINK;
-    msg.u.unlink.dir_ino = parent_inode->ino;
-    msg.u.unlink.ino     = inode->ino;
+    msg.u.unlink.dir_ino = parent_ino;
+    msg.u.unlink.ino     = ino;
     msg.u.unlink.name    = new_name;
     
-    fs_send_recv(parent_inode->fs, &msg);
+    fs_send_recv(parent_fs, &msg);
 
     if ((r = msg.u.unlink.r) == 0) {
       fs_path_node_remove(new_node);
@@ -295,29 +299,33 @@ fs_rename(char *old, char *new)
       goto out2;
   }
 
-  inode        = fs_path_inode(old_node);
-  parent_inode = fs_path_inode(new_dir);
+  ino        = fs_path_ino(old_node, &fs);
+  parent_ino = fs_path_ino(new_dir, &parent_fs);
+
+  k_assert(parent_fs == fs);
 
   msg.type = FS_MSG_LINK;
-  msg.u.link.dir_ino = parent_inode->ino;
+  msg.u.link.dir_ino = parent_ino;
   msg.u.link.name    = new_name;
-  msg.u.link.ino     = inode->ino;
+  msg.u.link.ino     = ino;
 
-  fs_send_recv(parent_inode->fs, &msg);
+  fs_send_recv(parent_fs, &msg);
 
   r = msg.u.link.r;
 
   if (r < 0)
     goto out2;
 
-  parent_inode = fs_path_inode(old_dir);
+  parent_ino = fs_path_ino(old_dir, &parent_fs);
+
+  k_assert(parent_fs == fs);
     
   msg.type = FS_MSG_UNLINK;
-  msg.u.unlink.dir_ino = parent_inode->ino;
-  msg.u.unlink.ino     = inode->ino;
+  msg.u.unlink.dir_ino = parent_ino;
+  msg.u.unlink.ino     = ino;
   msg.u.unlink.name    = old_name;
 
-  fs_send_recv(parent_inode->fs, &msg);
+  fs_send_recv(parent_fs, &msg);
 
   if ((r = msg.u.unlink.r) == 0) {
     fs_path_node_remove(old_node);
@@ -342,7 +350,8 @@ fs_rmdir(const char *path)
 {
   struct FSMessage msg;
   struct PathNode *dir, *pp;
-  struct Inode *inode, *parent_inode;
+  ino_t ino, parent_ino;
+  struct FS *fs, *parent_fs;
   char name[NAME_MAX + 1];
   int r;
 
@@ -359,15 +368,17 @@ fs_rmdir(const char *path)
 
   // TODO: lock the namespace manager?
 
-  parent_inode = fs_path_inode(dir);
-  inode = fs_path_inode(pp);
+  parent_ino = fs_path_ino(dir, &parent_fs);
+  ino = fs_path_ino(pp, &fs);
+
+  k_assert(fs == parent_fs);
 
   msg.type = FS_MSG_RMDIR;
-  msg.u.rmdir.dir_ino = parent_inode->ino;
-  msg.u.rmdir.ino     = inode->ino;
+  msg.u.rmdir.dir_ino = parent_ino;
+  msg.u.rmdir.ino     = ino;
   msg.u.rmdir.name    = pp->name;
 
-  fs_send_recv(parent_inode->fs, &msg);
+  fs_send_recv(parent_fs, &msg);
 
   if ((r = msg.u.rmdir.r) == 0) {
     fs_path_node_remove(pp);
@@ -387,7 +398,8 @@ fs_unlink(const char *path)
 {
   struct FSMessage msg;
   struct PathNode *dir, *pp;
-  struct Inode *inode, *parent_inode;
+  ino_t ino, parent_ino;
+  struct FS *fs, *parent_fs;
   char name[NAME_MAX + 1];
   int r;
 
@@ -401,17 +413,19 @@ fs_unlink(const char *path)
     return -ENOENT;
   }
 
-  parent_inode = fs_path_inode(dir);
-  inode        = fs_path_inode(pp);
+  parent_ino = fs_path_ino(dir, &parent_fs);
+  ino        = fs_path_ino(pp, &fs);
+
+  k_assert(parent_fs == fs);
 
   // TODO: lock the namespace manager?
 
   msg.type = FS_MSG_UNLINK;
-  msg.u.unlink.dir_ino = parent_inode->ino;
-  msg.u.unlink.ino     = inode->ino;
+  msg.u.unlink.dir_ino = parent_ino;
+  msg.u.unlink.ino     = ino;
   msg.u.unlink.name    = pp->name;
     
-  fs_send_recv(parent_inode->fs, &msg);
+  fs_send_recv(parent_fs, &msg);
 
   if ((r = msg.u.unlink.r) == 0) {
     fs_path_node_remove(pp);
