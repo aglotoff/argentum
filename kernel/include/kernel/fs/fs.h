@@ -66,10 +66,10 @@ struct PathNode {
   // struct Inode    *mounted;
 
   ino_t            ino;
-  struct FS       *fs;
+  struct Channel  *channel;
 
   ino_t            mounted_ino;
-  struct FS       *mounted_fs;
+  struct Channel  *mounted_channel;
 };
 
 typedef int (*FillDirFunc)(void *, ino_t, const char *, size_t);
@@ -160,7 +160,7 @@ int              fs_select(struct Channel *, struct timeval *);
 int              fs_ftruncate(struct Channel *, off_t);
 int              fs_fsync(struct Channel *);
 
-struct PathNode *fs_path_node_create(const char *, ino_t, struct FS *, struct PathNode *);
+struct PathNode *fs_path_node_create(const char *, ino_t, struct Channel *, struct PathNode *);
 struct PathNode *fs_path_node_ref(struct PathNode *);
 void             fs_path_node_remove(struct PathNode *);
 void             fs_path_node_unref(struct PathNode *);
@@ -169,11 +169,10 @@ void             fs_path_node_unlock(struct PathNode *);
 void             fs_path_lock_two(struct PathNode *, struct PathNode *);
 void             fs_path_unlock_two(struct PathNode *, struct PathNode *);
 int              fs_mount(const char *, const char *);
-struct Inode    *fs_path_inode(struct PathNode *);
 int              fs_path_resolve(const char *, int, struct PathNode **);
 int              fs_path_node_resolve(const char *, char *, int, struct PathNode **, struct PathNode **);
 int              fs_path_set_cwd(struct PathNode *);
-ino_t            fs_path_ino(struct PathNode *, struct FS **);
+ino_t            fs_path_ino(struct PathNode *, struct Channel **);
 
 struct FS *      fs_create_service(char *, dev_t, void *, struct FSOps *);
 void             fs_service_task(void *);
@@ -183,6 +182,7 @@ struct Thread;
 struct FSMessage {
   struct KSemaphore sem;
   struct Thread *sender;
+  struct Channel *channel;
 
   int type;
   
@@ -258,71 +258,58 @@ struct FSMessage {
     } utime;
 
     struct {
-      struct Channel *file;
       int r;
     } close;
     struct {
-      struct Channel *file;
       mode_t mode;
       int r;
     } fchmod;
     struct {
-      struct Channel *file;
       uid_t uid;
       gid_t gid;
       int r;
     } fchown;
     struct {
-      struct Channel *file;
       struct stat *buf;
       int r;
     } fstat;
     struct {
-      struct Channel *file;
       int r;
     } fsync;
     struct {
-      struct Channel *file;
       int request;
       int arg;
       int r;
     } ioctl;
     struct {
-      struct Channel *file;
       ino_t ino;
       int oflag;
       int r;
     } open;
     struct {
-      struct Channel *file;
       uintptr_t va;
       size_t nbyte;
       ssize_t r;
     } read;
     struct {
-      struct Channel *file;
       uintptr_t va;
       size_t nbyte;
       ssize_t r;
     } readdir;
     struct {
-      struct Channel *file;
       off_t offset;
       int whence;
       off_t r;
     } seek;
     struct {
-      struct Channel *file;
       struct timeval *timeout;
       int r;
     } select;
     struct {
-      struct Channel *file;
       off_t length;
       int r;
     } trunc;
     struct {
-      struct Channel *file;
       uintptr_t va;
       size_t nbyte;
       ssize_t r;
@@ -330,7 +317,7 @@ struct FSMessage {
   } u;
 };
 
-int              fs_send_recv(struct FS *, struct FSMessage *);
+int              fs_send_recv(struct Channel *, struct FSMessage *);
 
 enum {
   FS_MSG_ACCESS,

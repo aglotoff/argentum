@@ -538,41 +538,77 @@ out:
 
 int
 do_close(struct FS *, struct Thread *,
-         struct Channel *file)
+         struct Channel *channel)
 {
-  if (file->u.file.inode != NULL) {
-    fs_inode_put(file->u.file.inode);
-    file->u.file.inode = NULL;
+  if (channel->u.file.inode != NULL) {
+    fs_inode_put(channel->u.file.inode);
+    channel->u.file.inode = NULL;
   }
 
   return 0;
 }
 
+static int
+do_fchmod(struct FS *fs, struct Thread *sender,
+          struct Channel *channel, mode_t mode)
+{
+  if (channel->u.file.inode == NULL)
+    return -EINVAL;
+
+  return do_inode_chmod(fs, sender, channel->u.file.inode, mode);
+}
+
+static int
+do_fchown(struct FS *fs, struct Thread *sender,
+          struct Channel *channel, uid_t uid, gid_t gid)
+{
+  if (channel->u.file.inode == NULL)
+    return -EINVAL;
+
+  return do_inode_chown(fs, sender, channel->u.file.inode, uid, gid);
+}
+
+static int
+do_fstat(struct FS *fs, struct Thread *sender,
+         struct Channel *channel, struct stat *buf)
+{
+  if (channel->u.file.inode == NULL)
+    return -EINVAL;
+
+  return do_inode_stat(fs, sender, channel->u.file.inode, buf);
+}
+
 int
 do_fsync(struct FS *, struct Thread *,
-         struct Channel *file)
+         struct Channel *channel)
 {
-  fs_inode_lock(file->u.file.inode);
+  if (channel->u.file.inode == NULL)
+    return -EINVAL;
+
+  fs_inode_lock(channel->u.file.inode);
   // FIXME: fsync
-  fs_inode_unlock(file->u.file.inode);
+  fs_inode_unlock(channel->u.file.inode);
 
   return 0;
 }
 
 static int
 do_ioctl(struct FS *, struct Thread *,
-         struct Channel *file, int, int)
+         struct Channel *channel, int, int)
 {
-  fs_inode_lock(file->u.file.inode);
+  if (channel->u.file.inode == NULL)
+    return -EINVAL;
+
+  fs_inode_lock(channel->u.file.inode);
   // FIXME: ioctl
-  fs_inode_unlock(file->u.file.inode);
+  fs_inode_unlock(channel->u.file.inode);
 
   return -ENOTTY;
 }
 
 static int
 do_open_locked(struct FS *fs, struct Thread *sender,
-               struct Channel *file, 
+               struct Channel *channel, 
                struct Inode *inode,
                int oflag)
 {
@@ -603,19 +639,19 @@ do_open_locked(struct FS *fs, struct Thread *sender,
   }
 
   if (S_ISCHR(inode->mode) || S_ISBLK(inode->mode))
-    file->u.file.rdev = inode->rdev;
+    channel->u.file.rdev = inode->rdev;
 
   if (oflag & O_APPEND)
-    file->u.file.offset = inode->size;
+    channel->u.file.offset = inode->size;
 
-  file->u.file.inode = fs_inode_duplicate(inode);
+  channel->u.file.inode = fs_inode_duplicate(inode);
 
   return 0;
 }
 
 static int
 do_open(struct FS *fs, struct Thread *sender,
-        struct Channel *file, 
+        struct Channel *channel, 
         ino_t ino,
         int oflag)
 {
@@ -624,7 +660,7 @@ do_open(struct FS *fs, struct Thread *sender,
   struct Inode *inode = fs->ops->inode_get(fs, ino);
 
   fs_inode_lock(inode);
-  r = do_open_locked(fs, sender, file, inode, oflag);
+  r = do_open_locked(fs, sender, channel, inode, oflag);
   fs_inode_unlock(inode);
 
   fs_inode_put(inode);
@@ -634,30 +670,30 @@ do_open(struct FS *fs, struct Thread *sender,
 
 static ssize_t
 do_read_locked(struct FS *fs, struct Thread *sender,
-               struct Channel *file,
+               struct Channel *channel,
                uintptr_t va,
                size_t nbyte)
 {
   ssize_t total;
 
-  if (!fs_inode_permission(sender, file->u.file.inode, FS_PERM_READ, 0))
+  if (!fs_inode_permission(sender, channel->u.file.inode, FS_PERM_READ, 0))
     return -EPERM;
 
-  if ((off_t) (file->u.file.offset + nbyte) < file->u.file.offset)
+  if ((off_t) (channel->u.file.offset + nbyte) < channel->u.file.offset)
     return -EINVAL;
 
-  if ((off_t) (file->u.file.offset + nbyte) > file->u.file.inode->size)
-    nbyte = file->u.file.inode->size - file->u.file.offset;
+  if ((off_t) (channel->u.file.offset + nbyte) > channel->u.file.inode->size)
+    nbyte = channel->u.file.inode->size - channel->u.file.offset;
   if (nbyte == 0)
     return 0;
 
-  total = fs->ops->read(sender, file->u.file.inode, va, nbyte, file->u.file.offset);
+  total = fs->ops->read(sender, channel->u.file.inode, va, nbyte, channel->u.file.offset);
 
   if (total >= 0) {
-    file->u.file.offset += total;
+    channel->u.file.offset += total;
   
-    file->u.file.inode->atime  = time_get_seconds();
-    file->u.file.inode->flags |= FS_INODE_DIRTY;
+    channel->u.file.inode->atime  = time_get_seconds();
+    channel->u.file.inode->flags |= FS_INODE_DIRTY;
   }
 
   return total;
@@ -665,25 +701,27 @@ do_read_locked(struct FS *fs, struct Thread *sender,
 
 static ssize_t
 do_read(struct FS *fs, struct Thread *sender,
-        struct Channel *file,
+        struct Channel *channel,
         uintptr_t va,
         size_t nbyte)
 {
   ssize_t r;
 
-  if ((file->flags & O_ACCMODE) == O_WRONLY)
+  if ((channel->flags & O_ACCMODE) == O_WRONLY)
     return -EBADF;
+  if (channel->u.file.inode == NULL)
+    return -EINVAL;
 
-  fs_inode_lock(file->u.file.inode);
-  r = do_read_locked(fs, sender, file, va, nbyte);
-  fs_inode_unlock(file->u.file.inode);
+  fs_inode_lock(channel->u.file.inode);
+  r = do_read_locked(fs, sender, channel, va, nbyte);
+  fs_inode_unlock(channel->u.file.inode);
 
   return r;
 }
 
 static ssize_t
 do_readdir_locked(struct FS *fs, struct Thread *sender,
-                  struct Channel *file,
+                  struct Channel *channel,
                   uintptr_t va,
                   size_t nbyte)
 {
@@ -694,17 +732,17 @@ do_readdir_locked(struct FS *fs, struct Thread *sender,
     char buf[NAME_MAX + 1];
   } de;
 
-  if (!S_ISDIR(file->u.file.inode->mode))
+  if (!S_ISDIR(channel->u.file.inode->mode))
     return -ENOTDIR;
 
-  if (!fs_inode_permission(sender, file->u.file.inode, FS_PERM_READ, 0))
+  if (!fs_inode_permission(sender, channel->u.file.inode, FS_PERM_READ, 0))
     return -EPERM;
 
   while (nbyte > 0) {
     ssize_t nread;
     int r;
 
-    nread = fs->ops->readdir(sender, file->u.file.inode, &de, fs_filldir, file->u.file.offset);
+    nread = fs->ops->readdir(sender, channel->u.file.inode, &de, fs_filldir, channel->u.file.offset);
 
     if (nread < 0)
       return nread;
@@ -719,7 +757,7 @@ do_readdir_locked(struct FS *fs, struct Thread *sender,
       break;
     }
 
-    file->u.file.offset += nread;
+    channel->u.file.offset += nread;
 
     if ((r = vm_space_copy_out(sender, &de, va, de.de.d_reclen)) < 0)
       return r;
@@ -734,38 +772,44 @@ do_readdir_locked(struct FS *fs, struct Thread *sender,
 
 static ssize_t
 do_readdir(struct FS *fs, struct Thread *sender,
-           struct Channel *file,
+           struct Channel *channel,
            uintptr_t va,
            size_t nbyte)
 {
   ssize_t r;
 
-  fs_inode_lock(file->u.file.inode);
-  r = do_readdir_locked(fs, sender, file, va, nbyte);
-  fs_inode_unlock(file->u.file.inode);
+  if (channel->u.file.inode == NULL)
+    return -EINVAL;
+
+  fs_inode_lock(channel->u.file.inode);
+  r = do_readdir_locked(fs, sender, channel, va, nbyte);
+  fs_inode_unlock(channel->u.file.inode);
 
   return r;
 }
 
 static off_t
 do_seek(struct FS *, struct Thread *,
-        struct Channel *file,
+        struct Channel *channel,
         off_t offset,
         int whence)
 {
   off_t new_offset;
+
+  if (channel->u.file.inode == NULL)
+    return -EINVAL;
 
   switch (whence) {
   case SEEK_SET:
     new_offset = offset;
     break;
   case SEEK_CUR:
-    new_offset = file->u.file.offset + offset;
+    new_offset = channel->u.file.offset + offset;
     break;
   case SEEK_END:
-    fs_inode_lock(file->u.file.inode);
-    new_offset = file->u.file.inode->size + offset;
-    fs_inode_unlock(file->u.file.inode);
+    fs_inode_lock(channel->u.file.inode);
+    new_offset = channel->u.file.inode->size + offset;
+    fs_inode_unlock(channel->u.file.inode);
     break;
   default:
     return -EINVAL;
@@ -774,85 +818,91 @@ do_seek(struct FS *, struct Thread *,
   if (new_offset < 0)
     return -EOVERFLOW;
 
-  file->u.file.offset = new_offset;
+  channel->u.file.offset = new_offset;
 
   return new_offset;
 }
 
 static int
 do_select(struct FS *, struct Thread *,
-          struct Channel *file,
+          struct Channel *channel,
           struct timeval *)
 {
-  fs_inode_lock(file->u.file.inode);
+  if (channel->u.file.inode == NULL)
+    return -EINVAL;
+
+  fs_inode_lock(channel->u.file.inode);
   // FIXME: select
-  fs_inode_unlock(file->u.file.inode);
+  fs_inode_unlock(channel->u.file.inode);
 
   return 1;
 }
 
 static int
 do_trunc(struct FS *fs, struct Thread *sender,
-         struct Channel *file,
+         struct Channel *channel,
          off_t length)
 {
   if (length < 0)
     return -EINVAL;
 
-  fs_inode_lock(file->u.file.inode);
+  if (channel->u.file.inode == NULL)
+    return -EINVAL;
 
-  if (length > file->u.file.inode->size) {
-    fs_inode_unlock(file->u.file.inode);
+  fs_inode_lock(channel->u.file.inode);
+
+  if (length > channel->u.file.inode->size) {
+    fs_inode_unlock(channel->u.file.inode);
     return -EFBIG;
   }
 
-  if (!fs_inode_permission(sender, file->u.file.inode, FS_PERM_WRITE, 0)) {
-    fs_inode_unlock(file->u.file.inode);
+  if (!fs_inode_permission(sender, channel->u.file.inode, FS_PERM_WRITE, 0)) {
+    fs_inode_unlock(channel->u.file.inode);
     return -EPERM;
   }
 
-  fs->ops->trunc(sender, file->u.file.inode, length);
+  fs->ops->trunc(sender, channel->u.file.inode, length);
 
-  file->u.file.inode->size = length;
-  file->u.file.inode->ctime = file->u.file.inode->mtime = time_get_seconds();
+  channel->u.file.inode->size = length;
+  channel->u.file.inode->ctime = channel->u.file.inode->mtime = time_get_seconds();
 
-  file->u.file.inode->flags |= FS_INODE_DIRTY;
+  channel->u.file.inode->flags |= FS_INODE_DIRTY;
 
-  fs_inode_unlock(file->u.file.inode);
+  fs_inode_unlock(channel->u.file.inode);
 
   return 0;
 }
 
 static ssize_t
 do_write_locked(struct FS *fs, struct Thread *sender,
-                struct Channel *file,
+                struct Channel *channel,
                 uintptr_t va,
                 size_t nbyte)
 {
   ssize_t total;
 
-  if (!fs_inode_permission(sender, file->u.file.inode, FS_PERM_WRITE, 0))
+  if (!fs_inode_permission(sender, channel->u.file.inode, FS_PERM_WRITE, 0))
     return -EPERM;
 
-  if (file->flags & O_APPEND)
-    file->u.file.offset = file->u.file.inode->size;
+  if (channel->flags & O_APPEND)
+    channel->u.file.offset = channel->u.file.inode->size;
 
-  if ((off_t) (file->u.file.offset + nbyte) < file->u.file.offset)
+  if ((off_t) (channel->u.file.offset + nbyte) < channel->u.file.offset)
     return -EINVAL;
 
   if (nbyte == 0)
     return 0;
 
-  total = fs->ops->write(sender, file->u.file.inode, va, nbyte, file->u.file.offset);
+  total = fs->ops->write(sender, channel->u.file.inode, va, nbyte, channel->u.file.offset);
 
   if (total > 0) {
-    file->u.file.offset += total;
+    channel->u.file.offset += total;
 
-    if (file->u.file.offset > file->u.file.inode->size)
-      file->u.file.inode->size = file->u.file.offset;
+    if (channel->u.file.offset > channel->u.file.inode->size)
+      channel->u.file.inode->size = channel->u.file.offset;
 
-    file->u.file.inode->mtime = time_get_seconds();
-    file->u.file.inode->flags |= FS_INODE_DIRTY;
+    channel->u.file.inode->mtime = time_get_seconds();
+    channel->u.file.inode->flags |= FS_INODE_DIRTY;
   }
 
   return total;
@@ -860,18 +910,21 @@ do_write_locked(struct FS *fs, struct Thread *sender,
 
 static ssize_t
 do_write(struct FS *fs, struct Thread *sender,
-         struct Channel *file,
+         struct Channel *channel,
          uintptr_t va,
          size_t nbyte)
 {
   ssize_t r;
 
-  if ((file->flags & O_ACCMODE) == O_RDONLY)
+  if (channel->u.file.inode == NULL)
+    return -EINVAL;
+
+  if ((channel->flags & O_ACCMODE) == O_RDONLY)
     return -EBADF;
 
-  fs_inode_lock(file->u.file.inode);
-  r = do_write_locked(fs, sender, file, va, nbyte);
-  fs_inode_unlock(file->u.file.inode);
+  fs_inode_lock(channel->u.file.inode);
+  r = do_write_locked(fs, sender, channel, va, nbyte);
+  fs_inode_unlock(channel->u.file.inode);
 
   return r;
 }
@@ -958,71 +1011,71 @@ fs_service_task(void *arg)
 
     case FS_MSG_CLOSE:
       msg->u.close.r = do_close(fs, msg->sender,
-                                msg->u.fchmod.file);
+                                msg->channel);
       break;
     case FS_MSG_FCHMOD:
-      msg->u.fchmod.r = do_inode_chmod(fs, msg->sender,
-                                       msg->u.fchmod.file->u.file.inode,
-                                       msg->u.fchmod.mode);
+      msg->u.fchmod.r = do_fchmod(fs, msg->sender,
+                                  msg->channel,
+                                  msg->u.fchmod.mode);
       break;
     case FS_MSG_FCHOWN:
-      msg->u.fchown.r = do_inode_chown(fs, msg->sender,
-                                       msg->u.fchown.file->u.file.inode,
-                                       msg->u.fchown.uid,
-                                       msg->u.fchown.gid);
+      msg->u.fchown.r = do_fchown(fs, msg->sender,
+                                  msg->channel,
+                                  msg->u.fchown.uid,
+                                  msg->u.fchown.gid);
       break;
     case FS_MSG_FSTAT:
-      msg->u.fstat.r = do_inode_stat(fs, msg->sender,
-                                     msg->u.fstat.file->u.file.inode,
-                                     msg->u.fstat.buf);
+      msg->u.fstat.r = do_fstat(fs, msg->sender,
+                                msg->channel,
+                                msg->u.fstat.buf);
       break;
     case FS_MSG_FSYNC:
       msg->u.fsync.r = do_fsync(fs, msg->sender,
-                                msg->u.fsync.file);
+                                msg->channel);
       break;
     case FS_MSG_IOCTL:
       msg->u.ioctl.r = do_ioctl(fs, msg->sender,
-                                msg->u.ioctl.file,
+                                msg->channel,
                                 msg->u.ioctl.request,
                                 msg->u.ioctl.arg);
       break;
     case FS_MSG_OPEN:
       msg->u.open.r = do_open(fs, msg->sender,
-                              msg->u.open.file,
+                              msg->channel,
                               msg->u.open.ino,
                               msg->u.open.oflag);
       break;
     case FS_MSG_READ:
       msg->u.read.r = do_read(fs, msg->sender,
-                              msg->u.read.file,
+                              msg->channel,
                               msg->u.read.va,
                               msg->u.read.nbyte);
       break;
     case FS_MSG_READDIR:
       msg->u.readdir.r = do_readdir(fs, msg->sender,
-                                    msg->u.readdir.file,
+                                    msg->channel,
                                     msg->u.readdir.va,
                                     msg->u.readdir.nbyte);
       break;
     case FS_MSG_SEEK:
       msg->u.seek.r = do_seek(fs, msg->sender,
-                              msg->u.seek.file,
+                              msg->channel,
                               msg->u.seek.offset,
                               msg->u.seek.whence);
       break;
     case FS_MSG_SELECT:
       msg->u.select.r = do_select(fs, msg->sender,
-                                  msg->u.select.file,
+                                  msg->channel,
                                   msg->u.select.timeout);
       break;
     case FS_MSG_TRUNC:
       msg->u.trunc.r = do_trunc(fs, msg->sender,
-                                msg->u.trunc.file,
+                                msg->channel,
                                 msg->u.trunc.length);
       break;
     case FS_MSG_WRITE:
       msg->u.write.r = do_write(fs, msg->sender,
-                                msg->u.write.file,
+                                msg->channel,
                                 msg->u.write.va,
                                 msg->u.write.nbyte);
       break;
@@ -1069,16 +1122,20 @@ fs_create_service(char *name, dev_t dev, void *extra, struct FSOps *ops)
 }
 
 int
-fs_send_recv(struct FS *fs, struct FSMessage *msg)
+fs_send_recv(struct Channel *channel, struct FSMessage *msg)
 {
   struct FSMessage *msg_ptr = msg;
   unsigned long long timeout = seconds2ticks(5);
   int r;
 
-  k_semaphore_create(&msg->sem, 0);
-  msg->sender = thread_current();
+  k_assert(channel->type == CHANNEL_TYPE_FILE);
 
-  if (k_mailbox_timed_send(&fs->mbox, &msg_ptr, timeout) < 0)
+  k_semaphore_create(&msg->sem, 0);
+
+  msg->sender = thread_current();
+  msg->channel = channel;
+
+  if (k_mailbox_timed_send(&channel->u.file.fs->mbox, &msg_ptr, timeout) < 0)
     k_panic("fail send %d: %d", msg->type, r);
 
   if ((r = k_semaphore_timed_get(&msg->sem, timeout, K_SLEEP_UNINTERUPTIBLE)) < 0)
