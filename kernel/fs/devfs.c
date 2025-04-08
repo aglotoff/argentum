@@ -278,17 +278,23 @@ struct CharDev special_device = {
   .select = special_select,
 };
 
-struct Inode *
-devfs_mount(dev_t dev)
+ino_t
+devfs_mount(dev_t dev, struct FS **fs_store)
 {
   struct FS *devfs;
+  struct Inode *root;
 
   if ((devfs = fs_create_service("devfs", dev, NULL, &devfs_ops)) == NULL)
     k_panic("cannot allocate FS");
 
-  //devfs_time = time_get_seconds();
+  devfs_time = time_get_seconds();
 
   dev_register_char(0x02, &special_device);
 
-  return devfs_inode_get(devfs, 2);
+  root = devfs_inode_get(devfs, 2);
+
+  if (fs_store)
+    *fs_store = devfs;
+
+  return root->ino;
 }

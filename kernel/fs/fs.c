@@ -478,8 +478,12 @@ fs_close(struct File *file)
 
   // TODO: add a comment, when node can be NULL?
   if (file->node != NULL) {
-    fs_inode_put(file->inode);
-    file->inode = NULL;
+    struct FSMessage msg;
+
+    msg.type = FS_MSG_CLOSE;
+    msg.u.close.file = file;
+
+    fs_send_recv(file->inode->fs, &msg);
 
     fs_path_node_unref(file->node);
     file->node = NULL;

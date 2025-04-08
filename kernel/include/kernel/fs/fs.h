@@ -188,14 +188,6 @@ struct FSMessage {
   
   union {
     struct {
-      ino_t dir_ino;
-      const char *name;
-      ino_t *istore;
-      int flags;
-      int r;
-    } lookup;
-    
-    struct {
       ino_t ino;
       int amode;
       int r;
@@ -230,6 +222,13 @@ struct FSMessage {
       int r;
     } link;
     struct {
+      ino_t dir_ino;
+      const char *name;
+      ino_t *istore;
+      int flags;
+      int r;
+    } lookup;
+    struct {
       ino_t ino;
       uintptr_t va;
       size_t nbyte;
@@ -258,6 +257,10 @@ struct FSMessage {
       int r;
     } utime;
 
+    struct {
+      struct File *file;
+      int r;
+    } close;
     struct {
       struct File *file;
       mode_t mode;
@@ -330,20 +333,20 @@ struct FSMessage {
 int              fs_send_recv(struct FS *, struct FSMessage *);
 
 enum {
-  FS_MSG_LOOKUP,
-  
   FS_MSG_ACCESS,
   FS_MSG_CHDIR,
   FS_MSG_CHMOD,
   FS_MSG_CHOWN,
   FS_MSG_CREATE,
   FS_MSG_LINK,
+  FS_MSG_LOOKUP,
   FS_MSG_STAT,
   FS_MSG_READLINK,
   FS_MSG_RMDIR,
   FS_MSG_UNLINK,
   FS_MSG_UTIME,
   
+  FS_MSG_CLOSE,
   FS_MSG_FCHMOD,
   FS_MSG_FCHOWN,
   FS_MSG_FSTAT,

@@ -146,18 +146,6 @@ fs_path_node_unref(struct PathNode *path)
   k_spinlock_release(&fs_path_lock);
 }
 
-// struct Inode *
-// fs_path_inode(struct PathNode *node)
-// {
-//   struct Inode *inode;
-
-//   k_spinlock_acquire(&fs_path_lock);
-//   inode = node->mounted ? node->mounted : node->inode;
-//   k_spinlock_release(&fs_path_lock);
-
-//   return inode;
-// }
-
 ino_t
 fs_path_ino(struct PathNode *node, struct FS **fsp)
 {
@@ -566,7 +554,8 @@ fs_path_resolve(const char *path, int flags, struct PathNode **store)
 void
 fs_init(void)
 { 
-  struct Inode *root;
+  ino_t root_ino;
+  struct FS *root_fs;
 
   fs_inode_cache_init();
 
@@ -578,9 +567,9 @@ fs_init(void)
   if (fs_path_pool == NULL)
     k_panic("cannot allocate fs_path_pool");
 
-  root = ext2_mount(FS_ROOT_DEV);
+  root_ino = ext2_mount(FS_ROOT_DEV, &root_fs);
 
-  if ((fs_root = fs_path_node_create("/", root->ino, root->fs, NULL)) == NULL)
+  if ((fs_root = fs_path_node_create("/", root_ino, root_fs, NULL)) == NULL)
     k_panic("cannot allocate fs root");
 
   fs_root->parent = fs_path_node_ref(fs_root);
@@ -615,24 +604,22 @@ int
 fs_mount(const char *type, const char *path)
 {
   struct PathNode *node;
-  struct Inode *root;
+  ino_t root_ino;
+  struct FS *fs;
 
   // REF(node)
   if ((fs_path_resolve(path, 0, &node) != 0) || (node == NULL))
     return -ENOENT;
 
   if (strcmp(type, "devfs") == 0) {
-    root = devfs_mount(FS_DEV_DEV);
+    root_ino = devfs_mount(FS_DEV_DEV, &fs);
   } else {
-    // UNREF(node)
-    fs_path_node_unref(node);
-
     return -EINVAL;
   }
 
   // TODO: add to the list of mount points
 
-  return fs_path_mount(node, root->ino, root->fs);
+  return fs_path_mount(node, root_ino, fs);
 }
 
 static int

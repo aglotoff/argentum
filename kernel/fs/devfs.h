@@ -6,6 +6,6 @@
 
 #include <kernel/fs/fs.h>
 
-struct Inode *devfs_mount(dev_t);
+ino_t devfs_mount(dev_t, struct FS **);
 
 #endif  // !__KERNEL_FS_DEV_H__

@@ -521,13 +521,14 @@ struct FSOps ext2fs_ops = {
   .lookup       = ext2_lookup,
 };
 
-struct Inode *
-ext2_mount(dev_t dev)
+ino_t
+ext2_mount(dev_t dev, struct FS **fs_store)
 {
   struct Buf *buf;
   struct Ext2Superblock *raw;
   struct Ext2SuperblockData *sb;
   struct FS *ext2fs;
+  struct Inode *root;
 
   if ((sb = (struct Ext2SuperblockData *) k_malloc(sizeof(struct Ext2SuperblockData))) == NULL)
     k_panic("cannt allocate superblock");
@@ -563,5 +564,10 @@ ext2_mount(dev_t dev)
 
   // TODO: update mtime, mnt_count, state, last_mounted
 
-  return ext2_inode_get(ext2fs, 2);
+  root = ext2_inode_get(ext2fs, 2);
+
+  if (fs_store)
+    *fs_store = ext2fs;
+
+  return root->ino;
 }

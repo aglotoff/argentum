@@ -537,6 +537,18 @@ out:
  */
 
 int
+do_close(struct FS *, struct Thread *,
+         struct File *file)
+{
+  if (file->inode != NULL) {
+    fs_inode_put(file->inode);
+    file->inode = NULL;
+  }
+
+  return 0;
+}
+
+int
 do_fsync(struct FS *, struct Thread *,
          struct File *file)
 {
@@ -944,6 +956,10 @@ fs_service_task(void *arg)
                                 msg->u.utime.times);
       break;
 
+    case FS_MSG_CLOSE:
+      msg->u.close.r = do_close(fs, msg->sender,
+                                msg->u.fchmod.file);
+      break;
     case FS_MSG_FCHMOD:
       msg->u.fchmod.r = do_inode_chmod(fs, msg->sender,
                                        msg->u.fchmod.file->inode,
