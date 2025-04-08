@@ -2,7 +2,7 @@
 #include <fcntl.h>
 
 #include <kernel/console.h>
-#include <kernel/fs/file.h>
+#include <kernel/ipc/channel.h>
 #include <kernel/object_pool.h>
 #include <kernel/page.h>
 #include <kernel/pipe.h>
@@ -24,11 +24,11 @@ pipe_init(void)
 }
 
 int
-pipe_open(struct File **read_store, struct File **write_store)
+pipe_open(struct Channel **read_store, struct Channel **write_store)
 {
   struct Pipe *pipe;
   struct Page *page;
-  struct File *read, *write;
+  struct Channel *read, *write;
   int r;
 
   if ((pipe = (struct Pipe *) k_object_pool_get(pipe_cache)) == NULL) {
@@ -44,10 +44,10 @@ pipe_open(struct File **read_store, struct File **write_store)
   pipe->buf = (char *) page2kva(page);
   page->ref_count++;
 
-  if ((r = file_alloc(&read)) < 0)
+  if ((r = channel_alloc(&read)) < 0)
     goto fail3;
 
-  if ((r = file_alloc(&write)) < 0)
+  if ((r = channel_alloc(&write)) < 0)
     goto fail4;
 
   k_mutex_init(&pipe->mutex, "pipe");
@@ -60,13 +60,13 @@ pipe_open(struct File **read_store, struct File **write_store)
   k_condvar_create(&pipe->read_cond);
   k_condvar_create(&pipe->write_cond);
 
-  read->type  = FD_PIPE;
-  read->pipe  = pipe;
+  read->type  = CHANNEL_TYPE_PIPE;
+  read->u.pipe = pipe;
   read->flags = O_RDONLY;
   read->ref_count++;
 
-  write->type  = FD_PIPE;
-  write->pipe  = pipe;
+  write->type  = CHANNEL_TYPE_PIPE;
+  write->u.pipe = pipe;
   write->flags = O_WRONLY;
   write->ref_count++;
 
@@ -76,7 +76,7 @@ pipe_open(struct File **read_store, struct File **write_store)
   return 0;
 
 fail4:
-  file_put(read);
+  channel_unref(read);
 fail3:
   page_assert(page, PIPE_BUF_ORDER, PAGE_TAG_PIPE);
   page->ref_count--;
@@ -88,14 +88,14 @@ fail1:
 }
 
 int
-pipe_close(struct File *file)
+pipe_close(struct Channel *file)
 {
   struct Page *page;
-  struct Pipe *pipe = file->pipe;
+  struct Pipe *pipe = file->u.pipe;
   int write = (file->flags & O_ACCMODE) != O_RDONLY;
   int r;
 
-  if (file->type != FD_PIPE)
+  if (file->type != CHANNEL_TYPE_PIPE)
     return -EBADF;
 
   if ((r = k_mutex_lock(&pipe->mutex)) < 0)
@@ -136,12 +136,12 @@ pipe_close(struct File *file)
 }
 
 int
-pipe_select(struct File *file, struct timeval *timeout)
+pipe_select(struct Channel *file, struct timeval *timeout)
 {
-  struct Pipe *pipe = file->pipe;
+  struct Pipe *pipe = file->u.pipe;
   int r;
 
-  if (file->type != FD_PIPE)
+  if (file->type != CHANNEL_TYPE_PIPE)
     return -EBADF;
 
   if ((r = k_mutex_lock(&pipe->mutex)) < 0)
@@ -168,13 +168,13 @@ pipe_select(struct File *file, struct timeval *timeout)
 }
 
 ssize_t
-pipe_read(struct File *file, uintptr_t va, size_t n)
+pipe_read(struct Channel *file, uintptr_t va, size_t n)
 {
   size_t i;
-  struct Pipe *pipe = file->pipe;
+  struct Pipe *pipe = file->u.pipe;
   int r;
 
-  if (file->type != FD_PIPE)
+  if (file->type != CHANNEL_TYPE_PIPE)
     return -EBADF;
 
   if ((r = k_mutex_lock(&pipe->mutex)) < 0)
@@ -225,13 +225,13 @@ pipe_read(struct File *file, uintptr_t va, size_t n)
 }
 
 ssize_t
-pipe_write(struct File *file, uintptr_t va, size_t n)
+pipe_write(struct Channel *file, uintptr_t va, size_t n)
 {
   size_t i;
-  struct Pipe *pipe = file->pipe;
+  struct Pipe *pipe = file->u.pipe;
   int r;
 
-  if (file->type != FD_PIPE)
+  if (file->type != CHANNEL_TYPE_PIPE)
     return -EBADF;
 
   if ((r = k_mutex_lock(&pipe->mutex)) < 0)
@@ -278,12 +278,12 @@ pipe_write(struct File *file, uintptr_t va, size_t n)
 }
 
 int
-pipe_stat(struct File *file, struct stat *buf)
+pipe_stat(struct Channel *file, struct stat *buf)
 {
-  struct Pipe *pipe = file->pipe;
+  struct Pipe *pipe = file->u.pipe;
   int r;
 
-  if (file->type != FD_PIPE)
+  if (file->type != CHANNEL_TYPE_PIPE)
     return -EBADF;
   
   if ((r = k_mutex_lock(&pipe->mutex)) < 0)

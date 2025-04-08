@@ -5,7 +5,7 @@
 #include <unistd.h>
 
 #include <kernel/fs/fs.h>
-#include <kernel/fs/file.h>
+#include <kernel/ipc/channel.h>
 #include <kernel/console.h>
 #include <kernel/time.h>
 #include <kernel/page.h>
@@ -472,134 +472,127 @@ fs_utime(const char *path, struct utimbuf *times)
  */
 
 int
-fs_close(struct File *file)
+fs_close(struct Channel *file)
 {
-  k_assert(file->type == FD_INODE);
+  k_assert(file->type == CHANNEL_TYPE_FILE);
 
   // TODO: add a comment, when node can be NULL?
-  if (file->node != NULL) {
+  if (file->u.file.node != NULL) {
     struct FSMessage msg;
 
     msg.type = FS_MSG_CLOSE;
     msg.u.close.file = file;
 
-    fs_send_recv(file->inode->fs, &msg);
+    fs_send_recv(file->u.file.fs, &msg);
 
-    fs_path_node_unref(file->node);
-    file->node = NULL;
+    fs_path_node_unref(file->u.file.node);
+    file->u.file.node = NULL;
   }
 
   return 0;
 }
  
 int
-fs_fchdir(struct File *file)
+fs_fchdir(struct Channel *file)
 {
   k_assert(file->ref_count > 0);
-  k_assert(file->type == FD_INODE);
-  k_assert(file->inode != NULL);
+  k_assert(file->type == CHANNEL_TYPE_FILE);
 
-  return fs_path_set_cwd(file->node);
+  return fs_path_set_cwd(file->u.file.node);
 }
 
 int
-fs_fchmod(struct File *file, mode_t mode)
+fs_fchmod(struct Channel *file, mode_t mode)
 {
   struct FSMessage msg;
 
   k_assert(file->ref_count > 0);
-  k_assert(file->type == FD_INODE);
-  k_assert(file->inode != NULL);
+  k_assert(file->type == CHANNEL_TYPE_FILE);
 
   msg.type = FS_MSG_FCHMOD;
   msg.u.fchmod.file = file;
   msg.u.fchmod.mode = mode;
 
-  fs_send_recv(file->inode->fs, &msg);
+  fs_send_recv(file->u.file.fs, &msg);
 
   return msg.u.fchmod.r;
 }
 
 int
-fs_fchown(struct File *file, uid_t uid, gid_t gid)
+fs_fchown(struct Channel *file, uid_t uid, gid_t gid)
 {
   struct FSMessage msg;
 
   k_assert(file->ref_count > 0);
-  k_assert(file->type == FD_INODE);
-  k_assert(file->inode != NULL);
+  k_assert(file->type == CHANNEL_TYPE_FILE);
 
   msg.type = FS_MSG_FCHOWN;
   msg.u.fchown.file = file;
   msg.u.fchown.uid  = uid;
   msg.u.fchown.gid  = gid;
 
-  fs_send_recv(file->inode->fs, &msg);
+  fs_send_recv(file->u.file.fs, &msg);
 
   return msg.u.fchown.r;
 }
 
 int
-fs_fstat(struct File *file, struct stat *buf)
+fs_fstat(struct Channel *file, struct stat *buf)
 {
   struct FSMessage msg;
 
   k_assert(file->ref_count > 0);
-  k_assert(file->type == FD_INODE);
-  k_assert(file->inode != NULL);
+  k_assert(file->type == CHANNEL_TYPE_FILE);
 
   msg.type = FS_MSG_FSTAT;
   msg.u.fstat.file = file;
   msg.u.fstat.buf  = buf;
 
-  fs_send_recv(file->inode->fs, &msg);
+  fs_send_recv(file->u.file.fs, &msg);
 
   return msg.u.fstat.r;
 }
 
 int
-fs_fsync(struct File *file)
+fs_fsync(struct Channel *file)
 {
   struct FSMessage msg;
 
   k_assert(file->ref_count > 0);
-  k_assert(file->type == FD_INODE);
-  k_assert(file->inode != NULL);
+  k_assert(file->type == CHANNEL_TYPE_FILE);
 
   msg.type = FS_MSG_FSYNC;
   msg.u.fsync.file = file;
 
-  fs_send_recv(file->inode->fs, &msg);
+  fs_send_recv(file->u.file.fs, &msg);
 
   return msg.u.fsync.r;
 }
 
 int
-fs_ftruncate(struct File *file, off_t length)
+fs_ftruncate(struct Channel *file, off_t length)
 {
   struct FSMessage msg;
 
   k_assert(file->ref_count > 0);
-  k_assert(file->type == FD_INODE);
-  k_assert(file->inode != NULL);
+  k_assert(file->type == CHANNEL_TYPE_FILE);
 
   msg.type = FS_MSG_TRUNC;
   msg.u.trunc.file   = file;
   msg.u.trunc.length = length;
 
-  fs_send_recv(file->inode->fs, &msg);
+  fs_send_recv(file->u.file.fs, &msg);
 
   return msg.u.trunc.r;
 }
 
 ssize_t
-fs_getdents(struct File *file, uintptr_t va, size_t nbyte)
+fs_getdents(struct Channel *file, uintptr_t va, size_t nbyte)
 {
   struct FSMessage msg;
 
   k_assert(file->ref_count > 0);
-  k_assert(file->type == FD_INODE);
-  k_assert(file->inode != NULL);
+  k_assert(file->type == CHANNEL_TYPE_FILE);
 
   if ((file->flags & O_ACCMODE) == O_WRONLY)
     return -EBADF;
@@ -609,29 +602,28 @@ fs_getdents(struct File *file, uintptr_t va, size_t nbyte)
   msg.u.readdir.va    = va;
   msg.u.readdir.nbyte = nbyte;
   
-  fs_send_recv(file->inode->fs, &msg);
+  fs_send_recv(file->u.file.fs, &msg);
 
   return msg.u.readdir.r;
 }
 
 int
-fs_ioctl(struct File *file, int request, int arg)
+fs_ioctl(struct Channel *file, int request, int arg)
 {
   struct FSMessage msg;
   
   k_assert(file->ref_count > 0);
-  k_assert(file->type == FD_INODE);
-  k_assert(file->inode != NULL);
+  k_assert(file->type == CHANNEL_TYPE_FILE);
 
-  if (file->rdev >= 0)
-    return dev_ioctl(thread_current(), file->rdev, request, arg);
+  if (file->u.file.rdev >= 0)
+    return dev_ioctl(thread_current(), file->u.file.rdev, request, arg);
 
   msg.type = FS_MSG_IOCTL;
   msg.u.ioctl.file    = file;
   msg.u.ioctl.request = request;
   msg.u.ioctl.arg     = arg;
 
-  fs_send_recv(file->inode->fs, &msg);
+  fs_send_recv(file->u.file.fs, &msg);
 
   return msg.u.ioctl.r;
 }
@@ -639,10 +631,10 @@ fs_ioctl(struct File *file, int request, int arg)
 #define OPEN_TIME_FLAGS (O_CREAT | O_EXCL | O_DIRECTORY | O_NOFOLLOW | O_NOCTTY | O_TRUNC)
 
 int
-fs_open(const char *path, int oflag, mode_t mode, struct File **file_store)
+fs_open(const char *path, int oflag, mode_t mode, struct Channel **file_store)
 {
   struct FSMessage msg;
-  struct File *file;
+  struct Channel *file;
   struct PathNode *path_node;
   ino_t ino;
   struct FS *fs;
@@ -657,15 +649,16 @@ fs_open(const char *path, int oflag, mode_t mode, struct File **file_store)
   if (oflag & O_DIRECT) k_panic("O_DIRECT %s", path);
 
   // TODO: ENFILE
-  if ((r = file_alloc(&file)) != 0)
+  if ((r = channel_alloc(&file)) != 0)
     return r;
 
-  file->flags     = oflag & ~OPEN_TIME_FLAGS;
-  file->type      = FD_INODE;
-  file->node      = NULL;
-  file->inode     = NULL;
-  file->rdev      = -1;
-  file->ref_count = 1;
+  file->flags        = oflag & ~OPEN_TIME_FLAGS;
+  file->type         = CHANNEL_TYPE_FILE;
+  file->u.file.node  = NULL;
+  file->u.file.inode = NULL;
+  file->u.file.fs    = NULL;
+  file->u.file.rdev  = -1;
+  file->ref_count    = 1;
 
   flags = FS_LOOKUP_FOLLOW_LINKS;
   if ((oflag & O_EXCL) && (oflag & O_CREAT))
@@ -708,13 +701,14 @@ fs_open(const char *path, int oflag, mode_t mode, struct File **file_store)
   if ((r = msg.u.open.r) < 0)
     goto out2;
 
-  if (file->rdev >= 0) {
-    if ((r = dev_open(thread_current(), file->rdev, oflag, mode)) < 0)
+  if (file->u.file.rdev >= 0) {
+    if ((r = dev_open(thread_current(), file->u.file.rdev, oflag, mode)) < 0)
       goto out2;
   }
 
-  // REF(file->node)
-  file->node  = fs_path_node_ref(path_node);
+  // REF(file->u.file.node)
+  file->u.file.node = fs_path_node_ref(path_node);
+  file->u.file.fs   = fs;
 
   // UNREF(path_node)
   fs_path_node_unref(path_node);
@@ -727,90 +721,86 @@ out2:
   // UNREF(path_node)
   fs_path_node_unref(path_node);
 out1:
-  file_put(file);
+  channel_unref(file);
   return r;
 }
 
 ssize_t
-fs_read(struct File *file, uintptr_t va, size_t nbytes)
+fs_read(struct Channel *file, uintptr_t va, size_t nbytes)
 {
   struct FSMessage msg;
 
   k_assert(file->ref_count > 0);
-  k_assert(file->type == FD_INODE);
-  k_assert(file->inode != NULL);
+  k_assert(file->type == CHANNEL_TYPE_FILE);
 
-  if (file->rdev >= 0)
-    return dev_read(thread_current(), file->rdev, va, nbytes);
+  if (file->u.file.rdev >= 0)
+    return dev_read(thread_current(), file->u.file.rdev, va, nbytes);
 
   msg.type = FS_MSG_READ;
   msg.u.read.file  = file;
   msg.u.read.va    = va;
   msg.u.read.nbyte = nbytes;
 
-  fs_send_recv(file->inode->fs, &msg);
+  fs_send_recv(file->u.file.fs, &msg);
 
   return msg.u.read.r;
 }
 
 off_t
-fs_seek(struct File *file, off_t offset, int whence)
+fs_seek(struct Channel *file, off_t offset, int whence)
 {
   struct FSMessage msg;
 
   k_assert(file->ref_count > 0);
-  k_assert(file->type == FD_INODE);
-  k_assert(file->inode != NULL);
+  k_assert(file->type == CHANNEL_TYPE_FILE);
 
   msg.type = FS_MSG_SEEK;
   msg.u.seek.file   = file;
   msg.u.seek.offset = offset;
   msg.u.seek.whence = whence;
 
-  fs_send_recv(file->inode->fs, &msg);
+  fs_send_recv(file->u.file.fs, &msg);
 
   return msg.u.seek.r;
 }
 
 int
-fs_select(struct File *file, struct timeval *timeout)
+fs_select(struct Channel *file, struct timeval *timeout)
 {
   struct FSMessage msg;
 
   k_assert(file->ref_count > 0);
-  k_assert(file->type == FD_INODE);
-  k_assert(file->inode != NULL);
+  k_assert(file->type == CHANNEL_TYPE_FILE);
 
-  if (file->rdev >= 0)
-    return dev_select(thread_current(), file->rdev, timeout);
+  if (file->u.file.rdev >= 0)
+    return dev_select(thread_current(), file->u.file.rdev, timeout);
 
   msg.type = FS_MSG_SELECT;
   msg.u.select.file    = file;
   msg.u.select.timeout = timeout;
 
-  fs_send_recv(file->inode->fs, &msg);
+  fs_send_recv(file->u.file.fs, &msg);
 
   return msg.u.select.r;
 }
 
 ssize_t
-fs_write(struct File *file, uintptr_t va, size_t nbytes)
+fs_write(struct Channel *file, uintptr_t va, size_t nbytes)
 {
   struct FSMessage msg;
   
   k_assert(file->ref_count > 0);
-  k_assert(file->type == FD_INODE);
-  k_assert(file->inode != NULL);
+  k_assert(file->type == CHANNEL_TYPE_FILE);
 
-  if (file->rdev >= 0)
-    return dev_write(thread_current(), file->rdev, va, nbytes);
+  if (file->u.file.rdev >= 0)
+    return dev_write(thread_current(), file->u.file.rdev, va, nbytes);
 
   msg.type = FS_MSG_WRITE;
   msg.u.write.file  = file;
   msg.u.write.va    = va;
   msg.u.write.nbyte = nbytes;
 
-  fs_send_recv(file->inode->fs, &msg);
+  fs_send_recv(file->u.file.fs, &msg);
 
   return msg.u.write.r;
 }

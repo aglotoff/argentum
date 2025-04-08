@@ -16,7 +16,7 @@
 #include <kernel/types.h>
 #include <kernel/core/irq.h>
 #include <kernel/signal.h>
-#include <kernel/fs/file.h>
+#include <kernel/ipc/channel.h>
 #include <stdio.h>
 #include <sys/fcntl.h>
 
@@ -82,7 +82,7 @@ user_stack_put_vector(struct VMSpace *vm, uintptr_t *vec, int count,
 }
 
 struct ExecContext {
-  struct File    *file;
+  struct Channel    *file;
   struct VMSpace *vm;
   uintptr_t      *argv;
   int             argc;
@@ -145,7 +145,7 @@ user_stack_finalize(struct ExecContext *ctx)
 }
 
 static int
-resolve_file(struct File *file, char *p, struct ExecContext *ctx, char **pp)
+resolve_file(struct Channel *file, char *p, struct ExecContext *ctx, char **pp)
 {
   char buf[1024];
   struct stat stat;
@@ -211,7 +211,7 @@ resolve_file(struct File *file, char *p, struct ExecContext *ctx, char **pp)
 static int
 resolve(const char *path, struct ExecContext *ctx)
 {
-  struct File *file;
+  struct Channel *file;
   char *p = (char *) path;
 
   for (;;) {

@@ -8,7 +8,7 @@
 #include <kernel/core/condvar.h>
 #include <kernel/tty.h>
 #include <kernel/fs/buf.h>
-#include <kernel/fs/file.h>
+#include <kernel/ipc/channel.h>
 #include <kernel/core/irq.h>
 #include <kernel/core/mailbox.h>
 #include <kernel/core/mutex.h>
@@ -76,7 +76,7 @@ main(void)
 
   // Initialize the remaining kernel services
   buf_init();           // Buffer cache
-  file_init();          // File table
+  channel_init();          // File table
   vm_space_init();      // Virtual memory manager
   pipe_init();          // Pipes
   process_init();       // Process table

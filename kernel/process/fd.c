@@ -5,10 +5,10 @@
 #include <kernel/console.h>
 #include <kernel/process.h>
 #include <kernel/fd.h>
-#include <kernel/fs/file.h>
+#include <kernel/ipc/channel.h>
 
-static struct FileDesc *_fd_lookup(struct Process *, int);
-static void             _fd_close(struct FileDesc *);
+static struct ChannelDesc *_fd_lookup(struct Process *, int);
+static void                _fd_close(struct ChannelDesc *);
 
 void
 fd_init(struct Process *process)
@@ -16,11 +16,11 @@ fd_init(struct Process *process)
   int i;
 
   for (i = 0; i < OPEN_MAX; i++) {
-    process->fd[i].file  = NULL;
-    process->fd[i].flags = 0;
+    process->channels[i].channel = NULL;
+    process->channels[i].flags = 0;
   }
 
-  k_spinlock_init(&process->fd_lock, "fd_lock");
+  k_spinlock_init(&process->channels_lock, "channels_lock");
 }
 
 void
@@ -31,8 +31,8 @@ fd_close_all(struct Process *process)
   // TODO: no need to lock?
 
   for (i = 0; i < OPEN_MAX; i++)
-    if (process->fd[i].file != NULL)
-      _fd_close(&process->fd[i]);
+    if (process->channels[i].channel != NULL)
+      _fd_close(&process->channels[i]);
 }
 
 void
@@ -43,8 +43,8 @@ fd_close_on_exec(struct Process *process)
   // TODO: no need to lock the parent?
 
   for (i = 0; i < OPEN_MAX; i++)
-    if (process->fd[i].flags & FD_CLOEXEC) 
-      _fd_close(&process->fd[i]);
+    if (process->channels[i].flags & FD_CLOEXEC) 
+      _fd_close(&process->channels[i]);
 }
 
 void
@@ -54,40 +54,40 @@ fd_clone(struct Process *parent, struct Process *child)
 
   // TODO: no need to lock the parent?
 
-  k_spinlock_acquire(&child->fd_lock);
+  k_spinlock_acquire(&child->channels_lock);
 
   for (i = 0; i < OPEN_MAX; i++) {
-    if (parent->fd[i].file != NULL){
-      child->fd[i].file  = file_dup(parent->fd[i].file);
-      child->fd[i].flags = parent->fd[i].flags;
+    if (parent->channels[i].channel != NULL){
+      child->channels[i].channel  = channel_ref(parent->channels[i].channel);
+      child->channels[i].flags = parent->channels[i].flags;
     }
   }
 
-  k_spinlock_release(&child->fd_lock);
+  k_spinlock_release(&child->channels_lock);
 }
 
 int
-fd_alloc(struct Process *process, struct File *f, int start)
+fd_alloc(struct Process *process, struct Channel *f, int start)
 {
   int i;
 
   if (start < 0 || start >= OPEN_MAX)
     return -EINVAL;
 
-  k_spinlock_acquire(&process->fd_lock);
+  k_spinlock_acquire(&process->channels_lock);
 
   for (i = start; i < OPEN_MAX; i++) {
-    if (process->fd[i].file == NULL) {
-      process->fd[i].file  = file_dup(f);
-      process->fd[i].flags = 0;
+    if (process->channels[i].channel == NULL) {
+      process->channels[i].channel = channel_ref(f);
+      process->channels[i].flags = 0;
 
-      k_spinlock_release(&process->fd_lock);
+      k_spinlock_release(&process->channels_lock);
 
       return i;
     }
   }
 
-  k_spinlock_release(&process->fd_lock);
+  k_spinlock_release(&process->channels_lock);
 
   return -EMFILE;
 }
@@ -104,43 +104,41 @@ fd_alloc(struct Process *process, struct File *f, int start)
  * @retval -EFAULT if the arguments doesn't point to a valid string.
  * @retval -EBADF if the file descriptor is invalid.
  */
-struct File *
+struct Channel *
 fd_lookup(struct Process *process, int n)
 {
-  struct FileDesc *fd;
+  struct ChannelDesc *fd;
 
-  k_spinlock_acquire(&process->fd_lock);
+  k_spinlock_acquire(&process->channels_lock);
   fd = _fd_lookup(process, n);
-  k_spinlock_release(&process->fd_lock);
+  k_spinlock_release(&process->channels_lock);
 
-  return (fd == NULL || fd->file == NULL) ?  NULL : file_dup(fd->file);
+  return (fd == NULL || fd->channel == NULL) ?  NULL : channel_ref(fd->channel);
 }
 
 int
 fd_close(struct Process *process, int n)
 {
-  struct FileDesc *fd;
-  struct File *file;
+  struct ChannelDesc *fd;
+  struct Channel *channel;
 
-  k_spinlock_acquire(&process->fd_lock);
+  k_spinlock_acquire(&process->channels_lock);
 
   fd = _fd_lookup(process, n);
 
-  if ((fd == NULL) || (fd->file == NULL)) {
-    k_spinlock_release(&process->fd_lock);
+  if ((fd == NULL) || (fd->channel == NULL)) {
+    k_spinlock_release(&process->channels_lock);
     return -EBADF;
   }
 
-  file = fd->file;
+  channel = fd->channel;
 
-  fd->file  = NULL;
+  fd->channel  = NULL;
   fd->flags = 0;
 
-  k_spinlock_release(&process->fd_lock);
+  k_spinlock_release(&process->channels_lock);
 
-  // cprintf("     file_put %d %d\n", n, file->ref_count);
-
-  file_put(file);
+  channel_unref(channel);
 
   return 0;
 }
@@ -148,21 +146,21 @@ fd_close(struct Process *process, int n)
 int
 fd_get_flags(struct Process *process, int n)
 {
-  struct FileDesc *fd;
+  struct ChannelDesc *fd;
   int flags = 0;
 
-  k_spinlock_acquire(&process->fd_lock);
+  k_spinlock_acquire(&process->channels_lock);
 
   fd = _fd_lookup(process, n);
 
-  if ((fd == NULL) || (fd->file == NULL)) {
-    k_spinlock_release(&process->fd_lock);
+  if ((fd == NULL) || (fd->channel == NULL)) {
+    k_spinlock_release(&process->channels_lock);
     return -EBADF;
   }
 
   flags = fd->flags;
 
-  k_spinlock_release(&process->fd_lock);
+  k_spinlock_release(&process->channels_lock);
 
   return flags;
 }
@@ -170,44 +168,42 @@ fd_get_flags(struct Process *process, int n)
 int
 fd_set_flags(struct Process *process, int n, int flags)
 {
-  struct FileDesc *fd;
+  struct ChannelDesc *fd;
 
   if (flags & ~FD_CLOEXEC)
     return -EINVAL;
 
-  k_spinlock_acquire(&process->fd_lock);
+  k_spinlock_acquire(&process->channels_lock);
 
   fd = _fd_lookup(process, n);
 
-  if ((fd == NULL) || (fd->file == NULL)) {
-    k_spinlock_release(&process->fd_lock);
+  if ((fd == NULL) || (fd->channel == NULL)) {
+    k_spinlock_release(&process->channels_lock);
     return -EBADF;
   }
 
   fd->flags = flags;
 
-  k_spinlock_release(&process->fd_lock);
+  k_spinlock_release(&process->channels_lock);
 
   return 0;
 }
 
-static struct FileDesc *
+static struct ChannelDesc *
 _fd_lookup(struct Process *process, int n)
 {
   if ((n < 0) || (n >= OPEN_MAX))
     return NULL;
-
-  return &process->fd[n];
+  return &process->channels[n];
 }
 
 static void
-_fd_close(struct FileDesc *fd)
+_fd_close(struct ChannelDesc *fd)
 {
-  k_assert(fd->file != NULL);
+  k_assert(fd->channel != NULL);
   
-  file_put(fd->file);
+  channel_unref(fd->channel);
 
-  fd->file  = NULL;
+  fd->channel  = NULL;
   fd->flags = 0;
 }
-

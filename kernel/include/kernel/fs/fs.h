@@ -20,7 +20,7 @@
 #define INODE_CACHE_SIZE  32
 
 struct stat;
-struct File;
+struct Channel;
 struct FS;
 
 struct Thread;
@@ -135,7 +135,7 @@ void             fs_inode_unlock_two(struct Inode *, struct Inode *);
 int              fs_chmod(const char *, mode_t);
 int              fs_chown(const char *, uid_t, gid_t);
 int              fs_create(const char *, mode_t, dev_t, struct PathNode **);
-int              fs_open(const char *, int, mode_t, struct File **);
+int              fs_open(const char *, int, mode_t, struct Channel **);
 int              fs_link(char *, char *);
 int              fs_rename(char *, char *);
 int              fs_chdir(const char *);
@@ -146,19 +146,19 @@ ssize_t          fs_readlink(const char *, uintptr_t, size_t);
 int              fs_utime(const char *, struct utimbuf *);
 
 // File operations
-int              fs_close(struct File *);
-off_t            fs_seek(struct File *, off_t, int);
-ssize_t          fs_read(struct File *, uintptr_t, size_t);
-ssize_t          fs_write(struct File *, uintptr_t, size_t);
-ssize_t          fs_getdents(struct File *, uintptr_t, size_t);
-int              fs_fstat(struct File *, struct stat *);
-int              fs_fchdir(struct File *);
-int              fs_fchmod(struct File *, mode_t);
-int              fs_fchown(struct File *, uid_t, gid_t);
-int              fs_ioctl(struct File *, int, int);
-int              fs_select(struct File *, struct timeval *);
-int              fs_ftruncate(struct File *, off_t);
-int              fs_fsync(struct File *);
+int              fs_close(struct Channel *);
+off_t            fs_seek(struct Channel *, off_t, int);
+ssize_t          fs_read(struct Channel *, uintptr_t, size_t);
+ssize_t          fs_write(struct Channel *, uintptr_t, size_t);
+ssize_t          fs_getdents(struct Channel *, uintptr_t, size_t);
+int              fs_fstat(struct Channel *, struct stat *);
+int              fs_fchdir(struct Channel *);
+int              fs_fchmod(struct Channel *, mode_t);
+int              fs_fchown(struct Channel *, uid_t, gid_t);
+int              fs_ioctl(struct Channel *, int, int);
+int              fs_select(struct Channel *, struct timeval *);
+int              fs_ftruncate(struct Channel *, off_t);
+int              fs_fsync(struct Channel *);
 
 struct PathNode *fs_path_node_create(const char *, ino_t, struct FS *, struct PathNode *);
 struct PathNode *fs_path_node_ref(struct PathNode *);
@@ -258,71 +258,71 @@ struct FSMessage {
     } utime;
 
     struct {
-      struct File *file;
+      struct Channel *file;
       int r;
     } close;
     struct {
-      struct File *file;
+      struct Channel *file;
       mode_t mode;
       int r;
     } fchmod;
     struct {
-      struct File *file;
+      struct Channel *file;
       uid_t uid;
       gid_t gid;
       int r;
     } fchown;
     struct {
-      struct File *file;
+      struct Channel *file;
       struct stat *buf;
       int r;
     } fstat;
     struct {
-      struct File *file;
+      struct Channel *file;
       int r;
     } fsync;
     struct {
-      struct File *file;
+      struct Channel *file;
       int request;
       int arg;
       int r;
     } ioctl;
     struct {
-      struct File *file;
+      struct Channel *file;
       ino_t ino;
       int oflag;
       int r;
     } open;
     struct {
-      struct File *file;
+      struct Channel *file;
       uintptr_t va;
       size_t nbyte;
       ssize_t r;
     } read;
     struct {
-      struct File *file;
+      struct Channel *file;
       uintptr_t va;
       size_t nbyte;
       ssize_t r;
     } readdir;
     struct {
-      struct File *file;
+      struct Channel *file;
       off_t offset;
       int whence;
       off_t r;
     } seek;
     struct {
-      struct File *file;
+      struct Channel *file;
       struct timeval *timeout;
       int r;
     } select;
     struct {
-      struct File *file;
+      struct Channel *file;
       off_t length;
       int r;
     } trunc;
     struct {
-      struct File *file;
+      struct Channel *file;
       uintptr_t va;
       size_t nbyte;
       ssize_t r;

@@ -1,5 +1,5 @@
 #include <kernel/console.h>
-#include <kernel/fs/file.h>
+#include <kernel/ipc/channel.h>
 #include <kernel/page.h>
 #include <kernel/net.h>
 #include <kernel/core/task.h>
@@ -102,21 +102,21 @@ net_init(void)
 }
 
 int
-net_socket(int domain, int type, int protocol, struct File **fstore)
+net_socket(int domain, int type, int protocol, struct Channel **fstore)
 {
-  struct File *f;
+  struct Channel *f;
   int r, socket;
 
   if ((socket = lwip_socket(domain, type, protocol)) < 0)
     return -errno;
 
-  if ((r = file_alloc(&f)) < 0) {
+  if ((r = channel_alloc(&f)) < 0) {
     lwip_close(socket);
     return r;
   }
 
-  f->type   = FD_SOCKET;
-  f->socket = socket;
+  f->type   = CHANNEL_TYPE_SOCKET;
+  f->u.socket = socket;
   f->ref_count++;
 
   if (fstore != NULL)
@@ -126,61 +126,61 @@ net_socket(int domain, int type, int protocol, struct File **fstore)
 }
 
 int
-net_bind(struct File *file, const struct sockaddr *address, socklen_t address_len)
+net_bind(struct Channel *file, const struct sockaddr *address, socklen_t address_len)
 {
-  if (file->type != FD_SOCKET)
+  if (file->type != CHANNEL_TYPE_SOCKET)
     return -EBADF;
 
-  if (lwip_bind(file->socket, address, address_len) != 0)
+  if (lwip_bind(file->u.socket, address, address_len) != 0)
     return -errno;
 
   return 0;
 }
 
 int
-net_listen(struct File *file, int backlog)
+net_listen(struct Channel *file, int backlog)
 {
-  if (file->type != FD_SOCKET)
+  if (file->type != CHANNEL_TYPE_SOCKET)
     return -EBADF;
 
-  if (lwip_listen(file->socket, backlog) != 0)
+  if (lwip_listen(file->u.socket, backlog) != 0)
     return -errno;
 
   return 0;
 }
 
 int
-net_connect(struct File *file, const struct sockaddr *address, socklen_t address_len)
+net_connect(struct Channel *file, const struct sockaddr *address, socklen_t address_len)
 {
-  if (file->type != FD_SOCKET)
+  if (file->type != CHANNEL_TYPE_SOCKET)
     return -EBADF;
 
-  if (lwip_connect(file->socket, address, address_len) != 0)
+  if (lwip_connect(file->u.socket, address, address_len) != 0)
     return -errno;
 
   return 0;
 }
 
 int
-net_accept(struct File *file, struct sockaddr *address, socklen_t * address_len,
-           struct File **fstore)
+net_accept(struct Channel *file, struct sockaddr *address, socklen_t * address_len,
+           struct Channel **fstore)
 {
   int r, conn;
-  struct File *f;
+  struct Channel *f;
 
-  if (file->type != FD_SOCKET)
+  if (file->type != CHANNEL_TYPE_SOCKET)
     return -EBADF;
 
-  if ((conn = lwip_accept(file->socket, address, address_len)) < 0)
+  if ((conn = lwip_accept(file->u.socket, address, address_len)) < 0)
     return -errno;
   
-  if ((r = file_alloc(&f)) != 0) {
+  if ((r = channel_alloc(&f)) != 0) {
     lwip_close(conn);
     return r;
   }
 
-  f->type   = FD_SOCKET;
-  f->socket = conn;
+  f->type   = CHANNEL_TYPE_SOCKET;
+  f->u.socket = conn;
   f->flags  = O_RDWR;
   f->ref_count++;
   
@@ -191,25 +191,25 @@ net_accept(struct File *file, struct sockaddr *address, socklen_t * address_len,
 }
 
 int
-net_close(struct File *file)
+net_close(struct Channel *file)
 {
-  if (file->type != FD_SOCKET)
+  if (file->type != CHANNEL_TYPE_SOCKET)
     return -EBADF;
 
-  if (lwip_close(file->socket) != 0)
+  if (lwip_close(file->u.socket) != 0)
     return -errno;
 
   return 0;
 }
 
 ssize_t
-net_recvfrom(struct File *file, uintptr_t va, size_t nbytes, int flags,
+net_recvfrom(struct Channel *file, uintptr_t va, size_t nbytes, int flags,
              struct sockaddr *address, socklen_t *address_len)
 {
   ssize_t total, r;
   char *p;
 
-  if (file->type != FD_SOCKET)
+  if (file->type != CHANNEL_TYPE_SOCKET)
     return -EBADF;
 
   // TODO: looks like a triple copy!
@@ -220,7 +220,7 @@ net_recvfrom(struct File *file, uintptr_t va, size_t nbytes, int flags,
   while (nbytes) {
     ssize_t nread = MIN(nbytes, PAGE_SIZE);
 
-    r = lwip_recvfrom(file->socket, p, nread, flags, address, address_len);
+    r = lwip_recvfrom(file->u.socket, p, nread, flags, address, address_len);
 
     if (r == 0)
       break;
@@ -250,19 +250,19 @@ net_recvfrom(struct File *file, uintptr_t va, size_t nbytes, int flags,
 }
 
 ssize_t
-net_read(struct File *file, uintptr_t buf, size_t nbytes)
+net_read(struct Channel *file, uintptr_t buf, size_t nbytes)
 {
   return net_recvfrom(file, buf, nbytes, 0, NULL, NULL);
 }
 
 ssize_t
-net_sendto(struct File *file, uintptr_t va, size_t nbytes, int flags,
+net_sendto(struct Channel *file, uintptr_t va, size_t nbytes, int flags,
            const struct sockaddr *dest_addr, socklen_t dest_len)
 {
   ssize_t total, r;
   char *p;
 
-  if (file->type != FD_SOCKET)
+  if (file->type != CHANNEL_TYPE_SOCKET)
     return -EBADF;
 
   // TODO: looks like a triple copy!
@@ -278,7 +278,7 @@ net_sendto(struct File *file, uintptr_t va, size_t nbytes, int flags,
       break;
     }
 
-    r = lwip_sendto(file->socket, p, nwrite, flags, (struct sockaddr *) dest_addr, dest_len);
+    r = lwip_sendto(file->u.socket, p, nwrite, flags, (struct sockaddr *) dest_addr, dest_len);
 
     if (r == 0)
       break;
@@ -303,21 +303,21 @@ net_sendto(struct File *file, uintptr_t va, size_t nbytes, int flags,
 }
 
 ssize_t
-net_write(struct File *file, uintptr_t va, size_t nbytes)
+net_write(struct Channel *file, uintptr_t va, size_t nbytes)
 {
   return net_sendto(file, va, nbytes, 0, NULL, 0);
 }
 
 int
-net_setsockopt(struct File *file, int level, int option_name, const void *option_value,
+net_setsockopt(struct Channel *file, int level, int option_name, const void *option_value,
                socklen_t option_len)
 {
   ssize_t r;
 
-  if (file->type != FD_SOCKET)
+  if (file->type != CHANNEL_TYPE_SOCKET)
     return -EBADF;
 
-  if ((r = lwip_setsockopt(file->socket, level, option_name, option_value,
+  if ((r = lwip_setsockopt(file->u.socket, level, option_name, option_value,
                            option_len)) < 0)
     return -errno;
 
@@ -325,14 +325,14 @@ net_setsockopt(struct File *file, int level, int option_name, const void *option
 }
 
 int
-net_select(struct File *file, struct timeval *timeout)
+net_select(struct Channel *file, struct timeval *timeout)
 {
   int r;
   fd_set dset;
 
-  dset.__fds_bits[0] = (1 << file->socket);
+  dset.__fds_bits[0] = (1 << file->u.socket);
 
-  if ((r = lwip_select(file->socket + 1, &dset, NULL, NULL, timeout)) < 0)
+  if ((r = lwip_select(file->u.socket + 1, &dset, NULL, NULL, timeout)) < 0)
     return -errno;
   
   return r;

@@ -14,7 +14,7 @@
 #include <kernel/console.h>
 #include <kernel/core/cpu.h>
 #include <kernel/fd.h>
-#include <kernel/fs/file.h>
+#include <kernel/ipc/channel.h>
 #include <kernel/fs/fs.h>
 #include <kernel/vmspace.h>
 #include <kernel/net.h>
@@ -564,7 +564,7 @@ out1:
 int32_t
 sys_open(void)
 {
-  struct File *file;
+  struct Channel *file;
   char *path;
   int oflag, r;
   mode_t mode;
@@ -587,7 +587,7 @@ sys_open(void)
 
   //cprintf("[k] opened %s -> %d\n", path, r);
 
-  file_put(file);
+  channel_unref(file);
 out2:
   k_free(path);
 out1:
@@ -757,7 +757,7 @@ sys_getdents(void)
 {
   size_t n;
   int fd;
-  struct File *file;
+  struct Channel *file;
   uintptr_t va;
   int r;
 
@@ -771,9 +771,9 @@ sys_getdents(void)
   if ((file = fd_lookup(process_current(), fd)) == NULL)
     return -EBADF;
 
-  r = file_getdents(file, va, n);
+  r = channel_getdents(file, va, n);
 
-  file_put(file);
+  channel_unref(file);
 
   return r;
 }
@@ -781,7 +781,7 @@ sys_getdents(void)
 int32_t
 sys_fchdir(void)
 {
-  struct File *file;
+  struct Channel *file;
   int r, fd;
 
   if ((r = sys_arg_int(0, &fd)) < 0)
@@ -790,9 +790,9 @@ sys_fchdir(void)
   if ((file = fd_lookup(process_current(), fd)) == NULL)
     return -EBADF;
 
-  r = file_chdir(file);
+  r = channel_chdir(file);
 
-  file_put(file);
+  channel_unref(file);
 
   return r;
 }
@@ -800,7 +800,7 @@ sys_fchdir(void)
 int32_t
 sys_stat(void)
 {
-  struct File *file;
+  struct Channel *file;
   uintptr_t buf_va;
   struct stat buf;
   int r, fd;
@@ -815,13 +815,13 @@ sys_stat(void)
     goto out2;
   }
 
-  if ((r = file_stat(file, &buf)) < 0)
+  if ((r = channel_stat(file, &buf)) < 0)
     goto out2;
 
   r = sys_copy_out(&buf, buf_va, sizeof buf);
 
 out2:
-  file_put(file);
+  channel_unref(file);
 out1:
   return r;
 }
@@ -846,7 +846,7 @@ sys_read(void)
 {
   uintptr_t va;
   size_t n;
-  struct File *file;
+  struct Channel *file;
   int r, fd;
 
   if ((r = sys_arg_int(0, &fd)) < 0)
@@ -859,9 +859,9 @@ sys_read(void)
   if ((file = fd_lookup(process_current(), fd)) == NULL)
     return -EBADF;
 
-  r = file_read(file, va, n);
+  r = channel_read(file, va, n);
 
-  file_put(file);
+  channel_unref(file);
 
   return r;
 }
@@ -869,7 +869,7 @@ sys_read(void)
 int32_t
 sys_seek(void)
 {
-  struct File *file;
+  struct Channel *file;
   off_t offset;
   int whence, r, fd;
 
@@ -883,9 +883,9 @@ sys_seek(void)
   if ((file = fd_lookup(process_current(), fd)) == NULL)
     return -EBADF;
 
-  r = file_seek(file, offset, whence);
+  r = channel_seek(file, offset, whence);
 
-  file_put(file);
+  channel_unref(file);
 
   return r;
 }
@@ -893,7 +893,7 @@ sys_seek(void)
 int32_t
 sys_fcntl(void)
 {
-  struct File *file;
+  struct Channel *file;
   int cmd, r, arg, fd;
 
   if ((r = sys_arg_int(0, &fd)) < 0)
@@ -916,10 +916,10 @@ sys_fcntl(void)
     r = fd_alloc(process_current(), file, arg);
     break;
   case F_GETFL:
-    r = file_get_flags(file);
+    r = channel_get_flags(file);
     break;
   case F_SETFL:
-    r = file_set_flags(file, arg);
+    r = channel_set_flags(file, arg);
     break;
   case F_GETFD:
     r = fd_get_flags(process_current(), fd);
@@ -948,7 +948,7 @@ sys_fcntl(void)
     break;
   }
 
-  file_put(file);
+  channel_unref(file);
 
   return r;
 }
@@ -958,7 +958,7 @@ sys_write(void)
 {
   uintptr_t va;
   size_t n;
-  struct File *file;
+  struct Channel *file;
   int r, fd;
 
   if ((r = sys_arg_int(0, &fd)) < 0)
@@ -971,9 +971,9 @@ sys_write(void)
   if ((file = fd_lookup(process_current(), fd)) == NULL)
     return -EBADF;
 
-  r = file_write(file, va, n);
+  r = channel_write(file, va, n);
 
-  file_put(file);
+  channel_unref(file);
 
   return r;
 }
@@ -981,7 +981,7 @@ sys_write(void)
 int32_t
 sys_fchmod(void)
 {
-  struct File *file;
+  struct Channel *file;
   mode_t mode;
   int r, fd;
 
@@ -993,9 +993,9 @@ sys_fchmod(void)
   if ((file = fd_lookup(process_current(), fd)) == NULL)
     return -EBADF;
 
-  r = file_chmod(file, mode);
+  r = channel_chmod(file, mode);
 
-  file_put(file);
+  channel_unref(file);
 
   return r;
 }
@@ -1003,7 +1003,7 @@ sys_fchmod(void)
 int32_t
 sys_fchown(void)
 {
-  struct File *file;
+  struct Channel *file;
   int r, fd;
   uid_t uid;
   gid_t gid;
@@ -1018,9 +1018,9 @@ sys_fchown(void)
   if ((file = fd_lookup(process_current(), fd)) == NULL)
     return -EBADF;
 
-  r = file_chown(file, uid, gid);
+  r = channel_chown(file, uid, gid);
 
-  file_put(file);
+  channel_unref(file);
 
   return r;
 }
@@ -1048,7 +1048,7 @@ sys_select(void)
   r = 0;
 
   for (fd = 0; fd < FD_SETSIZE; fd++) {
-    struct File *file;
+    struct Channel *file;
 
     // TODO: writefds
     // TODO: errorfds
@@ -1062,9 +1062,9 @@ sys_select(void)
       break;
     }
 
-    r += file_select(file, timeout);
+    r += channel_select(file, timeout);
 
-    file_put(file);
+    channel_unref(file);
   }
 
 out4:
@@ -1083,7 +1083,7 @@ out1:
 int32_t
 sys_ioctl(void)
 {
-  struct File *file;
+  struct Channel *file;
   int r, request, fd, arg;
 
   if ((r = sys_arg_int(0, &fd)) < 0)
@@ -1098,9 +1098,9 @@ sys_ioctl(void)
 
  //cprintf("[k] ioctl %s\n", file->node->name);
 
-  r = file_ioctl(file, request, arg);
+  r = channel_ioctl(file, request, arg);
   
-  file_put(file);
+  channel_unref(file);
 
   return r;
 }
@@ -1108,7 +1108,7 @@ sys_ioctl(void)
 int32_t
 sys_ftruncate(void)
 {
-  struct File *file;
+  struct Channel *file;
   int r, fd;
   off_t length;
 
@@ -1120,9 +1120,9 @@ sys_ftruncate(void)
   if ((file = fd_lookup(process_current(), fd)) == NULL)
     return -EBADF;
 
-  r = file_truncate(file, length);
+  r = channel_truncate(file, length);
 
-  file_put(file);
+  channel_unref(file);
 
   return r;
 }
@@ -1130,7 +1130,7 @@ sys_ftruncate(void)
 int32_t
 sys_fsync(void)
 {
-  struct File *file;
+  struct Channel *file;
   int r, fd;
 
   if ((r = sys_arg_int(0, &fd)) < 0)
@@ -1139,9 +1139,9 @@ sys_fsync(void)
   if ((file = fd_lookup(process_current(), fd)) == NULL)
     return -EBADF;
 
-  r = file_sync(file);
+  r = channel_sync(file);
 
-  file_put(file);
+  channel_unref(file);
 
   return r;
 }
@@ -1159,7 +1159,7 @@ sys_socket(void)
   int domain;
   int type;
   int protocol;
-  struct File *file;
+  struct Channel *file;
 
   if ((r = sys_arg_int(0, &domain)) < 0)
     return r;
@@ -1173,14 +1173,14 @@ sys_socket(void)
 
   r = fd_alloc(process_current(), file, 0);
 
-  file_put(file);
+  channel_unref(file);
   return r;
 }
 
 int32_t
 sys_bind(void)
 {
-  struct File *file;
+  struct Channel *file;
   struct sockaddr *address;
   socklen_t address_len;
   int r, fd;
@@ -1197,7 +1197,7 @@ sys_bind(void)
 
   r = net_bind(file, address, address_len);
 
-  file_put(file);
+  channel_unref(file);
 
   return r;
 }
@@ -1205,7 +1205,7 @@ sys_bind(void)
 int32_t
 sys_connect(void)
 {
-  struct File *file;
+  struct Channel *file;
   struct sockaddr *address;
   socklen_t address_len;
   int r, fd;
@@ -1228,7 +1228,7 @@ sys_connect(void)
 
   r = net_connect(file, address, address_len);
 
-  file_put(file);
+  channel_unref(file);
 
 out2:
   if (address != NULL)
@@ -1240,7 +1240,7 @@ out1:
 int32_t
 sys_listen(void)
 {
-  struct File *file;
+  struct Channel *file;
   int backlog, r, fd;
 
   if ((r = sys_arg_int(0, &fd)) < 0)
@@ -1253,7 +1253,7 @@ sys_listen(void)
 
   r = net_listen(file, backlog);
 
-  file_put(file);
+  channel_unref(file);
 
   return r;
 }
@@ -1261,7 +1261,7 @@ sys_listen(void)
 int32_t
 sys_accept(void)
 {
-  struct File *sockf, *connf;
+  struct Channel *sockf, *connf;
   uintptr_t address_va, address_len_va;
   struct sockaddr address;
   socklen_t address_len;
@@ -1295,9 +1295,9 @@ sys_accept(void)
   r = conn_fd;
 
 out3:
-  file_put(connf);
+  channel_unref(connf);
 out2:
-  file_put(sockf);
+  channel_unref(sockf);
 out1:
   return r;
 }
@@ -1305,7 +1305,7 @@ out1:
 int32_t
 sys_recvfrom(void)
 {
-  struct File *file;
+  struct Channel *file;
   uintptr_t buffer_va;
   size_t length;
   int flags;
@@ -1334,7 +1334,7 @@ sys_recvfrom(void)
   if ((nread = r = net_recvfrom(file, buffer_va, length, flags, &address, &address_len)) < 0)
     return r;
 
-  file_put(file);
+  channel_unref(file);
 
   if (address_va && (r = sys_copy_out(&address, address_va,
                                       sizeof(address))) < 0)
@@ -1349,7 +1349,7 @@ sys_recvfrom(void)
 int32_t
 sys_sendto(void)
 {
-  struct File *file;
+  struct Channel *file;
   uintptr_t message_va;
   size_t length;
   int flags;
@@ -1377,7 +1377,7 @@ sys_sendto(void)
 
   r = net_sendto(file, message_va, length, flags, dest_addr, dest_len);
 
-  file_put(file);
+  channel_unref(file);
 
 out2:
   if (dest_addr != NULL)
@@ -1389,7 +1389,7 @@ out1:
 int32_t
 sys_setsockopt(void)
 {
-  struct File *file;
+  struct Channel *file;
   int level;
   int option_name;
   void *option_value;
@@ -1414,7 +1414,7 @@ sys_setsockopt(void)
 
   r = net_setsockopt(file, level, option_name, option_value, option_len);
 
-  file_put(file);
+  channel_unref(file);
 
 out2:
   if (option_value != NULL)
@@ -1654,7 +1654,7 @@ sys_pipe(void)
 {
   struct Process *my_process = process_current();
   uintptr_t fd_va;
-  struct File *read_file, *write_file;
+  struct Channel *read_file, *write_file;
   int fd[2];
   int r;
 
@@ -1675,8 +1675,8 @@ sys_pipe(void)
   r = 0;
 
 out2:
-  file_put(read_file);
-  file_put(write_file);
+  channel_unref(read_file);
+  channel_unref(write_file);
 out1:
   return r;
 }

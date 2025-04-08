@@ -7,7 +7,7 @@
 #include <string.h>
 #include <sys/mman.h>
 #include <kernel/fs/fs.h>
-#include <kernel/fs/file.h>
+#include <kernel/ipc/channel.h>
 #include <stdio.h>
 #include <kernel/process.h>
 
@@ -572,7 +572,7 @@ vm_handle_fault(void *pgtab, uintptr_t va)
 }
 
 int
-vm_space_load_file(void *pgtab, void *va, struct File *file, size_t n, off_t off)
+vm_space_load_file(void *pgtab, void *va, struct Channel *file, size_t n, off_t off)
 {
   struct Page *page;
   uint8_t *dst, *kva;

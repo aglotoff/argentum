@@ -40,7 +40,7 @@ KERNEL_SRCFILES := \
 	kernel/fs/ext2.c \
 	kernel/fs/devfs.c \
 	kernel/fs/buf.c \
-	kernel/fs/file.c \
+	kernel/ipc/channel.c \
 	kernel/fs/inode.c \
 	kernel/fs/path.c \
 	kernel/fs/fs.c \

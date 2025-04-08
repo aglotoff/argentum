@@ -18,11 +18,11 @@ struct Pipe {
 };
 
 void    pipe_init(void);
-int     pipe_open(struct File **, struct File **);
-int     pipe_close(struct File *);
-ssize_t pipe_read(struct File *, uintptr_t, size_t);
-ssize_t pipe_write(struct File *, uintptr_t, size_t);
-int     pipe_stat(struct File *, struct stat *);
-int     pipe_select(struct File *, struct timeval *);
+int     pipe_open(struct Channel **, struct Channel **);
+int     pipe_close(struct Channel *);
+ssize_t pipe_read(struct Channel *, uintptr_t, size_t);
+ssize_t pipe_write(struct Channel *, uintptr_t, size_t);
+int     pipe_stat(struct Channel *, struct stat *);
+int     pipe_select(struct Channel *, struct timeval *);
 
 #endif  // !__KERNEL_INCLUDE_KERNEL_PIPE_H__
