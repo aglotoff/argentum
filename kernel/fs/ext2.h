@@ -156,6 +156,8 @@ struct Ext2DirEntry {
 #define EXT2_FT_SOCK      6
 #define EXT2_FT_SYMLINK   7
 
+#define MAX_FAST_SYMLINK_NAMELEN  60
+
 struct Inode;
 
 extern struct FS ext2fs;

@@ -95,6 +95,7 @@ static int32_t (*syscalls[])(void) = {
   [__SYS_RENAME]      = sys_rename,
   [__SYS_CHOWN]       = sys_chown,
   [__SYS_UTIME]       = sys_utime,
+  [__SYS_SYMLINK]     = sys_symlink,
 };
 
 int32_t
@@ -114,7 +115,7 @@ sys_dispatch(void)
     return r;
   }
 
-  //cprintf("Unknown system call %d\n", num);
+  cprintf("Unknown system call %d\n", num);
   return -ENOSYS;
 }
 
@@ -1734,6 +1735,27 @@ out2:
 out1:
   return r;
 }
+
+int32_t
+sys_symlink(void)
+{
+  char *path1, *path2;
+  int r;
+
+  if ((r = sys_arg_str(0, PATH_MAX, VM_READ, &path1)) < 0)
+    goto out1;
+  if ((r = sys_arg_str(1, PATH_MAX, VM_READ, &path2)) < 0)
+    goto out2;
+
+  r = fs_symlink(path1, path2);
+
+  k_free(path2);
+out2:
+  k_free(path1);
+out1:
+  return r;
+}
+
 
 int32_t
 sys_utime(void)

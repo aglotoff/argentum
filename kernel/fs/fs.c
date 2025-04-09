@@ -394,6 +394,41 @@ fs_rmdir(const char *path)
 }
 
 int
+fs_symlink(const char *path, const char *link_path)
+{
+  struct FSMessage msg;
+  struct PathNode *dir;
+  ino_t ino, dir_ino;
+  struct Channel *chan;
+  char name[NAME_MAX + 1];
+  mode_t mode;
+  int r;
+
+  // REF(dir)
+  if ((r = fs_path_node_resolve(link_path, name, FS_LOOKUP_FOLLOW_LINKS, NULL, &dir)) < 0)
+    return r;
+
+  mode = 0666 & ~process_current()->cmask;
+
+  dir_ino = fs_path_ino(dir, &chan);
+
+  msg.type = FS_MSG_SYMLINK;
+  msg.u.symlink.dir_ino   = dir_ino;
+  msg.u.symlink.name      = name;
+  msg.u.symlink.mode      = mode;
+  msg.u.symlink.path      = path;
+  msg.u.symlink.istore    = &ino;
+
+  fs_send_recv(chan, &msg);
+
+  // UNREF(dir)
+  fs_path_node_unref(dir);
+  dir = NULL;
+
+  return msg.u.symlink.r;
+}
+
+int
 fs_unlink(const char *path)
 {
   struct FSMessage msg;

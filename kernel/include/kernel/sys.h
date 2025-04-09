@@ -76,5 +76,6 @@ int32_t sys_setitimer(void);
 int32_t sys_rename(void);
 int32_t sys_chown(void);
 int32_t sys_utime(void);
+int32_t sys_symlink(void);
 
 #endif  // !__KERNEL_INCLUDE_KERNEL_SYSCALL_H__

@@ -413,7 +413,8 @@ ext2_rmdir(struct Thread *thread,
 void
 ext2_inode_delete(struct Thread *thread, struct Inode *inode)
 {
-  ext2_trunc(thread, inode, 0);
+  if (!S_ISLNK(inode->mode) || (inode->size > MAX_FAST_SYMLINK_NAMELEN))
+    ext2_trunc(thread, inode, 0);
 
   inode->mode = 0;
   inode->size = 0;
@@ -480,8 +481,6 @@ ext2_readdir(struct Thread *thread, struct Inode *dir, void *buf,
   return de.rec_len;
 }
 
-#define MAX_FAST_SYMLINK_NAMELEN  60
-
 ssize_t
 ext2_readlink(struct Thread *thread, struct Inode *inode, uintptr_t va, size_t n)
 {
@@ -502,6 +501,58 @@ ext2_readlink(struct Thread *thread, struct Inode *inode, uintptr_t va, size_t n
   return ext2_read(thread, inode, va, n, 0);
 }
 
+int
+ext2_symlink(struct Thread *thread,
+             struct Inode *dir,
+             char *name,
+             mode_t mode,
+             const char *link_path,
+             struct Inode **istore)
+{
+  struct Inode *ip;
+  int r;
+  size_t path_len;
+
+  (void) thread;
+
+  path_len = strlen(link_path);
+
+  
+
+  if ((r = ext2_inode_create(thread, dir, name, mode, 0, &ip)) != 0)
+    return r;
+
+  ip->nlink = 1;
+
+  if (path_len <= MAX_FAST_SYMLINK_NAMELEN) {
+    struct Ext2InodeExtra *extra = (struct Ext2InodeExtra *) ip->extra;
+
+    if ((r = vm_space_copy_in(thread, extra->block, (uintptr_t) link_path, path_len)) < 0) {
+      fs_inode_unlock(ip);
+      return r;
+    }
+
+    ip->size = path_len;
+  } else {
+    if ((r = ext2_write(thread, ip, (uintptr_t) link_path, path_len, 0)) < 0) {
+      fs_inode_unlock(ip);
+      return r;
+    }
+  }
+
+  ip->flags |= FS_INODE_DIRTY;
+
+  fs_inode_unlock(ip);
+
+  k_assert(istore != NULL);
+  *istore = ip;
+
+  dir->atime = dir->ctime = dir->mtime = time_get_seconds();
+  dir->flags |= FS_INODE_DIRTY;
+
+  return 0;
+}
+
 struct FSOps ext2fs_ops = {
   .inode_get    = ext2_inode_get,
   .inode_read   = ext2_inode_read,
@@ -519,6 +570,7 @@ struct FSOps ext2fs_ops = {
   .link         = ext2_link,
   .unlink       = ext2_unlink,
   .lookup       = ext2_lookup,
+  .symlink      = ext2_symlink,
 };
 
 ino_t

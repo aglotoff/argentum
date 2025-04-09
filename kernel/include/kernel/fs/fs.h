@@ -86,6 +86,7 @@ struct FSOps {
   ssize_t         (*readdir)(struct Thread *, struct Inode *, void *, FillDirFunc, off_t);
   ssize_t         (*readlink)(struct Thread *, struct Inode *, uintptr_t, size_t);
   int             (*create)(struct Thread *, struct Inode *, char *, mode_t, struct Inode **);
+  int             (*symlink)(struct Thread *, struct Inode *, char *, mode_t, const char *, struct Inode **);
   int             (*mkdir)(struct Thread *, struct Inode *, char *, mode_t, struct Inode **);
   int             (*mknod)(struct Thread *, struct Inode *, char *, mode_t, dev_t, struct Inode **);
   int             (*link)(struct Thread *, struct Inode *, char *, struct Inode *);
@@ -143,6 +144,7 @@ int              fs_unlink(const char *);
 int              fs_rmdir(const char *);
 int              fs_access(const char *, int);
 ssize_t          fs_readlink(const char *, uintptr_t, size_t);
+int              fs_symlink(const char *, const char *);
 int              fs_utime(const char *, struct utimbuf *);
 
 // File operations
@@ -247,6 +249,14 @@ struct FSMessage {
     } stat;
     struct {
       ino_t dir_ino;
+      char *name;
+      mode_t mode;
+      const char *path;
+      ino_t *istore;
+      int r;
+    } symlink;
+    struct {
+      ino_t dir_ino;
       ino_t ino;
       const char *name;
       int r;
@@ -330,6 +340,7 @@ enum {
   FS_MSG_STAT,
   FS_MSG_READLINK,
   FS_MSG_RMDIR,
+  FS_MSG_SYMLINK,
   FS_MSG_UNLINK,
   FS_MSG_UTIME,
   

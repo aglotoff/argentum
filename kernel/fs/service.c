@@ -446,6 +446,60 @@ do_stat(struct FS *fs, struct Thread *sender,
 }
 
 static int
+do_symlink_locked(struct FS *fs, struct Thread *sender,
+                  struct Inode *dir,
+                  char *name,
+                  mode_t mode,
+                  const char *path,
+                  struct Inode **istore)
+{
+  struct Inode *inode;
+
+  if (!S_ISDIR(dir->mode))
+    return -ENOTDIR;
+
+  if (!fs_inode_permission(sender, dir, FS_PERM_WRITE, 0))
+    return -EPERM;
+
+  inode = fs->ops->lookup(sender, dir, name);
+
+  if (inode != NULL) {
+    fs_inode_put(inode);
+    return -EEXIST;
+  }
+
+  return fs->ops->symlink(sender, dir, name, S_IFLNK | mode, path, istore);
+}
+
+static int
+do_symlink(struct FS *fs, struct Thread *sender,
+           ino_t dir_ino,
+           char *name,
+           mode_t mode,
+           const char *link_path,
+           ino_t *istore)
+{
+  int r;
+
+  struct Inode *dir = fs->ops->inode_get(fs, dir_ino);
+  struct Inode *inode = NULL;
+
+  fs_inode_lock(dir);
+  r = do_symlink_locked(fs, sender, dir, name, mode, link_path, &inode);
+  fs_inode_unlock(dir);
+
+  if (inode != NULL) {
+    if (istore)
+      *istore = inode->ino;
+    fs_inode_put(inode);
+  }
+
+  fs_inode_put(dir);
+
+  return r;
+}
+
+static int
 do_unlink(struct FS *fs, struct Thread *sender,
           ino_t dir_ino,
           ino_t ino,
@@ -996,6 +1050,14 @@ fs_service_task(void *arg)
       msg->u.stat.r = do_stat(fs, msg->sender,
                               msg->u.stat.ino,
                               msg->u.stat.buf);
+      break;
+    case FS_MSG_SYMLINK:
+      msg->u.symlink.r = do_symlink(fs, msg->sender,
+                                    msg->u.symlink.dir_ino,
+                                    msg->u.symlink.name,
+                                    msg->u.symlink.mode,
+                                    msg->u.symlink.path,
+                                    msg->u.symlink.istore);
       break;
     case FS_MSG_UNLINK:
       msg->u.unlink.r = do_unlink(fs, msg->sender,

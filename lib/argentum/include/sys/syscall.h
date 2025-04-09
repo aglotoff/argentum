@@ -74,6 +74,7 @@
 #define __SYS_RENAME        68
 #define __SYS_CHOWN         69
 #define __SYS_UTIME         70
+#define __SYS_SYMLINK       71
 
 #ifndef __ASSEMBLER__
 

@@ -209,6 +209,17 @@ devfs_trunc(struct Thread *, struct Inode *inode, off_t size)
   (void) size;
 }
 
+int
+devfs_symlink(struct Thread *,
+              struct Inode *,
+              char *,
+              mode_t,
+              const char *,
+              struct Inode **)
+{
+  return -ENOSYS;
+}
+
 struct FSOps devfs_ops = {
   .inode_get    = devfs_inode_get,
   .inode_read   = devfs_inode_read,
@@ -222,6 +233,7 @@ struct FSOps devfs_ops = {
   .readlink     = devfs_readlink,
   .create       = devfs_create,
   .mkdir        = devfs_mkdir,
+  .symlink      = devfs_symlink,
   .mknod        = devfs_mknod,
   .link         = devfs_link,
   .unlink       = devfs_unlink,
