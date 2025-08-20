@@ -68,7 +68,7 @@ struct KListLink ide_queue;
 struct KMutex ide_mutex;
 
 static void ide_irq_task(int, void *);
-static void ide_start_transfer(struct Buf *);
+static void ide_start_transfer(struct BufRequest *);
 
 struct PRD {
   uint32_t address;
@@ -158,8 +158,10 @@ volatile int sss;
 #define IDE_BLOCK_LEN   512
 
 void
-ide_request(struct Buf *buf)
+ide_request(struct BufRequest *req)
 {
+  struct Buf *buf = req->buf;
+
   if (buf->block_size % IDE_BLOCK_LEN != 0)
     k_panic("block size must be a multiple of %u", IDE_BLOCK_LEN);
 
@@ -167,17 +169,15 @@ ide_request(struct Buf *buf)
     k_panic("TODO: error");
 
   // Add buffer to the queue.
-  k_list_add_back(&ide_queue, &buf->queue_link);
+  k_list_add_back(&ide_queue, &req->queue_link);
 
   // If the buffer is at the front of the queue, immediately send it to the
   // hardware.
-  if (ide_queue.next == &buf->queue_link)
-    ide_start_transfer(buf);
+  if (ide_queue.next == &req->queue_link)
+    ide_start_transfer(req);
 
   // Wait for the R/W operation to finish.
-  // TODO: deal with errors!
-  while ((buf->flags & (BUF_DIRTY | BUF_VALID)) != BUF_VALID)
-    k_condvar_wait(&buf->wait_cond, &ide_mutex);
+  buf_request_wait(req, &ide_mutex);
 
   k_mutex_unlock(&ide_mutex);
 }
@@ -185,12 +185,13 @@ ide_request(struct Buf *buf)
 volatile uint8_t *test = (uint8_t *) VIRT_KERNEL_BASE;
 
 static void
-ide_start_transfer(struct Buf *buf)
+ide_start_transfer(struct BufRequest *req)
 {
+  struct Buf *buf = req->buf;
   size_t nsectors;
 
   k_assert(k_mutex_holding(&ide_mutex));
-  k_assert(buf->queue_link.prev == &ide_queue);
+  k_assert(req->queue_link.prev == &ide_queue);
   k_assert(buf->block_size % IDE_BLOCK_LEN == 0);
 
   // cprintf("[k] start %d\n", buf->block_no);
@@ -199,7 +200,7 @@ ide_start_transfer(struct Buf *buf)
 
   int sector = buf->block_no * nsectors;
   
-  if (buf->flags & BUF_DIRTY) {
+  if (req->type == BUF_REQUEST_WRITE) {
   //   k_panic("TODO");
 
   //   // WRITING
@@ -277,7 +278,7 @@ static void
 ide_irq_task(int irq, void *arg)
 {
   struct KListLink *link;
-  struct Buf *buf, *next_buf;
+  struct BufRequest *req, *next_req;
 
   (void) irq;
   (void) arg;
@@ -292,28 +293,23 @@ ide_irq_task(int irq, void *arg)
   link = ide_queue.next;
   
 
-  buf = KLIST_CONTAINER(link, struct Buf, queue_link);
+  req = KLIST_CONTAINER(link, struct BufRequest, queue_link);
 
-  k_assert((buf->flags & (BUF_DIRTY | BUF_VALID)) != BUF_VALID);
-  k_assert(buf->block_size % IDE_BLOCK_LEN == 0);
+  k_assert(req->buf->block_size % IDE_BLOCK_LEN == 0);
 
   // cprintf("[k] end %d\n", buf->block_no);
 
-  if (buf->flags & BUF_DIRTY) {
+  if (req->type == BUF_REQUEST_WRITE) {
     // WRITING
     ide_wait(0);
   
     inb(ide_dma_base + 0x2);
     outb(ide_dma_base + 0x0, 0);
-
-    buf->flags &= ~BUF_DIRTY;
   } else {
     ide_wait(0);
   
     inb(ide_dma_base + 0x2);
     outb(ide_dma_base + 0x0, 0);
-
-    buf->flags |= BUF_VALID;
   }
   
   k_list_remove(link);
@@ -322,11 +318,11 @@ ide_irq_task(int irq, void *arg)
   arch_interrupt_unmask(irq);
 
   if (!k_list_is_empty(&ide_queue)) {
-    next_buf = KLIST_CONTAINER(ide_queue.next, struct Buf, queue_link);
-    ide_start_transfer(next_buf);
+    next_req = KLIST_CONTAINER(ide_queue.next, struct BufRequest, queue_link);
+    ide_start_transfer(next_req);
   }
 
-  k_condvar_broadcast(&buf->wait_cond);
+  buf_request_wakeup(req);
 
   k_mutex_unlock(&ide_mutex);
 }

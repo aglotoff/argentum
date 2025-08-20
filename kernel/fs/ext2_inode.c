@@ -136,9 +136,7 @@ ext2_inode_write(struct Thread *thread, struct Inode *inode)
   raw->blocks = extra->blocks;
   memmove(raw->block, extra->block, sizeof(extra->block));
 
-  buf->flags |= BUF_DIRTY;
-
-  buf_release(buf);
+  buf_write(buf);
 
   return 0;
 }
@@ -226,10 +224,11 @@ ext2_inode_get_block(struct Inode *inode, uint32_t n, int alloc)
       extra->blocks += blocks_inc;
       inode->flags |= FS_INODE_DIRTY;
 
-      buf->flags |= BUF_DIRTY;
+      buf_write(buf);
+    } else {
+      buf_release(buf);
     }
-    buf_release(buf);
-  
+    
     lvl_idx_shift -= shift_per_lvl;
   }
 
@@ -258,8 +257,7 @@ ext2_trunc_indirect(struct Inode *inode, uint32_t *id_store, int lvl, size_t to)
     for (i = to; i < (inc << shift_per_lvl); i = ROUND_DOWN(i + inc, inc))
       ext2_trunc_indirect(inode, &ids[i / inc], lvl - 1, i % inc);
 
-    buf->flags |= BUF_DIRTY;
-    buf_release(buf);
+    buf_write(buf);
   }
 
   if (to == 0) {
@@ -376,9 +374,8 @@ ext2_write(struct Thread *thread, struct Inode *inode, uintptr_t va, size_t nbyt
     }
 
     vm_space_copy_in(thread, &buf->data[off % sb->block_size], va, n);
-    buf->flags |= BUF_DIRTY;
-
-    buf_release(buf);
+  
+    buf_write(buf);
   }
 
   return total;

@@ -9,13 +9,18 @@
 
 struct KObjectPool *buf_pool;
 
-static void buf_request(struct Buf *);
+static void buf_request(struct Buf *, int);
 
-// Maximum size of the buffer cache
 #define BUF_CACHE_MAX_SIZE   1024
 
+enum {
+  BUF_FLAGS_VALID = (1 << 0),
+  BUF_FLAGS_DIRTY = (1 << 1),
+  BUF_FLAGS_ERROR = (1 << 2),
+};
+
 static struct {
-  size_t          size;
+  size_t           size;
   struct KListLink head;
   struct KSpinLock lock;
 } buf_cache;
@@ -24,14 +29,11 @@ static void
 buf_ctor(void *ptr, size_t)
 {
   struct Buf *buf = (struct Buf *) ptr;
-
-  k_condvar_create(&buf->wait_cond);
-  k_mutex_init(&buf->mutex, "buf");
+  k_mutex_init(&buf->_mutex, "buf");
 }
 
-/**
- * Initialize the buffer cache.
- */
+// no buf_dtor since buffers stay in cache forever (for now)
+
 void
 buf_init(void)
 {
@@ -48,47 +50,63 @@ buf_init(void)
 }
 
 static uint8_t *
-buf_alloc_data(size_t block_size)
+buf_alloc_page_data(size_t block_size)
 {
-  unsigned long page_order;
+  unsigned page_order;
   struct Page *page;
 
-  if (block_size < PAGE_SIZE)
-    return (uint8_t *) k_malloc(block_size);
-
-  for (page_order = 0; (PAGE_SIZE << page_order) < block_size; page_order++)
-    ;
+  page_order = page_estimate_order(block_size);
 
   if ((page = page_alloc_block(page_order, 0, PAGE_TAG_BUF)) == NULL)
     return NULL;
 
-  page->ref_count++;
+  page_inc_ref(page);
+
   return (uint8_t *) page2kva(page);
+}
+
+static uint8_t *
+buf_alloc_data(size_t block_size)
+{
+  if (block_size < PAGE_SIZE)
+    return (uint8_t *) k_malloc(block_size);
+  return buf_alloc_page_data(block_size);
+}
+
+static void
+buf_free_page_data(void *data, size_t block_size)
+{
+  unsigned page_order;
+  struct Page *page;
+
+  page_order = page_estimate_order(block_size);
+
+  page = kva2page(data);
+  page_assert(page, page_order, PAGE_TAG_BUF);
+
+  page_dec_ref(page, page_order);
 }
 
 static void
 buf_free_data(void *data, size_t block_size)
 {
-  unsigned long page_order;
-  struct Page *page;
-
-  if (block_size < PAGE_SIZE) {
+  if (block_size < PAGE_SIZE)
     k_free(data);
-    return;
-  }
+  else
+    buf_free_page_data(data, block_size);
+}
 
-  for (page_order = 0; (PAGE_SIZE << page_order) < block_size; page_order++)
-    ;
+static void
+buf_cache_insert(struct Buf *buf)
+{
+  if (!k_list_is_null(&buf->_cache_link))
+    k_list_remove(&buf->_cache_link);
 
-  page = kva2page(data);
-  page_assert(page, page_order, PAGE_TAG_BUF);
-
-  page->ref_count--;
-  page_free_block(page, page_order);
+  k_list_add_front(&buf_cache.head, &buf->_cache_link);
 }
 
 static struct Buf *
-buf_alloc(size_t block_size)
+buf_alloc(unsigned block_no, size_t block_size, dev_t dev)
 {
   struct Buf *buf;
 
@@ -103,213 +121,216 @@ buf_alloc(size_t block_size)
     return NULL;
   }
 
-  buf->block_no   = 0;
-  buf->dev        = 0;
-  buf->flags      = 0;
-  buf->ref_count  = 0;
+  buf->_ref_count = 0;
+  buf->block_no   = block_no;
+  buf->dev        = dev;
+  buf->_flags     = 0;
   buf->block_size = block_size;
-  buf->cache_link.prev = NULL;
-  buf->cache_link.next = NULL;
-  buf->queue_link.prev = NULL;
-  buf->queue_link.next = NULL;
+  k_list_null(&buf->_cache_link);
+  
+  buf_cache_insert(buf);
 
-  k_list_add_front(&buf_cache.head, &buf->cache_link);
+  return buf;
+}
+
+static struct Buf *
+buf_cache_grow(unsigned block_no, size_t block_size, dev_t dev)
+{
+  struct Buf *buf;
+
+  if (buf_cache.size >= BUF_CACHE_MAX_SIZE)
+    return NULL;
+
+  if ((buf = buf_alloc(block_no, block_size, dev)) == NULL)
+    return NULL;
+
+  buf_cache_insert(buf);
   buf_cache.size++;
 
   return buf;
 }
 
-// Scan the cache for a buffer with the given block number and device.
 static struct Buf *
-buf_get(unsigned block_no, size_t block_size, dev_t dev)
+buf_cache_lookup(unsigned block_no, size_t block_size, dev_t dev, struct Buf **unused_store)
 {
   struct KListLink *l;
-  struct Buf *b, *unused = NULL;
-
-  k_spinlock_acquire(&buf_cache.lock);
+  struct Buf *b, *unused;
 
   // TODO: use a hash table for faster lookups
   KLIST_FOREACH(&buf_cache.head, l) {
-    b = KLIST_CONTAINER(l, struct Buf, cache_link);
+    b = KLIST_CONTAINER(l, struct Buf, _cache_link);
 
     if ((b->block_no == block_no) &&
         (b->dev == dev) &&
-        (b->block_size == block_size)) {
-      b->ref_count++;
-
-      k_spinlock_release(&buf_cache.lock);
-
+        (b->block_size == block_size))
       return b;
-    }
 
-    // Remember the least recently used free buffer.
-    if (b->ref_count == 0)
+    if (b->_ref_count == 0)
       unused = b;
   }
 
-  // Grow the buffer cache. If the maximum cache size is already reached, try
-  // to reuse a buffer that held a different block.
-  if ((buf_cache.size >= BUF_CACHE_MAX_SIZE) ||
-      ((b = buf_alloc(block_size)) == NULL))
-    b = unused;
+  if (unused_store)
+    *unused_store = unused;
 
-  if (b == NULL) {
-    // Out of free blocks.
-    k_spinlock_release(&buf_cache.lock);
-    return NULL;
-  }
+  return NULL;
+}
 
-  // TODO: realloc
+static struct Buf *
+buf_reuse(struct Buf *b, unsigned block_no, size_t block_size, dev_t dev)
+{
   if (b->block_size != block_size) {
+    uint8_t *data;
+
+    if ((data = buf_alloc_data(block_size)) == NULL)
+      return NULL;
+
     buf_free_data(b->data, b->block_size);
 
-    if ((b->data = buf_alloc_data(block_size)) == NULL) {
-      k_list_remove(&b->cache_link);
-      k_object_pool_put(buf_pool, b);
-
-      k_spinlock_release(&buf_cache.lock);
-
-      return NULL;
-    }
-
+    b->data = data;
     b->block_size = block_size;
   }
 
-  b->block_size = block_size;
   b->block_no   = block_no;
   b->dev        = dev;
-  b->ref_count  = 1;
-  b->flags      = 0;
+  b->_flags      = 0;
+
+  return b;
+}
+
+static struct Buf *
+buf_cache_get_locked(unsigned block_no, size_t block_size, dev_t dev)
+{
+  struct Buf *b, *unused = NULL;
+
+  if ((b = buf_cache_lookup(block_no, block_size, dev, &unused)) != NULL)
+    return b;
+
+  if ((b = buf_cache_grow(block_no, block_size, dev)) != NULL)
+    return b;
+
+  if (unused == NULL)
+    return NULL;
+
+  return buf_reuse(unused, block_no, block_size, dev);
+}
+
+static struct Buf *
+buf_cache_get(unsigned block_no, size_t block_size, dev_t dev)
+{
+  struct Buf *b;
+
+  k_spinlock_acquire(&buf_cache.lock);
+
+  if ((b = buf_cache_get_locked(block_no, block_size, dev)) != NULL)
+    b->_ref_count++;
 
   k_spinlock_release(&buf_cache.lock);
 
   return b;
 }
 
-/**
- * Get a buffer for the given filesystem block from the cache.
- * 
- * @param block_no The filesystem block number.
- * @param dev      ID of the device the block belongs to.
- * @return A pointer to the locked Buf structure, or NULL if unable to allocate
- *         a block.
- */
+static void
+buf_assert(struct Buf *buf)
+{
+  unsigned page_order; 
+  struct Page *page;
+
+  if (buf->block_size < PAGE_SIZE)
+    return;
+
+  page_order = page_estimate_order(buf->block_size);
+  page = kva2page(buf->data);
+
+  page_assert(page, page_order, PAGE_TAG_BUF);
+}
+
 struct Buf *
 buf_read(unsigned block_no, size_t block_size, dev_t dev)
 {
   struct Buf *buf;
   int r;
 
-  if (block_no == (unsigned) -1)
-    k_panic("bad block_no");
+  k_assert(block_no != (unsigned) -1);
 
-  if ((buf = buf_get(block_no, block_size, dev)) == NULL)
+  if ((buf = buf_cache_get(block_no, block_size, dev)) == NULL)
     return NULL;
 
-  if ((r = k_mutex_lock(&buf->mutex)) < 0) {
-    k_panic("TODO %d", r);
-    return NULL;
-  }
+  r = k_mutex_lock(&buf->_mutex);
+  k_assert(r == 0);
 
-  if (block_size >= PAGE_SIZE) {
-    unsigned page_order; 
-    struct Page *page;
-
-    for (page_order = 0; (PAGE_SIZE << page_order) < block_size; page_order++)
-      ;
-
-    page = kva2page(buf->data);
-    page_assert(page, page_order, PAGE_TAG_BUF);
-  }
+  buf_assert(buf);
 
   // If needed, read the block contents.
-  // TODO: check for I/O errors
-  if (!(buf->flags & BUF_VALID))
-    buf_request(buf);
-
-  k_assert(buf->flags & BUF_VALID);
+  if (!(buf->_flags & BUF_FLAGS_VALID))
+    buf_request(buf, BUF_REQUEST_READ);
+  
+  // TODO: check error
+  buf->_flags |= BUF_FLAGS_VALID;
 
   return buf;
 }
 
-/**
- * Write the buffer data to the disk. This function must be called before
- * releasing the buffer, if its data has changed. The caller must hold
- * 'buf->mutex'.
- * 
- * @param buf Pointer to the Buf structure to be written.
- */
 void
 buf_write(struct Buf *buf)
 {
-  if (!k_mutex_holding(&buf->mutex))
-    k_panic("not holding buf->mutex");
-
-  if (buf->block_size >= PAGE_SIZE) {
-    unsigned page_order; 
-    struct Page *page;
-
-    for (page_order = 0; (PAGE_SIZE << page_order) < buf->block_size; page_order++)
-      ;
-
-    page = kva2page(buf->data);
-    page_assert(page, page_order, PAGE_TAG_BUF);
-  }
-
-  // TODO: check for I/O errors
-  buf_request(buf);
+  buf->_flags |= BUF_FLAGS_DIRTY;
+  buf_release(buf);
 }
 
-/**
- * Release the buffer.
- * 
- * @param buf Pointer to the Buf structure to be released.
- */
-void 
-buf_release(struct Buf *buf)
-{ 
-  if (!(buf->flags & BUF_VALID))
-    k_panic("buffer not valid");
-
-  if (buf->flags & BUF_DIRTY) {
-    buf_write(buf);
-
-    if (buf->flags & BUF_DIRTY) {
-      k_panic("buffer still dirty");
-    }
-  }
-  
-  k_mutex_unlock(&buf->mutex);
-
+static void
+buf_cache_put(struct Buf *buf)
+{
   k_spinlock_acquire(&buf_cache.lock);
 
-  if (--buf->ref_count == 0) {
-    // Return the buffer to the cache.
-    k_list_remove(&buf->cache_link);
-    k_list_add_front(&buf_cache.head, &buf->cache_link);
-  }
+  if (--buf->_ref_count == 0)
+    buf_cache_insert(buf);
 
   k_spinlock_release(&buf_cache.lock);
 }
 
-/**
- * Add buffer to the request queue and put the current process to sleep until
- * the operation is completed.
- * 
- * @param buf The buffer to be processed.
- */
+void 
+buf_release(struct Buf *buf)
+{ 
+  k_assert(buf->_flags & BUF_FLAGS_VALID);
+
+  if (buf->_flags & BUF_FLAGS_DIRTY) {
+    k_assert(k_mutex_holding(&buf->_mutex));
+
+    buf_assert(buf);
+
+    buf_request(buf, BUF_REQUEST_WRITE);
+
+    // TODO: check for I/O errors
+    buf->_flags &= ~BUF_FLAGS_DIRTY;
+  }
+
+  k_mutex_unlock(&buf->_mutex);
+
+  buf_cache_put(buf);
+}
+
 static void
-buf_request(struct Buf *buf)
+buf_request_init(struct BufRequest *req, struct Buf *buf, int type)
+{
+  req->buf = buf;
+  req->type = type;
+  k_list_null(&req->queue_link);
+  k_condvar_create(&req->_wait_cond);
+}
+
+static void
+buf_request(struct Buf *buf, int type)
 {
   struct BlockDev *dev;
+  struct BufRequest req;
 
-  if (!k_mutex_holding(&buf->mutex))
-    k_panic("buf not locked");
-  if ((buf->flags & (BUF_DIRTY | BUF_VALID)) == BUF_VALID)
-    k_panic("nothing to do");
+  k_assert(k_mutex_holding(&buf->_mutex));
+  k_assert((buf->_flags & (BUF_FLAGS_DIRTY | BUF_FLAGS_VALID)) != BUF_FLAGS_VALID);
 
   if ((dev = dev_lookup_block(buf->dev)) == NULL)
     k_panic("no block device %d found", buf->dev);
 
-  dev->request(buf);
+  buf_request_init(&req, buf, type);
+
+  dev->request(&req);
 }

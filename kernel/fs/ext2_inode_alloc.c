@@ -56,16 +56,15 @@ ext2_inode_init(struct Ext2SuperblockData *sb, dev_t dev, uint32_t table, uint32
 
     block_buf = buf_read(raw->block[0], sb->block_size, dev);
     memmove(block_buf->data, &rdev, sizeof rdev);
-    block_buf->flags |= BUF_DIRTY;
-    buf_release(block_buf);
+  
+    buf_write(block_buf);
 
     raw->size = sizeof rdev;
   
     raw->blocks += sb->block_size / 512;
   }
 
-  buf->flags |= BUF_DIRTY;
-  buf_release(buf);
+  buf_write(buf);
 
   return 0;
 }
@@ -124,8 +123,7 @@ ext2_inode_alloc(struct Ext2SuperblockData *sb, mode_t mode, dev_t rdev, dev_t d
 
     inum += 1 + (g + gi) * sb->inodes_per_group;
 
-    buf->flags |= BUF_DIRTY;
-    buf_release(buf);
+    buf_write(buf);
 
     ext2_inode_init(sb, dev, table, inum, mode, rdev);
 
@@ -152,8 +150,7 @@ ext2_inode_alloc(struct Ext2SuperblockData *sb, mode_t mode, dev_t rdev, dev_t d
 
         table = gd->inode_table;
 
-        buf->flags |= BUF_DIRTY;
-        buf_release(buf);
+        buf_write(buf);
 
         inum += 1 + (g + gi) * sb->inodes_per_group;
 
@@ -210,9 +207,8 @@ ext2_inode_free(struct Ext2SuperblockData *sb, dev_t dev, uint32_t ino)
   ext2_bitmap_free(sb, gd->inode_bitmap, dev, (ino - 1) % sb->inodes_per_group);
 
   gd->free_inodes_count++;
-  buf->flags |= BUF_DIRTY;
 
-  buf_release(buf);
+  buf_write(buf);
 
   if (k_mutex_lock(&sb->mutex) < 0)
     k_panic("TODO");

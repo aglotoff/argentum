@@ -37,7 +37,7 @@ enum {
 };
 
 static void sd_irq_task(int, void *);
-static void sd_start_transfer(struct SD *, struct Buf *);
+static void sd_start_transfer(struct SD *, struct BufRequest *);
 
 int
 sd_init(struct SD *sd, struct SDOps *ops, void *ctx, int irq)
@@ -83,43 +83,43 @@ sd_init(struct SD *sd, struct SDOps *ops, void *ctx, int irq)
 }
 
 void
-sd_request(struct SD *sd, struct Buf *buf)
+sd_request(struct SD *sd, struct BufRequest *req)
 {
+  struct Buf *buf = req->buf;
+
   if (buf->block_size % SD_BLOCKLEN != 0)
     k_panic("block size must be a multiple of %u", SD_BLOCKLEN);
 
   k_mutex_lock(&sd->mutex);
 
   // Add buffer to the queue.
-  k_list_add_back(&sd->queue, &buf->queue_link);
+  k_list_add_back(&sd->queue, &req->queue_link);
 
   // If the buffer is at the front of the queue, immediately send it to the
   // hardware.
-  if (sd->queue.next == &buf->queue_link)
-    sd_start_transfer(sd, buf);
+  if (sd->queue.next == &req->queue_link)
+    sd_start_transfer(sd, req);
 
-  // Wait for the R/W operation to finish.
-  // TODO: deal with errors!
-  while ((buf->flags & (BUF_DIRTY | BUF_VALID)) != BUF_VALID)
-    k_condvar_wait(&buf->wait_cond, &sd->mutex);
+  buf_request_wait(req, &sd->mutex);
 
   k_mutex_unlock(&sd->mutex);
 }
 
 // Send the data transfer request to the hardware.
 static void
-sd_start_transfer(struct SD *sd, struct Buf *buf)
+sd_start_transfer(struct SD *sd, struct BufRequest *req)
 {
+  struct Buf *buf = req->buf;
   uint32_t cmd, arg;
   size_t nblocks;
 
   k_assert(k_mutex_holding(&sd->mutex));
-  k_assert(buf->queue_link.prev == &sd->queue);
+  k_assert(req->queue_link.prev == &sd->queue);
   k_assert(buf->block_size % SD_BLOCKLEN == 0);
 
   nblocks = buf->block_size / SD_BLOCKLEN;
 
-  if (buf->flags & BUF_DIRTY) {
+  if (req->type == BUF_REQUEST_WRITE) {
     sd->ops->begin_transfer(sd->ctx, buf->block_size, 0);
     cmd = (nblocks > 1) ? CMD_WRITE_MULTIPLE_BLOCK : CMD_WRITE_BLOCK;
   } else {
@@ -140,7 +140,7 @@ sd_irq_task(int irq, void *arg)
 {
   struct SD *sd = (struct SD *) arg;
   struct KListLink *link;
-  struct Buf *buf, *next_buf;
+  struct BufRequest *req, *next_req;
 
   k_mutex_lock(&sd->mutex);
 
@@ -152,36 +152,32 @@ sd_irq_task(int irq, void *arg)
   link = sd->queue.next;
   k_list_remove(link);
 
-  buf = KLIST_CONTAINER(link, struct Buf, queue_link);
+  req = KLIST_CONTAINER(link, struct BufRequest, queue_link);
 
-  k_assert((buf->flags & (BUF_DIRTY | BUF_VALID)) != BUF_VALID);
-  k_assert(buf->block_size % SD_BLOCKLEN == 0);
+  k_assert(req->buf->block_size % SD_BLOCKLEN == 0);
 
   // Transfer the data and update the corresponding buffer flags.
-  if (buf->flags & BUF_DIRTY) {
-    if (sd->ops->send_data(sd->ctx, buf->data, buf->block_size) != 0)
-      k_panic("error writing block %d", buf->block_no);
-    buf->flags &= ~BUF_DIRTY;
+  if (req->type == BUF_REQUEST_WRITE) {
+    if (sd->ops->send_data(sd->ctx, req->buf->data, req->buf->block_size) != 0)
+      k_panic("error writing block %d", req->buf->block_no);
   } else {
-    if (sd->ops->receive_data(sd->ctx, buf->data, buf->block_size) != 0)
-      k_panic("error reading block %d", buf->block_no);
-    buf->flags |= BUF_VALID;
+    if (sd->ops->receive_data(sd->ctx, req->buf->data, req->buf->block_size) != 0)
+      k_panic("error reading block %d", req->buf->block_no);
   }
 
   // Multiple block transfers must be stopped manually by issuing CMD12.
-  if (buf->block_size > SD_BLOCKLEN)
+  if (req->buf->block_size > SD_BLOCKLEN)
     sd->ops->send_cmd(sd->ctx, CMD_STOP_TRANSMISSION, 0, SD_RESPONSE_R1B, NULL);
 
   arch_interrupt_unmask(irq);
 
   // Begin processing the next buffer in the queue.
   if (!k_list_is_empty(&sd->queue)) {
-    next_buf = KLIST_CONTAINER(sd->queue.next, struct Buf, queue_link);
-    sd_start_transfer(sd, next_buf);
+    next_req = KLIST_CONTAINER(sd->queue.next, struct BufRequest, queue_link);
+    sd_start_transfer(sd, next_req);
   }
 
-  // Resume the task waiting for the buf data.
-  k_condvar_broadcast(&buf->wait_cond);
+  buf_request_wakeup(req);
 
   k_mutex_unlock(&sd->mutex);
 }

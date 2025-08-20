@@ -61,9 +61,9 @@ ext2_bitmap_alloc(struct Ext2SuperblockData *sb, uint32_t bstart, size_t blen, d
         continue;
 
       bit_set(bmap, bi);
-      buf->flags |= BUF_DIRTY;
+    
+      buf_write(buf);
 
-      buf_release(buf);
       // TODO: recover from I/O errors
 
       *bstore = b + bi;
@@ -107,9 +107,8 @@ ext2_bitmap_free(struct Ext2SuperblockData *sb, uint32_t bstart, dev_t dev, uint
     k_panic("bit %d %d %d not allocated", bstart, buf->block_no, bit_no);
 
   bit_clear(bmap, bi);
-  buf->flags |= BUF_DIRTY;
 
-  buf_release(buf);
+  buf_write(buf);
   // TODO: recover from I/O errors
 
   return 0;

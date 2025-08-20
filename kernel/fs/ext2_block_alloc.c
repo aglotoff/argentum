@@ -25,9 +25,8 @@ ext2_block_zero(struct Ext2SuperblockData *sb, uint32_t block_id, uint32_t dev)
     k_panic("cannot read block %d", block_id);
 
   memset(buf->data, 0, sb->block_size);
-  buf->flags |= BUF_DIRTY;
 
-  buf_release(buf);
+  buf_write(buf);
   // TODO: recover from I/O errors!
 
   return 0;
@@ -116,9 +115,7 @@ ext2_block_alloc(struct Thread *thread, struct Ext2SuperblockData *sb, dev_t dev
       uint32_t block_id;
 
       if (ext2_block_group_alloc(sb, gd, dev, &block_id) == 0) {
-        buf->flags |= BUF_DIRTY;
-
-        buf_release(buf);
+        buf_write(buf);
         // TODO: recover from I/O errors
 
         block_id += (g + gi) * sb->blocks_per_group;
@@ -173,9 +170,7 @@ ext2_block_free(struct Ext2SuperblockData *sb, dev_t dev, uint32_t bno)
   ext2_bitmap_free(sb, gd->block_bitmap, dev, bno % sb->blocks_per_group);
 
   gd->free_blocks_count++;
-  buf->flags |= BUF_DIRTY;
-
-  buf_release(buf);
+  buf_write(buf);
 
   if (k_mutex_lock(&sb->mutex) < 0)
     k_panic("TODO");

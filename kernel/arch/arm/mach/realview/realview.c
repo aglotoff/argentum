@@ -175,9 +175,9 @@ struct PL180 mmci;
 static struct SD sd;
 
 void
-realview_storage_request(struct Buf *buf)
+realview_storage_request(struct BufRequest *req)
 {
-  sd_request(&sd, buf);
+  sd_request(&sd, req);
 }
 
 struct BlockDev storage_dev = {

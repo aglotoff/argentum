@@ -145,4 +145,29 @@ page_free_one(struct Page *page)
   page_free_block(page, 0);
 }
 
+static inline unsigned
+page_estimate_order(size_t size)
+{
+  unsigned page_order;
+
+  for (page_order = 0; (PAGE_SIZE << page_order) < size; page_order++)
+    ;
+
+  return page_order;
+}
+
+static inline struct Page *
+page_inc_ref(struct Page *page)
+{
+  page->ref_count++;
+  return page;
+}
+
+static inline void
+page_dec_ref(struct Page *page, unsigned page_order)
+{
+  if (--page->ref_count == 0)
+    page_free_block(page, page_order);
+}
+
 #endif  // !__KERNEL_PAGE_H__

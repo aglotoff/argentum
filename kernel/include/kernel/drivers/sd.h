@@ -17,7 +17,7 @@
 #define SD_RESPONSE_R6            7
 #define SD_RESPONSE_R7            8
 
-struct Buf;
+struct BufRequest;
 
 struct SDOps {
   int  (*send_cmd)(void *, uint32_t, uint32_t, int, uint32_t *);
@@ -35,6 +35,6 @@ struct SD {
 };
 
 int  sd_init(struct SD *, struct SDOps *, void *, int);
-void sd_request(struct SD *, struct Buf *);
+void sd_request(struct SD *, struct BufRequest *);
 
 #endif  // !__KERNEL_DRIVERS_SD_H__

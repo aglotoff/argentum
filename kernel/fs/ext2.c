@@ -452,9 +452,7 @@ ext2_sb_sync(struct Ext2SuperblockData *sb, dev_t dev)
   raw->free_blocks_count = sb->free_blocks_count;
   raw->free_inodes_count = sb->free_inodes_count;
 
-  buf->flags |= BUF_DIRTY;
-
-  buf_release(buf);
+  buf_write(buf);
 
   k_mutex_unlock(&sb->mutex);
 }

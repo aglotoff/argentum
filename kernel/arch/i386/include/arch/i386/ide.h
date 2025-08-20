@@ -4,9 +4,9 @@
 
 #include <stdint.h>
 
-struct Buf;
+struct BufRequest;
 
 int  ide_init(uint32_t, uint32_t, uint32_t, uint32_t, uint32_t);
-void ide_request(struct Buf *buf);
+void ide_request(struct BufRequest *);
 
 #endif  // !_ARCH_I386_IDE_H

@@ -3,7 +3,7 @@
 
 #include <sys/types.h>
 
-struct Buf;
+struct BufRequest;
 struct timeval;
 struct Thread;
 
@@ -16,7 +16,7 @@ struct CharDev {
 };
 
 struct BlockDev {
-  void    (*request)(struct Buf *);
+  void    (*request)(struct BufRequest *);
 };
 
 struct CharDev  *dev_lookup_char(dev_t);
