@@ -200,14 +200,14 @@ int
 fs_path_set_cwd(struct PathNode *node)
 {
   struct Process *current = process_current();
-  struct FSMessage msg;
+  struct IpcMessage msg;
   ino_t ino;
   struct Channel *channel;
   int r;
 
   ino = fs_path_ino(node, &channel);
 
-  msg.type = FS_MSG_CHDIR;
+  msg.type = IPC_MSG_CHDIR;
   msg.u.chdir.ino = ino;
 
   fs_send_recv(channel, &msg);
@@ -231,14 +231,14 @@ fs_path_resolve_symlink(ino_t ino,
                         const char *rest,
                         char **path_store)
 {
-  struct FSMessage msg;  
+  struct IpcMessage msg;  
   char *path;
   ssize_t r;
 
   if ((path = (char *) k_malloc(PATH_MAX)) == NULL)
     return -ENOMEM;
 
-  msg.type = FS_MSG_READLINK;
+  msg.type = IPC_MSG_READLINK;
   msg.u.readlink.ino   = ino;
   msg.u.readlink.va    = (uintptr_t) path;
   msg.u.readlink.nbyte = PATH_MAX - 1;
@@ -293,7 +293,7 @@ fs_path_node_resolve_at(struct PathNode *start,
   prev = NULL;
 
   while ((r = fs_path_next(p, name_buf, (char **) &p)) > 0) {
-    struct FSMessage msg;
+    struct IpcMessage msg;
     struct stat stat;
     ino_t ino;
     struct Channel *channel;
@@ -343,7 +343,7 @@ fs_path_node_resolve_at(struct PathNode *start,
 
     ino = fs_path_ino(next, &channel);
 
-    msg.type = FS_MSG_STAT;
+    msg.type = IPC_MSG_STAT;
     msg.u.stat.ino = ino;
     msg.u.stat.buf = &stat;
 
@@ -448,7 +448,7 @@ fs_path_node_lookup(struct PathNode *parent,
                     int flags,
                     struct PathNode **child_store)
 {
-  struct FSMessage msg;
+  struct IpcMessage msg;
   struct PathNode *child;
   int r = 0;
   
@@ -463,7 +463,7 @@ fs_path_node_lookup(struct PathNode *parent,
 
     parent_ino = fs_path_ino(parent, &channel);
 
-    msg.type = FS_MSG_LOOKUP;
+    msg.type = IPC_MSG_LOOKUP;
     msg.u.lookup.dir_ino = parent_ino;
     msg.u.lookup.name    = name;
     msg.u.lookup.flags   = flags;
@@ -575,7 +575,7 @@ fs_init(void)
 
   channel->flags        = 0;
   channel->type         = CHANNEL_TYPE_FILE;
-  channel->u.file.node  = NULL;
+  channel->node         = NULL;
   channel->u.file.inode = NULL;
   channel->u.file.rdev  = -1;
   channel->ref_count    = 1;
@@ -652,7 +652,7 @@ fs_path_mount(struct PathNode *node, ino_t ino, struct FS *fs)
 
   channel->flags        = 0;
   channel->type         = CHANNEL_TYPE_FILE;
-  channel->u.file.node  = NULL;
+  channel->node         = NULL;
   channel->u.file.inode = NULL;
   channel->u.file.fs    = fs;
   channel->u.file.rdev  = -1;

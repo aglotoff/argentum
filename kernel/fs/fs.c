@@ -20,7 +20,7 @@
 int
 fs_access(const char *path, int amode)
 {
-  struct FSMessage msg;
+  struct IpcMessage msg;
   struct PathNode *node;
   ino_t ino;
   struct Channel *channel;
@@ -33,7 +33,7 @@ fs_access(const char *path, int amode)
 
   ino = fs_path_ino(node, &channel);
 
-  msg.type = FS_MSG_ACCESS;
+  msg.type = IPC_MSG_ACCESS;
   msg.u.access.ino   = ino;
   msg.u.access.amode = amode;
 
@@ -65,7 +65,7 @@ fs_chdir(const char *path)
 int
 fs_chmod(const char *path, mode_t mode)
 {
-  struct FSMessage msg;
+  struct IpcMessage msg;
   struct PathNode *node;
   ino_t ino;
   struct Channel *channel;
@@ -78,7 +78,7 @@ fs_chmod(const char *path, mode_t mode)
 
   ino = fs_path_ino(node, &channel);
 
-  msg.type = FS_MSG_CHMOD;
+  msg.type = IPC_MSG_CHMOD;
   msg.u.chmod.ino  = ino;
   msg.u.chmod.mode = mode;
 
@@ -92,7 +92,7 @@ fs_chmod(const char *path, mode_t mode)
 int
 fs_chown(const char *path, uid_t uid, gid_t gid)
 {
-  struct FSMessage msg;
+  struct IpcMessage msg;
   struct PathNode *node;
   ino_t ino;
   struct Channel *channel;
@@ -105,7 +105,7 @@ fs_chown(const char *path, uid_t uid, gid_t gid)
 
   ino = fs_path_ino(node, &channel);
 
-  msg.type = FS_MSG_CHOWN;
+  msg.type = IPC_MSG_CHOWN;
   msg.u.chown.ino = ino;
   msg.u.chown.uid = uid;
   msg.u.chown.gid = gid;
@@ -120,7 +120,7 @@ fs_chown(const char *path, uid_t uid, gid_t gid)
 int
 fs_create(const char *path, mode_t mode, dev_t dev, struct PathNode **istore)
 {
-  struct FSMessage msg;
+  struct IpcMessage msg;
   struct PathNode *dir;
   ino_t ino, dir_ino;
   struct Channel *chan;
@@ -135,7 +135,7 @@ fs_create(const char *path, mode_t mode, dev_t dev, struct PathNode **istore)
 
   dir_ino = fs_path_ino(dir, &chan);
 
-  msg.type = FS_MSG_CREATE;
+  msg.type = IPC_MSG_CREATE;
   msg.u.create.dir_ino = dir_ino;
   msg.u.create.name    = name;
   msg.u.create.mode    = mode;
@@ -172,7 +172,7 @@ fs_create(const char *path, mode_t mode, dev_t dev, struct PathNode **istore)
 int
 fs_link(char *path1, char *path2)
 {
-  struct FSMessage msg;
+  struct IpcMessage msg;
   struct PathNode *dirp, *pp;
   ino_t ino, parent_ino;
   struct Channel *channel, *parent_channel;
@@ -197,7 +197,7 @@ fs_link(char *path1, char *path2)
 
   k_assert(channel == parent_channel);
 
-  msg.type = FS_MSG_LINK;
+  msg.type = IPC_MSG_LINK;
   msg.u.link.dir_ino = parent_ino;
   msg.u.link.name    = name;
   msg.u.link.ino     = ino;
@@ -217,7 +217,7 @@ out1:
 ssize_t
 fs_readlink(const char *path, uintptr_t va, size_t bufsize)
 {
-  struct FSMessage msg;  
+  struct IpcMessage msg;  
   struct PathNode *node;
   ino_t ino;
   struct Channel *channel;
@@ -230,7 +230,7 @@ fs_readlink(const char *path, uintptr_t va, size_t bufsize)
 
   ino = fs_path_ino(node, &channel);
 
-  msg.type = FS_MSG_READLINK;
+  msg.type = IPC_MSG_READLINK;
   msg.u.readlink.ino   = ino;
   msg.u.readlink.va    = va;
   msg.u.readlink.nbyte = bufsize;
@@ -248,7 +248,7 @@ fs_rename(char *old, char *new)
   struct PathNode *old_dir, *new_dir, *old_node, *new_node;
   ino_t ino, parent_ino;
   struct Channel *channel, *parent_channel;
-  struct FSMessage msg;
+  struct IpcMessage msg;
   char old_name[NAME_MAX + 1];
   char new_name[NAME_MAX + 1];
   int r;
@@ -280,7 +280,7 @@ fs_rename(char *old, char *new)
 
     k_assert(parent_channel == channel);
 
-    msg.type = FS_MSG_UNLINK;
+    msg.type = IPC_MSG_UNLINK;
     msg.u.unlink.dir_ino = parent_ino;
     msg.u.unlink.ino     = ino;
     msg.u.unlink.name    = new_name;
@@ -304,7 +304,7 @@ fs_rename(char *old, char *new)
 
   k_assert(parent_channel == channel);
 
-  msg.type = FS_MSG_LINK;
+  msg.type = IPC_MSG_LINK;
   msg.u.link.dir_ino = parent_ino;
   msg.u.link.name    = new_name;
   msg.u.link.ino     = ino;
@@ -320,7 +320,7 @@ fs_rename(char *old, char *new)
 
   k_assert(parent_channel == channel);
     
-  msg.type = FS_MSG_UNLINK;
+  msg.type = IPC_MSG_UNLINK;
   msg.u.unlink.dir_ino = parent_ino;
   msg.u.unlink.ino     = ino;
   msg.u.unlink.name    = old_name;
@@ -348,7 +348,7 @@ out1:
 int
 fs_rmdir(const char *path)
 {
-  struct FSMessage msg;
+  struct IpcMessage msg;
   struct PathNode *dir, *pp;
   ino_t ino, parent_ino;
   struct Channel *channel, *parent_channel;
@@ -373,7 +373,7 @@ fs_rmdir(const char *path)
 
   k_assert(channel == parent_channel);
 
-  msg.type = FS_MSG_RMDIR;
+  msg.type = IPC_MSG_RMDIR;
   msg.u.rmdir.dir_ino = parent_ino;
   msg.u.rmdir.ino     = ino;
   msg.u.rmdir.name    = pp->name;
@@ -396,7 +396,7 @@ fs_rmdir(const char *path)
 int
 fs_symlink(const char *path, const char *link_path)
 {
-  struct FSMessage msg;
+  struct IpcMessage msg;
   struct PathNode *dir;
   ino_t ino, dir_ino;
   struct Channel *chan;
@@ -412,7 +412,7 @@ fs_symlink(const char *path, const char *link_path)
 
   dir_ino = fs_path_ino(dir, &chan);
 
-  msg.type = FS_MSG_SYMLINK;
+  msg.type = IPC_MSG_SYMLINK;
   msg.u.symlink.dir_ino   = dir_ino;
   msg.u.symlink.name      = name;
   msg.u.symlink.mode      = mode;
@@ -431,7 +431,7 @@ fs_symlink(const char *path, const char *link_path)
 int
 fs_unlink(const char *path)
 {
-  struct FSMessage msg;
+  struct IpcMessage msg;
   struct PathNode *dir, *pp;
   ino_t ino, parent_ino;
   struct Channel *channel, *parent_channel;
@@ -455,7 +455,7 @@ fs_unlink(const char *path)
 
   // TODO: lock the namespace manager?
 
-  msg.type = FS_MSG_UNLINK;
+  msg.type = IPC_MSG_UNLINK;
   msg.u.unlink.dir_ino = parent_ino;
   msg.u.unlink.ino     = ino;
   msg.u.unlink.name    = pp->name;
@@ -478,7 +478,7 @@ fs_unlink(const char *path)
 int
 fs_utime(const char *path, struct utimbuf *times)
 {
-  struct FSMessage msg;
+  struct IpcMessage msg;
   struct PathNode *node;
   ino_t ino;
   struct Channel *channel;
@@ -491,7 +491,7 @@ fs_utime(const char *path, struct utimbuf *times)
 
   ino = fs_path_ino(node, &channel);
 
-  msg.type = FS_MSG_UTIME;
+  msg.type = IPC_MSG_UTIME;
   msg.u.utime.ino   = ino;
   msg.u.utime.times = times;
 
@@ -512,147 +512,18 @@ fs_close(struct Channel *channel)
   k_assert(channel->type == CHANNEL_TYPE_FILE);
 
   // TODO: add a comment, when node can be NULL?
-  if (channel->u.file.node != NULL) {
-    struct FSMessage msg;
+  if (channel->node != NULL) {
+    struct IpcMessage msg;
 
-    msg.type = FS_MSG_CLOSE;
+    msg.type = IPC_MSG_CLOSE;
 
     fs_send_recv(channel, &msg);
 
-    fs_path_node_unref(channel->u.file.node);
-    channel->u.file.node = NULL;
+    fs_path_node_unref(channel->node);
+    channel->node = NULL;
   }
 
   return 0;
-}
- 
-int
-fs_fchdir(struct Channel *channel)
-{
-  k_assert(channel->ref_count > 0);
-  k_assert(channel->type == CHANNEL_TYPE_FILE);
-
-  return fs_path_set_cwd(channel->u.file.node);
-}
-
-int
-fs_fchmod(struct Channel *channel, mode_t mode)
-{
-  struct FSMessage msg;
-
-  k_assert(channel->ref_count > 0);
-  k_assert(channel->type == CHANNEL_TYPE_FILE);
-
-  msg.type = FS_MSG_FCHMOD;
-  msg.u.fchmod.mode = mode;
-
-  fs_send_recv(channel, &msg);
-
-  return msg.u.fchmod.r;
-}
-
-int
-fs_fchown(struct Channel *channel, uid_t uid, gid_t gid)
-{
-  struct FSMessage msg;
-
-  k_assert(channel->ref_count > 0);
-  k_assert(channel->type == CHANNEL_TYPE_FILE);
-
-  msg.type = FS_MSG_FCHOWN;
-  msg.u.fchown.uid  = uid;
-  msg.u.fchown.gid  = gid;
-
-  fs_send_recv(channel, &msg);
-
-  return msg.u.fchown.r;
-}
-
-int
-fs_fstat(struct Channel *channel, struct stat *buf)
-{
-  struct FSMessage msg;
-
-  k_assert(channel->ref_count > 0);
-  k_assert(channel->type == CHANNEL_TYPE_FILE);
-
-  msg.type = FS_MSG_FSTAT;
-  msg.u.fstat.buf  = buf;
-
-  fs_send_recv(channel, &msg);
-
-  return msg.u.fstat.r;
-}
-
-int
-fs_fsync(struct Channel *channel)
-{
-  struct FSMessage msg;
-
-  k_assert(channel->ref_count > 0);
-  k_assert(channel->type == CHANNEL_TYPE_FILE);
-
-  msg.type = FS_MSG_FSYNC;
-
-  fs_send_recv(channel, &msg);
-
-  return msg.u.fsync.r;
-}
-
-int
-fs_ftruncate(struct Channel *channel, off_t length)
-{
-  struct FSMessage msg;
-
-  k_assert(channel->ref_count > 0);
-  k_assert(channel->type == CHANNEL_TYPE_FILE);
-
-  msg.type = FS_MSG_TRUNC;
-  msg.u.trunc.length = length;
-
-  fs_send_recv(channel, &msg);
-
-  return msg.u.trunc.r;
-}
-
-ssize_t
-fs_getdents(struct Channel *channel, uintptr_t va, size_t nbyte)
-{
-  struct FSMessage msg;
-
-  k_assert(channel->ref_count > 0);
-  k_assert(channel->type == CHANNEL_TYPE_FILE);
-
-  if ((channel->flags & O_ACCMODE) == O_WRONLY)
-    return -EBADF;
-
-  msg.type = FS_MSG_READDIR;
-  msg.u.readdir.va    = va;
-  msg.u.readdir.nbyte = nbyte;
-  
-  fs_send_recv(channel, &msg);
-
-  return msg.u.readdir.r;
-}
-
-int
-fs_ioctl(struct Channel *channel, int request, int arg)
-{
-  struct FSMessage msg;
-  
-  k_assert(channel->ref_count > 0);
-  k_assert(channel->type == CHANNEL_TYPE_FILE);
-
-  if (channel->u.file.rdev >= 0)
-    return dev_ioctl(thread_current(), channel->u.file.rdev, request, arg);
-
-  msg.type = FS_MSG_IOCTL;
-  msg.u.ioctl.request = request;
-  msg.u.ioctl.arg     = arg;
-
-  fs_send_recv(channel, &msg);
-
-  return msg.u.ioctl.r;
 }
 
 #define OPEN_TIME_FLAGS (O_CREAT | O_EXCL | O_DIRECTORY | O_NOFOLLOW | O_NOCTTY | O_TRUNC)
@@ -660,7 +531,7 @@ fs_ioctl(struct Channel *channel, int request, int arg)
 int
 fs_open(const char *path, int oflag, mode_t mode, struct Channel **file_store)
 {
-  struct FSMessage msg;
+  struct IpcMessage msg;
   struct Channel *channel;
   struct Channel *fs_channel;
   struct PathNode *path_node;
@@ -681,7 +552,7 @@ fs_open(const char *path, int oflag, mode_t mode, struct Channel **file_store)
 
   channel->flags        = oflag & ~OPEN_TIME_FLAGS;
   channel->type         = CHANNEL_TYPE_FILE;
-  channel->u.file.node  = NULL;
+  channel->node         = NULL;
   channel->u.file.inode = NULL;
   channel->u.file.fs    = NULL;
   channel->u.file.rdev  = -1;
@@ -720,24 +591,19 @@ fs_open(const char *path, int oflag, mode_t mode, struct Channel **file_store)
 
   channel->u.file.fs = fs_channel->u.file.fs;
 
-  msg.type = FS_MSG_OPEN;
+  msg.type = IPC_MSG_OPEN;
   msg.u.open.ino   = ino;
   msg.u.open.oflag = oflag;
+  msg.u.open.mode  = mode;
 
   fs_send_recv(channel, &msg);
 
   if ((r = msg.u.open.r) < 0)
     goto out2;
 
-  if (channel->u.file.rdev >= 0) {
-    if ((r = dev_open(thread_current(), channel->u.file.rdev, oflag, mode)) < 0)
-      goto out2;
-  }
-
-  // REF(channel->u.file.node)
-  channel->u.file.node = fs_path_node_ref(path_node);
+  // REF(channel->node)
+  channel->node = fs_path_node_ref(path_node);
   
-
   // UNREF(path_node)
   fs_path_node_unref(path_node);
   path_node = NULL;
@@ -753,47 +619,10 @@ out1:
   return r;
 }
 
-ssize_t
-fs_read(struct Channel *channel, uintptr_t va, size_t nbytes)
-{
-  struct FSMessage msg;
-
-  k_assert(channel->ref_count > 0);
-  k_assert(channel->type == CHANNEL_TYPE_FILE);
-
-  if (channel->u.file.rdev >= 0)
-    return dev_read(thread_current(), channel->u.file.rdev, va, nbytes);
-
-  msg.type = FS_MSG_READ;
-  msg.u.read.va    = va;
-  msg.u.read.nbyte = nbytes;
-
-  fs_send_recv(channel, &msg);
-
-  return msg.u.read.r;
-}
-
-off_t
-fs_seek(struct Channel *channel, off_t offset, int whence)
-{
-  struct FSMessage msg;
-
-  k_assert(channel->ref_count > 0);
-  k_assert(channel->type == CHANNEL_TYPE_FILE);
-
-  msg.type = FS_MSG_SEEK;
-  msg.u.seek.offset = offset;
-  msg.u.seek.whence = whence;
-
-  fs_send_recv(channel, &msg);
-
-  return msg.u.seek.r;
-}
-
 int
 fs_select(struct Channel *channel, struct timeval *timeout)
 {
-  struct FSMessage msg;
+  struct IpcMessage msg;
 
   k_assert(channel->ref_count > 0);
   k_assert(channel->type == CHANNEL_TYPE_FILE);
@@ -801,30 +630,10 @@ fs_select(struct Channel *channel, struct timeval *timeout)
   if (channel->u.file.rdev >= 0)
     return dev_select(thread_current(), channel->u.file.rdev, timeout);
 
-  msg.type = FS_MSG_SELECT;
+  msg.type = IPC_MSG_SELECT;
   msg.u.select.timeout = timeout;
 
   fs_send_recv(channel, &msg);
 
   return msg.u.select.r;
-}
-
-ssize_t
-fs_write(struct Channel *channel, uintptr_t va, size_t nbytes)
-{
-  struct FSMessage msg;
-  
-  k_assert(channel->ref_count > 0);
-  k_assert(channel->type == CHANNEL_TYPE_FILE);
-
-  if (channel->u.file.rdev >= 0)
-    return dev_write(thread_current(), channel->u.file.rdev, va, nbytes);
-
-  msg.type = FS_MSG_WRITE;
-  msg.u.write.va    = va;
-  msg.u.write.nbyte = nbytes;
-
-  fs_send_recv(channel, &msg);
-
-  return msg.u.write.r;
 }

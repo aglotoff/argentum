@@ -11,6 +11,7 @@
 #include <kernel/process.h>
 #include <kernel/time.h>
 #include <kernel/vmspace.h>
+#include <kernel/dev.h>
 
 static int
 fs_filldir(void *buf, ino_t ino, const char *name, size_t name_len)
@@ -647,9 +648,12 @@ do_fsync(struct FS *, struct Thread *,
 }
 
 static int
-do_ioctl(struct FS *, struct Thread *,
-         struct Channel *channel, int, int)
+do_ioctl(struct FS *, struct Thread *sender,
+         struct Channel *channel, int request, int arg)
 {
+  if (channel->u.file.rdev >= 0)
+    return dev_ioctl(sender, channel->u.file.rdev, request, arg);
+
   if (channel->u.file.inode == NULL)
     return -EINVAL;
 
@@ -707,7 +711,8 @@ static int
 do_open(struct FS *fs, struct Thread *sender,
         struct Channel *channel, 
         ino_t ino,
-        int oflag)
+        int oflag,
+        mode_t mode)
 {
   int r;
 
@@ -718,6 +723,10 @@ do_open(struct FS *fs, struct Thread *sender,
   fs_inode_unlock(inode);
 
   fs_inode_put(inode);
+
+  if ((r == 0) && (channel->u.file.rdev >= 0)){
+    r = dev_open(sender, channel->u.file.rdev, oflag, mode);
+  }
 
   return r;
 }
@@ -760,6 +769,9 @@ do_read(struct FS *fs, struct Thread *sender,
         size_t nbyte)
 {
   ssize_t r;
+
+  if (channel->u.file.rdev >= 0)
+    return dev_read(sender, channel->u.file.rdev, va, nbyte);
 
   if ((channel->flags & O_ACCMODE) == O_WRONLY)
     return -EBADF;
@@ -970,6 +982,9 @@ do_write(struct FS *fs, struct Thread *sender,
 {
   ssize_t r;
 
+  if (channel->u.file.rdev >= 0)
+    return dev_write(sender, channel->u.file.rdev, va, nbyte);
+
   if (channel->u.file.inode == NULL)
     return -EINVAL;
 
@@ -987,33 +1002,33 @@ void
 fs_service_task(void *arg)
 {
   struct FS *fs = (struct FS *) arg;
-  struct FSMessage *msg;
+  struct IpcMessage *msg;
 
   while (k_mailbox_receive(&fs->mbox, (void *) &msg) >= 0) {
     k_assert(msg != NULL);
 
     switch (msg->type) {
-    case FS_MSG_ACCESS:
+    case IPC_MSG_ACCESS:
       msg->u.access.r = do_access(fs, msg->sender,
                                   msg->u.access.ino,
                                   msg->u.access.amode);
       break;
-    case FS_MSG_CHDIR:
+    case IPC_MSG_CHDIR:
       msg->u.chdir.r = do_chdir(fs, msg->sender,
                                 msg->u.chdir.ino);
       break;
-    case FS_MSG_CHMOD:
+    case IPC_MSG_CHMOD:
       msg->u.chmod.r = do_chmod(fs, msg->sender,
                                 msg->u.chmod.ino,
                                 msg->u.chmod.mode);
       break;
-    case FS_MSG_CHOWN:
+    case IPC_MSG_CHOWN:
       msg->u.chown.r = do_chown(fs, msg->sender,
                                 msg->u.chown.ino,
                                 msg->u.chown.uid,
                                 msg->u.chown.gid);
       break;
-    case FS_MSG_CREATE:
+    case IPC_MSG_CREATE:
       msg->u.create.r = do_create(fs, msg->sender,
                                   msg->u.create.dir_ino,
                                   msg->u.create.name,
@@ -1021,37 +1036,37 @@ fs_service_task(void *arg)
                                   msg->u.create.dev,
                                   msg->u.create.istore);
       break;
-    case FS_MSG_LINK:
+    case IPC_MSG_LINK:
       msg->u.link.r = do_link(fs, msg->sender,
                               msg->u.link.dir_ino,
                               msg->u.link.name,
                               msg->u.link.ino);
       break;
-    case FS_MSG_LOOKUP:
+    case IPC_MSG_LOOKUP:
       msg->u.lookup.r = do_lookup(fs, msg->sender,
                                   msg->u.lookup.dir_ino,
                                   msg->u.lookup.name,
                                   msg->u.lookup.flags,
                                   msg->u.lookup.istore);
       break;
-    case FS_MSG_READLINK:
+    case IPC_MSG_READLINK:
       msg->u.readlink.r = do_readlink(fs, msg->sender,
                                       msg->u.readlink.ino,
                                       msg->u.readlink.va,
                                       msg->u.readlink.nbyte);
       break;
-    case FS_MSG_RMDIR:
+    case IPC_MSG_RMDIR:
       msg->u.rmdir.r = do_rmdir(fs, msg->sender,
                                 msg->u.rmdir.dir_ino,
                                 msg->u.rmdir.ino,
                                 msg->u.rmdir.name);
       break;
-    case FS_MSG_STAT:
+    case IPC_MSG_STAT:
       msg->u.stat.r = do_stat(fs, msg->sender,
                               msg->u.stat.ino,
                               msg->u.stat.buf);
       break;
-    case FS_MSG_SYMLINK:
+    case IPC_MSG_SYMLINK:
       msg->u.symlink.r = do_symlink(fs, msg->sender,
                                     msg->u.symlink.dir_ino,
                                     msg->u.symlink.name,
@@ -1059,83 +1074,84 @@ fs_service_task(void *arg)
                                     msg->u.symlink.path,
                                     msg->u.symlink.istore);
       break;
-    case FS_MSG_UNLINK:
+    case IPC_MSG_UNLINK:
       msg->u.unlink.r = do_unlink(fs, msg->sender,
                                   msg->u.unlink.dir_ino,
                                   msg->u.unlink.ino,
                                   msg->u.unlink.name);
       break;
-    case FS_MSG_UTIME:
+    case IPC_MSG_UTIME:
       msg->u.utime.r = do_utime(fs, msg->sender,
                                 msg->u.utime.ino,
                                 msg->u.utime.times);
       break;
 
-    case FS_MSG_CLOSE:
+    case IPC_MSG_CLOSE:
       msg->u.close.r = do_close(fs, msg->sender,
                                 msg->channel);
       break;
-    case FS_MSG_FCHMOD:
+    case IPC_MSG_FCHMOD:
       msg->u.fchmod.r = do_fchmod(fs, msg->sender,
                                   msg->channel,
                                   msg->u.fchmod.mode);
       break;
-    case FS_MSG_FCHOWN:
+    case IPC_MSG_FCHOWN:
       msg->u.fchown.r = do_fchown(fs, msg->sender,
                                   msg->channel,
                                   msg->u.fchown.uid,
                                   msg->u.fchown.gid);
       break;
-    case FS_MSG_FSTAT:
+    case IPC_MSG_FSTAT:
       msg->u.fstat.r = do_fstat(fs, msg->sender,
                                 msg->channel,
                                 msg->u.fstat.buf);
       break;
-    case FS_MSG_FSYNC:
+    case IPC_MSG_FSYNC:
       msg->u.fsync.r = do_fsync(fs, msg->sender,
                                 msg->channel);
       break;
-    case FS_MSG_IOCTL:
+    case IPC_MSG_IOCTL:
       msg->u.ioctl.r = do_ioctl(fs, msg->sender,
                                 msg->channel,
                                 msg->u.ioctl.request,
                                 msg->u.ioctl.arg);
       break;
-    case FS_MSG_OPEN:
+    case IPC_MSG_OPEN:
       msg->u.open.r = do_open(fs, msg->sender,
                               msg->channel,
                               msg->u.open.ino,
-                              msg->u.open.oflag);
+                              msg->u.open.oflag,
+                              msg->u.open.mode);
       break;
-    case FS_MSG_READ:
+    case IPC_MSG_READ:
       msg->u.read.r = do_read(fs, msg->sender,
                               msg->channel,
                               msg->u.read.va,
                               msg->u.read.nbyte);
       break;
-    case FS_MSG_READDIR:
+    case IPC_MSG_READDIR:
       msg->u.readdir.r = do_readdir(fs, msg->sender,
                                     msg->channel,
                                     msg->u.readdir.va,
                                     msg->u.readdir.nbyte);
       break;
-    case FS_MSG_SEEK:
+    case IPC_MSG_SEEK:
       msg->u.seek.r = do_seek(fs, msg->sender,
                               msg->channel,
                               msg->u.seek.offset,
                               msg->u.seek.whence);
       break;
-    case FS_MSG_SELECT:
+    case IPC_MSG_SELECT:
       msg->u.select.r = do_select(fs, msg->sender,
                                   msg->channel,
                                   msg->u.select.timeout);
       break;
-    case FS_MSG_TRUNC:
+    case IPC_MSG_TRUNC:
       msg->u.trunc.r = do_trunc(fs, msg->sender,
                                 msg->channel,
                                 msg->u.trunc.length);
       break;
-    case FS_MSG_WRITE:
+    case IPC_MSG_WRITE:
       msg->u.write.r = do_write(fs, msg->sender,
                                 msg->channel,
                                 msg->u.write.va,
@@ -1184,13 +1200,16 @@ fs_create_service(char *name, dev_t dev, void *extra, struct FSOps *ops)
 }
 
 int
-fs_send_recv(struct Channel *channel, struct FSMessage *msg)
+fs_send_recv(struct Channel *channel, struct IpcMessage *msg)
 {
-  struct FSMessage *msg_ptr = msg;
+  struct IpcMessage *msg_ptr = msg;
   unsigned long long timeout = seconds2ticks(5);
   int r;
 
   k_assert(channel->type == CHANNEL_TYPE_FILE);
+
+  if (channel->u.file.fs == NULL)
+    return -1;
 
   k_semaphore_create(&msg->sem, 0);
 

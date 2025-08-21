@@ -15,7 +15,6 @@
 #include <kernel/core/mutex.h>
 #include <kernel/core/mailbox.h>
 #include <kernel/core/task.h>
-#include <kernel/core/semaphore.h>
 
 #define INODE_CACHE_SIZE  32
 
@@ -149,18 +148,7 @@ int              fs_utime(const char *, struct utimbuf *);
 
 // File operations
 int              fs_close(struct Channel *);
-off_t            fs_seek(struct Channel *, off_t, int);
-ssize_t          fs_read(struct Channel *, uintptr_t, size_t);
-ssize_t          fs_write(struct Channel *, uintptr_t, size_t);
-ssize_t          fs_getdents(struct Channel *, uintptr_t, size_t);
-int              fs_fstat(struct Channel *, struct stat *);
-int              fs_fchdir(struct Channel *);
-int              fs_fchmod(struct Channel *, mode_t);
-int              fs_fchown(struct Channel *, uid_t, gid_t);
-int              fs_ioctl(struct Channel *, int, int);
 int              fs_select(struct Channel *, struct timeval *);
-int              fs_ftruncate(struct Channel *, off_t);
-int              fs_fsync(struct Channel *);
 
 struct PathNode *fs_path_node_create(const char *, ino_t, struct Channel *, struct PathNode *);
 struct PathNode *fs_path_node_ref(struct PathNode *);
@@ -180,183 +168,8 @@ struct FS *      fs_create_service(char *, dev_t, void *, struct FSOps *);
 void             fs_service_task(void *);
 
 struct Thread;
+struct IpcMessage;
 
-struct FSMessage {
-  struct KSemaphore sem;
-  struct Thread *sender;
-  struct Channel *channel;
-
-  int type;
-  
-  union {
-    struct {
-      ino_t ino;
-      int amode;
-      int r;
-    } access;
-    struct {
-      ino_t ino;
-      int r;
-    } chdir;
-    struct {
-      ino_t ino;
-      mode_t mode;
-      int r;
-    } chmod;
-    struct {
-      ino_t ino;
-      uid_t uid;
-      gid_t gid;
-      int r;
-    } chown;
-    struct {
-      ino_t dir_ino;
-      char *name;
-      mode_t mode;
-      dev_t dev;
-      ino_t *istore;
-      int r;
-    } create;
-    struct {
-      ino_t dir_ino;
-      char *name;
-      ino_t ino;
-      int r;
-    } link;
-    struct {
-      ino_t dir_ino;
-      const char *name;
-      ino_t *istore;
-      int flags;
-      int r;
-    } lookup;
-    struct {
-      ino_t ino;
-      uintptr_t va;
-      size_t nbyte;
-      ssize_t r;
-    } readlink;
-    struct {
-      ino_t dir_ino;
-      ino_t ino;
-      const char *name;
-      int r;
-    } rmdir;
-    struct {
-      ino_t ino;
-      struct stat *buf;
-      int r;
-    } stat;
-    struct {
-      ino_t dir_ino;
-      char *name;
-      mode_t mode;
-      const char *path;
-      ino_t *istore;
-      int r;
-    } symlink;
-    struct {
-      ino_t dir_ino;
-      ino_t ino;
-      const char *name;
-      int r;
-    } unlink;
-    struct {
-      ino_t ino;
-      struct utimbuf *times;
-      int r;
-    } utime;
-
-    struct {
-      int r;
-    } close;
-    struct {
-      mode_t mode;
-      int r;
-    } fchmod;
-    struct {
-      uid_t uid;
-      gid_t gid;
-      int r;
-    } fchown;
-    struct {
-      struct stat *buf;
-      int r;
-    } fstat;
-    struct {
-      int r;
-    } fsync;
-    struct {
-      int request;
-      int arg;
-      int r;
-    } ioctl;
-    struct {
-      ino_t ino;
-      int oflag;
-      int r;
-    } open;
-    struct {
-      uintptr_t va;
-      size_t nbyte;
-      ssize_t r;
-    } read;
-    struct {
-      uintptr_t va;
-      size_t nbyte;
-      ssize_t r;
-    } readdir;
-    struct {
-      off_t offset;
-      int whence;
-      off_t r;
-    } seek;
-    struct {
-      struct timeval *timeout;
-      int r;
-    } select;
-    struct {
-      off_t length;
-      int r;
-    } trunc;
-    struct {
-      uintptr_t va;
-      size_t nbyte;
-      ssize_t r;
-    } write;
-  } u;
-};
-
-int              fs_send_recv(struct Channel *, struct FSMessage *);
-
-enum {
-  FS_MSG_ACCESS,
-  FS_MSG_CHDIR,
-  FS_MSG_CHMOD,
-  FS_MSG_CHOWN,
-  FS_MSG_CREATE,
-  FS_MSG_LINK,
-  FS_MSG_LOOKUP,
-  FS_MSG_STAT,
-  FS_MSG_READLINK,
-  FS_MSG_RMDIR,
-  FS_MSG_SYMLINK,
-  FS_MSG_UNLINK,
-  FS_MSG_UTIME,
-  
-  FS_MSG_CLOSE,
-  FS_MSG_FCHMOD,
-  FS_MSG_FCHOWN,
-  FS_MSG_FSTAT,
-  FS_MSG_FSYNC,
-  FS_MSG_IOCTL,
-  FS_MSG_OPEN,
-  FS_MSG_READ,
-  FS_MSG_READDIR,
-  FS_MSG_SEEK,
-  FS_MSG_SELECT,
-  FS_MSG_TRUNC,
-  FS_MSG_WRITE,
-};
+int              fs_send_recv(struct Channel *, struct IpcMessage *);
 
 #endif  // !__KERNEL_INCLUDE_KERNEL_FS_H__

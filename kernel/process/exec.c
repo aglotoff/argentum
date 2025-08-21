@@ -151,7 +151,7 @@ resolve_file(struct Channel *file, char *p, struct ExecContext *ctx, char **pp)
   struct stat stat;
   int i, r, start;
 
-  if ((r = fs_fstat(file, &stat)) < 0)
+  if ((r = channel_stat(file, &stat)) < 0)
     return r;
 
   if (!S_ISREG(stat.st_mode))
@@ -162,8 +162,8 @@ resolve_file(struct Channel *file, char *p, struct ExecContext *ctx, char **pp)
   if ((stat.st_mode & (S_IXUSR | S_IXGRP | S_IXOTH)) == 0)
     return -EPERM;
 
-  fs_seek(file, 0, SEEK_SET);
-  if ((r = fs_read(file, (uintptr_t) buf, 1024)) < 0) {
+  channel_seek(file, 0, SEEK_SET);
+  if ((r = channel_read(file, (uintptr_t) buf, 1024)) < 0) {
     return r;
   }
 
@@ -256,9 +256,9 @@ load_elf(struct ExecContext *ctx)
   off_t off;
   uintptr_t a;
 
-  fs_seek(ctx->file, 0, SEEK_SET);
+  channel_seek(ctx->file, 0, SEEK_SET);
 
-  if ((r = fs_read(ctx->file, (uintptr_t) &elf, sizeof(elf))) != sizeof(elf)) {
+  if ((r = channel_read(ctx->file, (uintptr_t) &elf, sizeof(elf))) != sizeof(elf)) {
     return -EINVAL;
   }
 
@@ -268,9 +268,9 @@ load_elf(struct ExecContext *ctx)
 
   off = elf.phoff;
   while ((size_t) off < elf.phoff + elf.phnum * sizeof(ph)) {
-    fs_seek(ctx->file, off, SEEK_SET);
+    channel_seek(ctx->file, off, SEEK_SET);
 
-    if ((r = fs_read(ctx->file, (uintptr_t) &ph, sizeof(ph))) != sizeof(ph)) {
+    if ((r = channel_read(ctx->file, (uintptr_t) &ph, sizeof(ph))) != sizeof(ph)) {
       return r;
     }
 

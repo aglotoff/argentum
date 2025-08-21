@@ -292,7 +292,7 @@ tty_process_input(struct Tty *tty, char *buf)
 // Use the device minor number to select the virtual console corresponding to
 // this inode
 static struct Tty *
-tty_from_dev(dev_t dev)
+tty_from_dev(struct Thread *thread, dev_t dev)
 {
   // No need to lock since rdev cannot change once we obtain an inode ref
   // TODO: are we sure?
@@ -304,9 +304,11 @@ tty_from_dev(dev_t dev)
   }
 
   if (major == 0x03) {
-    struct Process *process = process_current();
+    if (thread->process == NULL)
+      return NULL;
 
-    if (((process->ctty >> 8) & 0xFF) == 0x01) {
+    // TODO: lock process?
+    if (((thread->process->ctty >> 8) & 0xFF) == 0x01) {
       int minor = dev & 0xFF;
       return minor < NTTYS ? &ttys[minor] : NULL;
     }
@@ -318,7 +320,7 @@ tty_from_dev(dev_t dev)
 int
 tty_open(struct Thread *thread, dev_t dev, int oflag, mode_t)
 {
-  struct Tty *tty = tty_from_dev(dev);
+  struct Tty *tty = tty_from_dev(thread, dev);
   struct Process *my_process = thread->process;
 
   if (tty == NULL)
@@ -342,7 +344,7 @@ tty_open(struct Thread *thread, dev_t dev, int oflag, mode_t)
 ssize_t
 tty_read(struct Thread *thread, dev_t dev, uintptr_t buf, size_t nbytes)
 {
-  struct Tty *tty = tty_from_dev(dev);
+  struct Tty *tty = tty_from_dev(thread, dev);
   size_t i = 0;
 
   if (tty == NULL)
@@ -401,7 +403,7 @@ tty_read(struct Thread *thread, dev_t dev, uintptr_t buf, size_t nbytes)
 ssize_t
 tty_write(struct Thread *thread, dev_t dev, uintptr_t buf, size_t nbytes)
 {
-  struct Tty *tty = tty_from_dev(dev);
+  struct Tty *tty = tty_from_dev(thread, dev);
   size_t i;
 
   if (tty == NULL)
@@ -433,7 +435,7 @@ tty_write(struct Thread *thread, dev_t dev, uintptr_t buf, size_t nbytes)
 int
 tty_ioctl(struct Thread *thread, dev_t dev, int request, int arg)
 {
-  struct Tty *tty = tty_from_dev(dev);
+  struct Tty *tty = tty_from_dev(thread, dev);
   struct winsize ws;
 
   if (tty == NULL)
@@ -498,7 +500,7 @@ tty_try_select(struct Thread *, struct Tty *tty)
 int
 tty_select(struct Thread *thread, dev_t dev, struct timeval *timeout)
 {
-  struct Tty *tty = tty_from_dev(dev);
+  struct Tty *tty = tty_from_dev(thread, dev);
   int r;
 
   if (tty == NULL)

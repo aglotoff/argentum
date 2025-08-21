@@ -37,7 +37,7 @@ channel_alloc(struct Channel **fstore)
   f->ref_count = 0;
   f->flags     = 0;
   f->u.file.offset    = 0;
-  f->u.file.node      = NULL;
+  f->node             = NULL;
   f->u.file.inode     = NULL;
   f->u.file.rdev      = -1;
   f->u.file.fs   = NULL;
@@ -85,6 +85,26 @@ channel_set_flags(struct Channel *channel, int flags)
 }
 
 void
+channel_send_recv(struct Channel *channel, struct IpcMessage *msg)
+{
+  //k_assert(channel->ref_count > 0);
+
+  switch (channel->type) {
+    case CHANNEL_TYPE_FILE:
+      fs_send_recv(channel, msg);
+      break;
+    case CHANNEL_TYPE_PIPE:
+      pipe_send_recv(channel, msg);
+      break;
+    case CHANNEL_TYPE_SOCKET:
+      net_send_recv(channel, msg);
+      break;
+    default:
+      k_panic("bad channel type %d", channel->type);
+  }
+}
+
+void
 channel_unref(struct Channel *channel)
 {
   int ref_count;
@@ -101,18 +121,15 @@ channel_unref(struct Channel *channel)
   if (ref_count > 0)
     return;
 
-  switch (channel->type) {
-    case CHANNEL_TYPE_FILE:
-      fs_close(channel);
-      break;
-    case CHANNEL_TYPE_PIPE:
-      pipe_close(channel);
-      break;
-    case CHANNEL_TYPE_SOCKET:
-      net_close(channel);
-      break;
-    default:
-      k_panic("bad channel type %d", channel->type);
+  struct IpcMessage msg;
+
+  msg.type = IPC_MSG_CLOSE;
+
+  channel_send_recv(channel, &msg);
+
+  if (channel->node != NULL) {
+    fs_path_node_unref(channel->node);
+    channel->node = NULL;
   }
 
   k_object_pool_put(channel_pool, channel);
@@ -121,153 +138,135 @@ channel_unref(struct Channel *channel)
 off_t
 channel_seek(struct Channel *channel, off_t offset, int whence)
 {
+  struct IpcMessage msg;
+
   if ((whence != SEEK_SET) && (whence != SEEK_CUR) && (whence != SEEK_END))
     return -EINVAL;
 
-  switch (channel->type) {
-  case CHANNEL_TYPE_FILE:
-    return fs_seek(channel, offset, whence);
-  case CHANNEL_TYPE_PIPE:
-  case CHANNEL_TYPE_SOCKET:
-    return -ESPIPE;
-  default:
-    k_panic("bad channel type %d", channel->type);
-    return -EBADF;
-  }
+  msg.type = IPC_MSG_SEEK;
+  msg.u.seek.offset = offset;
+  msg.u.seek.whence = whence;
+
+  channel_send_recv(channel, &msg);
+
+  return msg.u.seek.r;
 }
 
 ssize_t
 channel_read(struct Channel *channel, uintptr_t va, size_t nbytes)
 {
+  struct IpcMessage msg;
+
   if ((channel->flags & O_ACCMODE) == O_WRONLY)
     return -EBADF;
-  
-  switch (channel->type) {
-  case CHANNEL_TYPE_FILE:
-    return fs_read(channel, va, nbytes);
-  case CHANNEL_TYPE_SOCKET:
-    return net_read(channel, va, nbytes);
-  case CHANNEL_TYPE_PIPE:
-    return pipe_read(channel, va, nbytes);
-  default:
-  k_panic("bad channel type %d", channel->type);
-    return -EBADF;
-  }
+
+  msg.type = IPC_MSG_READ;
+  msg.u.read.va    = va;
+  msg.u.read.nbyte = nbytes;
+
+  channel_send_recv(channel, &msg);
+
+  return msg.u.read.r;
 }
 
 ssize_t
 channel_write(struct Channel *channel, uintptr_t va, size_t nbytes)
 {
+  struct IpcMessage msg;
+
   if ((channel->flags & O_ACCMODE) == O_RDONLY)
     return -EBADF;
 
-  switch (channel->type) {
-  case CHANNEL_TYPE_FILE:
-    return fs_write(channel, va, nbytes);
-  case CHANNEL_TYPE_SOCKET:
-    return net_write(channel, va, nbytes);
-  case CHANNEL_TYPE_PIPE:
-    return pipe_write(channel, va, nbytes);
-  default:
-    k_panic("bad channel type %d", channel->type);
-    return -EBADF;
-  }
+  msg.type = IPC_MSG_WRITE;
+  msg.u.write.va    = va;
+  msg.u.write.nbyte = nbytes;
+
+  channel_send_recv(channel, &msg);
+
+  return msg.u.write.r;
 }
 
 ssize_t
 channel_getdents(struct Channel *channel, uintptr_t va, size_t nbytes)
 {
+  struct IpcMessage msg;
+
   if ((channel->flags & O_ACCMODE) == O_WRONLY)
     return -EBADF;
 
-  switch (channel->type) {
-  case CHANNEL_TYPE_FILE:
-    return fs_getdents(channel, va, nbytes);
-  case CHANNEL_TYPE_SOCKET:
-  case CHANNEL_TYPE_PIPE:
-    return -ENOTDIR;
-  default:
-    k_panic("bad channel type %d", channel->type);
-    return -EBADF;
-  }
+  msg.type = IPC_MSG_READDIR;
+  msg.u.readdir.va    = va;
+  msg.u.readdir.nbyte = nbytes;
+  
+  channel_send_recv(channel, &msg);
+
+  return msg.u.readdir.r;
 }
 
 int
 channel_stat(struct Channel *channel, struct stat *buf)
 {
-  switch (channel->type) {
-  case CHANNEL_TYPE_FILE:
-    return fs_fstat(channel, buf);
-  case CHANNEL_TYPE_PIPE:
-    return pipe_stat(channel, buf);
-  case CHANNEL_TYPE_SOCKET:
-    return -EBADF;
-  default:
-    k_panic("bad channel type %d", channel->type);
-    return -EBADF;
-  }
+  struct IpcMessage msg;
+
+  msg.type = IPC_MSG_FSTAT;
+  msg.u.fstat.buf  = buf;
+
+  channel_send_recv(channel, &msg);
+
+  return msg.u.fstat.r;
 }
 
 int
 channel_chdir(struct Channel *channel)
 {
-  switch (channel->type) {
-  case CHANNEL_TYPE_FILE:
-    return fs_fchdir(channel);
-  case CHANNEL_TYPE_SOCKET:
-  case CHANNEL_TYPE_PIPE:
+  if (channel->node == NULL)
     return -ENOTDIR;
-  default:
-    k_panic("bad channel type %d", channel->type);
-    return -EBADF;
-  }
+
+  return fs_path_set_cwd(channel->node);
 }
 
 int
 channel_chmod(struct Channel *channel, mode_t mode)
 {
-  switch (channel->type) {
-  case CHANNEL_TYPE_FILE:
-    return fs_fchmod(channel, mode);
-  case CHANNEL_TYPE_SOCKET:
-  case CHANNEL_TYPE_PIPE:
-    return -EBADF;
-  default:
-    k_panic("bad channel type %d", channel->type);
-    return -EBADF;
-  }
+  struct IpcMessage msg;
+
+  msg.type = IPC_MSG_FCHMOD;
+  msg.u.fchmod.mode = mode;
+
+  channel_send_recv(channel, &msg);
+
+  return msg.u.fchmod.r;
 }
 
 int
 channel_chown(struct Channel *channel, uid_t uid, gid_t gid)
 {
-  switch (channel->type) {
-  case CHANNEL_TYPE_FILE:
-    return fs_fchown(channel, uid, gid);
-  case CHANNEL_TYPE_SOCKET:
-  case CHANNEL_TYPE_PIPE:
-    return -EBADF;
-  default:
-    k_panic("bad channel type %d", channel->type);
-    return -EBADF;
-  }
+  struct IpcMessage msg;
+
+  msg.type = IPC_MSG_FCHOWN;
+  msg.u.fchown.uid  = uid;
+  msg.u.fchown.gid  = gid;
+
+  channel_send_recv(channel, &msg);
+
+  return msg.u.fchown.r;
 }
 
 int
 channel_ioctl(struct Channel *channel, int request, int arg)
 {
-  switch (channel->type) {
-  case CHANNEL_TYPE_FILE:
-    return fs_ioctl(channel, request, arg);
-  case CHANNEL_TYPE_SOCKET:
-  case CHANNEL_TYPE_PIPE:
-    return -EBADF;
-  default:
-    k_panic("bad channel type %d", channel->type);
-    return -EBADF;
-  }
+  struct IpcMessage msg;
+  
+  msg.type = IPC_MSG_IOCTL;
+  msg.u.ioctl.request = request;
+  msg.u.ioctl.arg     = arg;
+
+  channel_send_recv(channel, &msg);
+
+  return msg.u.ioctl.r;
 }
 
+// TODO
 int
 channel_select(struct Channel *channel, struct timeval *timeout)
 {
@@ -287,32 +286,30 @@ channel_select(struct Channel *channel, struct timeval *timeout)
 int
 channel_truncate(struct Channel *channel, off_t length)
 {
+  struct IpcMessage msg;
+
   if ((channel->flags & O_ACCMODE) == O_RDONLY)
     return -EBADF;
 
-  switch (channel->type) {
-  case CHANNEL_TYPE_FILE:
-    return fs_ftruncate(channel, length);
-  case CHANNEL_TYPE_SOCKET:
-  case CHANNEL_TYPE_PIPE:
-    return -EBADF;
-  default:
-    k_panic("bad channel type %d", channel->type);
-    return -EBADF;
-  }
+  k_assert(channel->ref_count > 0);
+  k_assert(channel->type == CHANNEL_TYPE_FILE);
+
+  msg.type = IPC_MSG_TRUNC;
+  msg.u.trunc.length = length;
+
+  channel_send_recv(channel, &msg);
+
+  return msg.u.trunc.r;
 }
 
 int
 channel_sync(struct Channel *channel)
 {
-  switch (channel->type) {
-  case CHANNEL_TYPE_FILE:
-    return fs_fsync(channel);
-  case CHANNEL_TYPE_SOCKET:
-  case CHANNEL_TYPE_PIPE:
-    return -EBADF;
-  default:
-    k_panic("bad channel type %d", channel->type);
-    return -EBADF;
-  }
+  struct IpcMessage msg;
+
+  msg.type = IPC_MSG_FSYNC;
+
+  channel_send_recv(channel, &msg);
+
+  return msg.u.fsync.r;
 }

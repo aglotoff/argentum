@@ -168,7 +168,7 @@ fs_inode_lock(struct Inode *ip)
 
   ip->fs->ops->inode_read(thread_current(), ip);
 
-  //msg.type = FS_MSG_INODE_READ;
+  //msg.type = IPC_MSG_INODE_READ;
   //msg.u.inode_read.inode = ip;
 
   //fs_send_recv(ip->fs, &msg);

@@ -102,6 +102,50 @@ net_init(void)
 }
 
 int
+net_send_recv(struct Channel *channel, struct IpcMessage *msg)
+{
+  switch (msg->type) {
+  case IPC_MSG_CLOSE:
+    msg->u.close.r = net_close(channel);
+    break;
+  case IPC_MSG_SEEK:
+    msg->u.seek.r = -ESPIPE;
+    break;
+  case IPC_MSG_FCHMOD:
+    msg->u.fchmod.r = -EBADF;
+    break;
+  case IPC_MSG_READ:
+    msg->u.read.r = net_read(channel, msg->u.read.va, msg->u.read.nbyte);
+    break;
+  case IPC_MSG_WRITE:
+    msg->u.write.r = net_write(channel, msg->u.write.va, msg->u.write.nbyte);
+    break;
+  case IPC_MSG_READDIR:
+    msg->u.readdir.r = -ENOTDIR;
+    break;
+  case IPC_MSG_FSTAT:
+    msg->u.fstat.r = -EBADF;
+    break;
+  case IPC_MSG_FCHOWN:
+    msg->u.fchown.r = -EBADF;
+    break;
+  case IPC_MSG_IOCTL:
+    msg->u.ioctl.r = -EBADF;
+    break;
+  case IPC_MSG_TRUNC:
+    msg->u.trunc.r = -EBADF;
+    break;
+  case IPC_MSG_FSYNC:
+    msg->u.fsync.r = -EBADF;
+    break;
+  default:
+    return -ENOSYS;
+  }
+
+  return 0;
+}
+
+int
 net_socket(int domain, int type, int protocol, struct Channel **fstore)
 {
   struct Channel *f;

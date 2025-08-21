@@ -581,7 +581,7 @@ vm_space_load_file(void *pgtab, void *va, struct Channel *file, size_t n, off_t 
 
   dst = (uint8_t *) va;
 
-  fs_seek(file, off, SEEK_SET);
+  channel_seek(file, off, SEEK_SET);
 
   while (n != 0) {
     k_spinlock_acquire(&vm_lock);
@@ -600,7 +600,7 @@ vm_space_load_file(void *pgtab, void *va, struct Channel *file, size_t n, off_t 
     offset = (uintptr_t) dst % PAGE_SIZE;
     ncopy  = MIN(PAGE_SIZE - offset, n);
 
-    if ((r = fs_read(file, (uintptr_t) kva + offset, ncopy)) != ncopy)
+    if ((r = channel_read(file, (uintptr_t) kva + offset, ncopy)) != ncopy)
       return r;
 
     dst += ncopy;
