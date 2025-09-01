@@ -9,47 +9,130 @@
 #include <kernel/process.h>
 #include <kernel/vmspace.h>
 #include <kernel/time.h>
+#include <kernel/hash.h>
 
 static struct KObjectPool *pipe_cache;
 
 static const size_t PIPE_BUF_ORDER = 4;
 static const size_t PIPE_BUF_SIZE  = (PAGE_SIZE << PIPE_BUF_ORDER);
 
+struct Pipe {
+  char           *buf;
+  size_t          size;
+  size_t          max_size;
+  int             read_open;
+  int             write_open;
+  size_t          read_pos;
+  size_t          write_pos;
+  struct KMutex   mutex;
+  struct KCondVar read_cond;
+  struct KCondVar write_cond;
+};
+
+struct PipeEndpoint {
+  struct KListLink hash_link;
+  struct Channel  *channel;
+  struct Pipe     *pipe;
+  int              flags;
+};
+
+// Size of PID hash table
+#define NBUCKET   256
+
+// Process ID hash table
+static struct {
+  struct KListLink table[NBUCKET];
+  struct KSpinLock lock;
+} pipe_hash;
+
+static struct PipeEndpoint *
+pipe_get_channel_endpoint(struct Channel *channel)
+{
+  struct KListLink *l;
+
+  k_spinlock_acquire(&pipe_hash.lock);
+
+  HASH_FOREACH_ENTRY(pipe_hash.table, l, (uintptr_t) channel) {
+    struct PipeEndpoint *endpoint;
+    
+    endpoint = KLIST_CONTAINER(l, struct PipeEndpoint, hash_link);
+    if (endpoint->channel == channel) {
+      k_spinlock_release(&pipe_hash.lock);
+      return endpoint;
+    }
+  }
+
+  k_spinlock_release(&pipe_hash.lock);
+
+  k_warn("pipe endpoint not found");
+
+  return NULL;
+}
+
+static void
+pipe_set_channel_endpoint(struct PipeEndpoint *endpoint,
+                          struct Channel *channel,
+                          struct Pipe *pipe,
+                          int flags)
+{
+  endpoint->channel = channel;
+  endpoint->pipe    = pipe;
+  endpoint->flags   = flags;
+  k_list_null(&endpoint->hash_link);
+
+  channel->type = CHANNEL_TYPE_PIPE;
+  channel->ref_count++;
+
+  k_spinlock_acquire(&pipe_hash.lock);
+  HASH_PUT(pipe_hash.table, &endpoint->hash_link, (uintptr_t) channel);
+  k_spinlock_release(&pipe_hash.lock);
+}
+
 void
-pipe_init(void)
+pipe_init_system(void)
 {
   pipe_cache = k_object_pool_create("pipe", sizeof(struct Pipe), 0, NULL, NULL);
   if (pipe_cache == NULL)
     k_panic("cannot allocate pipe cache");
+
+  HASH_INIT(pipe_hash.table);
+  k_spinlock_init(&pipe_hash.lock, "pipe_hash");
 }
 
-int
-pipe_open(struct Channel **read_store, struct Channel **write_store)
+static struct Pipe *
+pipe_alloc(void)
 {
-  struct Pipe *pipe;
   struct Page *page;
-  struct Channel *read, *write;
-  int r;
+  struct Pipe *pipe;
 
-  if ((pipe = (struct Pipe *) k_object_pool_get(pipe_cache)) == NULL) {
-    r = -ENOMEM;
-    goto fail1;
-  }
+  if ((pipe = (struct Pipe *) k_object_pool_get(pipe_cache)) == NULL)
+    return NULL;
 
   if ((page = page_alloc_block(PIPE_BUF_ORDER, 0, PAGE_TAG_PIPE)) == NULL) {
-    r = -ENOMEM;
-    goto fail2;
+    k_object_pool_put(pipe_cache, pipe);
+    return NULL;
   }
-
+  
   pipe->buf = (char *) page2kva(page);
   page->ref_count++;
 
-  if ((r = channel_alloc(&read)) < 0)
-    goto fail3;
+  return pipe;
+}
 
-  if ((r = channel_alloc(&write)) < 0)
-    goto fail4;
+static void
+pipe_free(struct Pipe *pipe)
+{
+  struct Page *page = kva2page(pipe->buf);
 
+  page_assert(page, PIPE_BUF_ORDER, PAGE_TAG_PIPE);
+  page_dec_ref(page, PIPE_BUF_ORDER);
+
+  k_object_pool_put(pipe_cache, pipe);
+}
+
+static void
+pipe_create(struct Pipe *pipe)
+{
   k_mutex_init(&pipe->mutex, "pipe");
   pipe->read_open  = 1;
   pipe->write_open = 1;
@@ -59,30 +142,61 @@ pipe_open(struct Channel **read_store, struct Channel **write_store)
   pipe->max_size   = PIPE_BUF_SIZE;
   k_condvar_create(&pipe->read_cond);
   k_condvar_create(&pipe->write_cond);
+}
 
-  read->type  = CHANNEL_TYPE_PIPE;
-  read->u.pipe = pipe;
-  read->flags = O_RDONLY;
-  read->ref_count++;
+static void
+pipe_destroy(struct Pipe *pipe)
+{
+  k_mutex_fini(&pipe->mutex);
+  k_condvar_destroy(&pipe->read_cond);
+  k_condvar_destroy(&pipe->write_cond);
+}
 
-  write->type  = CHANNEL_TYPE_PIPE;
-  write->u.pipe = pipe;
-  write->flags = O_WRONLY;
-  write->ref_count++;
+int
+pipe_open(struct Channel **read_store, struct Channel **write_store)
+{
+  struct Pipe *pipe;
+  struct PipeEndpoint *read_end, *write_end;
+  struct Channel *read_channel, *write_channel;
+  int r;
 
-  *read_store = read;
-  *write_store = write;
+  if ((pipe = pipe_alloc()) == NULL) {
+    r = -ENOMEM;
+    goto fail1;
+  }
+
+  if ((r = channel_alloc(&read_channel)) < 0)
+    goto fail2;
+  if ((r = channel_alloc(&write_channel)) < 0)
+    goto fail3;
+
+  if ((read_end = k_malloc(sizeof *read_end)) == NULL) {
+    r = -ENOMEM;
+    goto fail4;
+  }
+  if ((write_end = k_malloc(sizeof *write_end)) == NULL) {
+    r = -ENOMEM;
+    goto fail5;
+  }
+
+  pipe_create(pipe);
+
+  pipe_set_channel_endpoint(read_end, read_channel, pipe, O_RDONLY);
+  pipe_set_channel_endpoint(write_end, write_channel, pipe, O_WRONLY);
+
+  *read_store = read_channel;
+  *write_store = write_channel;
 
   return 0;
 
+fail5:
+  k_free(read_end);
 fail4:
-  channel_unref(read);
+  channel_unref(write_channel);
 fail3:
-  page_assert(page, PIPE_BUF_ORDER, PAGE_TAG_PIPE);
-  page->ref_count--;
-  page_free_block(page, PIPE_BUF_ORDER);
+  channel_unref(read_channel);
 fail2:
-  k_object_pool_put(pipe_cache, pipe);
+  pipe_free(pipe);
 fail1:
   return r;
 }
@@ -132,15 +246,12 @@ pipe_send_recv(struct Channel *channel, struct IpcMessage *msg)
 }
 
 int
-pipe_close(struct Channel *file)
+pipe_close(struct Channel *channel)
 {
-  struct Page *page;
-  struct Pipe *pipe = file->u.pipe;
-  int write = (file->flags & O_ACCMODE) != O_RDONLY;
+  struct PipeEndpoint *endpoint = pipe_get_channel_endpoint(channel);
+  struct Pipe *pipe = endpoint->pipe;
+  int write = (endpoint->flags & O_ACCMODE) != O_RDONLY;
   int r;
-
-  if (file->type != CHANNEL_TYPE_PIPE)
-    return -EBADF;
 
   if ((r = k_mutex_lock(&pipe->mutex)) < 0)
     return r;
@@ -157,6 +268,8 @@ pipe_close(struct Channel *file)
     }
   }
 
+  k_list_remove(&endpoint->hash_link);
+
   if (pipe->read_open || pipe->write_open) {
     k_mutex_unlock(&pipe->mutex);
     return 0;
@@ -164,29 +277,18 @@ pipe_close(struct Channel *file)
 
   k_mutex_unlock(&pipe->mutex);
 
-  page = kva2page(pipe->buf);
-  page_assert(page, PIPE_BUF_ORDER, PAGE_TAG_PIPE);
-
-  page->ref_count--;
-  page_free_block(page, PIPE_BUF_ORDER);
-
-  k_mutex_fini(&pipe->mutex);
-  k_condvar_destroy(&pipe->read_cond);
-  k_condvar_destroy(&pipe->write_cond);
-
-  k_object_pool_put(pipe_cache, pipe);
+  pipe_destroy(pipe);
+  pipe_free(pipe);
 
   return 0;
 }
 
 int
-pipe_select(struct Channel *file, struct timeval *timeout)
+pipe_select(struct Channel *channel, struct timeval *timeout)
 {
-  struct Pipe *pipe = file->u.pipe;
+  struct PipeEndpoint *endpoint = pipe_get_channel_endpoint(channel);
+  struct Pipe *pipe = endpoint->pipe;
   int r;
-
-  if (file->type != CHANNEL_TYPE_PIPE)
-    return -EBADF;
 
   if ((r = k_mutex_lock(&pipe->mutex)) < 0)
     return r;
@@ -212,14 +314,12 @@ pipe_select(struct Channel *file, struct timeval *timeout)
 }
 
 ssize_t
-pipe_read(struct Channel *file, uintptr_t va, size_t n)
+pipe_read(struct Channel *channel, uintptr_t va, size_t n)
 {
   size_t i;
-  struct Pipe *pipe = file->u.pipe;
+  struct PipeEndpoint *endpoint = pipe_get_channel_endpoint(channel);
+  struct Pipe *pipe = endpoint->pipe;
   int r;
-
-  if (file->type != CHANNEL_TYPE_PIPE)
-    return -EBADF;
 
   if ((r = k_mutex_lock(&pipe->mutex)) < 0)
     return r;
@@ -269,14 +369,12 @@ pipe_read(struct Channel *file, uintptr_t va, size_t n)
 }
 
 ssize_t
-pipe_write(struct Channel *file, uintptr_t va, size_t n)
+pipe_write(struct Channel *channel, uintptr_t va, size_t n)
 {
   size_t i;
-  struct Pipe *pipe = file->u.pipe;
+  struct PipeEndpoint *endpoint = pipe_get_channel_endpoint(channel);
+  struct Pipe *pipe = endpoint->pipe;
   int r;
-
-  if (file->type != CHANNEL_TYPE_PIPE)
-    return -EBADF;
 
   if ((r = k_mutex_lock(&pipe->mutex)) < 0)
     return r;
@@ -322,14 +420,12 @@ pipe_write(struct Channel *file, uintptr_t va, size_t n)
 }
 
 int
-pipe_stat(struct Channel *file, struct stat *buf)
+pipe_stat(struct Channel *channel, struct stat *buf)
 {
-  struct Pipe *pipe = file->u.pipe;
+  struct PipeEndpoint *endpoint = pipe_get_channel_endpoint(channel);
+  struct Pipe *pipe = endpoint->pipe;
   int r;
 
-  if (file->type != CHANNEL_TYPE_PIPE)
-    return -EBADF;
-  
   if ((r = k_mutex_lock(&pipe->mutex)) < 0)
     return r;
 

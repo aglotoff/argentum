@@ -78,7 +78,7 @@ main(void)
   buf_init();           // Buffer cache
   channel_init();          // File table
   vm_space_init();      // Virtual memory manager
-  pipe_init();          // Pipes
+  pipe_init_system();          // Pipes
   process_init();       // Process table
   //net_init();           // Networking
 

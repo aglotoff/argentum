@@ -6,7 +6,6 @@
 
 struct Inode;
 struct stat;
-struct Pipe;
 
 enum {
   CHANNEL_TYPE_FILE = 1,
@@ -23,7 +22,6 @@ struct Channel {
   
   union {
     int                socket;       // Socket ID
-    struct Pipe       *pipe;         // Pointer to the correspondig pipe
     struct {
       off_t            offset;       // Current offset within the file
       struct Inode    *inode;

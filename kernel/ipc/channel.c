@@ -42,7 +42,6 @@ channel_alloc(struct Channel **fstore)
   f->u.file.rdev      = -1;
   f->u.file.fs   = NULL;
   f->u.socket    = 0;
-  f->u.pipe      = NULL;
 
   if (fstore != NULL)
     *fstore = f;
@@ -140,9 +139,6 @@ channel_seek(struct Channel *channel, off_t offset, int whence)
 {
   struct IpcMessage msg;
 
-  if ((whence != SEEK_SET) && (whence != SEEK_CUR) && (whence != SEEK_END))
-    return -EINVAL;
-
   msg.type = IPC_MSG_SEEK;
   msg.u.seek.offset = offset;
   msg.u.seek.whence = whence;
@@ -157,9 +153,6 @@ channel_read(struct Channel *channel, uintptr_t va, size_t nbytes)
 {
   struct IpcMessage msg;
 
-  if ((channel->flags & O_ACCMODE) == O_WRONLY)
-    return -EBADF;
-
   msg.type = IPC_MSG_READ;
   msg.u.read.va    = va;
   msg.u.read.nbyte = nbytes;
@@ -173,9 +166,6 @@ ssize_t
 channel_write(struct Channel *channel, uintptr_t va, size_t nbytes)
 {
   struct IpcMessage msg;
-
-  if ((channel->flags & O_ACCMODE) == O_RDONLY)
-    return -EBADF;
 
   msg.type = IPC_MSG_WRITE;
   msg.u.write.va    = va;
