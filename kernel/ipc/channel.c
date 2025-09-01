@@ -41,7 +41,6 @@ channel_alloc(struct Channel **fstore)
   f->u.file.inode     = NULL;
   f->u.file.rdev      = -1;
   f->u.file.fs   = NULL;
-  f->u.socket    = 0;
 
   if (fstore != NULL)
     *fstore = f;

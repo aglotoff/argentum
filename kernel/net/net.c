@@ -6,6 +6,7 @@
 #include <kernel/object_pool.h>
 #include <kernel/vmspace.h>
 #include <kernel/process.h>
+#include <kernel/hash.h>
 #include <netdb.h>
 
 #include <lwip/api.h>
@@ -95,9 +96,66 @@ net_init_done(void *arg)
   dhcp_start(&eth_netif);
 }
 
+struct SocketEndpoint {
+  struct KListLink hash_link;
+  struct Channel  *channel;
+  int              socket;
+};
+
+#define NBUCKET   256
+
+static struct {
+  struct KListLink table[NBUCKET];
+  struct KSpinLock lock;
+} socket_hash;
+
+static struct SocketEndpoint *
+net_get_channel_endpoint(struct Channel *channel)
+{
+  struct KListLink *l;
+
+  k_spinlock_acquire(&socket_hash.lock);
+
+  HASH_FOREACH_ENTRY(socket_hash.table, l, (uintptr_t) channel) {
+    struct SocketEndpoint *endpoint;
+    
+    endpoint = KLIST_CONTAINER(l, struct SocketEndpoint, hash_link);
+    if (endpoint->channel == channel) {
+      k_spinlock_release(&socket_hash.lock);
+      return endpoint;
+    }
+  }
+
+  k_spinlock_release(&socket_hash.lock);
+
+  k_warn("socket endpoint not found");
+
+  return NULL;
+}
+
+static void
+net_set_channel_endpoint(struct SocketEndpoint *endpoint,
+                         struct Channel *channel,
+                         int socket)
+{
+  endpoint->channel = channel;
+  endpoint->socket  = socket;
+  k_list_null(&endpoint->hash_link);
+
+  channel->type = CHANNEL_TYPE_SOCKET;
+  channel->ref_count++;
+
+  k_spinlock_acquire(&socket_hash.lock);
+  HASH_PUT(socket_hash.table, &endpoint->hash_link, (uintptr_t) channel);
+  k_spinlock_release(&socket_hash.lock);
+}
+
 void
 net_init(void)
 {
+  HASH_INIT(socket_hash.table);
+  k_spinlock_init(&socket_hash.lock, "socket_hash");
+
   tcpip_init(net_init_done, NULL);
 }
 
@@ -149,19 +207,24 @@ int
 net_socket(int domain, int type, int protocol, struct Channel **fstore)
 {
   struct Channel *f;
+  struct SocketEndpoint *endpoint;
   int r, socket;
 
-  if ((socket = lwip_socket(domain, type, protocol)) < 0)
+  if ((endpoint = k_malloc(sizeof *endpoint)) == NULL)
+    return -ENOMEM;
+
+  if ((socket = lwip_socket(domain, type, protocol)) < 0) {
+    k_free(endpoint);
     return -errno;
+  }
 
   if ((r = channel_alloc(&f)) < 0) {
     lwip_close(socket);
+    k_free(endpoint);
     return r;
   }
 
-  f->type   = CHANNEL_TYPE_SOCKET;
-  f->u.socket = socket;
-  f->ref_count++;
+  net_set_channel_endpoint(endpoint, f, socket);
 
   if (fstore != NULL)
     *fstore = f;
@@ -172,10 +235,9 @@ net_socket(int domain, int type, int protocol, struct Channel **fstore)
 int
 net_bind(struct Channel *file, const struct sockaddr *address, socklen_t address_len)
 {
-  if (file->type != CHANNEL_TYPE_SOCKET)
-    return -EBADF;
+  struct SocketEndpoint *endpoint = net_get_channel_endpoint(file);
 
-  if (lwip_bind(file->u.socket, address, address_len) != 0)
+  if (lwip_bind(endpoint->socket, address, address_len) != 0)
     return -errno;
 
   return 0;
@@ -184,10 +246,9 @@ net_bind(struct Channel *file, const struct sockaddr *address, socklen_t address
 int
 net_listen(struct Channel *file, int backlog)
 {
-  if (file->type != CHANNEL_TYPE_SOCKET)
-    return -EBADF;
+  struct SocketEndpoint *endpoint = net_get_channel_endpoint(file);
 
-  if (lwip_listen(file->u.socket, backlog) != 0)
+  if (lwip_listen(endpoint->socket, backlog) != 0)
     return -errno;
 
   return 0;
@@ -196,10 +257,9 @@ net_listen(struct Channel *file, int backlog)
 int
 net_connect(struct Channel *file, const struct sockaddr *address, socklen_t address_len)
 {
-  if (file->type != CHANNEL_TYPE_SOCKET)
-    return -EBADF;
+  struct SocketEndpoint *endpoint = net_get_channel_endpoint(file);
 
-  if (lwip_connect(file->u.socket, address, address_len) != 0)
+  if (lwip_connect(endpoint->socket, address, address_len) != 0)
     return -errno;
 
   return 0;
@@ -212,22 +272,25 @@ net_accept(struct Channel *file, struct sockaddr *address, socklen_t * address_l
   int r, conn;
   struct Channel *f;
 
-  if (file->type != CHANNEL_TYPE_SOCKET)
-    return -EBADF;
+  struct SocketEndpoint *endpoint = net_get_channel_endpoint(file);
+  struct SocketEndpoint *e;
 
-  if ((conn = lwip_accept(file->u.socket, address, address_len)) < 0)
+  if ((conn = lwip_accept(endpoint->socket, address, address_len)) < 0)
     return -errno;
+
+  if ((e = k_malloc(sizeof *e)) == NULL) {
+    lwip_close(conn);
+    return r;
+  }
   
   if ((r = channel_alloc(&f)) != 0) {
+    k_free(e);
     lwip_close(conn);
     return r;
   }
 
-  f->type   = CHANNEL_TYPE_SOCKET;
-  f->u.socket = conn;
-  f->flags  = O_RDWR;
-  f->ref_count++;
-  
+  net_set_channel_endpoint(e, f, conn);
+
   if (fstore != NULL)
     *fstore = f;
   
@@ -237,11 +300,16 @@ net_accept(struct Channel *file, struct sockaddr *address, socklen_t * address_l
 int
 net_close(struct Channel *file)
 {
-  if (file->type != CHANNEL_TYPE_SOCKET)
-    return -EBADF;
+  struct SocketEndpoint *endpoint = net_get_channel_endpoint(file);
 
-  if (lwip_close(file->u.socket) != 0)
+  if (lwip_close(endpoint->socket) != 0)
     return -errno;
+
+  k_spinlock_acquire(&socket_hash.lock);
+  k_list_remove(&endpoint->hash_link);
+  k_spinlock_release(&socket_hash.lock);
+
+  k_free(endpoint);
 
   return 0;
 }
@@ -253,8 +321,7 @@ net_recvfrom(struct Channel *file, uintptr_t va, size_t nbytes, int flags,
   ssize_t total, r;
   char *p;
 
-  if (file->type != CHANNEL_TYPE_SOCKET)
-    return -EBADF;
+  struct SocketEndpoint *endpoint = net_get_channel_endpoint(file);
 
   // TODO: looks like a triple copy!
   if ((p = k_malloc(PAGE_SIZE)) == NULL)
@@ -264,7 +331,7 @@ net_recvfrom(struct Channel *file, uintptr_t va, size_t nbytes, int flags,
   while (nbytes) {
     ssize_t nread = MIN(nbytes, PAGE_SIZE);
 
-    r = lwip_recvfrom(file->u.socket, p, nread, flags, address, address_len);
+    r = lwip_recvfrom(endpoint->socket, p, nread, flags, address, address_len);
 
     if (r == 0)
       break;
@@ -306,8 +373,7 @@ net_sendto(struct Channel *file, uintptr_t va, size_t nbytes, int flags,
   ssize_t total, r;
   char *p;
 
-  if (file->type != CHANNEL_TYPE_SOCKET)
-    return -EBADF;
+  struct SocketEndpoint *endpoint = net_get_channel_endpoint(file);
 
   // TODO: looks like a triple copy!
   if ((p = k_malloc(PAGE_SIZE)) == NULL)
@@ -322,7 +388,7 @@ net_sendto(struct Channel *file, uintptr_t va, size_t nbytes, int flags,
       break;
     }
 
-    r = lwip_sendto(file->u.socket, p, nwrite, flags, (struct sockaddr *) dest_addr, dest_len);
+    r = lwip_sendto(endpoint->socket, p, nwrite, flags, (struct sockaddr *) dest_addr, dest_len);
 
     if (r == 0)
       break;
@@ -358,10 +424,9 @@ net_setsockopt(struct Channel *file, int level, int option_name, const void *opt
 {
   ssize_t r;
 
-  if (file->type != CHANNEL_TYPE_SOCKET)
-    return -EBADF;
+  struct SocketEndpoint *endpoint = net_get_channel_endpoint(file);
 
-  if ((r = lwip_setsockopt(file->u.socket, level, option_name, option_value,
+  if ((r = lwip_setsockopt(endpoint->socket, level, option_name, option_value,
                            option_len)) < 0)
     return -errno;
 
@@ -374,9 +439,11 @@ net_select(struct Channel *file, struct timeval *timeout)
   int r;
   fd_set dset;
 
-  dset.__fds_bits[0] = (1 << file->u.socket);
+  struct SocketEndpoint *endpoint = net_get_channel_endpoint(file);
 
-  if ((r = lwip_select(file->u.socket + 1, &dset, NULL, NULL, timeout)) < 0)
+  dset.__fds_bits[0] = (1 << endpoint->socket);
+
+  if ((r = lwip_select(endpoint->socket + 1, &dset, NULL, NULL, timeout)) < 0)
     return -errno;
   
   return r;

@@ -36,10 +36,8 @@ struct PipeEndpoint {
   int              flags;
 };
 
-// Size of PID hash table
 #define NBUCKET   256
 
-// Process ID hash table
 static struct {
   struct KListLink table[NBUCKET];
   struct KSpinLock lock;
@@ -268,7 +266,9 @@ pipe_close(struct Channel *channel)
     }
   }
 
+  k_spinlock_acquire(&pipe_hash.lock);
   k_list_remove(&endpoint->hash_link);
+  k_spinlock_release(&pipe_hash.lock);
 
   if (pipe->read_open || pipe->write_open) {
     k_mutex_unlock(&pipe->mutex);

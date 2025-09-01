@@ -21,7 +21,6 @@ struct Channel {
   struct PathNode     *node;         // Pointer to the corresponding inode
   
   union {
-    int                socket;       // Socket ID
     struct {
       off_t            offset;       // Current offset within the file
       struct Inode    *inode;
