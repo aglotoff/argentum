@@ -580,7 +580,7 @@ fs_init(void)
   channel->u.file.rdev  = -1;
   channel->ref_count    = 1;
 
-  root_ino = ext2_mount(FS_ROOT_DEV, &channel->u.file.fs);
+  root_ino = ext2_mount(FS_ROOT_DEV, &channel->fs);
 
   if ((fs_root = fs_path_node_create("/", root_ino, channel, NULL)) == NULL)
     k_panic("cannot allocate fs root");
@@ -654,7 +654,7 @@ fs_path_mount(struct PathNode *node, ino_t ino, struct FS *fs)
   channel->type         = CHANNEL_TYPE_FILE;
   channel->node         = NULL;
   channel->u.file.inode = NULL;
-  channel->u.file.fs    = fs;
+  channel->fs    = fs;
   channel->u.file.rdev  = -1;
   channel->ref_count    = 1;
 

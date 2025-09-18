@@ -13,6 +13,12 @@ enum {
   CHANNEL_TYPE_SOCKET = 3,
 };
 
+struct File {
+  off_t            offset;       // Current offset within the file
+  struct Inode    *inode;
+  dev_t            rdev;
+};
+
 struct Channel {
   int                  type;         // File type (inode, console, or pipe)
   int                  ref_count;    // The number of references to this file
@@ -20,13 +26,10 @@ struct Channel {
   int                  flags;
   struct PathNode     *node;         // Pointer to the corresponding inode
   
+  struct FS           *fs;
+
   union {
-    struct {
-      off_t            offset;       // Current offset within the file
-      struct Inode    *inode;
-      dev_t            rdev;
-      struct FS       *fs;
-    } file;
+    struct File file;
   } u;
 };
 

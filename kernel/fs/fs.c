@@ -554,7 +554,7 @@ fs_open(const char *path, int oflag, mode_t mode, struct Channel **file_store)
   channel->type         = CHANNEL_TYPE_FILE;
   channel->node         = NULL;
   channel->u.file.inode = NULL;
-  channel->u.file.fs    = NULL;
+  channel->fs    = NULL;
   channel->u.file.rdev  = -1;
   channel->ref_count    = 1;
 
@@ -589,7 +589,7 @@ fs_open(const char *path, int oflag, mode_t mode, struct Channel **file_store)
 
   ino = fs_path_ino(path_node, &fs_channel);
 
-  channel->u.file.fs = fs_channel->u.file.fs;
+  channel->fs = fs_channel->fs;
 
   msg.type = IPC_MSG_OPEN;
   msg.u.open.ino   = ino;

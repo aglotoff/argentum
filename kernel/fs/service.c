@@ -1208,7 +1208,7 @@ fs_send_recv(struct Channel *channel, struct IpcMessage *msg)
 
   k_assert(channel->type == CHANNEL_TYPE_FILE);
 
-  if (channel->u.file.fs == NULL)
+  if (channel->fs == NULL)
     return -1;
 
   k_semaphore_create(&msg->sem, 0);
@@ -1216,7 +1216,7 @@ fs_send_recv(struct Channel *channel, struct IpcMessage *msg)
   msg->sender = thread_current();
   msg->channel = channel;
 
-  if (k_mailbox_timed_send(&channel->u.file.fs->mbox, &msg_ptr, timeout) < 0)
+  if (k_mailbox_timed_send(&channel->fs->mbox, &msg_ptr, timeout) < 0)
     k_panic("fail send %d: %d", msg->type, r);
 
   if ((r = k_semaphore_timed_get(&msg->sem, timeout, K_SLEEP_UNINTERUPTIBLE)) < 0)
