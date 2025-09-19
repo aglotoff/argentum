@@ -54,32 +54,25 @@ int             channel_sync(struct Channel *);
 int             channel_truncate(struct Channel *, off_t);
 
 struct IpcMessage {
-  struct KSemaphore sem;
-  struct Thread *sender;
-  struct Channel *channel;
-
   int type;
+  uintptr_t r;
   
   union {
     struct {
       ino_t ino;
       int amode;
-      int r;
     } access;
     struct {
       ino_t ino;
-      int r;
     } chdir;
     struct {
       ino_t ino;
       mode_t mode;
-      int r;
     } chmod;
     struct {
       ino_t ino;
       uid_t uid;
       gid_t gid;
-      int r;
     } chown;
     struct {
       ino_t dir_ino;
@@ -87,37 +80,31 @@ struct IpcMessage {
       mode_t mode;
       dev_t dev;
       ino_t *istore;
-      int r;
     } create;
     struct {
       ino_t dir_ino;
       char *name;
       ino_t ino;
-      int r;
     } link;
     struct {
       ino_t dir_ino;
       const char *name;
       ino_t *istore;
       int flags;
-      int r;
     } lookup;
     struct {
       ino_t ino;
       uintptr_t va;
       size_t nbyte;
-      ssize_t r;
     } readlink;
     struct {
       ino_t dir_ino;
       ino_t ino;
       const char *name;
-      int r;
     } rmdir;
     struct {
       ino_t ino;
       struct stat *buf;
-      int r;
     } stat;
     struct {
       ino_t dir_ino;
@@ -125,77 +112,61 @@ struct IpcMessage {
       mode_t mode;
       const char *path;
       ino_t *istore;
-      int r;
     } symlink;
     struct {
       ino_t dir_ino;
       ino_t ino;
       const char *name;
-      int r;
     } unlink;
     struct {
       ino_t ino;
       struct utimbuf *times;
-      int r;
     } utime;
 
     struct {
-      int r;
     } close;
     struct {
       mode_t mode;
-      int r;
     } fchmod;
     struct {
       uid_t uid;
       gid_t gid;
-      int r;
     } fchown;
     struct {
       struct stat *buf;
-      int r;
     } fstat;
     struct {
-      int r;
     } fsync;
     struct {
       int request;
       int arg;
-      int r;
     } ioctl;
     struct {
       ino_t ino;
       int oflag;
       mode_t mode;
-      int r;
     } open;
     struct {
       uintptr_t va;
       size_t nbyte;
-      ssize_t r;
     } read;
     struct {
       uintptr_t va;
       size_t nbyte;
-      ssize_t r;
     } readdir;
     struct {
       off_t offset;
       int whence;
-      off_t r;
     } seek;
     struct {
       struct timeval *timeout;
-      int r;
     } select;
     struct {
       off_t length;
-      int r;
     } trunc;
     struct {
       uintptr_t va;
       size_t nbyte;
-      ssize_t r;
     } write;
   } u;
 };
@@ -228,6 +199,15 @@ enum {
   IPC_MSG_SELECT,
   IPC_MSG_TRUNC,
   IPC_MSG_WRITE,
+};
+
+struct IpcRequest {
+  struct IpcMessage *msg;
+  struct KSemaphore sem;
+  struct Thread *sender;
+  struct Channel *channel;
+  struct KSpinLock lock;
+  int ref_count;
 };
 
 #endif  // !__KERNEL_INCLUDE_KERNEL_IPC_CHANNEL__

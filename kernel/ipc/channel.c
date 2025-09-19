@@ -144,7 +144,7 @@ channel_seek(struct Channel *channel, off_t offset, int whence)
 
   channel_send_recv(channel, &msg);
 
-  return msg.u.seek.r;
+  return msg.r;
 }
 
 ssize_t
@@ -158,7 +158,7 @@ channel_read(struct Channel *channel, uintptr_t va, size_t nbytes)
 
   channel_send_recv(channel, &msg);
 
-  return msg.u.read.r;
+  return msg.r;
 }
 
 ssize_t
@@ -172,7 +172,7 @@ channel_write(struct Channel *channel, uintptr_t va, size_t nbytes)
 
   channel_send_recv(channel, &msg);
 
-  return msg.u.write.r;
+  return msg.r;
 }
 
 ssize_t
@@ -189,7 +189,7 @@ channel_getdents(struct Channel *channel, uintptr_t va, size_t nbytes)
   
   channel_send_recv(channel, &msg);
 
-  return msg.u.readdir.r;
+  return msg.r;
 }
 
 int
@@ -202,7 +202,7 @@ channel_stat(struct Channel *channel, struct stat *buf)
 
   channel_send_recv(channel, &msg);
 
-  return msg.u.fstat.r;
+  return msg.r;
 }
 
 int
@@ -224,7 +224,7 @@ channel_chmod(struct Channel *channel, mode_t mode)
 
   channel_send_recv(channel, &msg);
 
-  return msg.u.fchmod.r;
+  return msg.r;
 }
 
 int
@@ -238,7 +238,7 @@ channel_chown(struct Channel *channel, uid_t uid, gid_t gid)
 
   channel_send_recv(channel, &msg);
 
-  return msg.u.fchown.r;
+  return msg.r;
 }
 
 int
@@ -252,7 +252,7 @@ channel_ioctl(struct Channel *channel, int request, int arg)
 
   channel_send_recv(channel, &msg);
 
-  return msg.u.ioctl.r;
+  return msg.r;
 }
 
 // TODO
@@ -288,7 +288,7 @@ channel_truncate(struct Channel *channel, off_t length)
 
   channel_send_recv(channel, &msg);
 
-  return msg.u.trunc.r;
+  return msg.r;
 }
 
 int
@@ -300,5 +300,5 @@ channel_sync(struct Channel *channel)
 
   channel_send_recv(channel, &msg);
 
-  return msg.u.fsync.r;
+  return msg.r;
 }

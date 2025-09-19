@@ -13,6 +13,63 @@
 #include <kernel/vmspace.h>
 #include <kernel/dev.h>
 
+static struct IpcRequest *
+ipc_request_create(struct IpcMessage *msg)
+{
+  struct IpcRequest *req;
+
+  if ((req = k_malloc(sizeof *req)) == NULL)
+    return NULL;
+
+  k_semaphore_create(&req->sem, 0);
+  k_spinlock_init(&req->lock, "req");
+  
+  req->sender = NULL;
+  req->channel = NULL;
+  req->msg = msg;
+  req->ref_count = 1;
+
+  return req;
+}
+
+static void
+ipc_request_destroy(struct IpcRequest *req)
+{
+  int count;
+
+  k_assert(req->ref_count > 0);
+
+  k_spinlock_acquire(&req->lock);
+
+  req->channel = NULL;
+  req->msg = NULL;
+  req->sender = NULL;
+
+  count = --req->ref_count;
+
+  k_spinlock_release(&req->lock);
+
+  if (count == 0) {
+    k_free(req);
+  }
+}
+
+static void
+ipc_request_dup(struct IpcRequest *req)
+{
+  k_spinlock_acquire(&req->lock);
+  req->ref_count++;
+  k_spinlock_release(&req->lock);
+}
+
+static void
+ipc_request_reply(struct IpcRequest *req)
+{
+  k_semaphore_put(&req->sem);
+  ipc_request_destroy(req);
+}
+
+
 static int
 fs_filldir(void *buf, ino_t ino, const char *name, size_t name_len)
 {
@@ -30,56 +87,63 @@ fs_filldir(void *buf, ino_t ino, const char *name, size_t name_len)
  * ----- Inode Operations -----
  */
 
-int
-do_access(struct FS *fs, struct Thread *sender,
-          ino_t ino,
-          int amode)
+void
+do_access(struct FS *fs, struct IpcRequest *req, struct IpcMessage *msg)
 {
-  struct Inode *inode = fs->ops->inode_get(fs, ino);
-  int r = 0;
+  struct Thread *sender = req->sender;
 
-  if (amode == F_OK)
-    return r;
+  mode_t amode = msg->u.access.amode;
+  ino_t ino = msg->u.access.ino;
+
+  // TODO: verify existence
+  struct Inode *inode = fs->ops->inode_get(fs, ino);
+
+  msg->r = 0;
+
+  if (msg->u.access.amode == F_OK) {
+    fs_inode_put(inode);
+    ipc_request_reply(req);
+    return;
+  }
 
   fs_inode_lock(inode);
 
   if ((amode & R_OK) && !fs_inode_permission(sender, inode, FS_PERM_READ, 1))
-    r = -EPERM;
+    msg->r = -EPERM;
   if ((amode & W_OK) && !fs_inode_permission(sender, inode, FS_PERM_WRITE, 1))
-    r = -EPERM;
+    msg->r = -EPERM;
   if ((amode & X_OK) && !fs_inode_permission(sender, inode, FS_PERM_EXEC, 1))
-    r = -EPERM;
+    msg->r = -EPERM;
 
   fs_inode_unlock(inode);
   fs_inode_put(inode);
 
-  return r;
+  ipc_request_reply(req);
 }
 
-int
-do_chdir(struct FS *fs, struct Thread *sender,
-         ino_t ino)
+void
+do_chdir(struct FS *fs, struct IpcRequest *req, struct IpcMessage *msg)
 {
+  struct Thread *sender = req->sender;
+  ino_t ino = msg->u.chdir.ino;
+
+  // TODO: verify existence
   struct Inode *inode = fs->ops->inode_get(fs, ino);
 
   fs_inode_lock(inode);
 
   if (!S_ISDIR(inode->mode)) {
-    fs_inode_unlock(inode);
-    fs_inode_put(inode);
-    return -ENOTDIR;
-  }
-
-  if (!fs_inode_permission(sender, inode, FS_PERM_EXEC, 0)) {
-    fs_inode_unlock(inode);
-    fs_inode_put(inode);
-    return -EPERM;
+    msg->r = -ENOTDIR;
+  } else if (!fs_inode_permission(sender, inode, FS_PERM_EXEC, 0)) {
+    msg->r = -EPERM;
+  } else {
+    msg->r = 0;
   }
 
   fs_inode_unlock(inode);
   fs_inode_put(inode);
 
-  return 0;
+  ipc_request_reply(req);
 }
 
 #define CHMOD_MASK  (S_IRWXU | S_IRWXG | S_IRWXO | S_ISUID | S_ISGID)
@@ -99,7 +163,7 @@ do_inode_chmod(struct FS *, struct Thread *sender,
 
   // TODO: additional permission checks
 
-  inode->mode  = (inode->mode & ~CHMOD_MASK) | (mode & CHMOD_MASK);
+  inode->mode = (inode->mode & ~CHMOD_MASK) | (mode & CHMOD_MASK);
   inode->ctime = time_get_seconds();
   inode->flags |= FS_INODE_DIRTY;
 
@@ -108,21 +172,21 @@ do_inode_chmod(struct FS *, struct Thread *sender,
   return 0;
 }
 
-int
-do_chmod(struct FS *fs, struct Thread *sender,
-        ino_t ino,
-        mode_t mode)
+void
+do_chmod(struct FS *fs, struct IpcRequest *req, struct IpcMessage *msg)
 {
-  int r;
+  ino_t ino = msg->u.chmod.ino;
+  mode_t mode = msg->u.chmod.mode;
+
+  // TODO: verify existence
   struct Inode *inode = fs->ops->inode_get(fs, ino);
 
-  r = do_inode_chmod(fs, sender, inode, mode);
+  msg->r = do_inode_chmod(fs, req->sender, inode, mode);
 
   fs_inode_put(inode);
 
-  return r;
+  ipc_request_reply(req);
 }
-
 
 static int
 do_chown_locked(struct FS *, struct Thread *sender,
@@ -167,19 +231,21 @@ do_inode_chown(struct FS *fs, struct Thread *sender,
   return r;
 }
 
-int
-do_chown(struct FS *fs, struct Thread *sender,
-        ino_t ino,
-        uid_t uid, gid_t gid)
+void
+do_chown(struct FS *fs, struct IpcRequest *req, struct IpcMessage *msg)
 {
-  int r;
+  ino_t ino = msg->u.chown.ino;
+  uid_t uid = msg->u.chown.uid;
+  gid_t gid = msg->u.chown.gid;
+
+  // TODO: verify existence
   struct Inode *inode = fs->ops->inode_get(fs, ino);
 
-  r = do_inode_chown(fs, sender, inode, uid, gid);
+  msg->r = do_inode_chown(fs, req->sender, inode, uid, gid);
 
   fs_inode_put(inode);
 
-  return r;
+  ipc_request_reply(req);
 }
 
 static int
@@ -215,21 +281,21 @@ do_create_locked(struct FS *fs, struct Thread *sender,
   }
 }
 
-static int
-do_create(struct FS *fs, struct Thread *sender,
-          ino_t dir_ino,
-          char *name,
-          mode_t mode,
-          dev_t dev,
-          ino_t *istore)
+void
+do_create(struct FS *fs, struct IpcRequest *req, struct IpcMessage *msg)
 {
-  int r;
+  ino_t dir_ino = msg->u.create.dir_ino;
+  char *name = msg->u.create.name;
+  mode_t mode = msg->u.create.mode;
+  dev_t dev  = msg->u.create.dev;
+  ino_t *istore  = msg->u.create.istore;
 
+  // TODO: verify existence
   struct Inode *dir = fs->ops->inode_get(fs, dir_ino);
   struct Inode *inode = NULL;
 
   fs_inode_lock(dir);
-  r = do_create_locked(fs, sender, dir, name, mode, dev, &inode);
+  msg->r = do_create_locked(fs, req->sender, dir, name, mode, dev, &inode);
   fs_inode_unlock(dir);
 
   if (inode != NULL) {
@@ -240,7 +306,7 @@ do_create(struct FS *fs, struct Thread *sender,
 
   fs_inode_put(dir);
 
-  return r;
+  ipc_request_reply(req);
 }
 
 static int
@@ -268,34 +334,37 @@ do_link_locked(struct FS *fs, struct Thread *sender,
   return fs->ops->link(sender, dir, name, inode);
 }
 
-static int
-do_link(struct FS *fs, struct Thread *sender,
-        ino_t dir_ino,
-        char *name,
-        ino_t ino)
+void
+do_link(struct FS *fs, struct IpcRequest *req, struct IpcMessage *msg)
 {
-  int r;
+  ino_t dir_ino = msg->u.link.dir_ino;
+  char *name = msg->u.link.name;
+  ino_t ino = msg->u.link.ino;
 
+  // TODO: verify existence
   struct Inode *dir = fs->ops->inode_get(fs, dir_ino);
   struct Inode *inode = fs->ops->inode_get(fs, ino);
 
   fs_inode_lock_two(dir, inode);
-  r = do_link_locked(fs, sender, dir, name, inode);
+  msg->r = do_link_locked(fs, req->sender, dir, name, inode);
   fs_inode_unlock_two(dir, inode);
 
   fs_inode_put(dir);
   fs_inode_put(inode);
 
-  return r;
+  ipc_request_reply(req);
 }
 
-static int
-do_lookup(struct FS *fs, struct Thread *sender,
-          ino_t dir_ino,
-          const char *name,
-          int flags,
-          ino_t *istore)
+void
+do_lookup(struct FS *fs, struct IpcRequest *req, struct IpcMessage *msg)
 {
+  struct Thread *sender = req->sender;
+
+  ino_t dir_ino = msg->u.lookup.dir_ino;
+  const char *name = msg->u.lookup.name;
+  int flags = msg->u.lookup.flags;
+  ino_t *istore = msg->u.lookup.istore;
+
   struct Inode *inode, *dir;
 
   dir = fs->ops->inode_get(fs, dir_ino);
@@ -305,13 +374,17 @@ do_lookup(struct FS *fs, struct Thread *sender,
   if (!S_ISDIR(dir->mode)) {
     fs_inode_unlock(dir);
     fs_inode_put(dir);
-    return -ENOTDIR;
+    msg->r = -ENOTDIR;
+    ipc_request_reply(req);
+    return;
   }
 
   if (!fs_inode_permission(sender, dir, FS_PERM_READ, flags & FS_LOOKUP_REAL)) {
     fs_inode_unlock(dir);
     fs_inode_put(dir);
-    return -EPERM;
+    msg->r = -EPERM;
+    ipc_request_reply(req);
+    return;
   }
     
   inode = fs->ops->lookup(sender, dir, name);
@@ -324,16 +397,19 @@ do_lookup(struct FS *fs, struct Thread *sender,
   fs_inode_unlock(dir);
   fs_inode_put(dir);
 
-  return 0;
+  msg->r = 0;
+
+  ipc_request_reply(req);
 }
 
-static ssize_t
-do_readlink(struct FS *fs, struct Thread *sender,
-            ino_t ino,
-            uintptr_t va,
-            size_t nbyte)
+void
+do_readlink(struct FS *fs, struct IpcRequest *req, struct IpcMessage *msg)
 {
-  ssize_t r;
+  struct Thread *sender = req->sender;
+  ino_t ino = msg->u.readlink.ino;
+  uintptr_t va = msg->u.readlink.va;
+  size_t nbyte = msg->u.readlink.nbyte;
+
   struct Inode *inode = fs->ops->inode_get(fs, ino);
 
   fs_inode_lock(inode);
@@ -341,30 +417,34 @@ do_readlink(struct FS *fs, struct Thread *sender,
   if (!fs_inode_permission(sender, inode, FS_PERM_READ, 0)) {
     fs_inode_unlock(inode);
     fs_inode_put(inode);
-    return -EPERM;
+    msg->r = -EPERM;
+    ipc_request_reply(req);
+    return;
   }
     
   if (!S_ISLNK(inode->mode)) {
     fs_inode_unlock(inode);
     fs_inode_put(inode);
-    return -EINVAL;
+    msg->r = -EINVAL;
+    ipc_request_reply(req);
+    return;
   }
 
-  r = fs->ops->readlink(sender, inode, va, nbyte);
+  msg->r = fs->ops->readlink(sender, inode, va, nbyte);
 
   fs_inode_unlock(inode);
   fs_inode_put(inode);
 
-  return r;
+  ipc_request_reply(req);
 }
 
-static int
-do_rmdir(struct FS *fs, struct Thread *sender,
-         ino_t dir_ino,
-         ino_t ino,
-         const char *name)
+void
+do_rmdir(struct FS *fs, struct IpcRequest *req, struct IpcMessage *msg)
 {
-  int r;
+  struct Thread *sender = req->sender;
+  ino_t dir_ino = msg->u.rmdir.dir_ino;
+  ino_t ino = msg->u.rmdir.ino;
+  const char *name = msg->u.rmdir.name;
 
   struct Inode *dir = fs->ops->inode_get(fs, dir_ino);
   struct Inode *inode = fs->ops->inode_get(fs, ino);
@@ -375,14 +455,18 @@ do_rmdir(struct FS *fs, struct Thread *sender,
     fs_inode_unlock_two(dir, inode);
     fs_inode_put(dir);
     fs_inode_put(inode);
-    return -ENOTDIR;
+    msg->r = -ENOTDIR;
+    ipc_request_reply(req);
+    return;
   }
 
   if (!fs_inode_permission(sender, dir, FS_PERM_WRITE, 0)) {
     fs_inode_unlock_two(dir, inode);
     fs_inode_put(dir);
     fs_inode_put(inode);
-    return -EPERM;
+    msg->r = -EPERM;
+    ipc_request_reply(req);
+    return;
   }
 
   // TODO: Allow links to directories?
@@ -390,16 +474,18 @@ do_rmdir(struct FS *fs, struct Thread *sender,
     fs_inode_unlock_two(dir, inode);
     fs_inode_put(dir);
     fs_inode_put(inode);
-    return -EPERM;
+    msg->r = -EPERM;
+    ipc_request_reply(req);
+    return;
   }
 
-  r = fs->ops->rmdir(sender, dir, inode, name);
+  msg->r = fs->ops->rmdir(sender, dir, inode, name);
 
   fs_inode_unlock_two(dir, inode);
   fs_inode_put(dir);
   fs_inode_put(inode);
 
-  return r;
+  ipc_request_reply(req);
 }
 
 int
@@ -431,19 +517,20 @@ do_inode_stat(struct FS *, struct Thread *,
   return 0;
 }
 
-int
-do_stat(struct FS *fs, struct Thread *sender,
-        ino_t ino,
-        struct stat *buf)
+void
+do_stat(struct FS *fs, struct IpcRequest *req, struct IpcMessage *msg)
 {
-  int r;
+  struct Thread *sender = req->sender;
+  ino_t ino = msg->u.stat.ino;
+  struct stat *buf = msg->u.stat.buf;
+
   struct Inode *inode = fs->ops->inode_get(fs, ino);
 
-  r = do_inode_stat(fs, sender, inode, buf);
+  msg->r = do_inode_stat(fs, sender, inode, buf);
   
   fs_inode_put(inode);
 
-  return r;
+  ipc_request_reply(req);
 }
 
 static int
@@ -472,21 +559,21 @@ do_symlink_locked(struct FS *fs, struct Thread *sender,
   return fs->ops->symlink(sender, dir, name, S_IFLNK | mode, path, istore);
 }
 
-static int
-do_symlink(struct FS *fs, struct Thread *sender,
-           ino_t dir_ino,
-           char *name,
-           mode_t mode,
-           const char *link_path,
-           ino_t *istore)
+void
+do_symlink(struct FS *fs, struct IpcRequest *req, struct IpcMessage *msg)
 {
-  int r;
+  struct Thread *sender = req->sender;
+  ino_t dir_ino = msg->u.symlink.dir_ino;
+  char *name = msg->u.symlink.name;
+  mode_t mode = msg->u.symlink.mode;
+  const char *link_path = msg->u.symlink.path;
+  ino_t *istore = msg->u.symlink.istore;
 
   struct Inode *dir = fs->ops->inode_get(fs, dir_ino);
   struct Inode *inode = NULL;
 
   fs_inode_lock(dir);
-  r = do_symlink_locked(fs, sender, dir, name, mode, link_path, &inode);
+  msg->r = do_symlink_locked(fs, sender, dir, name, mode, link_path, &inode);
   fs_inode_unlock(dir);
 
   if (inode != NULL) {
@@ -497,16 +584,16 @@ do_symlink(struct FS *fs, struct Thread *sender,
 
   fs_inode_put(dir);
 
-  return r;
+  ipc_request_reply(req);
 }
 
-static int
-do_unlink(struct FS *fs, struct Thread *sender,
-          ino_t dir_ino,
-          ino_t ino,
-          const char *name)
+void
+do_unlink(struct FS *fs, struct IpcRequest *req, struct IpcMessage *msg)
 {
-  int r;
+  struct Thread *sender = req->sender;
+  ino_t dir_ino = msg->u.unlink.dir_ino;
+  ino_t ino = msg->u.unlink.ino;
+  const char *name = msg->u.unlink.name;
 
   struct Inode *dir = fs->ops->inode_get(fs, dir_ino);
   struct Inode *inode = fs->ops->inode_get(fs, ino);
@@ -517,14 +604,18 @@ do_unlink(struct FS *fs, struct Thread *sender,
     fs_inode_unlock_two(dir, inode);
     fs_inode_put(dir);
     fs_inode_put(inode);
-    return -ENOTDIR;
+    msg->r = -ENOTDIR;
+    ipc_request_reply(req);
+    return;
   }
 
   if (!fs_inode_permission(sender, dir, FS_PERM_WRITE, 0)) {
     fs_inode_unlock_two(dir, inode);
     fs_inode_put(dir);
     fs_inode_put(inode);
-    return -EPERM;
+    msg->r = -EPERM;
+    ipc_request_reply(req);
+    return;
   }
 
   // TODO: Allow links to directories?
@@ -532,25 +623,29 @@ do_unlink(struct FS *fs, struct Thread *sender,
     fs_inode_unlock_two(dir, inode);
     fs_inode_put(dir);
     fs_inode_put(inode);
-    return -EPERM;
+    msg->r = -EPERM;
+    ipc_request_reply(req);
+    return;
   }
 
-  r = fs->ops->unlink(sender, dir, inode, name);
+  msg->r = fs->ops->unlink(sender, dir, inode, name);
 
   fs_inode_unlock_two(dir, inode);
   fs_inode_put(dir);
   fs_inode_put(inode);
 
-  return r;
+  ipc_request_reply(req);
 }
 
-int
-do_utime(struct FS *fs, struct Thread *sender,
-         ino_t ino, struct utimbuf *times)
+void
+do_utime(struct FS *fs, struct IpcRequest *req, struct IpcMessage *msg)
 {
+  struct Thread *sender = req->sender;
+  ino_t ino = msg->u.utime.ino;
+  struct utimbuf *times = msg->u.utime.times;
+
   struct Inode *inode = fs->ops->inode_get(fs, ino);
   uid_t euid = sender ? sender->process->euid : 0;
-  int r = 0;
 
   fs_inode_lock(inode);
 
@@ -558,7 +653,7 @@ do_utime(struct FS *fs, struct Thread *sender,
     if ((euid != 0) &&
         (euid != inode->uid) &&
         !fs_inode_permission(sender, inode, FS_PERM_WRITE, 1)) {
-      r = -EPERM;
+      msg->r = -EPERM;
       goto out;
     }
 
@@ -566,11 +661,12 @@ do_utime(struct FS *fs, struct Thread *sender,
     inode->mtime = time_get_seconds();
 
     inode->flags |= FS_INODE_DIRTY;
+    msg->r = 0;
   } else {
     if ((euid != 0) ||
        ((euid != inode->uid) ||
          !fs_inode_permission(sender, inode, FS_PERM_WRITE, 1))) {
-      r = -EPERM;
+      msg->r = -EPERM;
       goto out;
     }
 
@@ -578,90 +674,119 @@ do_utime(struct FS *fs, struct Thread *sender,
     inode->mtime = times->modtime;
 
     inode->flags |= FS_INODE_DIRTY;
+    msg->r = 0;
   }
 
 out:
   fs_inode_unlock(inode);
   fs_inode_put(inode);
 
-  return r;
+  ipc_request_reply(req);
 }
 
 /*
  * ----- File Operations -----
  */
 
-int
-do_close(struct FS *, struct Thread *,
-         struct Channel *channel)
+void
+do_close(struct FS *, struct IpcRequest *req, struct IpcMessage *msg)
 {
-  if (channel->u.file.inode != NULL) {
-    fs_inode_put(channel->u.file.inode);
-    channel->u.file.inode = NULL;
+  if (req->channel->u.file.inode != NULL) {
+    fs_inode_put(req->channel->u.file.inode);
+    req->channel->u.file.inode = NULL;
   }
 
-  return 0;
+  msg->r = 0;
+
+  ipc_request_reply(req);
 }
 
-static int
-do_fchmod(struct FS *fs, struct Thread *sender,
-          struct Channel *channel, mode_t mode)
+void
+do_fchmod(struct FS *fs, struct IpcRequest *req, struct IpcMessage *msg)
 {
-  if (channel->u.file.inode == NULL)
-    return -EINVAL;
+  struct Thread *sender = req->sender;
+  struct Channel *channel = req->channel;
+  mode_t mode = msg->u.fchmod.mode;
 
-  return do_inode_chmod(fs, sender, channel->u.file.inode, mode);
+  if (channel->u.file.inode == NULL) {
+    msg->r = -EINVAL;
+  } else {
+    msg->r = do_inode_chmod(fs, sender, channel->u.file.inode, mode);
+  }
+
+  ipc_request_reply(req);
 }
 
-static int
-do_fchown(struct FS *fs, struct Thread *sender,
-          struct Channel *channel, uid_t uid, gid_t gid)
+void
+do_fchown(struct FS *fs, struct IpcRequest *req, struct IpcMessage *msg)
 {
-  if (channel->u.file.inode == NULL)
-    return -EINVAL;
+  struct Thread *sender = req->sender;
+  struct Channel *channel = req->channel;
+  uid_t uid = msg->u.fchown.uid;
+  gid_t gid = msg->u.fchown.gid;
 
-  return do_inode_chown(fs, sender, channel->u.file.inode, uid, gid);
+  if (channel->u.file.inode == NULL) {
+    msg->r = -EINVAL;
+  } else {
+    msg->r = do_inode_chown(fs, sender, channel->u.file.inode, uid, gid);
+  }
+
+  ipc_request_reply(req);
 }
 
-static int
-do_fstat(struct FS *fs, struct Thread *sender,
-         struct Channel *channel, struct stat *buf)
+void
+do_fstat(struct FS *fs, struct IpcRequest *req, struct IpcMessage *msg)
 {
-  if (channel->u.file.inode == NULL)
-    return -EINVAL;
+  struct Thread *sender = req->sender;
+  struct Channel *channel = req->channel;
+  struct stat *buf = msg->u.fstat.buf;
 
-  return do_inode_stat(fs, sender, channel->u.file.inode, buf);
+  if (channel->u.file.inode == NULL) {
+    msg->r = -EINVAL;
+  } else {
+    msg->r = do_inode_stat(fs, sender, channel->u.file.inode, buf);
+  }
+
+  ipc_request_reply(req);
 }
 
-int
-do_fsync(struct FS *, struct Thread *,
-         struct Channel *channel)
+void
+do_fsync(struct FS *, struct IpcRequest *req, struct IpcMessage *msg)
 {
-  if (channel->u.file.inode == NULL)
-    return -EINVAL;
+  struct Channel *channel = req->channel;
 
-  fs_inode_lock(channel->u.file.inode);
-  // FIXME: fsync
-  fs_inode_unlock(channel->u.file.inode);
+  if (channel->u.file.inode == NULL) {
+    msg->r = -EINVAL;
+  } else {
+    fs_inode_lock(channel->u.file.inode);
+    // FIXME: fsync
+    fs_inode_unlock(channel->u.file.inode);
+    msg->r = 0;
+  }
 
-  return 0;
+  ipc_request_reply(req);
 }
 
-static int
-do_ioctl(struct FS *, struct Thread *sender,
-         struct Channel *channel, int request, int arg)
+void
+do_ioctl(struct FS *, struct IpcRequest *req, struct IpcMessage *msg)
 {
-  if (channel->u.file.rdev >= 0)
-    return dev_ioctl(sender, channel->u.file.rdev, request, arg);
+  struct Thread *sender = req->sender;
+  struct Channel *channel = req->channel;
+  int request = msg->u.ioctl.request;
+  int arg = msg->u.ioctl.arg;
 
-  if (channel->u.file.inode == NULL)
-    return -EINVAL;
+  if (channel->u.file.rdev >= 0) {
+    msg->r = dev_ioctl(sender, channel->u.file.rdev, request, arg);
+  } else if (channel->u.file.inode == NULL) {
+    msg->r = -EINVAL;
+  } else {
+    fs_inode_lock(channel->u.file.inode);
+    // FIXME: ioctl
+    fs_inode_unlock(channel->u.file.inode);
+    msg->r = -ENOTTY;
+  }
 
-  fs_inode_lock(channel->u.file.inode);
-  // FIXME: ioctl
-  fs_inode_unlock(channel->u.file.inode);
-
-  return -ENOTTY;
+  ipc_request_reply(req);
 }
 
 static int
@@ -707,28 +832,28 @@ do_open_locked(struct FS *fs, struct Thread *sender,
   return 0;
 }
 
-static int
-do_open(struct FS *fs, struct Thread *sender,
-        struct Channel *channel, 
-        ino_t ino,
-        int oflag,
-        mode_t mode)
+void
+do_open(struct FS *fs, struct IpcRequest *req, struct IpcMessage *msg)
 {
-  int r;
+  struct Thread *sender = req->sender;
+  struct Channel *channel = req->channel;
+  ino_t ino = msg->u.open.ino;
+  int oflag = msg->u.open.oflag;
+  mode_t mode = msg->u.open.mode;
 
   struct Inode *inode = fs->ops->inode_get(fs, ino);
 
   fs_inode_lock(inode);
-  r = do_open_locked(fs, sender, channel, inode, oflag);
+  msg->r = do_open_locked(fs, sender, channel, inode, oflag);
   fs_inode_unlock(inode);
 
   fs_inode_put(inode);
 
-  if ((r == 0) && (channel->u.file.rdev >= 0)){
-    r = dev_open(sender, channel->u.file.rdev, oflag, mode);
+  if ((msg->r == 0) && (channel->u.file.rdev >= 0)){
+    msg->r = dev_open(sender, channel->u.file.rdev, oflag, mode);
   }
 
-  return r;
+  ipc_request_reply(req);
 }
 
 static ssize_t
@@ -762,27 +887,27 @@ do_read_locked(struct FS *fs, struct Thread *sender,
   return total;
 }
 
-static ssize_t
-do_read(struct FS *fs, struct Thread *sender,
-        struct Channel *channel,
-        uintptr_t va,
-        size_t nbyte)
+void
+do_read(struct FS *fs, struct IpcRequest *req, struct IpcMessage *msg)
 {
-  ssize_t r;
+  struct Thread *sender = req->sender;
+  struct Channel *channel = req->channel;
+  uintptr_t va = msg->u.read.va;
+  size_t nbyte = msg->u.read.nbyte;
 
-  if (channel->u.file.rdev >= 0)
-    return dev_read(sender, channel->u.file.rdev, va, nbyte);
+  if (channel->u.file.rdev >= 0) {
+    msg->r = dev_read(sender, channel->u.file.rdev, va, nbyte);
+  } else if ((channel->flags & O_ACCMODE) == O_WRONLY) {
+    msg->r = -EBADF;
+  } else if (channel->u.file.inode == NULL) {
+    msg->r = -EINVAL;
+  } else {
+    fs_inode_lock(channel->u.file.inode);
+    msg->r = do_read_locked(fs, sender, channel, va, nbyte);
+    fs_inode_unlock(channel->u.file.inode);
+  }
 
-  if ((channel->flags & O_ACCMODE) == O_WRONLY)
-    return -EBADF;
-  if (channel->u.file.inode == NULL)
-    return -EINVAL;
-
-  fs_inode_lock(channel->u.file.inode);
-  r = do_read_locked(fs, sender, channel, va, nbyte);
-  fs_inode_unlock(channel->u.file.inode);
-
-  return r;
+  ipc_request_reply(req);
 }
 
 static ssize_t
@@ -836,34 +961,38 @@ do_readdir_locked(struct FS *fs, struct Thread *sender,
   return total;
 }
 
-static ssize_t
-do_readdir(struct FS *fs, struct Thread *sender,
-           struct Channel *channel,
-           uintptr_t va,
-           size_t nbyte)
+void
+do_readdir(struct FS *fs, struct IpcRequest *req, struct IpcMessage *msg)
 {
-  ssize_t r;
+  struct Thread *sender = req->sender;
+  struct Channel *channel = req->channel;
+  uintptr_t va = msg->u.readdir.va;
+  size_t nbyte = msg->u.readdir.nbyte;
 
-  if (channel->u.file.inode == NULL)
-    return -EINVAL;
+  if (channel->u.file.inode == NULL) {
+    msg->r = -EINVAL;
+  } else {
+    fs_inode_lock(channel->u.file.inode);
+    msg->r = do_readdir_locked(fs, sender, channel, va, nbyte);
+    fs_inode_unlock(channel->u.file.inode);
+  }
 
-  fs_inode_lock(channel->u.file.inode);
-  r = do_readdir_locked(fs, sender, channel, va, nbyte);
-  fs_inode_unlock(channel->u.file.inode);
-
-  return r;
+  ipc_request_reply(req);
 }
 
-static off_t
-do_seek(struct FS *, struct Thread *,
-        struct Channel *channel,
-        off_t offset,
-        int whence)
+void
+do_seek(struct FS *, struct IpcRequest *req, struct IpcMessage *msg)
 {
+  struct Channel *channel = req->channel;
+  off_t offset = msg->u.seek.offset;
+  int whence = msg->u.seek.whence;
   off_t new_offset;
 
-  if (channel->u.file.inode == NULL)
-    return -EINVAL;
+  if (channel->u.file.inode == NULL) {
+    msg->r = -EINVAL;
+    ipc_request_reply(req);
+    return;
+  }
 
   switch (whence) {
   case SEEK_SET:
@@ -878,65 +1007,73 @@ do_seek(struct FS *, struct Thread *,
     fs_inode_unlock(channel->u.file.inode);
     break;
   default:
-    return -EINVAL;
+    msg->r = -EINVAL;
+    ipc_request_reply(req);
+    return;
   }
 
-  if (new_offset < 0)
-    return -EOVERFLOW;
+  if (new_offset < 0) {
+    msg->r = -EOVERFLOW;
+  } else {
+    channel->u.file.offset = new_offset;
+    msg->r = new_offset;
+  }
 
-  channel->u.file.offset = new_offset;
-
-  return new_offset;
+  ipc_request_reply(req);
 }
 
-static int
-do_select(struct FS *, struct Thread *,
-          struct Channel *channel,
-          struct timeval *)
+void
+do_select(struct FS *, struct IpcRequest *req, struct IpcMessage *msg)
 {
-  if (channel->u.file.inode == NULL)
-    return -EINVAL;
+  struct Channel *channel = req->channel;
+  // struct timeval *timeout = msg->u.select.timeout;
 
-  fs_inode_lock(channel->u.file.inode);
-  // FIXME: select
-  fs_inode_unlock(channel->u.file.inode);
+  if (channel->u.file.inode == NULL) {
+    msg->r = -EINVAL;
+  } else {
+    fs_inode_lock(channel->u.file.inode);
+    // FIXME: select
+    fs_inode_unlock(channel->u.file.inode);
+    msg->r = 1;
+  }
 
-  return 1;
+  ipc_request_reply(req);
 }
 
-static int
-do_trunc(struct FS *fs, struct Thread *sender,
-         struct Channel *channel,
-         off_t length)
+void
+do_trunc(struct FS *fs, struct IpcRequest *req, struct IpcMessage *msg)
 {
-  if (length < 0)
-    return -EINVAL;
+  struct Thread *sender = req->sender;
+  struct Channel *channel = req->channel;
+  off_t length = msg->u.trunc.length;
 
-  if (channel->u.file.inode == NULL)
-    return -EINVAL;
+  if (length < 0) {
+    msg->r = -EINVAL;
+  } else if (channel->u.file.inode == NULL) {
+    msg->r = -EINVAL;
+  } else {
+    fs_inode_lock(channel->u.file.inode);
 
-  fs_inode_lock(channel->u.file.inode);
+    if (length > channel->u.file.inode->size) {
+      fs_inode_unlock(channel->u.file.inode);
+      msg->r = -EFBIG;
+    } else if (!fs_inode_permission(sender, channel->u.file.inode, FS_PERM_WRITE, 0)) {
+      fs_inode_unlock(channel->u.file.inode);
+      msg->r = -EPERM;
+    } else {
+      fs->ops->trunc(sender, channel->u.file.inode, length);
 
-  if (length > channel->u.file.inode->size) {
-    fs_inode_unlock(channel->u.file.inode);
-    return -EFBIG;
+      channel->u.file.inode->size = length;
+      channel->u.file.inode->ctime = channel->u.file.inode->mtime = time_get_seconds();
+
+      channel->u.file.inode->flags |= FS_INODE_DIRTY;
+
+      fs_inode_unlock(channel->u.file.inode);
+      msg->r = 0;
+    }
   }
 
-  if (!fs_inode_permission(sender, channel->u.file.inode, FS_PERM_WRITE, 0)) {
-    fs_inode_unlock(channel->u.file.inode);
-    return -EPERM;
-  }
-
-  fs->ops->trunc(sender, channel->u.file.inode, length);
-
-  channel->u.file.inode->size = length;
-  channel->u.file.inode->ctime = channel->u.file.inode->mtime = time_get_seconds();
-
-  channel->u.file.inode->flags |= FS_INODE_DIRTY;
-
-  fs_inode_unlock(channel->u.file.inode);
-
-  return 0;
+  ipc_request_reply(req);
 }
 
 static ssize_t
@@ -974,195 +1111,88 @@ do_write_locked(struct FS *fs, struct Thread *sender,
   return total;
 }
 
-static ssize_t
-do_write(struct FS *fs, struct Thread *sender,
-         struct Channel *channel,
-         uintptr_t va,
-         size_t nbyte)
+void
+do_write(struct FS *fs, struct IpcRequest *req, struct IpcMessage *msg)
 {
-  ssize_t r;
+  struct Thread *sender = req->sender;
+  struct Channel *channel = req->channel;
+  uintptr_t va = msg->u.write.va;
+  size_t nbyte = msg->u.write.nbyte;
 
-  if (channel->u.file.rdev >= 0)
-    return dev_write(sender, channel->u.file.rdev, va, nbyte);
+  if (channel->u.file.rdev >= 0) {
+    msg->r = dev_write(sender, channel->u.file.rdev, va, nbyte);
+  } else if (channel->u.file.inode == NULL) {
+    msg->r = -EINVAL;
+  } else if ((channel->flags & O_ACCMODE) == O_RDONLY) {
+    msg->r = -EBADF;
+  } else {
+    fs_inode_lock(channel->u.file.inode);
+    msg->r = do_write_locked(fs, sender, channel, va, nbyte);
+    fs_inode_unlock(channel->u.file.inode);
+  }
 
-  if (channel->u.file.inode == NULL)
-    return -EINVAL;
-
-  if ((channel->flags & O_ACCMODE) == O_RDONLY)
-    return -EBADF;
-
-  fs_inode_lock(channel->u.file.inode);
-  r = do_write_locked(fs, sender, channel, va, nbyte);
-  fs_inode_unlock(channel->u.file.inode);
-
-  return r;
+  ipc_request_reply(req);
 }
+
+/*
+ * ----- Message Handler Dispatch Table -----
+ */
+
+typedef void (*fs_handler_t)(struct FS *, struct IpcRequest *, struct IpcMessage *);
+
+static fs_handler_t
+fs_dispatch_table[] = {
+  [IPC_MSG_ACCESS]   = do_access,
+  [IPC_MSG_CHDIR]    = do_chdir,
+  [IPC_MSG_CHMOD]    = do_chmod,
+  [IPC_MSG_CHOWN]    = do_chown,
+  [IPC_MSG_CREATE]   = do_create,
+  [IPC_MSG_LINK]     = do_link,
+  [IPC_MSG_LOOKUP]   = do_lookup,
+  [IPC_MSG_STAT]     = do_stat,
+  [IPC_MSG_READLINK] = do_readlink,
+  [IPC_MSG_RMDIR]    = do_rmdir,
+  [IPC_MSG_SYMLINK]  = do_symlink,
+  [IPC_MSG_UNLINK]   = do_unlink,
+  [IPC_MSG_UTIME]    = do_utime,
+  [IPC_MSG_CLOSE]    = do_close,
+  [IPC_MSG_FCHMOD]   = do_fchmod,
+  [IPC_MSG_FCHOWN]   = do_fchown,
+  [IPC_MSG_FSTAT]    = do_fstat,
+  [IPC_MSG_FSYNC]    = do_fsync,
+  [IPC_MSG_IOCTL]    = do_ioctl,
+  [IPC_MSG_OPEN]     = do_open,
+  [IPC_MSG_READ]     = do_read,
+  [IPC_MSG_READDIR]  = do_readdir,
+  [IPC_MSG_SEEK]     = do_seek,
+  [IPC_MSG_SELECT]   = do_select,
+  [IPC_MSG_TRUNC]    = do_trunc,
+  [IPC_MSG_WRITE]    = do_write,
+};
+
+#define FS_DISPATCH_TABLE_SIZE (int)(sizeof(fs_dispatch_table) / sizeof(fs_dispatch_table[0]))
 
 void
 fs_service_task(void *arg)
 {
   struct FS *fs = (struct FS *) arg;
-  struct IpcMessage *msg;
+  struct IpcRequest *req;
 
-  while (k_mailbox_receive(&fs->mbox, (void *) &msg) >= 0) {
-    k_assert(msg != NULL);
+  while (k_mailbox_receive(&fs->mbox, (void *) &req) >= 0) {
+    struct IpcMessage *msg = req->msg;
 
-    switch (msg->type) {
-    case IPC_MSG_ACCESS:
-      msg->u.access.r = do_access(fs, msg->sender,
-                                  msg->u.access.ino,
-                                  msg->u.access.amode);
-      break;
-    case IPC_MSG_CHDIR:
-      msg->u.chdir.r = do_chdir(fs, msg->sender,
-                                msg->u.chdir.ino);
-      break;
-    case IPC_MSG_CHMOD:
-      msg->u.chmod.r = do_chmod(fs, msg->sender,
-                                msg->u.chmod.ino,
-                                msg->u.chmod.mode);
-      break;
-    case IPC_MSG_CHOWN:
-      msg->u.chown.r = do_chown(fs, msg->sender,
-                                msg->u.chown.ino,
-                                msg->u.chown.uid,
-                                msg->u.chown.gid);
-      break;
-    case IPC_MSG_CREATE:
-      msg->u.create.r = do_create(fs, msg->sender,
-                                  msg->u.create.dir_ino,
-                                  msg->u.create.name,
-                                  msg->u.create.mode,
-                                  msg->u.create.dev,
-                                  msg->u.create.istore);
-      break;
-    case IPC_MSG_LINK:
-      msg->u.link.r = do_link(fs, msg->sender,
-                              msg->u.link.dir_ino,
-                              msg->u.link.name,
-                              msg->u.link.ino);
-      break;
-    case IPC_MSG_LOOKUP:
-      msg->u.lookup.r = do_lookup(fs, msg->sender,
-                                  msg->u.lookup.dir_ino,
-                                  msg->u.lookup.name,
-                                  msg->u.lookup.flags,
-                                  msg->u.lookup.istore);
-      break;
-    case IPC_MSG_READLINK:
-      msg->u.readlink.r = do_readlink(fs, msg->sender,
-                                      msg->u.readlink.ino,
-                                      msg->u.readlink.va,
-                                      msg->u.readlink.nbyte);
-      break;
-    case IPC_MSG_RMDIR:
-      msg->u.rmdir.r = do_rmdir(fs, msg->sender,
-                                msg->u.rmdir.dir_ino,
-                                msg->u.rmdir.ino,
-                                msg->u.rmdir.name);
-      break;
-    case IPC_MSG_STAT:
-      msg->u.stat.r = do_stat(fs, msg->sender,
-                              msg->u.stat.ino,
-                              msg->u.stat.buf);
-      break;
-    case IPC_MSG_SYMLINK:
-      msg->u.symlink.r = do_symlink(fs, msg->sender,
-                                    msg->u.symlink.dir_ino,
-                                    msg->u.symlink.name,
-                                    msg->u.symlink.mode,
-                                    msg->u.symlink.path,
-                                    msg->u.symlink.istore);
-      break;
-    case IPC_MSG_UNLINK:
-      msg->u.unlink.r = do_unlink(fs, msg->sender,
-                                  msg->u.unlink.dir_ino,
-                                  msg->u.unlink.ino,
-                                  msg->u.unlink.name);
-      break;
-    case IPC_MSG_UTIME:
-      msg->u.utime.r = do_utime(fs, msg->sender,
-                                msg->u.utime.ino,
-                                msg->u.utime.times);
-      break;
-
-    case IPC_MSG_CLOSE:
-      msg->u.close.r = do_close(fs, msg->sender,
-                                msg->channel);
-      break;
-    case IPC_MSG_FCHMOD:
-      msg->u.fchmod.r = do_fchmod(fs, msg->sender,
-                                  msg->channel,
-                                  msg->u.fchmod.mode);
-      break;
-    case IPC_MSG_FCHOWN:
-      msg->u.fchown.r = do_fchown(fs, msg->sender,
-                                  msg->channel,
-                                  msg->u.fchown.uid,
-                                  msg->u.fchown.gid);
-      break;
-    case IPC_MSG_FSTAT:
-      msg->u.fstat.r = do_fstat(fs, msg->sender,
-                                msg->channel,
-                                msg->u.fstat.buf);
-      break;
-    case IPC_MSG_FSYNC:
-      msg->u.fsync.r = do_fsync(fs, msg->sender,
-                                msg->channel);
-      break;
-    case IPC_MSG_IOCTL:
-      msg->u.ioctl.r = do_ioctl(fs, msg->sender,
-                                msg->channel,
-                                msg->u.ioctl.request,
-                                msg->u.ioctl.arg);
-      break;
-    case IPC_MSG_OPEN:
-      msg->u.open.r = do_open(fs, msg->sender,
-                              msg->channel,
-                              msg->u.open.ino,
-                              msg->u.open.oflag,
-                              msg->u.open.mode);
-      break;
-    case IPC_MSG_READ:
-      msg->u.read.r = do_read(fs, msg->sender,
-                              msg->channel,
-                              msg->u.read.va,
-                              msg->u.read.nbyte);
-      break;
-    case IPC_MSG_READDIR:
-      msg->u.readdir.r = do_readdir(fs, msg->sender,
-                                    msg->channel,
-                                    msg->u.readdir.va,
-                                    msg->u.readdir.nbyte);
-      break;
-    case IPC_MSG_SEEK:
-      msg->u.seek.r = do_seek(fs, msg->sender,
-                              msg->channel,
-                              msg->u.seek.offset,
-                              msg->u.seek.whence);
-      break;
-    case IPC_MSG_SELECT:
-      msg->u.select.r = do_select(fs, msg->sender,
-                                  msg->channel,
-                                  msg->u.select.timeout);
-      break;
-    case IPC_MSG_TRUNC:
-      msg->u.trunc.r = do_trunc(fs, msg->sender,
-                                msg->channel,
-                                msg->u.trunc.length);
-      break;
-    case IPC_MSG_WRITE:
-      msg->u.write.r = do_write(fs, msg->sender,
-                                msg->channel,
-                                msg->u.write.va,
-                                msg->u.write.nbyte);
-      break;
-    default:
-      k_panic("bad msg type %d\n", msg->type);
-      break;
+    if (msg == NULL) {
+      ipc_request_reply(req);
+      continue;
     }
 
-    k_semaphore_put(&msg->sem);
+    if (msg->type >= 0 && msg->type < FS_DISPATCH_TABLE_SIZE && fs_dispatch_table[msg->type] != NULL) {
+      fs_dispatch_table[msg->type](fs, req, msg);
+    } else {
+      k_warn("unsupported msg type %d\n", msg->type);
+      msg->r = -ENOSYS;
+      ipc_request_reply(req);
+    }
   }
 
   k_panic("error");
@@ -1199,10 +1229,11 @@ fs_create_service(char *name, dev_t dev, void *extra, struct FSOps *ops)
   return fs;
 }
 
+
 int
 fs_send_recv(struct Channel *channel, struct IpcMessage *msg)
 {
-  struct IpcMessage *msg_ptr = msg;
+  struct IpcRequest *req;
   unsigned long long timeout = seconds2ticks(5);
   int r;
 
@@ -1211,16 +1242,29 @@ fs_send_recv(struct Channel *channel, struct IpcMessage *msg)
   if (channel->fs == NULL)
     return -1;
 
-  k_semaphore_create(&msg->sem, 0);
+  if ((req = ipc_request_create(msg)) == NULL)
+    return -ENOMEM;  
 
-  msg->sender = thread_current();
-  msg->channel = channel;
+  req->channel = channel;
+  req->sender = thread_current();
 
-  if (k_mailbox_timed_send(&channel->fs->mbox, &msg_ptr, timeout) < 0)
-    k_panic("fail send %d: %d", msg->type, r);
+  ipc_request_dup(req);
 
-  if ((r = k_semaphore_timed_get(&msg->sem, timeout, K_SLEEP_UNINTERUPTIBLE)) < 0)
-    k_panic("fail recv %d: %d", msg->type, r);
+  if (k_mailbox_timed_send(&channel->fs->mbox, &req, timeout) < 0) {
+    ipc_request_destroy(req);
+    ipc_request_destroy(req);
+    k_warn("fail send %d: %d", msg->type, r);
+    return -ETIMEDOUT;
+  }
+
+  if ((r = k_semaphore_timed_get(&req->sem, timeout, K_SLEEP_UNINTERUPTIBLE)) < 0) {
+    ipc_request_destroy(req);
+    ipc_request_destroy(req);
+    k_warn("fail recv %d: %d", msg->type, r);
+    return -ETIMEDOUT;
+  }
+
+  ipc_request_destroy(req);
 
   return 0;
 }

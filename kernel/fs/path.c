@@ -212,7 +212,7 @@ fs_path_set_cwd(struct PathNode *node)
 
   fs_send_recv(channel, &msg);
 
-  if ((r = msg.u.chdir.r) < 0)
+  if ((r = msg.r) < 0)
     return r;
 
   // UNREF(current->cwd)
@@ -245,7 +245,7 @@ fs_path_resolve_symlink(ino_t ino,
 
   fs_send_recv(channel, &msg);
 
-  if ((r = msg.u.readlink.r) < 0) {
+  if ((r = msg.r) < 0) {
     k_free(path);
     return r;
   }
@@ -349,7 +349,7 @@ fs_path_node_resolve_at(struct PathNode *start,
 
     fs_send_recv(channel, &msg);
 
-    if ((r = msg.u.stat.r) < 0) {
+    if ((r = msg.r) < 0) {
       break;
     }
 
@@ -471,7 +471,7 @@ fs_path_node_lookup(struct PathNode *parent,
 
     fs_send_recv(channel, &msg);
 
-    r = msg.u.lookup.r;
+    r = msg.r;
 
     if (r == 0 && child_ino != 0) {
       // Insert new node
