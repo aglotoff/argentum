@@ -553,9 +553,7 @@ fs_open(const char *path, int oflag, mode_t mode, struct Channel **file_store)
   channel->flags        = oflag & ~OPEN_TIME_FLAGS;
   channel->type         = CHANNEL_TYPE_FILE;
   channel->node         = NULL;
-  channel->u.file.inode = NULL;
   channel->fs    = NULL;
-  channel->u.file.rdev  = -1;
   channel->ref_count    = 1;
 
   flags = FS_LOOKUP_FOLLOW_LINKS;
@@ -626,9 +624,6 @@ fs_select(struct Channel *channel, struct timeval *timeout)
 
   k_assert(channel->ref_count > 0);
   k_assert(channel->type == CHANNEL_TYPE_FILE);
-
-  if (channel->u.file.rdev >= 0)
-    return dev_select(thread_current(), channel->u.file.rdev, timeout);
 
   msg.type = IPC_MSG_SELECT;
   msg.u.select.timeout = timeout;

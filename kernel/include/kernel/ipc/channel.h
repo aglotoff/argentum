@@ -14,6 +14,8 @@ enum {
 };
 
 struct File {
+  struct KListLink hash_link;
+  struct Channel  *channel;
   off_t            offset;       // Current offset within the file
   struct Inode    *inode;
   dev_t            rdev;
@@ -27,10 +29,6 @@ struct Channel {
   struct PathNode     *node;         // Pointer to the corresponding inode
   
   struct FS           *fs;
-
-  union {
-    struct File file;
-  } u;
 };
 
 int             channel_alloc(struct Channel **);

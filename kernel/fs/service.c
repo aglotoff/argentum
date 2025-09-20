@@ -12,6 +12,7 @@
 #include <kernel/time.h>
 #include <kernel/vmspace.h>
 #include <kernel/dev.h>
+#include <kernel/hash.h>
 
 static struct IpcRequest *
 ipc_request_create(struct IpcMessage *msg)
@@ -67,6 +68,48 @@ ipc_request_reply(struct IpcRequest *req)
 {
   k_semaphore_put(&req->sem);
   ipc_request_destroy(req);
+}
+
+// File data
+
+#define NBUCKET   256
+
+static struct {
+  struct KListLink table[NBUCKET];
+  struct KSpinLock lock;
+} file_hash;
+
+static struct File *
+get_channel_file(struct Channel *channel)
+{
+  struct KListLink *l;
+
+  k_spinlock_acquire(&file_hash.lock);
+
+  HASH_FOREACH_ENTRY(file_hash.table, l, (uintptr_t) channel) {
+    struct File *file;
+    
+    file = KLIST_CONTAINER(l, struct File, hash_link);
+    if (file->channel == channel) {
+      k_spinlock_release(&file_hash.lock);
+      return file;
+    }
+  }
+
+  k_spinlock_release(&file_hash.lock);
+  return NULL;
+}
+
+static void
+set_channel_file(struct File *file,
+                 struct Channel *channel)
+{
+  file->channel = channel;
+  k_list_null(&file->hash_link);
+
+  k_spinlock_acquire(&file_hash.lock);
+  HASH_PUT(file_hash.table, &file->hash_link, (uintptr_t) channel);
+  k_spinlock_release(&file_hash.lock);
 }
 
 
@@ -691,9 +734,18 @@ out:
 void
 do_close(struct FS *, struct IpcRequest *req, struct IpcMessage *msg)
 {
-  if (req->channel->u.file.inode != NULL) {
-    fs_inode_put(req->channel->u.file.inode);
-    req->channel->u.file.inode = NULL;
+  struct File *file = get_channel_file(req->channel);
+
+  if (file != NULL) {
+    k_assert(file->inode != NULL);
+
+    fs_inode_put(file->inode);
+
+    k_spinlock_acquire(&file_hash.lock);
+    k_list_remove(&file->hash_link);
+    k_spinlock_release(&file_hash.lock);
+
+    k_free(file);
   }
 
   msg->r = 0;
@@ -705,13 +757,15 @@ void
 do_fchmod(struct FS *fs, struct IpcRequest *req, struct IpcMessage *msg)
 {
   struct Thread *sender = req->sender;
-  struct Channel *channel = req->channel;
   mode_t mode = msg->u.fchmod.mode;
 
-  if (channel->u.file.inode == NULL) {
+  struct File *file = get_channel_file(req->channel);
+  k_assert(file != NULL);
+
+  if (file->inode == NULL) {
     msg->r = -EINVAL;
   } else {
-    msg->r = do_inode_chmod(fs, sender, channel->u.file.inode, mode);
+    msg->r = do_inode_chmod(fs, sender, file->inode, mode);
   }
 
   ipc_request_reply(req);
@@ -721,14 +775,16 @@ void
 do_fchown(struct FS *fs, struct IpcRequest *req, struct IpcMessage *msg)
 {
   struct Thread *sender = req->sender;
-  struct Channel *channel = req->channel;
   uid_t uid = msg->u.fchown.uid;
   gid_t gid = msg->u.fchown.gid;
 
-  if (channel->u.file.inode == NULL) {
+  struct File *file = get_channel_file(req->channel);
+  k_assert(file != NULL);
+
+  if (file->inode == NULL) {
     msg->r = -EINVAL;
   } else {
-    msg->r = do_inode_chown(fs, sender, channel->u.file.inode, uid, gid);
+    msg->r = do_inode_chown(fs, sender, file->inode, uid, gid);
   }
 
   ipc_request_reply(req);
@@ -738,13 +794,14 @@ void
 do_fstat(struct FS *fs, struct IpcRequest *req, struct IpcMessage *msg)
 {
   struct Thread *sender = req->sender;
-  struct Channel *channel = req->channel;
   struct stat *buf = msg->u.fstat.buf;
+  struct File *file = get_channel_file(req->channel);
+  k_assert(file != NULL);
 
-  if (channel->u.file.inode == NULL) {
+  if (file->inode == NULL) {
     msg->r = -EINVAL;
   } else {
-    msg->r = do_inode_stat(fs, sender, channel->u.file.inode, buf);
+    msg->r = do_inode_stat(fs, sender, file->inode, buf);
   }
 
   ipc_request_reply(req);
@@ -753,14 +810,15 @@ do_fstat(struct FS *fs, struct IpcRequest *req, struct IpcMessage *msg)
 void
 do_fsync(struct FS *, struct IpcRequest *req, struct IpcMessage *msg)
 {
-  struct Channel *channel = req->channel;
+  struct File *file = get_channel_file(req->channel);
+  k_assert(file != NULL);
 
-  if (channel->u.file.inode == NULL) {
+  if (file->inode == NULL) {
     msg->r = -EINVAL;
   } else {
-    fs_inode_lock(channel->u.file.inode);
+    fs_inode_lock(file->inode);
     // FIXME: fsync
-    fs_inode_unlock(channel->u.file.inode);
+    fs_inode_unlock(file->inode);
     msg->r = 0;
   }
 
@@ -771,18 +829,19 @@ void
 do_ioctl(struct FS *, struct IpcRequest *req, struct IpcMessage *msg)
 {
   struct Thread *sender = req->sender;
-  struct Channel *channel = req->channel;
+  struct File *file = get_channel_file(req->channel);
+  k_assert(file != NULL);
   int request = msg->u.ioctl.request;
   int arg = msg->u.ioctl.arg;
 
-  if (channel->u.file.rdev >= 0) {
-    msg->r = dev_ioctl(sender, channel->u.file.rdev, request, arg);
-  } else if (channel->u.file.inode == NULL) {
+  if (file->rdev >= 0) {
+    msg->r = dev_ioctl(sender, file->rdev, request, arg);
+  } else if (file->inode == NULL) {
     msg->r = -EINVAL;
   } else {
-    fs_inode_lock(channel->u.file.inode);
+    fs_inode_lock(file->inode);
     // FIXME: ioctl
-    fs_inode_unlock(channel->u.file.inode);
+    fs_inode_unlock(file->inode);
     msg->r = -ENOTTY;
   }
 
@@ -821,13 +880,22 @@ do_open_locked(struct FS *fs, struct Thread *sender,
     inode->flags |= FS_INODE_DIRTY;
   }
 
+  struct File *file = (struct File *) k_malloc(sizeof(struct File));
+  k_assert(file != NULL);
+
+  set_channel_file(file, channel);
+
   if (S_ISCHR(inode->mode) || S_ISBLK(inode->mode))
-    channel->u.file.rdev = inode->rdev;
+    file->rdev = inode->rdev;
+  else
+    file->rdev = -1;
 
   if (oflag & O_APPEND)
-    channel->u.file.offset = inode->size;
+    file->offset = inode->size;
+  else
+    file->offset = 0;
 
-  channel->u.file.inode = fs_inode_duplicate(inode);
+  file->inode = fs_inode_duplicate(inode);
 
   return 0;
 }
@@ -849,8 +917,13 @@ do_open(struct FS *fs, struct IpcRequest *req, struct IpcMessage *msg)
 
   fs_inode_put(inode);
 
-  if ((msg->r == 0) && (channel->u.file.rdev >= 0)){
-    msg->r = dev_open(sender, channel->u.file.rdev, oflag, mode);
+  if (msg->r == 0) {
+    struct File *file = get_channel_file(req->channel);
+    k_assert(file != NULL);
+
+    if (file->rdev >= 0) {
+      msg->r = dev_open(sender, file->rdev, oflag, mode);
+    }
   }
 
   ipc_request_reply(req);
@@ -864,24 +937,27 @@ do_read_locked(struct FS *fs, struct Thread *sender,
 {
   ssize_t total;
 
-  if (!fs_inode_permission(sender, channel->u.file.inode, FS_PERM_READ, 0))
+  struct File *file = get_channel_file(channel);
+  k_assert(file != NULL);
+
+  if (!fs_inode_permission(sender, file->inode, FS_PERM_READ, 0))
     return -EPERM;
 
-  if ((off_t) (channel->u.file.offset + nbyte) < channel->u.file.offset)
+  if ((off_t) (file->offset + nbyte) < file->offset)
     return -EINVAL;
 
-  if ((off_t) (channel->u.file.offset + nbyte) > channel->u.file.inode->size)
-    nbyte = channel->u.file.inode->size - channel->u.file.offset;
+  if ((off_t) (file->offset + nbyte) > file->inode->size)
+    nbyte = file->inode->size - file->offset;
   if (nbyte == 0)
     return 0;
 
-  total = fs->ops->read(sender, channel->u.file.inode, va, nbyte, channel->u.file.offset);
+  total = fs->ops->read(sender, file->inode, va, nbyte, file->offset);
 
   if (total >= 0) {
-    channel->u.file.offset += total;
+    file->offset += total;
   
-    channel->u.file.inode->atime  = time_get_seconds();
-    channel->u.file.inode->flags |= FS_INODE_DIRTY;
+    file->inode->atime  = time_get_seconds();
+    file->inode->flags |= FS_INODE_DIRTY;
   }
 
   return total;
@@ -895,16 +971,19 @@ do_read(struct FS *fs, struct IpcRequest *req, struct IpcMessage *msg)
   uintptr_t va = msg->u.read.va;
   size_t nbyte = msg->u.read.nbyte;
 
-  if (channel->u.file.rdev >= 0) {
-    msg->r = dev_read(sender, channel->u.file.rdev, va, nbyte);
+  struct File *file = get_channel_file(req->channel);
+  k_assert(file != NULL);
+
+  if (file->rdev >= 0) {
+    msg->r = dev_read(sender, file->rdev, va, nbyte);
   } else if ((channel->flags & O_ACCMODE) == O_WRONLY) {
     msg->r = -EBADF;
-  } else if (channel->u.file.inode == NULL) {
+  } else if (file->inode == NULL) {
     msg->r = -EINVAL;
   } else {
-    fs_inode_lock(channel->u.file.inode);
-    msg->r = do_read_locked(fs, sender, channel, va, nbyte);
-    fs_inode_unlock(channel->u.file.inode);
+    fs_inode_lock(file->inode);
+    msg->r = do_read_locked(fs, req->sender, channel, va, nbyte);
+    fs_inode_unlock(file->inode);
   }
 
   ipc_request_reply(req);
@@ -923,17 +1002,20 @@ do_readdir_locked(struct FS *fs, struct Thread *sender,
     char buf[NAME_MAX + 1];
   } de;
 
-  if (!S_ISDIR(channel->u.file.inode->mode))
+  struct File *file = get_channel_file(channel);
+  k_assert(file != NULL);
+
+  if (!S_ISDIR(file->inode->mode))
     return -ENOTDIR;
 
-  if (!fs_inode_permission(sender, channel->u.file.inode, FS_PERM_READ, 0))
+  if (!fs_inode_permission(sender, file->inode, FS_PERM_READ, 0))
     return -EPERM;
 
   while (nbyte > 0) {
     ssize_t nread;
     int r;
 
-    nread = fs->ops->readdir(sender, channel->u.file.inode, &de, fs_filldir, channel->u.file.offset);
+    nread = fs->ops->readdir(sender, file->inode, &de, fs_filldir, file->offset);
 
     if (nread < 0)
       return nread;
@@ -948,7 +1030,7 @@ do_readdir_locked(struct FS *fs, struct Thread *sender,
       break;
     }
 
-    channel->u.file.offset += nread;
+    file->offset += nread;
 
     if ((r = vm_space_copy_out(sender, &de, va, de.de.d_reclen)) < 0)
       return r;
@@ -969,12 +1051,15 @@ do_readdir(struct FS *fs, struct IpcRequest *req, struct IpcMessage *msg)
   uintptr_t va = msg->u.readdir.va;
   size_t nbyte = msg->u.readdir.nbyte;
 
-  if (channel->u.file.inode == NULL) {
+  struct File *file = get_channel_file(req->channel);
+  k_assert(file != NULL);
+
+  if (file->inode == NULL) {
     msg->r = -EINVAL;
   } else {
-    fs_inode_lock(channel->u.file.inode);
+    fs_inode_lock(file->inode);
     msg->r = do_readdir_locked(fs, sender, channel, va, nbyte);
-    fs_inode_unlock(channel->u.file.inode);
+    fs_inode_unlock(file->inode);
   }
 
   ipc_request_reply(req);
@@ -983,12 +1068,14 @@ do_readdir(struct FS *fs, struct IpcRequest *req, struct IpcMessage *msg)
 void
 do_seek(struct FS *, struct IpcRequest *req, struct IpcMessage *msg)
 {
-  struct Channel *channel = req->channel;
   off_t offset = msg->u.seek.offset;
   int whence = msg->u.seek.whence;
   off_t new_offset;
 
-  if (channel->u.file.inode == NULL) {
+  struct File *file = get_channel_file(req->channel);
+  k_assert(file != NULL);
+
+  if (file->inode == NULL) {
     msg->r = -EINVAL;
     ipc_request_reply(req);
     return;
@@ -999,12 +1086,12 @@ do_seek(struct FS *, struct IpcRequest *req, struct IpcMessage *msg)
     new_offset = offset;
     break;
   case SEEK_CUR:
-    new_offset = channel->u.file.offset + offset;
+    new_offset = file->offset + offset;
     break;
   case SEEK_END:
-    fs_inode_lock(channel->u.file.inode);
-    new_offset = channel->u.file.inode->size + offset;
-    fs_inode_unlock(channel->u.file.inode);
+    fs_inode_lock(file->inode);
+    new_offset = file->inode->size + offset;
+    fs_inode_unlock(file->inode);
     break;
   default:
     msg->r = -EINVAL;
@@ -1015,7 +1102,7 @@ do_seek(struct FS *, struct IpcRequest *req, struct IpcMessage *msg)
   if (new_offset < 0) {
     msg->r = -EOVERFLOW;
   } else {
-    channel->u.file.offset = new_offset;
+    file->offset = new_offset;
     msg->r = new_offset;
   }
 
@@ -1025,15 +1112,23 @@ do_seek(struct FS *, struct IpcRequest *req, struct IpcMessage *msg)
 void
 do_select(struct FS *, struct IpcRequest *req, struct IpcMessage *msg)
 {
-  struct Channel *channel = req->channel;
-  // struct timeval *timeout = msg->u.select.timeout;
+  struct timeval *timeout = msg->u.select.timeout;
 
-  if (channel->u.file.inode == NULL) {
+  struct File *file = get_channel_file(req->channel);
+  k_assert(file != NULL);
+
+  if (file->rdev >= 0) {
+    msg->r = dev_select(thread_current(), file->rdev, timeout);
+    ipc_request_reply(req);
+    return;
+  }
+
+  if (file->inode == NULL) {
     msg->r = -EINVAL;
   } else {
-    fs_inode_lock(channel->u.file.inode);
+    fs_inode_lock(file->inode);
     // FIXME: select
-    fs_inode_unlock(channel->u.file.inode);
+    fs_inode_unlock(file->inode);
     msg->r = 1;
   }
 
@@ -1044,31 +1139,33 @@ void
 do_trunc(struct FS *fs, struct IpcRequest *req, struct IpcMessage *msg)
 {
   struct Thread *sender = req->sender;
-  struct Channel *channel = req->channel;
   off_t length = msg->u.trunc.length;
+
+  struct File *file = get_channel_file(req->channel);
+  k_assert(file != NULL);
 
   if (length < 0) {
     msg->r = -EINVAL;
-  } else if (channel->u.file.inode == NULL) {
+  } else if (file->inode == NULL) {
     msg->r = -EINVAL;
   } else {
-    fs_inode_lock(channel->u.file.inode);
+    fs_inode_lock(file->inode);
 
-    if (length > channel->u.file.inode->size) {
-      fs_inode_unlock(channel->u.file.inode);
+    if (length > file->inode->size) {
+      fs_inode_unlock(file->inode);
       msg->r = -EFBIG;
-    } else if (!fs_inode_permission(sender, channel->u.file.inode, FS_PERM_WRITE, 0)) {
-      fs_inode_unlock(channel->u.file.inode);
+    } else if (!fs_inode_permission(sender, file->inode, FS_PERM_WRITE, 0)) {
+      fs_inode_unlock(file->inode);
       msg->r = -EPERM;
     } else {
-      fs->ops->trunc(sender, channel->u.file.inode, length);
+      fs->ops->trunc(sender, file->inode, length);
 
-      channel->u.file.inode->size = length;
-      channel->u.file.inode->ctime = channel->u.file.inode->mtime = time_get_seconds();
+      file->inode->size = length;
+      file->inode->ctime = file->inode->mtime = time_get_seconds();
 
-      channel->u.file.inode->flags |= FS_INODE_DIRTY;
+      file->inode->flags |= FS_INODE_DIRTY;
 
-      fs_inode_unlock(channel->u.file.inode);
+      fs_inode_unlock(file->inode);
       msg->r = 0;
     }
   }
@@ -1084,28 +1181,31 @@ do_write_locked(struct FS *fs, struct Thread *sender,
 {
   ssize_t total;
 
-  if (!fs_inode_permission(sender, channel->u.file.inode, FS_PERM_WRITE, 0))
+  struct File *file = get_channel_file(channel);
+  k_assert(file != NULL);
+
+  if (!fs_inode_permission(sender, file->inode, FS_PERM_WRITE, 0))
     return -EPERM;
 
   if (channel->flags & O_APPEND)
-    channel->u.file.offset = channel->u.file.inode->size;
+    file->offset = file->inode->size;
 
-  if ((off_t) (channel->u.file.offset + nbyte) < channel->u.file.offset)
+  if ((off_t) (file->offset + nbyte) < file->offset)
     return -EINVAL;
 
   if (nbyte == 0)
     return 0;
 
-  total = fs->ops->write(sender, channel->u.file.inode, va, nbyte, channel->u.file.offset);
+  total = fs->ops->write(sender, file->inode, va, nbyte, file->offset);
 
   if (total > 0) {
-    channel->u.file.offset += total;
+    file->offset += total;
 
-    if (channel->u.file.offset > channel->u.file.inode->size)
-      channel->u.file.inode->size = channel->u.file.offset;
+    if (file->offset > file->inode->size)
+      file->inode->size = file->offset;
 
-    channel->u.file.inode->mtime = time_get_seconds();
-    channel->u.file.inode->flags |= FS_INODE_DIRTY;
+    file->inode->mtime = time_get_seconds();
+    file->inode->flags |= FS_INODE_DIRTY;
   }
 
   return total;
@@ -1119,16 +1219,19 @@ do_write(struct FS *fs, struct IpcRequest *req, struct IpcMessage *msg)
   uintptr_t va = msg->u.write.va;
   size_t nbyte = msg->u.write.nbyte;
 
-  if (channel->u.file.rdev >= 0) {
-    msg->r = dev_write(sender, channel->u.file.rdev, va, nbyte);
-  } else if (channel->u.file.inode == NULL) {
+  struct File *file = get_channel_file(req->channel);
+  k_assert(file != NULL);
+
+  if (file->rdev >= 0) {
+    msg->r = dev_write(sender, file->rdev, va, nbyte);
+  } else if (file->inode == NULL) {
     msg->r = -EINVAL;
   } else if ((channel->flags & O_ACCMODE) == O_RDONLY) {
     msg->r = -EBADF;
   } else {
-    fs_inode_lock(channel->u.file.inode);
+    fs_inode_lock(file->inode);
     msg->r = do_write_locked(fs, sender, channel, va, nbyte);
-    fs_inode_unlock(channel->u.file.inode);
+    fs_inode_unlock(file->inode);
   }
 
   ipc_request_reply(req);
@@ -1203,6 +1306,12 @@ fs_create_service(char *name, dev_t dev, void *extra, struct FSOps *ops)
 {
   struct FS *fs;
   int i;
+
+  // TODO: move this code out from here
+  if (k_list_is_null(&file_hash.table[0])) {
+    HASH_INIT(file_hash.table);
+    k_spinlock_init(&file_hash.lock, "file_hash");
+  }
 
   if ((fs = (struct FS *) k_malloc(sizeof(struct FS))) == NULL)
     k_panic("cannot allocate FS");

@@ -43,8 +43,6 @@ fs_path_node_create(const char *name,
   if (name != NULL)
     strncpy(node->name, name, NAME_MAX);
 
-  k_assert(channel->u.file.inode == NULL);
-
   node->ino = ino;
   node->channel = channel_ref(channel);
   node->mounted_channel = NULL;
@@ -576,8 +574,6 @@ fs_init(void)
   channel->flags        = 0;
   channel->type         = CHANNEL_TYPE_FILE;
   channel->node         = NULL;
-  channel->u.file.inode = NULL;
-  channel->u.file.rdev  = -1;
   channel->ref_count    = 1;
 
   root_ino = ext2_mount(FS_ROOT_DEV, &channel->fs);
@@ -650,13 +646,11 @@ fs_path_mount(struct PathNode *node, ino_t ino, struct FS *fs)
   if ((r = channel_alloc(&channel)) < 0)
     return r;
 
-  channel->flags        = 0;
-  channel->type         = CHANNEL_TYPE_FILE;
-  channel->node         = NULL;
-  channel->u.file.inode = NULL;
-  channel->fs    = fs;
-  channel->u.file.rdev  = -1;
-  channel->ref_count    = 1;
+  channel->flags     = 0;
+  channel->type      = CHANNEL_TYPE_FILE;
+  channel->node      = NULL;
+  channel->fs        = fs;
+  channel->ref_count = 1;
 
   node->mounted_ino     = ino;
   node->mounted_channel = channel;

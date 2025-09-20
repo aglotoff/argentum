@@ -36,15 +36,12 @@ channel_alloc(struct Channel **fstore)
   f->type      = 0;
   f->ref_count = 0;
   f->flags     = 0;
-  f->u.file.offset    = 0;
-  f->node             = NULL;
-  f->u.file.inode     = NULL;
-  f->u.file.rdev      = -1;
-  f->fs   = NULL;
+  f->node      = NULL;
+  f->fs        = NULL;
 
   if (fstore != NULL)
     *fstore = f;
-  
+
   return 0;
 }
 
