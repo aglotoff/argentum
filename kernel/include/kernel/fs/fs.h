@@ -22,7 +22,7 @@ struct stat;
 struct Channel;
 struct FS;
 
-struct Thread;
+struct Process;
 
 struct Inode {
   // These two fields never change
@@ -76,22 +76,22 @@ typedef int (*FillDirFunc)(void *, ino_t, const char *, size_t);
 struct FSOps {
   char             *name;
   struct Inode *  (*inode_get)(struct FS *, ino_t);
-  int             (*inode_read)(struct Thread *, struct Inode *);
-  int             (*inode_write)(struct Thread *, struct Inode *);
-  void            (*inode_delete)(struct Thread *, struct Inode *);
-  ssize_t         (*read)(struct Thread *, struct Inode *, uintptr_t, size_t, off_t);
-  ssize_t         (*write)(struct Thread *, struct Inode *, uintptr_t, size_t, off_t);
-  int             (*rmdir)(struct Thread *, struct Inode *, struct Inode *, const char *);
-  ssize_t         (*readdir)(struct Thread *, struct Inode *, void *, FillDirFunc, off_t);
-  ssize_t         (*readlink)(struct Thread *, struct Inode *, uintptr_t, size_t);
-  int             (*create)(struct Thread *, struct Inode *, char *, mode_t, struct Inode **);
-  int             (*symlink)(struct Thread *, struct Inode *, char *, mode_t, const char *, struct Inode **);
-  int             (*mkdir)(struct Thread *, struct Inode *, char *, mode_t, struct Inode **);
-  int             (*mknod)(struct Thread *, struct Inode *, char *, mode_t, dev_t, struct Inode **);
-  int             (*link)(struct Thread *, struct Inode *, char *, struct Inode *);
-  int             (*unlink)(struct Thread *, struct Inode *, struct Inode *, const char *);
-  struct Inode *  (*lookup)(struct Thread *, struct Inode *, const char *);
-  void            (*trunc)(struct Thread *, struct Inode *, off_t);
+  int             (*inode_read)(struct Process *, struct Inode *);
+  int             (*inode_write)(struct Process *, struct Inode *);
+  void            (*inode_delete)(struct Process *, struct Inode *);
+  ssize_t         (*read)(struct Process *, struct Inode *, uintptr_t, size_t, off_t);
+  ssize_t         (*write)(struct Process *, struct Inode *, uintptr_t, size_t, off_t);
+  int             (*rmdir)(struct Process *, struct Inode *, struct Inode *, const char *);
+  ssize_t         (*readdir)(struct Process *, struct Inode *, void *, FillDirFunc, off_t);
+  ssize_t         (*readlink)(struct Process *, struct Inode *, uintptr_t, size_t);
+  int             (*create)(struct Process *, struct Inode *, char *, mode_t, struct Inode **);
+  int             (*symlink)(struct Process *, struct Inode *, char *, mode_t, const char *, struct Inode **);
+  int             (*mkdir)(struct Process *, struct Inode *, char *, mode_t, struct Inode **);
+  int             (*mknod)(struct Process *, struct Inode *, char *, mode_t, dev_t, struct Inode **);
+  int             (*link)(struct Process *, struct Inode *, char *, struct Inode *);
+  int             (*unlink)(struct Process *, struct Inode *, struct Inode *, const char *);
+  struct Inode *  (*lookup)(struct Process *, struct Inode *, const char *);
+  void            (*trunc)(struct Process *, struct Inode *, off_t);
 };
 
 #define FS_MBOX_CAPACITY  20
@@ -127,7 +127,7 @@ struct Inode    *fs_inode_duplicate(struct Inode *);
 void             fs_inode_lock(struct Inode *);
 void             fs_inode_unlock(struct Inode *);
 void             fs_inode_cache_init(void);
-int              fs_inode_permission(struct Thread *, struct Inode *, mode_t, int);
+int              fs_inode_permission(struct Process *, struct Inode *, mode_t, int);
 void             fs_inode_lock_two(struct Inode *, struct Inode *);
 void             fs_inode_unlock_two(struct Inode *, struct Inode *);
 
@@ -167,7 +167,6 @@ ino_t            fs_path_ino(struct PathNode *, struct Channel **);
 struct FS *      fs_create_service(char *, dev_t, void *, struct FSOps *);
 void             fs_service_task(void *);
 
-struct Thread;
 struct IpcMessage;
 
 int              fs_send_recv(struct Channel *, struct IpcMessage *);

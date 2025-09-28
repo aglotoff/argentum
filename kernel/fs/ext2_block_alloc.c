@@ -66,10 +66,10 @@ ext2_block_group_alloc(struct Ext2SuperblockData *sb, struct Ext2BlockGroup *gd,
  * @retval -ENOMEM Couldn't find a free block.
  */
 int
-ext2_block_alloc(struct Thread *thread, struct Ext2SuperblockData *sb, dev_t dev, uint32_t *bstore)
+ext2_block_alloc(struct Process *process, struct Ext2SuperblockData *sb, dev_t dev, uint32_t *bstore)
 {
   int r;
-  uid_t euid = (thread == NULL) ? 0 : thread->process->euid;
+  uid_t euid = (process == NULL) ? 0 : process->euid;
   
   uint32_t gd_start      = sb->block_size > 1024U ? 1 : 2;
   uint32_t gds_total     = sb->block_count / sb->blocks_per_group;

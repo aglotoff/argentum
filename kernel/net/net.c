@@ -343,7 +343,7 @@ net_recvfrom(struct Channel *file, uintptr_t va, size_t nbytes, int flags,
       break;
     }
 
-    if ((r = vm_space_copy_out(thread_current(), p, va, nread)) < 0) {
+    if ((r = vm_space_copy_out(process_current(), p, va, nread)) < 0) {
       total = -errno;
       break;
     }
@@ -383,7 +383,7 @@ net_sendto(struct Channel *file, uintptr_t va, size_t nbytes, int flags,
   while (nbytes) {
     ssize_t nwrite = MIN(nbytes, PAGE_SIZE);
     
-    if ((r = vm_space_copy_in(thread_current(), p, va, nwrite)) < 0) {
+    if ((r = vm_space_copy_in(process_current(), p, va, nwrite)) < 0) {
       total = -errno;
       break;
     }

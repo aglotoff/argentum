@@ -123,7 +123,8 @@ fs_inode_put(struct Inode *inode)
 
     // If this is the last reference to this inode
     if (ref_count == 1) {
-      inode->fs->ops->inode_delete(thread_current(), inode);
+      // TODO: process_current?
+      inode->fs->ops->inode_delete(process_current(), inode);
       inode->flags &= ~FS_INODE_VALID;
     }
   }
@@ -166,7 +167,7 @@ fs_inode_lock(struct Inode *ip)
   if (ip->flags & FS_INODE_DIRTY)
     k_panic("inode dirty");
 
-  ip->fs->ops->inode_read(thread_current(), ip);
+  ip->fs->ops->inode_read(process_current(), ip);
 
   //msg.type = IPC_MSG_INODE_READ;
   //msg.u.inode_read.inode = ip;
@@ -183,7 +184,8 @@ fs_inode_unlock(struct Inode *ip)
     k_panic("inode not valid");
 
   if (ip->flags & FS_INODE_DIRTY) {
-    ip->fs->ops->inode_write(thread_current(), ip);
+    // current??
+    ip->fs->ops->inode_write(process_current(), ip);
     ip->flags &= ~FS_INODE_DIRTY;
   }
 
@@ -215,12 +217,10 @@ fs_inode_unlock_two(struct Inode *inode1, struct Inode *inode2)
 }
 
 int
-fs_inode_permission(struct Thread *thread, struct Inode *inode, mode_t mode, int real)
+fs_inode_permission(struct Process *process, struct Inode *inode, mode_t mode, int real)
 {
-  struct Process *my_process = thread ? thread->process : NULL;
-
-  uid_t uid = my_process ? (real ? my_process->ruid : my_process->euid) : 0;
-  gid_t gid = my_process ? (real ? my_process->rgid : my_process->egid) : 0;
+  uid_t uid = process ? (real ? process->ruid : process->euid) : 0;
+  gid_t gid = process ? (real ? process->rgid : process->egid) : 0;
 
   if (uid == 0)
     return (mode & FS_PERM_EXEC)

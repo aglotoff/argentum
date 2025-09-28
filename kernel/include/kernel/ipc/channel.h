@@ -202,7 +202,7 @@ enum {
 struct IpcRequest {
   struct IpcMessage *msg;
   struct KSemaphore sem;
-  struct Thread *sender;
+  struct Process *process;
   struct Channel *channel;
   struct KSpinLock lock;
   int ref_count;

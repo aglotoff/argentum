@@ -48,56 +48,56 @@ dev_register_block(int major, struct BlockDev *dev)
 }
 
 int
-dev_open(struct Thread *thread, dev_t rdev, int oflag, mode_t mode)
+dev_open(struct Process *process, dev_t rdev, int oflag, mode_t mode)
 {
   struct CharDev *d = dev_lookup_char(rdev);
 
   if (d == NULL)
     return -ENODEV;
 
-  return d->open(thread, rdev, oflag, mode);
+  return d->open(process, rdev, oflag, mode);
 }
 
 ssize_t
-dev_read(struct Thread *thread, dev_t rdev, uintptr_t va, size_t n)
+dev_read(struct Process *process, dev_t rdev, uintptr_t va, size_t n)
 {
   struct CharDev *d = dev_lookup_char(rdev);
 
   if (d == NULL)
     return -ENODEV;
 
-  return d->read(thread, rdev, va, n);
+  return d->read(process, rdev, va, n);
 }
 
 ssize_t
-dev_write(struct Thread *thread, dev_t rdev, uintptr_t va, size_t n)
+dev_write(struct Process *process, dev_t rdev, uintptr_t va, size_t n)
 {
   struct CharDev *d = dev_lookup_char(rdev);
 
   if (d == NULL)
     return -ENODEV;
 
-  return d->write(thread, rdev, va, n);
+  return d->write(process, rdev, va, n);
 }
 
 int
-dev_ioctl(struct Thread *thread, dev_t rdev, int request, int arg)
+dev_ioctl(struct Process *process, dev_t rdev, int request, int arg)
 {
   struct CharDev *d = dev_lookup_char(rdev);
 
   if (d == NULL)
     return -ENODEV;
 
-  return d->ioctl(thread, rdev, request, arg);
+  return d->ioctl(process, rdev, request, arg);
 }
 
 int
-dev_select(struct Thread *thread, dev_t rdev, struct timeval *timeout)
+dev_select(struct Process *process, dev_t rdev, struct timeval *timeout)
 {
   struct CharDev *d = dev_lookup_char(rdev);
 
   if (d == NULL)
     return -ENODEV;
 
-  return d->select(thread, rdev, timeout);
+  return d->select(process, rdev, timeout);
 }

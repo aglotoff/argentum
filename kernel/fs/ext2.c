@@ -35,13 +35,13 @@ ext2_inode_get(struct FS *fs, ino_t inum)
 }
 
 int
-ext2_inode_create(struct Thread *thread, struct Inode *dirp, char *name, mode_t mode, dev_t rdev,
+ext2_inode_create(struct Process *process, struct Inode *dirp, char *name, mode_t mode, dev_t rdev,
             struct Inode **istore)
 {
   struct Inode *ip;
   uint32_t inum;
   int r;
-  uid_t euid = thread == NULL ? 0 : thread->process->euid;
+  uid_t euid = process == NULL ? 0 : process->euid;
 
   if ((r = ext2_inode_alloc((struct Ext2SuperblockData *) (dirp->fs->extra), mode, rdev, dirp->dev, &inum, dirp->ino)) < 0)
     return r;
@@ -54,7 +54,7 @@ ext2_inode_create(struct Thread *thread, struct Inode *dirp, char *name, mode_t 
   ip->uid = euid;
   ip->gid = dirp->gid;
 
-  if ((r = ext2_link(thread, dirp, name, ip)))
+  if ((r = ext2_link(process, dirp, name, ip)))
     k_panic("Cannot create link");
 
   ip->ctime = ip->mtime = time_get_seconds();
@@ -66,15 +66,13 @@ ext2_inode_create(struct Thread *thread, struct Inode *dirp, char *name, mode_t 
 }
 
 int
-ext2_create(struct Thread *thread, struct Inode *dirp, char *name, mode_t mode,
+ext2_create(struct Process *process, struct Inode *dirp, char *name, mode_t mode,
             struct Inode **istore)
 {
   struct Inode *ip;
   int r;
 
-  (void) thread;
-
-  if ((r = ext2_inode_create(thread, dirp, name, mode, 0, &ip)) != 0)
+  if ((r = ext2_inode_create(process, dirp, name, mode, 0, &ip)) != 0)
     return r;
 
   ip->nlink = 1;
@@ -92,7 +90,7 @@ ext2_create(struct Thread *thread, struct Inode *dirp, char *name, mode_t mode,
 }
 
 int
-ext2_mkdir(struct Thread *thread, struct Inode *dirp, char *name, mode_t mode,
+ext2_mkdir(struct Process *process, struct Inode *dirp, char *name, mode_t mode,
            struct Inode **istore)
 {
   struct Inode *ip;
@@ -101,18 +99,18 @@ ext2_mkdir(struct Thread *thread, struct Inode *dirp, char *name, mode_t mode,
   if (dirp->nlink >= LINK_MAX)
     return -EMLINK;
 
-  if ((r = ext2_inode_create(thread, dirp, name, mode, 0, &ip)) != 0)
+  if ((r = ext2_inode_create(process, dirp, name, mode, 0, &ip)) != 0)
     return r;
 
   // Create the "." entry
-  if (ext2_link(thread, ip, ".", ip) < 0)
+  if (ext2_link(process, ip, ".", ip) < 0)
     k_panic("Cannot create .");
 
   ip->nlink = 2;
   ip->flags |= FS_INODE_DIRTY;
 
   // Create the ".." entry
-  if (ext2_link(thread, ip, "..", dirp) < 0)
+  if (ext2_link(process, ip, "..", dirp) < 0)
     k_panic("Cannot create ..");
 
   fs_inode_unlock(ip);
@@ -128,13 +126,13 @@ ext2_mkdir(struct Thread *thread, struct Inode *dirp, char *name, mode_t mode,
 }
 
 int
-ext2_mknod(struct Thread *thread, struct Inode *dirp, char *name, mode_t mode,
+ext2_mknod(struct Process *process, struct Inode *dirp, char *name, mode_t mode,
            dev_t dev, struct Inode **istore)
 {
   struct Inode *ip;
   int r;
 
-  if ((r = ext2_inode_create(thread, dirp, name, mode, dev, &ip)) != 0)
+  if ((r = ext2_inode_create(process, dirp, name, mode, dev, &ip)) != 0)
     return r;
 
   ip->nlink = 1;
@@ -155,15 +153,15 @@ ext2_mknod(struct Thread *thread, struct Inode *dirp, char *name, mode_t mode,
 #define DE_NAME_OFFSET    offsetof(struct Ext2DirEntry, name)
 
 ssize_t
-ext2_dirent_read(struct Thread *thread, struct Inode *dir, struct Ext2DirEntry *de, off_t off)
+ext2_dirent_read(struct Process *process, struct Inode *dir, struct Ext2DirEntry *de, off_t off)
 {
   ssize_t ret;
 
-  ret = ext2_read(thread, dir, (uintptr_t) de, DE_NAME_OFFSET, off);
+  ret = ext2_read(process, dir, (uintptr_t) de, DE_NAME_OFFSET, off);
   if (ret != DE_NAME_OFFSET)
     k_panic("Cannot read directory");
 
-  ret = ext2_read(thread, dir, (uintptr_t) de->name, de->name_len, off + ret);
+  ret = ext2_read(process, dir, (uintptr_t) de->name, de->name_len, off + ret);
   if (ret != de->name_len)
     k_panic("Cannot read directory");
 
@@ -174,11 +172,11 @@ ext2_dirent_read(struct Thread *thread, struct Inode *dir, struct Ext2DirEntry *
 }
 
 ssize_t
-ext2_dirent_write(struct Thread *thread, struct Inode *dir, struct Ext2DirEntry *de, off_t off)
+ext2_dirent_write(struct Process *process, struct Inode *dir, struct Ext2DirEntry *de, off_t off)
 {
   size_t ret;
 
-  ret = ext2_write(thread, dir, (uintptr_t) de, DE_NAME_OFFSET + de->name_len, off);
+  ret = ext2_write(process, dir, (uintptr_t) de, DE_NAME_OFFSET + de->name_len, off);
   if (ret != (DE_NAME_OFFSET + de->name_len))
     k_panic("Cannot read directory");
 
@@ -186,7 +184,7 @@ ext2_dirent_write(struct Thread *thread, struct Inode *dir, struct Ext2DirEntry 
 }
 
 struct Inode *
-ext2_lookup(struct Thread *thread, struct Inode *dirp, const char *name)
+ext2_lookup(struct Process *process, struct Inode *dirp, const char *name)
 {
   struct Ext2DirEntry de;
   off_t off;
@@ -198,7 +196,7 @@ ext2_lookup(struct Thread *thread, struct Inode *dirp, const char *name)
   name_len = strlen(name);
 
   for (off = 0; off < dirp->size; off += de.rec_len) {
-    ext2_dirent_read(thread, dirp, &de, off);
+    ext2_dirent_read(process, dirp, &de, off);
 
     if (de.inode == 0)
       continue;
@@ -214,7 +212,7 @@ ext2_lookup(struct Thread *thread, struct Inode *dirp, const char *name)
 }
 
 int
-ext2_link(struct Thread *thread, struct Inode *dir, char *name, struct Inode *inode)
+ext2_link(struct Process *process, struct Inode *dir, char *name, struct Inode *inode)
 {
   struct Inode *existing_inode;
   struct Ext2DirEntry de, new_de;
@@ -223,7 +221,7 @@ ext2_link(struct Thread *thread, struct Inode *dir, char *name, struct Inode *in
   uint8_t file_type;
   struct Ext2SuperblockData *sb = (struct Ext2SuperblockData *) (dir->fs->extra);
 
-  if ((existing_inode = ext2_lookup(thread, dir, name)) != NULL) {
+  if ((existing_inode = ext2_lookup(process, dir, name)) != NULL) {
     fs_inode_put(existing_inode);
     return -EEXIST;
   }
@@ -259,7 +257,7 @@ ext2_link(struct Thread *thread, struct Inode *dir, char *name, struct Inode *in
   strncpy(new_de.name, name, ROUND_UP(name_len, sizeof(uint32_t)));
 
   for (off = 0; off < dir->size; off += de.rec_len) {
-    ext2_dirent_read(thread, dir, &de, off);
+    ext2_dirent_read(process, dir, &de, off);
 
     if (de.inode == 0) {
       if (de.rec_len < new_len)
@@ -272,7 +270,7 @@ ext2_link(struct Thread *thread, struct Inode *dir, char *name, struct Inode *in
       inode->nlink++;
       inode->flags |= FS_INODE_DIRTY;
 
-      return ext2_dirent_write(thread, dir, &new_de, off);
+      return ext2_dirent_write(process, dir, &new_de, off);
     }
 
     de_len = ROUND_UP(DE_NAME_OFFSET + de.name_len, sizeof(uint32_t));
@@ -286,8 +284,8 @@ ext2_link(struct Thread *thread, struct Inode *dir, char *name, struct Inode *in
       inode->nlink++;
       inode->flags |= FS_INODE_DIRTY;
 
-      ext2_dirent_write(thread, dir, &de, off);
-      ext2_dirent_write(thread, dir, &new_de, off + de_len);
+      ext2_dirent_write(process, dir, &de, off);
+      ext2_dirent_write(process, dir, &new_de, off + de_len);
 
       return 0;
     }
@@ -302,7 +300,7 @@ ext2_link(struct Thread *thread, struct Inode *dir, char *name, struct Inode *in
   inode->nlink++;
   inode->flags |= FS_INODE_DIRTY;
 
-  ext2_dirent_write(thread, dir, &new_de, off);
+  ext2_dirent_write(process, dir, &new_de, off);
 
   return 0;
 }
@@ -310,13 +308,13 @@ ext2_link(struct Thread *thread, struct Inode *dir, char *name, struct Inode *in
 // A directory is considered empty only if it only consists of unused entries
 // and a self and a parent entry
 static int
-ext2_dir_empty(struct Thread *thread, struct Inode *dir)
+ext2_dir_empty(struct Process *process, struct Inode *dir)
 {
   struct Ext2DirEntry de;
   off_t off;
 
   for (off = 0; off < dir->size; off += de.rec_len) {
-    ext2_dirent_read(thread, dir, &de, off);
+    ext2_dirent_read(process, dir, &de, off);
 
     if (de.inode == 0)
       continue;
@@ -332,7 +330,7 @@ ext2_dir_empty(struct Thread *thread, struct Inode *dir)
 }
 
 int
-ext2_unlink(struct Thread *thread, struct Inode *dir, struct Inode *ip, const char *name)
+ext2_unlink(struct Process *process, struct Inode *dir, struct Inode *ip, const char *name)
 {
   struct Ext2DirEntry de;
   off_t off, prev_off;
@@ -345,7 +343,7 @@ ext2_unlink(struct Thread *thread, struct Inode *dir, struct Inode *ip, const ch
   name_len = strlen(name);
 
   for (prev_off = off = 0; off < dir->size; prev_off = off, off += de.rec_len) {
-    ext2_dirent_read(thread, dir, &de, off);
+    ext2_dirent_read(process, dir, &de, off);
 
     if (de.inode != ip->ino)
       continue;
@@ -360,14 +358,14 @@ ext2_unlink(struct Thread *thread, struct Inode *dir, struct Inode *ip, const ch
       de.file_type = 0;
       de.inode     = 0;
 
-      ext2_dirent_write(thread, dir, &de, off);
+      ext2_dirent_write(process, dir, &de, off);
     } else {
       // Update length of the previous entry
       rec_len = de.rec_len;
 
-      ext2_dirent_read(thread, dir, &de, prev_off);
+      ext2_dirent_read(process, dir, &de, prev_off);
       de.rec_len += rec_len;
-      ext2_dirent_write(thread, dir, &de, prev_off);
+      ext2_dirent_write(process, dir, &de, prev_off);
     }
 
     if (--ip->nlink > 0)
@@ -382,7 +380,7 @@ ext2_unlink(struct Thread *thread, struct Inode *dir, struct Inode *ip, const ch
 }
 
 int
-ext2_rmdir(struct Thread *thread,
+ext2_rmdir(struct Process *process,
            struct Inode *dir,
            struct Inode *inode,
            const char *name)
@@ -392,15 +390,15 @@ ext2_rmdir(struct Thread *thread,
   k_assert(strcmp(name, ".") != 0);
   k_assert(strcmp(name, "..") != 0);
 
-  if (!ext2_dir_empty(thread, inode))
+  if (!ext2_dir_empty(process, inode))
     return -ENOTEMPTY;
 
-  if ((r = ext2_unlink(thread, inode, inode, ".")) < 0)
+  if ((r = ext2_unlink(process, inode, inode, ".")) < 0)
     return r;
-  if ((r = ext2_unlink(thread, inode, dir, "..")) < 0)
+  if ((r = ext2_unlink(process, inode, dir, "..")) < 0)
     return r;
 
-  if ((r = ext2_unlink(thread, dir, inode, name)) < 0)
+  if ((r = ext2_unlink(process, dir, inode, name)) < 0)
     return r;
 
   dir->nlink--;
@@ -411,14 +409,14 @@ ext2_rmdir(struct Thread *thread,
 }
 
 void
-ext2_inode_delete(struct Thread *thread, struct Inode *inode)
+ext2_inode_delete(struct Process *process, struct Inode *inode)
 {
   if (!S_ISLNK(inode->mode) || (inode->size > MAX_FAST_SYMLINK_NAMELEN))
-    ext2_trunc(thread, inode, 0);
+    ext2_trunc(process, inode, 0);
 
   inode->mode = 0;
   inode->size = 0;
-  ext2_inode_write(thread, inode);
+  ext2_inode_write(process, inode);
 
   ext2_inode_free((struct Ext2SuperblockData *) (inode->fs->extra), inode->dev, inode->ino);
 }
@@ -458,20 +456,18 @@ ext2_sb_sync(struct Ext2SuperblockData *sb, dev_t dev)
 }
 
 ssize_t
-ext2_readdir(struct Thread *thread, struct Inode *dir, void *buf,
+ext2_readdir(struct Process *process, struct Inode *dir, void *buf,
              FillDirFunc filldir, off_t off)
 {
   struct Ext2DirEntry de;
   ssize_t nread;
-
-  (void) thread;
 
   k_assert(S_ISDIR(dir->mode));
 
   if (off >= dir->size)
     return 0;
 
-  if ((nread = ext2_dirent_read(thread, dir, &de, off)) < 0)
+  if ((nread = ext2_dirent_read(process, dir, &de, off)) < 0)
     return nread;
 
   filldir(buf, de.inode, de.name, de.name_len);
@@ -480,7 +476,7 @@ ext2_readdir(struct Thread *thread, struct Inode *dir, void *buf,
 }
 
 ssize_t
-ext2_readlink(struct Thread *thread, struct Inode *inode, uintptr_t va, size_t n)
+ext2_readlink(struct Process *process, struct Inode *inode, uintptr_t va, size_t n)
 {
   struct Ext2InodeExtra *extra = (struct Ext2InodeExtra *) inode->extra;
   int r;
@@ -490,17 +486,17 @@ ext2_readlink(struct Thread *thread, struct Inode *inode, uintptr_t va, size_t n
   if ((inode->size <= MAX_FAST_SYMLINK_NAMELEN) && (extra->blocks == 0)) {
     ssize_t nread = MIN((size_t) inode->size, n);
 
-    if ((r = vm_space_copy_out(thread, extra->block, va, n)) < 0)
+    if ((r = vm_space_copy_out(process, extra->block, va, n)) < 0)
       return r;
 
     return nread;
   }
 
-  return ext2_read(thread, inode, va, n, 0);
+  return ext2_read(process, inode, va, n, 0);
 }
 
 int
-ext2_symlink(struct Thread *thread,
+ext2_symlink(struct Process *process,
              struct Inode *dir,
              char *name,
              mode_t mode,
@@ -511,13 +507,9 @@ ext2_symlink(struct Thread *thread,
   int r;
   size_t path_len;
 
-  (void) thread;
-
   path_len = strlen(link_path);
 
-  
-
-  if ((r = ext2_inode_create(thread, dir, name, mode, 0, &ip)) != 0)
+  if ((r = ext2_inode_create(process, dir, name, mode, 0, &ip)) != 0)
     return r;
 
   ip->nlink = 1;
@@ -525,14 +517,14 @@ ext2_symlink(struct Thread *thread,
   if (path_len <= MAX_FAST_SYMLINK_NAMELEN) {
     struct Ext2InodeExtra *extra = (struct Ext2InodeExtra *) ip->extra;
 
-    if ((r = vm_space_copy_in(thread, extra->block, (uintptr_t) link_path, path_len)) < 0) {
+    if ((r = vm_space_copy_in(process, extra->block, (uintptr_t) link_path, path_len)) < 0) {
       fs_inode_unlock(ip);
       return r;
     }
 
     ip->size = path_len;
   } else {
-    if ((r = ext2_write(thread, ip, (uintptr_t) link_path, path_len, 0)) < 0) {
+    if ((r = ext2_write(process, ip, (uintptr_t) link_path, path_len, 0)) < 0) {
       fs_inode_unlock(ip);
       return r;
     }

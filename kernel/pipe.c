@@ -346,7 +346,7 @@ pipe_read(struct Channel *channel, uintptr_t va, size_t n)
       // Prevent overflow
       nread = pipe->max_size - pipe->read_pos;
 
-    r = vm_space_copy_out(thread_current(), &pipe->buf[pipe->read_pos], va + i, nread);
+    r = vm_space_copy_out(process_current(), &pipe->buf[pipe->read_pos], va + i, nread);
     if (r < 0) {
       k_condvar_broadcast(&pipe->write_cond);
       k_mutex_unlock(&pipe->mutex);
@@ -397,7 +397,7 @@ pipe_write(struct Channel *channel, uintptr_t va, size_t n)
       // Prevent overflow
       nwrite = pipe->max_size - pipe->write_pos;
 
-    r = vm_space_copy_in(thread_current(), &pipe->buf[pipe->write_pos], va + i, nwrite);
+    r = vm_space_copy_in(process_current(), &pipe->buf[pipe->write_pos], va + i, nwrite);
     if (r < 0) {
       k_mutex_unlock(&pipe->mutex);
       return r;

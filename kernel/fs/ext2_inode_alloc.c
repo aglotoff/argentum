@@ -51,7 +51,8 @@ ext2_inode_init(struct Ext2SuperblockData *sb, dev_t dev, uint32_t table, uint32
 
   if (((mode & EXT2_S_IFMASK) == EXT2_S_IFBLK) ||
       ((mode & EXT2_S_IFMASK) == EXT2_S_IFCHR)) {
-    ext2_block_alloc(thread_current(), sb, dev, &raw->block[0]);
+    // TODO: why process_current?
+    ext2_block_alloc(process_current(), sb, dev, &raw->block[0]);
     struct Buf *block_buf;
 
     block_buf = buf_read(raw->block[0], sb->block_size, dev);
