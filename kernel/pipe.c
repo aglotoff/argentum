@@ -199,43 +199,34 @@ fail1:
   return r;
 }
 
-int
-pipe_send_recv(struct Channel *channel, struct IpcMessage *msg)
+intptr_t
+pipe_send_recv(struct Channel *channel, void *smsg, size_t, void *rmsg, size_t rbytes)
 {
+  struct IpcMessage *msg = (struct IpcMessage *) smsg;
+
   switch (msg->type) {
   case IPC_MSG_CLOSE:
-    msg->r = pipe_close(channel);
-    break;
+    return pipe_close(channel);
   case IPC_MSG_SEEK:
-    msg->r = -ESPIPE;
-    break;
+    return -ESPIPE;
   case IPC_MSG_FCHMOD:
-    msg->r = -EBADF;
-    break;
+    return -EBADF;
   case IPC_MSG_READ:
-    msg->r = pipe_read(channel, msg->u.read.va, msg->u.read.nbyte);
-    break;
+    return pipe_read(channel, (uintptr_t) rmsg, rbytes);
   case IPC_MSG_WRITE:
-    msg->r = pipe_write(channel, msg->u.write.va, msg->u.write.nbyte);
-    break;
+    return pipe_write(channel, msg->u.write.va, msg->u.write.nbyte);
   case IPC_MSG_READDIR:
-    msg->r = -ENOTDIR;
-    break;
+    return -ENOTDIR;
   case IPC_MSG_FSTAT:
-    msg->r = pipe_stat(channel, msg->u.fstat.buf);
-    break;
+    return pipe_stat(channel, msg->u.fstat.buf);
   case IPC_MSG_FCHOWN:
-    msg->r = -EBADF;
-    break;
+    return -EBADF;
   case IPC_MSG_IOCTL:
-    msg->r = -EBADF;
-    break;
+    return -EBADF;
   case IPC_MSG_TRUNC:
-    msg->r = -EBADF;
-    break;
+    return -EBADF;
   case IPC_MSG_FSYNC:
-    msg->r = -EBADF;
-    break;
+    return -EBADF;
   default:
     return -ENOSYS;
   }

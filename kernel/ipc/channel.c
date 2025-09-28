@@ -79,23 +79,21 @@ channel_set_flags(struct Channel *channel, int flags)
   return 0;
 }
 
-void
-channel_send_recv(struct Channel *channel, struct IpcMessage *msg)
+intptr_t
+channel_send_recv(struct Channel *channel, void *smsg, size_t sbytes, void *rmsg, size_t rbytes)
 {
   //k_assert(channel->ref_count > 0);
 
   switch (channel->type) {
     case CHANNEL_TYPE_FILE:
-      fs_send_recv(channel, msg);
-      break;
+      return fs_send_recv(channel, smsg, sbytes, rmsg, rbytes);
     case CHANNEL_TYPE_PIPE:
-      pipe_send_recv(channel, msg);
-      break;
+      return pipe_send_recv(channel, smsg, sbytes, rmsg, rbytes);
     case CHANNEL_TYPE_SOCKET:
-      net_send_recv(channel, msg);
-      break;
+      return net_send_recv(channel, smsg, sbytes, rmsg, rbytes);
     default:
       k_panic("bad channel type %d", channel->type);
+      return -ENOSYS;
   }
 }
 
@@ -120,7 +118,7 @@ channel_unref(struct Channel *channel)
 
   msg.type = IPC_MSG_CLOSE;
 
-  channel_send_recv(channel, &msg);
+  channel_send_recv(channel, &msg, sizeof(msg), NULL, 0);
 
   if (channel->node != NULL) {
     fs_path_node_unref(channel->node);
@@ -139,9 +137,7 @@ channel_seek(struct Channel *channel, off_t offset, int whence)
   msg.u.seek.offset = offset;
   msg.u.seek.whence = whence;
 
-  channel_send_recv(channel, &msg);
-
-  return msg.r;
+  return channel_send_recv(channel, &msg, sizeof(msg), NULL, 0);
 }
 
 ssize_t
@@ -153,9 +149,7 @@ channel_read(struct Channel *channel, uintptr_t va, size_t nbytes)
   msg.u.read.va    = va;
   msg.u.read.nbyte = nbytes;
 
-  channel_send_recv(channel, &msg);
-
-  return msg.r;
+  return channel_send_recv(channel, &msg, sizeof(msg), (void *) va, nbytes);
 }
 
 ssize_t
@@ -167,9 +161,7 @@ channel_write(struct Channel *channel, uintptr_t va, size_t nbytes)
   msg.u.write.va    = va;
   msg.u.write.nbyte = nbytes;
 
-  channel_send_recv(channel, &msg);
-
-  return msg.r;
+  return channel_send_recv(channel, &msg, sizeof(msg), NULL, 0);
 }
 
 ssize_t
@@ -184,9 +176,7 @@ channel_getdents(struct Channel *channel, uintptr_t va, size_t nbytes)
   msg.u.readdir.va    = va;
   msg.u.readdir.nbyte = nbytes;
   
-  channel_send_recv(channel, &msg);
-
-  return msg.r;
+  return channel_send_recv(channel, &msg, sizeof(msg), NULL, 0);
 }
 
 int
@@ -197,9 +187,7 @@ channel_stat(struct Channel *channel, struct stat *buf)
   msg.type = IPC_MSG_FSTAT;
   msg.u.fstat.buf  = buf;
 
-  channel_send_recv(channel, &msg);
-
-  return msg.r;
+  return channel_send_recv(channel, &msg, sizeof(msg), NULL, 0);
 }
 
 int
@@ -219,9 +207,7 @@ channel_chmod(struct Channel *channel, mode_t mode)
   msg.type = IPC_MSG_FCHMOD;
   msg.u.fchmod.mode = mode;
 
-  channel_send_recv(channel, &msg);
-
-  return msg.r;
+  return channel_send_recv(channel, &msg, sizeof(msg), NULL, 0);
 }
 
 int
@@ -233,9 +219,7 @@ channel_chown(struct Channel *channel, uid_t uid, gid_t gid)
   msg.u.fchown.uid  = uid;
   msg.u.fchown.gid  = gid;
 
-  channel_send_recv(channel, &msg);
-
-  return msg.r;
+  return channel_send_recv(channel, &msg, sizeof(msg), NULL, 0);
 }
 
 int
@@ -247,9 +231,7 @@ channel_ioctl(struct Channel *channel, int request, int arg)
   msg.u.ioctl.request = request;
   msg.u.ioctl.arg     = arg;
 
-  channel_send_recv(channel, &msg);
-
-  return msg.r;
+  return channel_send_recv(channel, &msg, sizeof(msg), NULL, 0);
 }
 
 // TODO
@@ -283,9 +265,7 @@ channel_truncate(struct Channel *channel, off_t length)
   msg.type = IPC_MSG_TRUNC;
   msg.u.trunc.length = length;
 
-  channel_send_recv(channel, &msg);
-
-  return msg.r;
+  return channel_send_recv(channel, &msg, sizeof(msg), NULL, 0);
 }
 
 int
@@ -295,7 +275,5 @@ channel_sync(struct Channel *channel)
 
   msg.type = IPC_MSG_FSYNC;
 
-  channel_send_recv(channel, &msg);
-
-  return msg.r;
+  return channel_send_recv(channel, &msg, sizeof(msg), NULL, 0);
 }

@@ -159,43 +159,34 @@ net_init(void)
   tcpip_init(net_init_done, NULL);
 }
 
-int
-net_send_recv(struct Channel *channel, struct IpcMessage *msg)
+intptr_t
+net_send_recv(struct Channel *channel, void *smsg, size_t, void *, size_t)
 {
+  struct IpcMessage *msg = (struct IpcMessage *) smsg;
+
   switch (msg->type) {
   case IPC_MSG_CLOSE:
-    msg->r = net_close(channel);
-    break;
+    return net_close(channel);
   case IPC_MSG_SEEK:
-    msg->r = -ESPIPE;
-    break;
+    return -ESPIPE;
   case IPC_MSG_FCHMOD:
-    msg->r = -EBADF;
-    break;
+    return -EBADF;
   case IPC_MSG_READ:
-    msg->r = net_read(channel, msg->u.read.va, msg->u.read.nbyte);
-    break;
+    return net_read(channel, msg->u.read.va, msg->u.read.nbyte);
   case IPC_MSG_WRITE:
-    msg->r = net_write(channel, msg->u.write.va, msg->u.write.nbyte);
-    break;
+    return net_write(channel, msg->u.write.va, msg->u.write.nbyte);
   case IPC_MSG_READDIR:
-    msg->r = -ENOTDIR;
-    break;
+    return -ENOTDIR;
   case IPC_MSG_FSTAT:
-    msg->r = -EBADF;
-    break;
+    return -EBADF;
   case IPC_MSG_FCHOWN:
-    msg->r = -EBADF;
-    break;
+    return -EBADF;
   case IPC_MSG_IOCTL:
-    msg->r = -EBADF;
-    break;
+    return -EBADF;
   case IPC_MSG_TRUNC:
-    msg->r = -EBADF;
-    break;
+    return -EBADF;
   case IPC_MSG_FSYNC:
-    msg->r = -EBADF;
-    break;
+    return -EBADF;
   default:
     return -ENOSYS;
   }

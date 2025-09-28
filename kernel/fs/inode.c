@@ -172,7 +172,7 @@ fs_inode_lock(struct Inode *ip)
   //msg.type = IPC_MSG_INODE_READ;
   //msg.u.inode_read.inode = ip;
 
-  //fs_send_recv(ip->fs, &msg);
+  //fs_send_recv(ip->fs, &msg, sizeof(msg), NULL, 0);
 
   ip->flags |= FS_INODE_VALID;
 }

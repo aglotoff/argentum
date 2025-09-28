@@ -208,9 +208,9 @@ fs_path_set_cwd(struct PathNode *node)
   msg.type = IPC_MSG_CHDIR;
   msg.u.chdir.ino = ino;
 
-  fs_send_recv(channel, &msg);
+  r = fs_send_recv(channel, &msg, sizeof(msg), NULL, 0);
 
-  if ((r = msg.r) < 0)
+  if (r < 0)
     return r;
 
   // UNREF(current->cwd)
@@ -241,9 +241,9 @@ fs_path_resolve_symlink(ino_t ino,
   msg.u.readlink.va    = (uintptr_t) path;
   msg.u.readlink.nbyte = PATH_MAX - 1;
 
-  fs_send_recv(channel, &msg);
+  r = fs_send_recv(channel, &msg, sizeof(msg), NULL, 0);
 
-  if ((r = msg.r) < 0) {
+  if (r < 0) {
     k_free(path);
     return r;
   }
@@ -345,9 +345,9 @@ fs_path_node_resolve_at(struct PathNode *start,
     msg.u.stat.ino = ino;
     msg.u.stat.buf = &stat;
 
-    fs_send_recv(channel, &msg);
+    r = fs_send_recv(channel, &msg, sizeof(msg), NULL, 0);
 
-    if ((r = msg.r) < 0) {
+    if (r < 0) {
       break;
     }
 
@@ -467,9 +467,7 @@ fs_path_node_lookup(struct PathNode *parent,
     msg.u.lookup.flags   = flags;
     msg.u.lookup.istore  = &child_ino;
 
-    fs_send_recv(channel, &msg);
-
-    r = msg.r;
+    r = fs_send_recv(channel, &msg, sizeof(msg), NULL, 0);
 
     if (r == 0 && child_ino != 0) {
       // Insert new node

@@ -24,6 +24,6 @@ ssize_t net_write(struct Channel *, uintptr_t, size_t);
 int     net_select(struct Channel *, struct timeval *);
 int     net_gethostbyname(const char *, ip_addr_t *);
 
-int     net_send_recv(struct Channel *, struct IpcMessage *);
+intptr_t net_send_recv(struct Channel *, void *, size_t, void *, size_t);
 
 #endif  // !__KERNEL_INCLUDE_KERNEL_NET_H__

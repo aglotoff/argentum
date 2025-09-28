@@ -53,8 +53,7 @@ int             channel_truncate(struct Channel *, off_t);
 
 struct IpcMessage {
   int type;
-  uintptr_t r;
-  
+
   union {
     struct {
       ino_t ino;
@@ -122,8 +121,6 @@ struct IpcMessage {
     } utime;
 
     struct {
-    } close;
-    struct {
       mode_t mode;
     } fchmod;
     struct {
@@ -133,8 +130,6 @@ struct IpcMessage {
     struct {
       struct stat *buf;
     } fstat;
-    struct {
-    } fsync;
     struct {
       int request;
       int arg;
@@ -200,12 +195,21 @@ enum {
 };
 
 struct IpcRequest {
-  struct IpcMessage *msg;
+  uintptr_t send_msg;
+  size_t    send_bytes;
+  size_t    send_nread;
+
+  uintptr_t recv_msg;
+  size_t    recv_bytes;
+  size_t    recv_nwrite;
+
   struct KSemaphore sem;
   struct Process *process;
   struct Channel *channel;
   struct KSpinLock lock;
   int ref_count;
+
+  intptr_t r;
 };
 
 #endif  // !__KERNEL_INCLUDE_KERNEL_IPC_CHANNEL__

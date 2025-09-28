@@ -12,6 +12,6 @@ ssize_t pipe_write(struct Channel *, uintptr_t, size_t);
 int     pipe_stat(struct Channel *, struct stat *);
 int     pipe_select(struct Channel *, struct timeval *);
 
-int     pipe_send_recv(struct Channel *, struct IpcMessage *);
+intptr_t pipe_send_recv(struct Channel *, void *, size_t, void *, size_t);
 
 #endif  // !__KERNEL_INCLUDE_KERNEL_PIPE_H__

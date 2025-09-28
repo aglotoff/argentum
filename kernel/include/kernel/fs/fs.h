@@ -169,6 +169,9 @@ void             fs_service_task(void *);
 
 struct IpcMessage;
 
-int              fs_send_recv(struct Channel *, struct IpcMessage *);
+// TODO: move to more appropriate place!
+intptr_t         fs_send_recv(struct Channel *, void *, size_t, void *, size_t);
+ssize_t          ipc_request_write(struct IpcRequest *, void *, size_t);
+ssize_t          ipc_request_read(struct IpcRequest *, void *, size_t);
 
 #endif  // !__KERNEL_INCLUDE_KERNEL_FS_H__
