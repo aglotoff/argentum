@@ -157,11 +157,11 @@ ext2_dirent_read(struct Process *process, struct Inode *dir, struct Ext2DirEntry
 {
   ssize_t ret;
 
-  ret = ext2_read(process, dir, (uintptr_t) de, DE_NAME_OFFSET, off);
+  ret = ext2_read_data(process, dir, de, DE_NAME_OFFSET, off);
   if (ret != DE_NAME_OFFSET)
     k_panic("Cannot read directory");
 
-  ret = ext2_read(process, dir, (uintptr_t) de->name, de->name_len, off + ret);
+  ret = ext2_read_data(process, dir, de->name, de->name_len, off + ret);
   if (ret != de->name_len)
     k_panic("Cannot read directory");
 
@@ -476,7 +476,7 @@ ext2_readdir(struct Process *process, struct Inode *dir, void *buf,
 }
 
 ssize_t
-ext2_readlink(struct Process *process, struct Inode *inode, uintptr_t va, size_t n)
+ext2_readlink(struct IpcRequest *req, struct Inode *inode, size_t n)
 {
   struct Ext2InodeExtra *extra = (struct Ext2InodeExtra *) inode->extra;
   int r;
@@ -486,13 +486,13 @@ ext2_readlink(struct Process *process, struct Inode *inode, uintptr_t va, size_t
   if ((inode->size <= MAX_FAST_SYMLINK_NAMELEN) && (extra->blocks == 0)) {
     ssize_t nread = MIN((size_t) inode->size, n);
 
-    if ((r = vm_space_copy_out(process, extra->block, va, n)) < 0)
+    if ((r = ipc_request_write(req, extra->block, n)) < 0)
       return r;
 
     return nread;
   }
 
-  return ext2_read(process, inode, va, n, 0);
+  return ext2_read(req, inode, n, 0);
 }
 
 int

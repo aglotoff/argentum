@@ -73,17 +73,19 @@ struct PathNode {
 
 typedef int (*FillDirFunc)(void *, ino_t, const char *, size_t);
 
+struct IpcRequest;
+
 struct FSOps {
   char             *name;
   struct Inode *  (*inode_get)(struct FS *, ino_t);
   int             (*inode_read)(struct Process *, struct Inode *);
   int             (*inode_write)(struct Process *, struct Inode *);
   void            (*inode_delete)(struct Process *, struct Inode *);
-  ssize_t         (*read)(struct Process *, struct Inode *, uintptr_t, size_t, off_t);
+  ssize_t         (*read)(struct IpcRequest *, struct Inode *, size_t, off_t);
   ssize_t         (*write)(struct Process *, struct Inode *, uintptr_t, size_t, off_t);
   int             (*rmdir)(struct Process *, struct Inode *, struct Inode *, const char *);
   ssize_t         (*readdir)(struct Process *, struct Inode *, void *, FillDirFunc, off_t);
-  ssize_t         (*readlink)(struct Process *, struct Inode *, uintptr_t, size_t);
+  ssize_t         (*readlink)(struct IpcRequest *, struct Inode *, size_t);
   int             (*create)(struct Process *, struct Inode *, char *, mode_t, struct Inode **);
   int             (*symlink)(struct Process *, struct Inode *, char *, mode_t, const char *, struct Inode **);
   int             (*mkdir)(struct Process *, struct Inode *, char *, mode_t, struct Inode **);
@@ -168,6 +170,7 @@ struct FS *      fs_create_service(char *, dev_t, void *, struct FSOps *);
 void             fs_service_task(void *);
 
 struct IpcMessage;
+struct IpcRequest;
 
 // TODO: move to more appropriate place!
 intptr_t         fs_send_recv(struct Channel *, void *, size_t, void *, size_t);

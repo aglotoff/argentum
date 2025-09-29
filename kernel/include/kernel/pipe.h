@@ -9,7 +9,7 @@ int     pipe_open(struct Channel **, struct Channel **);
 int     pipe_close(struct Channel *);
 ssize_t pipe_read(struct Channel *, uintptr_t, size_t);
 ssize_t pipe_write(struct Channel *, uintptr_t, size_t);
-int     pipe_stat(struct Channel *, struct stat *);
+int     pipe_stat(struct Channel *, uintptr_t);
 int     pipe_select(struct Channel *, struct timeval *);
 
 intptr_t pipe_send_recv(struct Channel *, void *, size_t, void *, size_t);

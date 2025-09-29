@@ -187,11 +187,12 @@ int           ext2_mkdir(struct Process *, struct Inode *, char *, mode_t, struc
 int           ext2_rmdir(struct Process *, struct Inode *, struct Inode *,const char *);
 int           ext2_mknod(struct Process *, struct Inode *, char *, mode_t, dev_t, struct Inode **);
 void          ext2_trunc(struct Process *, struct Inode *, off_t);
-ssize_t       ext2_read(struct Process *, struct Inode *, uintptr_t, size_t, off_t);
+ssize_t       ext2_read_data(struct Process *, struct Inode *, void *, size_t, off_t);
 ssize_t       ext2_write(struct Process *, struct Inode *, uintptr_t, size_t, off_t);
-
 ssize_t       ext2_readdir(struct Process *, struct Inode *, void *, FillDirFunc, off_t);
-ssize_t       ext2_readlink(struct Process *, struct Inode *, uintptr_t, size_t);
 uint32_t      ext2_inode_get_block(struct Inode *, uint32_t, int);
+
+ssize_t       ext2_readlink(struct IpcRequest *, struct Inode *, size_t);
+ssize_t       ext2_read(struct IpcRequest *, struct Inode *, size_t, off_t);
 
 #endif  // !__KERNEL_FS_EXT2_H__

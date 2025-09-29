@@ -233,7 +233,7 @@ fs_readlink(const char *path, uintptr_t va, size_t bufsize)
   msg.u.readlink.va    = va;
   msg.u.readlink.nbyte = bufsize;
 
-  r = fs_send_recv(channel, &msg, sizeof(msg), NULL, 0);
+  r = fs_send_recv(channel, &msg, sizeof(msg), (void *) va, bufsize);
 
   fs_path_node_unref(node);
 

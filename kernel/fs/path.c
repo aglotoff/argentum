@@ -241,7 +241,7 @@ fs_path_resolve_symlink(ino_t ino,
   msg.u.readlink.va    = (uintptr_t) path;
   msg.u.readlink.nbyte = PATH_MAX - 1;
 
-  r = fs_send_recv(channel, &msg, sizeof(msg), NULL, 0);
+  r = fs_send_recv(channel, &msg, sizeof(msg), path, PATH_MAX - 1);
 
   if (r < 0) {
     k_free(path);
@@ -345,7 +345,7 @@ fs_path_node_resolve_at(struct PathNode *start,
     msg.u.stat.ino = ino;
     msg.u.stat.buf = &stat;
 
-    r = fs_send_recv(channel, &msg, sizeof(msg), NULL, 0);
+    r = fs_send_recv(channel, &msg, sizeof(msg), &stat, sizeof(stat));
 
     if (r < 0) {
       break;

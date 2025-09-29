@@ -803,12 +803,11 @@ sys_stat(void)
 {
   struct Channel *file;
   uintptr_t buf_va;
-  struct stat buf;
   int r, fd;
 
   if ((r = sys_arg_int(0, &fd)) < 0)
     goto out1;
-  if ((r = sys_arg_va(1, &buf_va, sizeof buf, VM_WRITE, 0)) < 0)
+  if ((r = sys_arg_va(1, &buf_va, sizeof(struct stat), VM_WRITE, 0)) < 0)
     goto out1;
 
   if ((file = fd_lookup(process_current(), fd)) == NULL) {
@@ -816,10 +815,8 @@ sys_stat(void)
     goto out2;
   }
 
-  if ((r = channel_stat(file, &buf)) < 0)
+  if ((r = channel_stat(file, (struct stat *) buf_va)) < 0)
     goto out2;
-
-  r = sys_copy_out(&buf, buf_va, sizeof buf);
 
 out2:
   channel_unref(file);

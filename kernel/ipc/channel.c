@@ -1,10 +1,12 @@
-#include <kernel/core/assert.h>
 #include <errno.h>
 #include <fcntl.h>
 #include <stdio.h>
 #include <string.h>
+#include <sys/ioctl.h>
 #include <sys/stat.h>
+#include <termios.h>
 
+#include <kernel/core/assert.h>
 #include <kernel/console.h>
 #include <kernel/ipc/channel.h>
 #include <kernel/fs/fs.h>
@@ -12,6 +14,7 @@
 #include <kernel/core/spinlock.h>
 #include <kernel/net.h>
 #include <kernel/pipe.h>
+
 
 static struct KSpinLock channel_lock;
 static struct KObjectPool *channel_pool;
@@ -176,7 +179,7 @@ channel_getdents(struct Channel *channel, uintptr_t va, size_t nbytes)
   msg.u.readdir.va    = va;
   msg.u.readdir.nbyte = nbytes;
   
-  return channel_send_recv(channel, &msg, sizeof(msg), NULL, 0);
+  return channel_send_recv(channel, &msg, sizeof(msg), (void *) va, nbytes);
 }
 
 int
@@ -187,7 +190,7 @@ channel_stat(struct Channel *channel, struct stat *buf)
   msg.type = IPC_MSG_FSTAT;
   msg.u.fstat.buf  = buf;
 
-  return channel_send_recv(channel, &msg, sizeof(msg), NULL, 0);
+  return channel_send_recv(channel, &msg, sizeof(msg), buf, sizeof(*buf));
 }
 
 int
@@ -231,7 +234,14 @@ channel_ioctl(struct Channel *channel, int request, int arg)
   msg.u.ioctl.request = request;
   msg.u.ioctl.arg     = arg;
 
-  return channel_send_recv(channel, &msg, sizeof(msg), NULL, 0);
+  switch (request) {
+  case TIOCGETA:
+    return channel_send_recv(channel, &msg, sizeof(msg), (void *) arg, sizeof(struct termios));
+  case TIOCGWINSZ:
+    return channel_send_recv(channel, &msg, sizeof(msg), (void *) arg, sizeof(struct winsize));
+  default:
+    return channel_send_recv(channel, &msg, sizeof(msg), NULL, 0);
+  }
 }
 
 // TODO

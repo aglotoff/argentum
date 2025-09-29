@@ -18,6 +18,8 @@
 #include <kernel/dev.h>
 #include <kernel/signal.h>
 #include <kernel/core/condvar.h>
+#include <kernel/ipc/channel.h>
+#include <kernel/fs/fs.h>
 
 #include <kernel/drivers/kbd.h>
 
@@ -318,15 +320,15 @@ tty_from_dev(struct Process *process, dev_t dev)
 }
 
 int
-tty_open(struct Process *process, dev_t dev, int oflag, mode_t)
+tty_open(struct IpcRequest *req, dev_t dev, int oflag, mode_t)
 {
-  struct Tty *tty = tty_from_dev(process, dev);
+  struct Tty *tty = tty_from_dev(req->process, dev);
 
   if (tty == NULL)
     return -ENODEV;
 
-  if (!(oflag & O_NOCTTY) && (process->ctty == 0))
-    process->ctty = dev;
+  if (!(oflag & O_NOCTTY) && (req->process->ctty == 0))
+    req->process->ctty = dev;
 
   return 0;
 }
@@ -341,9 +343,9 @@ tty_open(struct Process *process, dev_t dev, int oflag, mode_t)
  * @return The number of bytes read or a negative value if an error occured.
  */
 ssize_t
-tty_read(struct Process *process, dev_t dev, uintptr_t buf, size_t nbytes)
+tty_read(struct IpcRequest *req, dev_t dev, uintptr_t, size_t nbytes)
 {
-  struct Tty *tty = tty_from_dev(process, dev);
+  struct Tty *tty = tty_from_dev(req->process, dev);
   size_t i = 0;
 
   if (tty == NULL)
@@ -373,7 +375,7 @@ tty_read(struct Process *process, dev_t dev, uintptr_t buf, size_t nbytes)
       if (c == tty->termios.c_cc[VEOF])
         break;
 
-      if ((r = vm_space_copy_out(process, &c, buf++, 1)) < 0) {
+      if ((r = ipc_request_write(req, &c, 1)) < 0) {
         k_mutex_unlock(&tty->in.mutex);
         return r;
       }
@@ -383,7 +385,7 @@ tty_read(struct Process *process, dev_t dev, uintptr_t buf, size_t nbytes)
       if ((c == tty->termios.c_cc[VEOL]) || (c == '\n'))
         break;
     } else {
-      if ((r = vm_space_copy_out(process, &c, buf++, 1)) < 0) {
+      if ((r = ipc_request_write(req, &c, 1)) < 0) {
         k_mutex_unlock(&tty->in.mutex);
         return r;
       }
@@ -400,9 +402,9 @@ tty_read(struct Process *process, dev_t dev, uintptr_t buf, size_t nbytes)
 }
 
 ssize_t
-tty_write(struct Process *process, dev_t dev, uintptr_t buf, size_t nbytes)
+tty_write(struct IpcRequest *req, dev_t dev, uintptr_t buf, size_t nbytes)
 {
-  struct Tty *tty = tty_from_dev(process, dev);
+  struct Tty *tty = tty_from_dev(req->process, dev);
   size_t i;
 
   if (tty == NULL)
@@ -415,7 +417,7 @@ tty_write(struct Process *process, dev_t dev, uintptr_t buf, size_t nbytes)
     for (i = 0; i != nbytes; i++) {
       int c, r;
 
-      if ((r = vm_space_copy_in(process, &c, buf + i, 1)) < 0) {
+      if ((r = vm_space_copy_in(req->process, &c, buf + i, 1)) < 0) {
         k_mutex_unlock(&tty->out.mutex);
         return r;
       }
@@ -432,9 +434,9 @@ tty_write(struct Process *process, dev_t dev, uintptr_t buf, size_t nbytes)
 }
 
 int
-tty_ioctl(struct Process *process, dev_t dev, int request, int arg)
+tty_ioctl(struct IpcRequest *req, dev_t dev, int request, int arg)
 {
-  struct Tty *tty = tty_from_dev(process, dev);
+  struct Tty *tty = tty_from_dev(req->process, dev);
   struct winsize ws;
 
   if (tty == NULL)
@@ -442,15 +444,12 @@ tty_ioctl(struct Process *process, dev_t dev, int request, int arg)
 
   switch (request) {
   case TIOCGETA:
-    return vm_copy_out(process->vm->pgtab,
-                       &tty->termios,
-                       arg,
-                       sizeof(struct termios));
+    return ipc_request_write(req, &tty->termios, sizeof(tty->termios));
 
   case TIOCSETAW:
     // TODO: drain
   case TIOCSETA:
-    return vm_copy_in(process->vm->pgtab,
+    return vm_copy_in(req->process->vm->pgtab,
                       &tty->termios,
                       arg,
                       sizeof(struct termios));
@@ -466,10 +465,10 @@ tty_ioctl(struct Process *process, dev_t dev, int request, int arg)
     ws.ws_row = tty_current->out.screen->rows;
     ws.ws_xpixel = tty_current->out.screen->cols * 8;  // FIXME
     ws.ws_ypixel = tty_current->out.screen->rows * 16; // FIXME
-    return vm_copy_out(process->vm->pgtab, &ws, arg, sizeof ws);
+    return ipc_request_write(req, &ws, sizeof ws);
   case TIOCSWINSZ:
     // cprintf("set winsize\n");
-    if (vm_copy_in(process->vm->pgtab, &ws, arg, sizeof ws) < 0)
+    if (vm_copy_in(req->process->vm->pgtab, &ws, arg, sizeof ws) < 0)
       return -EFAULT;
     // cprintf("ws_col = %d\n", ws.ws_col);
     // cprintf("ws_row = %d\n", ws.ws_row);
@@ -497,9 +496,9 @@ tty_try_select(struct Process *, struct Tty *tty)
 }
 
 int
-tty_select(struct Process *process, dev_t dev, struct timeval *timeout)
+tty_select(struct IpcRequest *req, dev_t dev, struct timeval *timeout)
 {
-  struct Tty *tty = tty_from_dev(process, dev);
+  struct Tty *tty = tty_from_dev(req->process, dev);
   int r;
 
   if (tty == NULL)
@@ -507,7 +506,7 @@ tty_select(struct Process *process, dev_t dev, struct timeval *timeout)
 
   k_mutex_lock(&tty->in.mutex);
 
-  while ((r = tty_try_select(process, tty)) == 0) {
+  while ((r = tty_try_select(req->process, tty)) == 0) {
     unsigned long t = 0;
 
     if (timeout != NULL) {

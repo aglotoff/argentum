@@ -94,7 +94,7 @@ ext2_inode_read(struct Process *process, struct Inode *inode)
   memmove(extra->block, raw->block, sizeof(extra->block));
 
   if (S_ISCHR(inode->mode) || S_ISBLK(inode->mode)) {
-    ext2_read(process, inode, (uintptr_t) &inode->rdev, sizeof(inode->rdev), 0);
+    ext2_read_data(process, inode, &inode->rdev, sizeof(inode->rdev), 0);
   }
 
   buf_release(buf);
@@ -313,22 +313,21 @@ ext2_trunc(struct Process *, struct Inode *inode, off_t length)
 }
 
 ssize_t
-ext2_read(struct Process *process, struct Inode *inode, uintptr_t va, size_t nbyte, off_t off)
+ext2_read_data(struct Process *, struct Inode *inode, void *p, size_t nbyte, off_t off)
 {
   size_t total, n;
   struct Ext2SuperblockData *sb = (struct Ext2SuperblockData *) (inode->fs->extra);
+  char *va = (char *) p;
 
   for (total = 0; total < nbyte; total += n, off += n, va += n) {
     uint32_t block_id = ext2_inode_get_block(inode, off / sb->block_size, 0);
-    int r;
-  
+
     n = MIN(nbyte - total, sb->block_size - off % sb->block_size);
   
     if (block_id == 0) {
       // Zero block in a sparse file - fill with zeros
       // TODO: could be an error
-      if ((r = vm_space_clear(va, n)) < 0)
-        return r;
+      k_panic("zero block");
     } else {
       // Read the block contents
       struct Buf *buf;
@@ -337,7 +336,40 @@ ext2_read(struct Process *process, struct Inode *inode, uintptr_t va, size_t nby
         return -EIO;
       }
 
-      if ((r = vm_space_copy_out(process, &buf->data[off % sb->block_size], va, n)) < 0) {
+      memmove((void *) va, &buf->data[off % sb->block_size], n);
+
+      buf_release(buf);
+    }
+  }
+
+  return total;
+}
+
+ssize_t
+ext2_read(struct IpcRequest *req, struct Inode *inode, size_t nbyte, off_t off)
+{
+  size_t total, n;
+  struct Ext2SuperblockData *sb = (struct Ext2SuperblockData *) (inode->fs->extra);
+
+  for (total = 0; total < nbyte; total += n, off += n) {
+    uint32_t block_id = ext2_inode_get_block(inode, off / sb->block_size, 0);
+    int r;
+  
+    n = MIN(nbyte - total, sb->block_size - off % sb->block_size);
+  
+    if (block_id == 0) {
+      // Zero block in a sparse file - fill with zeros
+      // TODO: could be an error
+      k_panic("zero block");
+    } else {
+      // Read the block contents
+      struct Buf *buf;
+
+      if ((buf = buf_read(block_id, sb->block_size, inode->dev)) == NULL) {
+        return -EIO;
+      }
+
+      if ((r = ipc_request_write(req, &buf->data[off % sb->block_size], n)) < 0) {
         buf_release(buf);
         return r;
       }

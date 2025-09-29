@@ -218,7 +218,7 @@ pipe_send_recv(struct Channel *channel, void *smsg, size_t, void *rmsg, size_t r
   case IPC_MSG_READDIR:
     return -ENOTDIR;
   case IPC_MSG_FSTAT:
-    return pipe_stat(channel, msg->u.fstat.buf);
+    return pipe_stat(channel, (uintptr_t) rmsg);
   case IPC_MSG_FCHOWN:
     return -EBADF;
   case IPC_MSG_IOCTL:
@@ -411,34 +411,40 @@ pipe_write(struct Channel *channel, uintptr_t va, size_t n)
 }
 
 int
-pipe_stat(struct Channel *channel, struct stat *buf)
+pipe_stat(struct Channel *channel, uintptr_t va)
 {
   struct PipeEndpoint *endpoint = pipe_get_channel_endpoint(channel);
   struct Pipe *pipe = endpoint->pipe;
+  struct stat buf;
   int r;
+
+  memset(&buf, 0, sizeof(buf));
 
   if ((r = k_mutex_lock(&pipe->mutex)) < 0)
     return r;
 
   // TODO: use meaningful values
-  buf->st_dev          = 255;
-  buf->st_ino          = 0;
-  buf->st_mode         = _IFIFO;
-  buf->st_nlink        = 0;
-  buf->st_uid          = 0;
-  buf->st_gid          = 0;
-  buf->st_rdev         = 0;
-  buf->st_size         = 0;
-  buf->st_atim.tv_sec  = 0;
-  buf->st_atim.tv_nsec = 0;
-  buf->st_mtim.tv_sec  = 0;
-  buf->st_mtim.tv_nsec = 0;
-  buf->st_ctim.tv_sec  = 0;
-  buf->st_ctim.tv_nsec = 0;
-  buf->st_blocks       = 0;
-  buf->st_blksize      = 0;
+  buf.st_dev          = 255;
+  buf.st_ino          = 0;
+  buf.st_mode         = _IFIFO;
+  buf.st_nlink        = 0;
+  buf.st_uid          = 0;
+  buf.st_gid          = 0;
+  buf.st_rdev         = 0;
+  buf.st_size         = 0;
+  buf.st_atim.tv_sec  = 0;
+  buf.st_atim.tv_nsec = 0;
+  buf.st_mtim.tv_sec  = 0;
+  buf.st_mtim.tv_nsec = 0;
+  buf.st_ctim.tv_sec  = 0;
+  buf.st_ctim.tv_nsec = 0;
+  buf.st_blocks       = 0;
+  buf.st_blksize      = 0;
 
   k_mutex_unlock(&pipe->mutex);
+
+  if ((r = vm_space_copy_out(process_current(), &buf, va, sizeof(buf))) < 0)
+    return r;
 
   return 0;
 }
