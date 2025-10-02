@@ -5,10 +5,10 @@
 #include <kernel/console.h>
 #include <kernel/process.h>
 #include <kernel/fd.h>
-#include <kernel/ipc/channel.h>
+#include <kernel/ipc.h>
 
-static struct ChannelDesc *_fd_lookup(struct Process *, int);
-static void                _fd_close(struct ChannelDesc *);
+static struct ConnectionDesc *_fd_lookup(struct Process *, int);
+static void                _fd_close(struct ConnectionDesc *);
 
 void
 fd_init(struct Process *process)
@@ -16,11 +16,11 @@ fd_init(struct Process *process)
   int i;
 
   for (i = 0; i < OPEN_MAX; i++) {
-    process->channels[i].channel = NULL;
-    process->channels[i].flags = 0;
+    process->connections[i].connection = NULL;
+    process->connections[i].flags = 0;
   }
 
-  k_spinlock_init(&process->channels_lock, "channels_lock");
+  k_spinlock_init(&process->connections_lock, "connections_lock");
 }
 
 void
@@ -31,8 +31,8 @@ fd_close_all(struct Process *process)
   // TODO: no need to lock?
 
   for (i = 0; i < OPEN_MAX; i++)
-    if (process->channels[i].channel != NULL)
-      _fd_close(&process->channels[i]);
+    if (process->connections[i].connection != NULL)
+      _fd_close(&process->connections[i]);
 }
 
 void
@@ -43,8 +43,8 @@ fd_close_on_exec(struct Process *process)
   // TODO: no need to lock the parent?
 
   for (i = 0; i < OPEN_MAX; i++)
-    if (process->channels[i].flags & FD_CLOEXEC) 
-      _fd_close(&process->channels[i]);
+    if (process->connections[i].flags & FD_CLOEXEC) 
+      _fd_close(&process->connections[i]);
 }
 
 void
@@ -54,40 +54,40 @@ fd_clone(struct Process *parent, struct Process *child)
 
   // TODO: no need to lock the parent?
 
-  k_spinlock_acquire(&child->channels_lock);
+  k_spinlock_acquire(&child->connections_lock);
 
   for (i = 0; i < OPEN_MAX; i++) {
-    if (parent->channels[i].channel != NULL){
-      child->channels[i].channel  = channel_ref(parent->channels[i].channel);
-      child->channels[i].flags = parent->channels[i].flags;
+    if (parent->connections[i].connection != NULL){
+      child->connections[i].connection  = connection_ref(parent->connections[i].connection);
+      child->connections[i].flags = parent->connections[i].flags;
     }
   }
 
-  k_spinlock_release(&child->channels_lock);
+  k_spinlock_release(&child->connections_lock);
 }
 
 int
-fd_alloc(struct Process *process, struct Channel *f, int start)
+fd_alloc(struct Process *process, struct Connection *f, int start)
 {
   int i;
 
   if (start < 0 || start >= OPEN_MAX)
     return -EINVAL;
 
-  k_spinlock_acquire(&process->channels_lock);
+  k_spinlock_acquire(&process->connections_lock);
 
   for (i = start; i < OPEN_MAX; i++) {
-    if (process->channels[i].channel == NULL) {
-      process->channels[i].channel = channel_ref(f);
-      process->channels[i].flags = 0;
+    if (process->connections[i].connection == NULL) {
+      process->connections[i].connection = connection_ref(f);
+      process->connections[i].flags = 0;
 
-      k_spinlock_release(&process->channels_lock);
+      k_spinlock_release(&process->connections_lock);
 
       return i;
     }
   }
 
-  k_spinlock_release(&process->channels_lock);
+  k_spinlock_release(&process->connections_lock);
 
   return -EMFILE;
 }
@@ -104,41 +104,41 @@ fd_alloc(struct Process *process, struct Channel *f, int start)
  * @retval -EFAULT if the arguments doesn't point to a valid string.
  * @retval -EBADF if the file descriptor is invalid.
  */
-struct Channel *
+struct Connection *
 fd_lookup(struct Process *process, int n)
 {
-  struct ChannelDesc *fd;
+  struct ConnectionDesc *fd;
 
-  k_spinlock_acquire(&process->channels_lock);
+  k_spinlock_acquire(&process->connections_lock);
   fd = _fd_lookup(process, n);
-  k_spinlock_release(&process->channels_lock);
+  k_spinlock_release(&process->connections_lock);
 
-  return (fd == NULL || fd->channel == NULL) ?  NULL : channel_ref(fd->channel);
+  return (fd == NULL || fd->connection == NULL) ?  NULL : connection_ref(fd->connection);
 }
 
 int
 fd_close(struct Process *process, int n)
 {
-  struct ChannelDesc *fd;
-  struct Channel *channel;
+  struct ConnectionDesc *fd;
+  struct Connection *connection;
 
-  k_spinlock_acquire(&process->channels_lock);
+  k_spinlock_acquire(&process->connections_lock);
 
   fd = _fd_lookup(process, n);
 
-  if ((fd == NULL) || (fd->channel == NULL)) {
-    k_spinlock_release(&process->channels_lock);
+  if ((fd == NULL) || (fd->connection == NULL)) {
+    k_spinlock_release(&process->connections_lock);
     return -EBADF;
   }
 
-  channel = fd->channel;
+  connection = fd->connection;
 
-  fd->channel  = NULL;
+  fd->connection  = NULL;
   fd->flags = 0;
 
-  k_spinlock_release(&process->channels_lock);
+  k_spinlock_release(&process->connections_lock);
 
-  channel_unref(channel);
+  connection_unref(connection);
 
   return 0;
 }
@@ -146,21 +146,21 @@ fd_close(struct Process *process, int n)
 int
 fd_get_flags(struct Process *process, int n)
 {
-  struct ChannelDesc *fd;
+  struct ConnectionDesc *fd;
   int flags = 0;
 
-  k_spinlock_acquire(&process->channels_lock);
+  k_spinlock_acquire(&process->connections_lock);
 
   fd = _fd_lookup(process, n);
 
-  if ((fd == NULL) || (fd->channel == NULL)) {
-    k_spinlock_release(&process->channels_lock);
+  if ((fd == NULL) || (fd->connection == NULL)) {
+    k_spinlock_release(&process->connections_lock);
     return -EBADF;
   }
 
   flags = fd->flags;
 
-  k_spinlock_release(&process->channels_lock);
+  k_spinlock_release(&process->connections_lock);
 
   return flags;
 }
@@ -168,42 +168,42 @@ fd_get_flags(struct Process *process, int n)
 int
 fd_set_flags(struct Process *process, int n, int flags)
 {
-  struct ChannelDesc *fd;
+  struct ConnectionDesc *fd;
 
   if (flags & ~FD_CLOEXEC)
     return -EINVAL;
 
-  k_spinlock_acquire(&process->channels_lock);
+  k_spinlock_acquire(&process->connections_lock);
 
   fd = _fd_lookup(process, n);
 
-  if ((fd == NULL) || (fd->channel == NULL)) {
-    k_spinlock_release(&process->channels_lock);
+  if ((fd == NULL) || (fd->connection == NULL)) {
+    k_spinlock_release(&process->connections_lock);
     return -EBADF;
   }
 
   fd->flags = flags;
 
-  k_spinlock_release(&process->channels_lock);
+  k_spinlock_release(&process->connections_lock);
 
   return 0;
 }
 
-static struct ChannelDesc *
+static struct ConnectionDesc *
 _fd_lookup(struct Process *process, int n)
 {
   if ((n < 0) || (n >= OPEN_MAX))
     return NULL;
-  return &process->channels[n];
+  return &process->connections[n];
 }
 
 static void
-_fd_close(struct ChannelDesc *fd)
+_fd_close(struct ConnectionDesc *fd)
 {
-  k_assert(fd->channel != NULL);
+  k_assert(fd->connection != NULL);
   
-  channel_unref(fd->channel);
+  connection_unref(fd->connection);
 
-  fd->channel  = NULL;
+  fd->connection  = NULL;
   fd->flags = 0;
 }

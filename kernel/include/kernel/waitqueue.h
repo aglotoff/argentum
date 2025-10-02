@@ -10,16 +10,16 @@
 struct KSpinLock;
 
 /**
- * Wait channel is a structure that allows tasks in the kernel to wait for
+ * Wait connection is a structure that allows tasks in the kernel to wait for
  * some associated resource. 
  */
 struct KWaitQueue {
-  /** List of tasks waiting on the channel. */
+  /** List of tasks waiting on the connection. */
   struct KListLink head;
 };
 
 /**
- * Initialize a static wait channel.
+ * Initialize a static wait connection.
  */
 #define k_waitqueue_initIALIZER { .head = KLIST_INITIALIZER }
 

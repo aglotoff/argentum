@@ -5,7 +5,7 @@
 #include <unistd.h>
 
 #include <kernel/fs/fs.h>
-#include <kernel/ipc/channel.h>
+#include <kernel/ipc.h>
 #include <kernel/console.h>
 #include <kernel/time.h>
 #include <kernel/page.h>
@@ -23,7 +23,7 @@ fs_access(const char *path, int amode)
   struct IpcMessage msg;
   struct PathNode *node;
   ino_t ino;
-  struct Channel *channel;
+  struct Connection *connection;
   int r;
 
   if ((r = fs_path_resolve(path, 0, &node)) < 0)
@@ -31,13 +31,13 @@ fs_access(const char *path, int amode)
   if (node == NULL)
     return -ENOENT;
 
-  ino = fs_path_ino(node, &channel);
+  ino = fs_path_ino(node, &connection);
 
   msg.type = IPC_MSG_ACCESS;
   msg.u.access.ino   = ino;
   msg.u.access.amode = amode;
 
-  r = fs_send_recv(channel, &msg, sizeof(msg), NULL, 0);
+  r = fs_send_recv(connection, &msg, sizeof(msg), NULL, 0);
 
   fs_path_node_unref(node);
 
@@ -68,7 +68,7 @@ fs_chmod(const char *path, mode_t mode)
   struct IpcMessage msg;
   struct PathNode *node;
   ino_t ino;
-  struct Channel *channel;
+  struct Connection *connection;
   int r;
 
   if ((r = fs_path_resolve(path, 0, &node)) < 0)
@@ -76,13 +76,13 @@ fs_chmod(const char *path, mode_t mode)
   if (node == NULL)
     return -ENOENT;
 
-  ino = fs_path_ino(node, &channel);
+  ino = fs_path_ino(node, &connection);
 
   msg.type = IPC_MSG_CHMOD;
   msg.u.chmod.ino  = ino;
   msg.u.chmod.mode = mode;
 
-  r = fs_send_recv(channel, &msg, sizeof(msg), NULL, 0);
+  r = fs_send_recv(connection, &msg, sizeof(msg), NULL, 0);
 
   fs_path_node_unref(node);
 
@@ -95,7 +95,7 @@ fs_chown(const char *path, uid_t uid, gid_t gid)
   struct IpcMessage msg;
   struct PathNode *node;
   ino_t ino;
-  struct Channel *channel;
+  struct Connection *connection;
   int r;
 
   if ((r = fs_path_resolve(path, 0, &node)) < 0)
@@ -103,14 +103,14 @@ fs_chown(const char *path, uid_t uid, gid_t gid)
   if (node == NULL)
     return -ENOENT;
 
-  ino = fs_path_ino(node, &channel);
+  ino = fs_path_ino(node, &connection);
 
   msg.type = IPC_MSG_CHOWN;
   msg.u.chown.ino = ino;
   msg.u.chown.uid = uid;
   msg.u.chown.gid = gid;
 
-  r = fs_send_recv(channel, &msg, sizeof(msg), NULL, 0);
+  r = fs_send_recv(connection, &msg, sizeof(msg), NULL, 0);
 
   fs_path_node_unref(node);
 
@@ -123,7 +123,7 @@ fs_create(const char *path, mode_t mode, dev_t dev, struct PathNode **istore)
   struct IpcMessage msg;
   struct PathNode *dir;
   ino_t ino, dir_ino;
-  struct Channel *chan;
+  struct Connection *chan;
   char name[NAME_MAX + 1];
   int r;
 
@@ -175,7 +175,7 @@ fs_link(char *path1, char *path2)
   struct IpcMessage msg;
   struct PathNode *dirp, *pp;
   ino_t ino, parent_ino;
-  struct Channel *channel, *parent_channel;
+  struct Connection *connection, *parent_connection;
   char name[NAME_MAX + 1];
   int r;
 
@@ -192,17 +192,17 @@ fs_link(char *path1, char *path2)
   // TODO: check for the same node?
   // TODO: lock the namespace manager?
 
-  parent_ino = fs_path_ino(dirp, &parent_channel);
-  ino = fs_path_ino(pp, &channel);
+  parent_ino = fs_path_ino(dirp, &parent_connection);
+  ino = fs_path_ino(pp, &connection);
 
-  k_assert(channel == parent_channel);
+  k_assert(connection == parent_connection);
 
   msg.type = IPC_MSG_LINK;
   msg.u.link.dir_ino = parent_ino;
   msg.u.link.name    = name;
   msg.u.link.ino     = ino;
 
-  r = fs_send_recv(parent_channel, &msg, sizeof(msg), NULL, 0);
+  r = fs_send_recv(parent_connection, &msg, sizeof(msg), NULL, 0);
 
   // UNREF(dirp)
   fs_path_node_unref(dirp);
@@ -218,7 +218,7 @@ fs_readlink(const char *path, uintptr_t va, size_t bufsize)
   struct IpcMessage msg;  
   struct PathNode *node;
   ino_t ino;
-  struct Channel *channel;
+  struct Connection *connection;
   int r;
 
   if ((r = fs_path_resolve(path, 0, &node)) < 0)
@@ -226,14 +226,14 @@ fs_readlink(const char *path, uintptr_t va, size_t bufsize)
   if (node == NULL)
     return -ENOENT;
 
-  ino = fs_path_ino(node, &channel);
+  ino = fs_path_ino(node, &connection);
 
   msg.type = IPC_MSG_READLINK;
   msg.u.readlink.ino   = ino;
   msg.u.readlink.va    = va;
   msg.u.readlink.nbyte = bufsize;
 
-  r = fs_send_recv(channel, &msg, sizeof(msg), (void *) va, bufsize);
+  r = fs_send_recv(connection, &msg, sizeof(msg), (void *) va, bufsize);
 
   fs_path_node_unref(node);
 
@@ -245,7 +245,7 @@ fs_rename(char *old, char *new)
 {
   struct PathNode *old_dir, *new_dir, *old_node, *new_node;
   ino_t ino, parent_ino;
-  struct Channel *channel, *parent_channel;
+  struct Connection *connection, *parent_connection;
   struct IpcMessage msg;
   char old_name[NAME_MAX + 1];
   char new_name[NAME_MAX + 1];
@@ -270,20 +270,20 @@ fs_rename(char *old, char *new)
   // TODO: should be a transaction?
 
   if (new_node != NULL) {
-    parent_ino = fs_path_ino(new_dir, &parent_channel);
-    ino = fs_path_ino(new_node, &channel);
+    parent_ino = fs_path_ino(new_dir, &parent_connection);
+    ino = fs_path_ino(new_node, &connection);
 
     // TODO: lock the namespace manager?
     // FIXME: check if is dir
 
-    k_assert(parent_channel == channel);
+    k_assert(parent_connection == connection);
 
     msg.type = IPC_MSG_UNLINK;
     msg.u.unlink.dir_ino = parent_ino;
     msg.u.unlink.ino     = ino;
     msg.u.unlink.name    = new_name;
     
-    r = fs_send_recv(parent_channel, &msg, sizeof(msg), NULL, 0);
+    r = fs_send_recv(parent_connection, &msg, sizeof(msg), NULL, 0);
 
     if (r == 0) {
       fs_path_node_remove(new_node);
@@ -297,31 +297,31 @@ fs_rename(char *old, char *new)
       goto out2;
   }
 
-  ino        = fs_path_ino(old_node, &channel);
-  parent_ino = fs_path_ino(new_dir, &parent_channel);
+  ino        = fs_path_ino(old_node, &connection);
+  parent_ino = fs_path_ino(new_dir, &parent_connection);
 
-  k_assert(parent_channel == channel);
+  k_assert(parent_connection == connection);
 
   msg.type = IPC_MSG_LINK;
   msg.u.link.dir_ino = parent_ino;
   msg.u.link.name    = new_name;
   msg.u.link.ino     = ino;
 
-  r = fs_send_recv(parent_channel, &msg, sizeof(msg), NULL, 0);
+  r = fs_send_recv(parent_connection, &msg, sizeof(msg), NULL, 0);
 
   if (r < 0)
     goto out2;
 
-  parent_ino = fs_path_ino(old_dir, &parent_channel);
+  parent_ino = fs_path_ino(old_dir, &parent_connection);
 
-  k_assert(parent_channel == channel);
+  k_assert(parent_connection == connection);
     
   msg.type = IPC_MSG_UNLINK;
   msg.u.unlink.dir_ino = parent_ino;
   msg.u.unlink.ino     = ino;
   msg.u.unlink.name    = old_name;
 
-  r = fs_send_recv(parent_channel, &msg, sizeof(msg), NULL, 0);
+  r = fs_send_recv(parent_connection, &msg, sizeof(msg), NULL, 0);
 
   if (r == 0) {
     fs_path_node_remove(old_node);
@@ -347,7 +347,7 @@ fs_rmdir(const char *path)
   struct IpcMessage msg;
   struct PathNode *dir, *pp;
   ino_t ino, parent_ino;
-  struct Channel *channel, *parent_channel;
+  struct Connection *connection, *parent_connection;
   char name[NAME_MAX + 1];
   int r;
 
@@ -364,17 +364,17 @@ fs_rmdir(const char *path)
 
   // TODO: lock the namespace manager?
 
-  parent_ino = fs_path_ino(dir, &parent_channel);
-  ino = fs_path_ino(pp, &channel);
+  parent_ino = fs_path_ino(dir, &parent_connection);
+  ino = fs_path_ino(pp, &connection);
 
-  k_assert(channel == parent_channel);
+  k_assert(connection == parent_connection);
 
   msg.type = IPC_MSG_RMDIR;
   msg.u.rmdir.dir_ino = parent_ino;
   msg.u.rmdir.ino     = ino;
   msg.u.rmdir.name    = pp->name;
 
-  r = fs_send_recv(parent_channel, &msg, sizeof(msg), NULL, 0);
+  r = fs_send_recv(parent_connection, &msg, sizeof(msg), NULL, 0);
 
   if (r == 0) {
     fs_path_node_remove(pp);
@@ -395,7 +395,7 @@ fs_symlink(const char *path, const char *link_path)
   struct IpcMessage msg;
   struct PathNode *dir;
   ino_t ino, dir_ino;
-  struct Channel *chan;
+  struct Connection *chan;
   char name[NAME_MAX + 1];
   mode_t mode;
   int r;
@@ -430,7 +430,7 @@ fs_unlink(const char *path)
   struct IpcMessage msg;
   struct PathNode *dir, *pp;
   ino_t ino, parent_ino;
-  struct Channel *channel, *parent_channel;
+  struct Connection *connection, *parent_connection;
   char name[NAME_MAX + 1];
   int r;
 
@@ -444,10 +444,10 @@ fs_unlink(const char *path)
     return -ENOENT;
   }
 
-  parent_ino = fs_path_ino(dir, &parent_channel);
-  ino        = fs_path_ino(pp, &channel);
+  parent_ino = fs_path_ino(dir, &parent_connection);
+  ino        = fs_path_ino(pp, &connection);
 
-  k_assert(parent_channel == channel);
+  k_assert(parent_connection == connection);
 
   // TODO: lock the namespace manager?
 
@@ -456,7 +456,7 @@ fs_unlink(const char *path)
   msg.u.unlink.ino     = ino;
   msg.u.unlink.name    = pp->name;
     
-  r = fs_send_recv(parent_channel, &msg, sizeof(msg), NULL, 0);
+  r = fs_send_recv(parent_connection, &msg, sizeof(msg), NULL, 0);
 
   if (r == 0) {
     fs_path_node_remove(pp);
@@ -477,7 +477,7 @@ fs_utime(const char *path, struct utimbuf *times)
   struct IpcMessage msg;
   struct PathNode *node;
   ino_t ino;
-  struct Channel *channel;
+  struct Connection *connection;
   int r;
 
   if ((r = fs_path_resolve(path, 0, &node)) < 0)
@@ -485,13 +485,13 @@ fs_utime(const char *path, struct utimbuf *times)
   if (node == NULL)
     return -ENOENT;
 
-  ino = fs_path_ino(node, &channel);
+  ino = fs_path_ino(node, &connection);
 
   msg.type = IPC_MSG_UTIME;
   msg.u.utime.ino   = ino;
   msg.u.utime.times = times;
 
-  r = fs_send_recv(channel, &msg, sizeof(msg), NULL, 0);
+  r = fs_send_recv(connection, &msg, sizeof(msg), NULL, 0);
 
   fs_path_node_unref(node);
 
@@ -503,20 +503,20 @@ fs_utime(const char *path, struct utimbuf *times)
  */
 
 int
-fs_close(struct Channel *channel)
+fs_close(struct Connection *connection)
 {
-  k_assert(channel->type == CHANNEL_TYPE_FILE);
+  k_assert(connection->type == CONNECTION_TYPE_FILE);
 
   // TODO: add a comment, when node can be NULL?
-  if (channel->node != NULL) {
+  if (connection->node != NULL) {
     struct IpcMessage msg;
 
     msg.type = IPC_MSG_CLOSE;
 
-    fs_send_recv(channel, &msg, sizeof(msg), NULL, 0);
+    fs_send_recv(connection, &msg, sizeof(msg), NULL, 0);
 
-    fs_path_node_unref(channel->node);
-    channel->node = NULL;
+    fs_path_node_unref(connection->node);
+    connection->node = NULL;
   }
 
   return 0;
@@ -525,11 +525,11 @@ fs_close(struct Channel *channel)
 #define OPEN_TIME_FLAGS (O_CREAT | O_EXCL | O_DIRECTORY | O_NOFOLLOW | O_NOCTTY | O_TRUNC)
 
 int
-fs_open(const char *path, int oflag, mode_t mode, struct Channel **file_store)
+fs_open(const char *path, int oflag, mode_t mode, struct Connection **file_store)
 {
   struct IpcMessage msg;
-  struct Channel *channel;
-  struct Channel *fs_channel;
+  struct Connection *connection;
+  struct Connection *fs_connection;
   struct PathNode *path_node;
   ino_t ino;
   int r, flags;
@@ -543,14 +543,14 @@ fs_open(const char *path, int oflag, mode_t mode, struct Channel **file_store)
   if (oflag & O_DIRECT) k_panic("O_DIRECT %s", path);
 
   // TODO: ENFILE
-  if ((r = channel_alloc(&channel)) != 0)
+  if ((r = connection_alloc(&connection)) != 0)
     return r;
 
-  channel->flags        = oflag & ~OPEN_TIME_FLAGS;
-  channel->type         = CHANNEL_TYPE_FILE;
-  channel->node         = NULL;
-  channel->fs    = NULL;
-  channel->ref_count    = 1;
+  connection->flags        = oflag & ~OPEN_TIME_FLAGS;
+  connection->type         = CONNECTION_TYPE_FILE;
+  connection->node         = NULL;
+  connection->fs    = NULL;
+  connection->ref_count    = 1;
 
   flags = FS_LOOKUP_FOLLOW_LINKS;
   if ((oflag & O_EXCL) && (oflag & O_CREAT))
@@ -581,48 +581,48 @@ fs_open(const char *path, int oflag, mode_t mode, struct Channel **file_store)
     }
   }
 
-  ino = fs_path_ino(path_node, &fs_channel);
+  ino = fs_path_ino(path_node, &fs_connection);
 
-  channel->fs = fs_channel->fs;
+  connection->fs = fs_connection->fs;
 
   msg.type = IPC_MSG_OPEN;
   msg.u.open.ino   = ino;
   msg.u.open.oflag = oflag;
   msg.u.open.mode  = mode;
 
-  r = fs_send_recv(channel, &msg, sizeof(msg), NULL, 0);
+  r = fs_send_recv(connection, &msg, sizeof(msg), NULL, 0);
 
   if (r < 0)
     goto out2;
 
-  // REF(channel->node)
-  channel->node = fs_path_node_ref(path_node);
+  // REF(connection->node)
+  connection->node = fs_path_node_ref(path_node);
   
   // UNREF(path_node)
   fs_path_node_unref(path_node);
   path_node = NULL;
 
-  *file_store = channel;
+  *file_store = connection;
 
   return 0;
 out2:
   // UNREF(path_node)
   fs_path_node_unref(path_node);
 out1:
-  channel_unref(channel);
+  connection_unref(connection);
   return r;
 }
 
 int
-fs_select(struct Channel *channel, struct timeval *timeout)
+fs_select(struct Connection *connection, struct timeval *timeout)
 {
   struct IpcMessage msg;
 
-  k_assert(channel->ref_count > 0);
-  k_assert(channel->type == CHANNEL_TYPE_FILE);
+  k_assert(connection->ref_count > 0);
+  k_assert(connection->type == CONNECTION_TYPE_FILE);
 
   msg.type = IPC_MSG_SELECT;
   msg.u.select.timeout = timeout;
 
-  return fs_send_recv(channel, &msg, sizeof(msg), NULL, 0);
+  return fs_send_recv(connection, &msg, sizeof(msg), NULL, 0);
 }

@@ -8,7 +8,7 @@
 #include <kernel/core/condvar.h>
 #include <kernel/tty.h>
 #include <kernel/fs/buf.h>
-#include <kernel/ipc/channel.h>
+#include <kernel/ipc.h>
 #include <kernel/core/irq.h>
 #include <kernel/core/mailbox.h>
 #include <kernel/core/mutex.h>
@@ -20,7 +20,6 @@
 #include <kernel/vmspace.h>
 #include <kernel/pipe.h>
 #include <kernel/process.h>
-#include <kernel/ipc.h>
 #include <kernel/net.h>
 #include <kernel/interrupt.h>
 #include <kernel/time.h>
@@ -76,7 +75,7 @@ main(void)
 
   // Initialize the remaining kernel services
   buf_init();           // Buffer cache
-  channel_init();          // File table
+  connection_init();          // File table
   vm_space_init();      // Virtual memory manager
   pipe_init_system();          // Pipes
   process_init();       // Process table

@@ -346,7 +346,7 @@ ext2_read_data(struct Process *, struct Inode *inode, void *p, size_t nbyte, off
 }
 
 ssize_t
-ext2_read(struct IpcRequest *req, struct Inode *inode, size_t nbyte, off_t off)
+ext2_read(struct Request *req, struct Inode *inode, size_t nbyte, off_t off)
 {
   size_t total, n;
   struct Ext2SuperblockData *sb = (struct Ext2SuperblockData *) (inode->fs->extra);

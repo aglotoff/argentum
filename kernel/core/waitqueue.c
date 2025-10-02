@@ -5,9 +5,9 @@
 #include "core_private.h"
 
 /**
- * Initialize the wait channel.
+ * Initialize the wait connection.
  * 
- * @param chan A pointer to the channel to be initialized.
+ * @param chan A pointer to the connection to be initialized.
  */
 void
 k_waitqueue_init(struct KWaitQueue *chan)
@@ -16,10 +16,10 @@ k_waitqueue_init(struct KWaitQueue *chan)
 }
 
 /**
- * Wait for the resource associated with the given wait channel to become
+ * Wait for the resource associated with the given wait connection to become
  * available and release an optional spinlock.
  * 
- * @param chan A pointer to the wait channel to sleep on.
+ * @param chan A pointer to the wait connection to sleep on.
  * @param lock A pointer to the spinlock to be released.
  */
 int
@@ -35,9 +35,9 @@ k_waitqueue_timed_sleep(struct KWaitQueue *chan, struct KSpinLock *lock, unsigne
 }
 
 /**
- * Wakeup the highest-priority task sleeling on the wait channel.
+ * Wakeup the highest-priority task sleeling on the wait connection.
  * 
- * @param chan A pointer to the wait channel
+ * @param chan A pointer to the wait connection
  */
 void
 k_waitqueue_wakeup_one(struct KWaitQueue *chan)
@@ -48,9 +48,9 @@ k_waitqueue_wakeup_one(struct KWaitQueue *chan)
 }
 
 /**
- * Wakeup all tasks sleeling on the wait channel.
+ * Wakeup all tasks sleeling on the wait connection.
  * 
- * @param chan A pointer to the wait channel
+ * @param chan A pointer to the wait connection
  */
 void
 k_waitqueue_wakeup_all(struct KWaitQueue *chan)

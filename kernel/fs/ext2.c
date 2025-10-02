@@ -476,7 +476,7 @@ ext2_readdir(struct Process *process, struct Inode *dir, void *buf,
 }
 
 ssize_t
-ext2_readlink(struct IpcRequest *req, struct Inode *inode, size_t n)
+ext2_readlink(struct Request *req, struct Inode *inode, size_t n)
 {
   struct Ext2InodeExtra *extra = (struct Ext2InodeExtra *) inode->extra;
   int r;

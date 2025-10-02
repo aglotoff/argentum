@@ -30,13 +30,13 @@ struct VMSpace {
   struct KListLink areas;
 };
 
-struct Channel;
+struct Connection;
 
 void              vm_space_init(void);
 struct VMSpace   *vm_space_create(void);
 void              vm_space_destroy(struct VMSpace *);
 struct VMSpace   *vm_space_clone(struct VMSpace *, int);
-int               vm_space_load_file(void *, void *, struct Channel *,
+int               vm_space_load_file(void *, void *, struct Connection *,
                                       size_t, off_t);
 
 intptr_t          vmspace_map(struct VMSpace *, uintptr_t, size_t, int);

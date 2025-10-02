@@ -192,7 +192,7 @@ ssize_t       ext2_write(struct Process *, struct Inode *, uintptr_t, size_t, of
 ssize_t       ext2_readdir(struct Process *, struct Inode *, void *, FillDirFunc, off_t);
 uint32_t      ext2_inode_get_block(struct Inode *, uint32_t, int);
 
-ssize_t       ext2_readlink(struct IpcRequest *, struct Inode *, size_t);
-ssize_t       ext2_read(struct IpcRequest *, struct Inode *, size_t, off_t);
+ssize_t       ext2_readlink(struct Request *, struct Inode *, size_t);
+ssize_t       ext2_read(struct Request *, struct Inode *, size_t, off_t);
 
 #endif  // !__KERNEL_FS_EXT2_H__

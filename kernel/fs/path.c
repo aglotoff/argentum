@@ -11,7 +11,7 @@
 #include <kernel/object_pool.h>
 #include <kernel/process.h>
 #include <kernel/types.h>
-#include <kernel/ipc/channel.h>
+#include <kernel/ipc.h>
 
 #include "devfs.h"
 #include "ext2.h"
@@ -32,7 +32,7 @@ static int              fs_path_node_lookup(struct PathNode *, const char *,
 struct PathNode *
 fs_path_node_create(const char *name,
                     ino_t ino,
-                    struct Channel *channel,
+                    struct Connection *connection,
                     struct PathNode *parent)
 {
   struct PathNode *node;
@@ -44,8 +44,8 @@ fs_path_node_create(const char *name,
     strncpy(node->name, name, NAME_MAX);
 
   node->ino = ino;
-  node->channel = channel_ref(channel);
-  node->mounted_channel = NULL;
+  node->connection = connection_ref(connection);
+  node->mounted_connection = NULL;
   node->mounted_ino = 0;
   node->parent = parent;
   node->ref_count++;
@@ -126,11 +126,11 @@ fs_path_node_unref(struct PathNode *path)
     k_spinlock_release(&fs_path_lock);
 
     // TODO: ???
-    if (path->mounted_channel != NULL)
+    if (path->mounted_connection != NULL)
       k_panic("mounted");
 
-    if (path->channel != NULL)
-      channel_unref(path->channel);
+    if (path->connection != NULL)
+      connection_unref(path->connection);
 
     path->ino = 0;
 
@@ -148,18 +148,18 @@ fs_path_node_unref(struct PathNode *path)
 }
 
 ino_t
-fs_path_ino(struct PathNode *node, struct Channel **channelp)
+fs_path_ino(struct PathNode *node, struct Connection **connectionp)
 {
   ino_t ino;
-  struct Channel *channel;
+  struct Connection *connection;
 
   k_spinlock_acquire(&fs_path_lock);
   ino = node->mounted_ino ? node->mounted_ino : node->ino;
-  channel = node->mounted_channel ? node->mounted_channel : node->channel;
+  connection = node->mounted_connection ? node->mounted_connection : node->connection;
   k_spinlock_release(&fs_path_lock);
 
-  if (channelp)
-    *channelp = channel;
+  if (connectionp)
+    *connectionp = connection;
 
   return ino;
 }
@@ -200,15 +200,15 @@ fs_path_set_cwd(struct PathNode *node)
   struct Process *current = process_current();
   struct IpcMessage msg;
   ino_t ino;
-  struct Channel *channel;
+  struct Connection *connection;
   int r;
 
-  ino = fs_path_ino(node, &channel);
+  ino = fs_path_ino(node, &connection);
 
   msg.type = IPC_MSG_CHDIR;
   msg.u.chdir.ino = ino;
 
-  r = fs_send_recv(channel, &msg, sizeof(msg), NULL, 0);
+  r = fs_send_recv(connection, &msg, sizeof(msg), NULL, 0);
 
   if (r < 0)
     return r;
@@ -225,7 +225,7 @@ fs_path_set_cwd(struct PathNode *node)
 
 static ssize_t
 fs_path_resolve_symlink(ino_t ino,
-                        struct Channel *channel,
+                        struct Connection *connection,
                         const char *rest,
                         char **path_store)
 {
@@ -241,7 +241,7 @@ fs_path_resolve_symlink(ino_t ino,
   msg.u.readlink.va    = (uintptr_t) path;
   msg.u.readlink.nbyte = PATH_MAX - 1;
 
-  r = fs_send_recv(channel, &msg, sizeof(msg), path, PATH_MAX - 1);
+  r = fs_send_recv(connection, &msg, sizeof(msg), path, PATH_MAX - 1);
 
   if (r < 0) {
     k_free(path);
@@ -294,7 +294,7 @@ fs_path_node_resolve_at(struct PathNode *start,
     struct IpcMessage msg;
     struct stat stat;
     ino_t ino;
-    struct Channel *channel;
+    struct Connection *connection;
     char *resolved_path;
 
     // Stay in the current directory
@@ -339,13 +339,13 @@ fs_path_node_resolve_at(struct PathNode *start,
 
     // Check for symlinks
 
-    ino = fs_path_ino(next, &channel);
+    ino = fs_path_ino(next, &connection);
 
     msg.type = IPC_MSG_STAT;
     msg.u.stat.ino = ino;
     msg.u.stat.buf = &stat;
 
-    r = fs_send_recv(channel, &msg, sizeof(msg), &stat, sizeof(stat));
+    r = fs_send_recv(connection, &msg, sizeof(msg), &stat, sizeof(stat));
 
     if (r < 0) {
       break;
@@ -369,7 +369,7 @@ fs_path_node_resolve_at(struct PathNode *start,
 
     // Resolve the symlink
 
-    if ((r = fs_path_resolve_symlink(ino, channel, p, &resolved_path)) < 0) {
+    if ((r = fs_path_resolve_symlink(ino, connection, p, &resolved_path)) < 0) {
       break;
     }
 
@@ -457,9 +457,9 @@ fs_path_node_lookup(struct PathNode *parent,
 
   if (child == NULL) {
     ino_t parent_ino, child_ino;
-    struct Channel *channel;
+    struct Connection *connection;
 
-    parent_ino = fs_path_ino(parent, &channel);
+    parent_ino = fs_path_ino(parent, &connection);
 
     msg.type = IPC_MSG_LOOKUP;
     msg.u.lookup.dir_ino = parent_ino;
@@ -467,11 +467,11 @@ fs_path_node_lookup(struct PathNode *parent,
     msg.u.lookup.flags   = flags;
     msg.u.lookup.istore  = &child_ino;
 
-    r = fs_send_recv(channel, &msg, sizeof(msg), NULL, 0);
+    r = fs_send_recv(connection, &msg, sizeof(msg), NULL, 0);
 
     if (r == 0 && child_ino != 0) {
       // Insert new node
-      if ((child = fs_path_node_create(name, child_ino, channel, parent)) == NULL) {
+      if ((child = fs_path_node_create(name, child_ino, connection, parent)) == NULL) {
         r = -ENOMEM;
       }
     } else {
@@ -554,7 +554,7 @@ void
 fs_init(void)
 { 
   ino_t root_ino;
-  struct Channel *channel;
+  struct Connection *connection;
 
   fs_inode_cache_init();
 
@@ -566,17 +566,17 @@ fs_init(void)
   if (fs_path_pool == NULL)
     k_panic("cannot allocate fs_path_pool");
 
-  if (channel_alloc(&channel) != 0)
-    k_panic("cannot allocate channel");
+  if (connection_alloc(&connection) != 0)
+    k_panic("cannot allocate connection");
 
-  channel->flags        = 0;
-  channel->type         = CHANNEL_TYPE_FILE;
-  channel->node         = NULL;
-  channel->ref_count    = 1;
+  connection->flags        = 0;
+  connection->type         = CONNECTION_TYPE_FILE;
+  connection->node         = NULL;
+  connection->ref_count    = 1;
 
-  root_ino = ext2_mount(FS_ROOT_DEV, &channel->fs);
+  root_ino = ext2_mount(FS_ROOT_DEV, &connection->fs);
 
-  if ((fs_root = fs_path_node_create("/", root_ino, channel, NULL)) == NULL)
+  if ((fs_root = fs_path_node_create("/", root_ino, connection, NULL)) == NULL)
     k_panic("cannot allocate fs root");
 
   fs_root->parent = fs_path_node_ref(fs_root);
@@ -587,7 +587,7 @@ fs_path_node_ctor(void *ptr, size_t)
 {
   struct PathNode *node = (struct PathNode *) ptr;
 
-  node->mounted_channel = NULL;
+  node->mounted_connection = NULL;
   node->mounted_ino = 0;
   node->ref_count = 0;
   k_list_init(&node->children);
@@ -600,7 +600,7 @@ fs_path_node_dtor(void *ptr, size_t)
 {
   struct PathNode *node = (struct PathNode *) ptr;
 
-  k_assert(node->mounted_channel == NULL);
+  k_assert(node->mounted_connection == NULL);
   k_assert(node->ref_count == 0);
   k_assert(k_list_is_empty(&node->children));
   k_assert(k_list_is_empty(&node->siblings));
@@ -632,26 +632,26 @@ fs_mount(const char *type, const char *path)
 static int
 fs_path_mount(struct PathNode *node, ino_t ino, struct FS *fs)
 {
-  struct Channel *channel;
+  struct Connection *connection;
   int r;
 
   // TODO: support multiple mountpoints
   // TODO: lock
 
-  if (node->mounted_channel)
+  if (node->mounted_connection)
     k_panic("already mounted");
 
-  if ((r = channel_alloc(&channel)) < 0)
+  if ((r = connection_alloc(&connection)) < 0)
     return r;
 
-  channel->flags     = 0;
-  channel->type      = CHANNEL_TYPE_FILE;
-  channel->node      = NULL;
-  channel->fs        = fs;
-  channel->ref_count = 1;
+  connection->flags     = 0;
+  connection->type      = CONNECTION_TYPE_FILE;
+  connection->node      = NULL;
+  connection->fs        = fs;
+  connection->ref_count = 1;
 
   node->mounted_ino     = ino;
-  node->mounted_channel = channel;
+  node->mounted_connection = connection;
 
   // TODO: remove cached entries?
 

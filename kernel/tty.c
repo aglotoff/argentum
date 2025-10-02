@@ -18,7 +18,7 @@
 #include <kernel/dev.h>
 #include <kernel/signal.h>
 #include <kernel/core/condvar.h>
-#include <kernel/ipc/channel.h>
+#include <kernel/ipc.h>
 #include <kernel/fs/fs.h>
 
 #include <kernel/drivers/kbd.h>
@@ -320,7 +320,7 @@ tty_from_dev(struct Process *process, dev_t dev)
 }
 
 int
-tty_open(struct IpcRequest *req, dev_t dev, int oflag, mode_t)
+tty_open(struct Request *req, dev_t dev, int oflag, mode_t)
 {
   struct Tty *tty = tty_from_dev(req->process, dev);
 
@@ -343,7 +343,7 @@ tty_open(struct IpcRequest *req, dev_t dev, int oflag, mode_t)
  * @return The number of bytes read or a negative value if an error occured.
  */
 ssize_t
-tty_read(struct IpcRequest *req, dev_t dev, uintptr_t, size_t nbytes)
+tty_read(struct Request *req, dev_t dev, uintptr_t, size_t nbytes)
 {
   struct Tty *tty = tty_from_dev(req->process, dev);
   size_t i = 0;
@@ -402,7 +402,7 @@ tty_read(struct IpcRequest *req, dev_t dev, uintptr_t, size_t nbytes)
 }
 
 ssize_t
-tty_write(struct IpcRequest *req, dev_t dev, uintptr_t buf, size_t nbytes)
+tty_write(struct Request *req, dev_t dev, uintptr_t buf, size_t nbytes)
 {
   struct Tty *tty = tty_from_dev(req->process, dev);
   size_t i;
@@ -434,7 +434,7 @@ tty_write(struct IpcRequest *req, dev_t dev, uintptr_t buf, size_t nbytes)
 }
 
 int
-tty_ioctl(struct IpcRequest *req, dev_t dev, int request, int arg)
+tty_ioctl(struct Request *req, dev_t dev, int request, int arg)
 {
   struct Tty *tty = tty_from_dev(req->process, dev);
   struct winsize ws;
@@ -496,7 +496,7 @@ tty_try_select(struct Process *, struct Tty *tty)
 }
 
 int
-tty_select(struct IpcRequest *req, dev_t dev, struct timeval *timeout)
+tty_select(struct Request *req, dev_t dev, struct timeval *timeout)
 {
   struct Tty *tty = tty_from_dev(req->process, dev);
   int r;

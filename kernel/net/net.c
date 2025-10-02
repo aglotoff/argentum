@@ -1,5 +1,5 @@
 #include <kernel/console.h>
-#include <kernel/ipc/channel.h>
+#include <kernel/ipc.h>
 #include <kernel/page.h>
 #include <kernel/net.h>
 #include <kernel/core/task.h>
@@ -98,7 +98,7 @@ net_init_done(void *arg)
 
 struct SocketEndpoint {
   struct KListLink hash_link;
-  struct Channel  *channel;
+  struct Connection  *connection;
   int              socket;
 };
 
@@ -110,17 +110,17 @@ static struct {
 } socket_hash;
 
 static struct SocketEndpoint *
-net_get_channel_endpoint(struct Channel *channel)
+net_get_connection_endpoint(struct Connection *connection)
 {
   struct KListLink *l;
 
   k_spinlock_acquire(&socket_hash.lock);
 
-  HASH_FOREACH_ENTRY(socket_hash.table, l, (uintptr_t) channel) {
+  HASH_FOREACH_ENTRY(socket_hash.table, l, (uintptr_t) connection) {
     struct SocketEndpoint *endpoint;
     
     endpoint = KLIST_CONTAINER(l, struct SocketEndpoint, hash_link);
-    if (endpoint->channel == channel) {
+    if (endpoint->connection == connection) {
       k_spinlock_release(&socket_hash.lock);
       return endpoint;
     }
@@ -134,19 +134,19 @@ net_get_channel_endpoint(struct Channel *channel)
 }
 
 static void
-net_set_channel_endpoint(struct SocketEndpoint *endpoint,
-                         struct Channel *channel,
+net_set_connection_endpoint(struct SocketEndpoint *endpoint,
+                         struct Connection *connection,
                          int socket)
 {
-  endpoint->channel = channel;
+  endpoint->connection = connection;
   endpoint->socket  = socket;
   k_list_null(&endpoint->hash_link);
 
-  channel->type = CHANNEL_TYPE_SOCKET;
-  channel->ref_count++;
+  connection->type = CONNECTION_TYPE_SOCKET;
+  connection->ref_count++;
 
   k_spinlock_acquire(&socket_hash.lock);
-  HASH_PUT(socket_hash.table, &endpoint->hash_link, (uintptr_t) channel);
+  HASH_PUT(socket_hash.table, &endpoint->hash_link, (uintptr_t) connection);
   k_spinlock_release(&socket_hash.lock);
 }
 
@@ -160,21 +160,21 @@ net_init(void)
 }
 
 intptr_t
-net_send_recv(struct Channel *channel, void *smsg, size_t, void *, size_t)
+net_send_recv(struct Connection *connection, void *smsg, size_t, void *, size_t)
 {
   struct IpcMessage *msg = (struct IpcMessage *) smsg;
 
   switch (msg->type) {
   case IPC_MSG_CLOSE:
-    return net_close(channel);
+    return net_close(connection);
   case IPC_MSG_SEEK:
     return -ESPIPE;
   case IPC_MSG_FCHMOD:
     return -EBADF;
   case IPC_MSG_READ:
-    return net_read(channel, msg->u.read.va, msg->u.read.nbyte);
+    return net_read(connection, msg->u.read.va, msg->u.read.nbyte);
   case IPC_MSG_WRITE:
-    return net_write(channel, msg->u.write.va, msg->u.write.nbyte);
+    return net_write(connection, msg->u.write.va, msg->u.write.nbyte);
   case IPC_MSG_READDIR:
     return -ENOTDIR;
   case IPC_MSG_FSTAT:
@@ -195,9 +195,9 @@ net_send_recv(struct Channel *channel, void *smsg, size_t, void *, size_t)
 }
 
 int
-net_socket(int domain, int type, int protocol, struct Channel **fstore)
+net_socket(int domain, int type, int protocol, struct Connection **fstore)
 {
-  struct Channel *f;
+  struct Connection *f;
   struct SocketEndpoint *endpoint;
   int r, socket;
 
@@ -209,13 +209,13 @@ net_socket(int domain, int type, int protocol, struct Channel **fstore)
     return -errno;
   }
 
-  if ((r = channel_alloc(&f)) < 0) {
+  if ((r = connection_alloc(&f)) < 0) {
     lwip_close(socket);
     k_free(endpoint);
     return r;
   }
 
-  net_set_channel_endpoint(endpoint, f, socket);
+  net_set_connection_endpoint(endpoint, f, socket);
 
   if (fstore != NULL)
     *fstore = f;
@@ -224,9 +224,9 @@ net_socket(int domain, int type, int protocol, struct Channel **fstore)
 }
 
 int
-net_bind(struct Channel *file, const struct sockaddr *address, socklen_t address_len)
+net_bind(struct Connection *file, const struct sockaddr *address, socklen_t address_len)
 {
-  struct SocketEndpoint *endpoint = net_get_channel_endpoint(file);
+  struct SocketEndpoint *endpoint = net_get_connection_endpoint(file);
 
   if (lwip_bind(endpoint->socket, address, address_len) != 0)
     return -errno;
@@ -235,9 +235,9 @@ net_bind(struct Channel *file, const struct sockaddr *address, socklen_t address
 }
 
 int
-net_listen(struct Channel *file, int backlog)
+net_listen(struct Connection *file, int backlog)
 {
-  struct SocketEndpoint *endpoint = net_get_channel_endpoint(file);
+  struct SocketEndpoint *endpoint = net_get_connection_endpoint(file);
 
   if (lwip_listen(endpoint->socket, backlog) != 0)
     return -errno;
@@ -246,9 +246,9 @@ net_listen(struct Channel *file, int backlog)
 }
 
 int
-net_connect(struct Channel *file, const struct sockaddr *address, socklen_t address_len)
+net_connect(struct Connection *file, const struct sockaddr *address, socklen_t address_len)
 {
-  struct SocketEndpoint *endpoint = net_get_channel_endpoint(file);
+  struct SocketEndpoint *endpoint = net_get_connection_endpoint(file);
 
   if (lwip_connect(endpoint->socket, address, address_len) != 0)
     return -errno;
@@ -257,13 +257,13 @@ net_connect(struct Channel *file, const struct sockaddr *address, socklen_t addr
 }
 
 int
-net_accept(struct Channel *file, struct sockaddr *address, socklen_t * address_len,
-           struct Channel **fstore)
+net_accept(struct Connection *file, struct sockaddr *address, socklen_t * address_len,
+           struct Connection **fstore)
 {
   int r, conn;
-  struct Channel *f;
+  struct Connection *f;
 
-  struct SocketEndpoint *endpoint = net_get_channel_endpoint(file);
+  struct SocketEndpoint *endpoint = net_get_connection_endpoint(file);
   struct SocketEndpoint *e;
 
   if ((conn = lwip_accept(endpoint->socket, address, address_len)) < 0)
@@ -274,13 +274,13 @@ net_accept(struct Channel *file, struct sockaddr *address, socklen_t * address_l
     return r;
   }
   
-  if ((r = channel_alloc(&f)) != 0) {
+  if ((r = connection_alloc(&f)) != 0) {
     k_free(e);
     lwip_close(conn);
     return r;
   }
 
-  net_set_channel_endpoint(e, f, conn);
+  net_set_connection_endpoint(e, f, conn);
 
   if (fstore != NULL)
     *fstore = f;
@@ -289,9 +289,9 @@ net_accept(struct Channel *file, struct sockaddr *address, socklen_t * address_l
 }
 
 int
-net_close(struct Channel *file)
+net_close(struct Connection *file)
 {
-  struct SocketEndpoint *endpoint = net_get_channel_endpoint(file);
+  struct SocketEndpoint *endpoint = net_get_connection_endpoint(file);
 
   if (lwip_close(endpoint->socket) != 0)
     return -errno;
@@ -306,13 +306,13 @@ net_close(struct Channel *file)
 }
 
 ssize_t
-net_recvfrom(struct Channel *file, uintptr_t va, size_t nbytes, int flags,
+net_recvfrom(struct Connection *file, uintptr_t va, size_t nbytes, int flags,
              struct sockaddr *address, socklen_t *address_len)
 {
   ssize_t total, r;
   char *p;
 
-  struct SocketEndpoint *endpoint = net_get_channel_endpoint(file);
+  struct SocketEndpoint *endpoint = net_get_connection_endpoint(file);
 
   // TODO: looks like a triple copy!
   if ((p = k_malloc(PAGE_SIZE)) == NULL)
@@ -352,19 +352,19 @@ net_recvfrom(struct Channel *file, uintptr_t va, size_t nbytes, int flags,
 }
 
 ssize_t
-net_read(struct Channel *file, uintptr_t buf, size_t nbytes)
+net_read(struct Connection *file, uintptr_t buf, size_t nbytes)
 {
   return net_recvfrom(file, buf, nbytes, 0, NULL, NULL);
 }
 
 ssize_t
-net_sendto(struct Channel *file, uintptr_t va, size_t nbytes, int flags,
+net_sendto(struct Connection *file, uintptr_t va, size_t nbytes, int flags,
            const struct sockaddr *dest_addr, socklen_t dest_len)
 {
   ssize_t total, r;
   char *p;
 
-  struct SocketEndpoint *endpoint = net_get_channel_endpoint(file);
+  struct SocketEndpoint *endpoint = net_get_connection_endpoint(file);
 
   // TODO: looks like a triple copy!
   if ((p = k_malloc(PAGE_SIZE)) == NULL)
@@ -404,18 +404,18 @@ net_sendto(struct Channel *file, uintptr_t va, size_t nbytes, int flags,
 }
 
 ssize_t
-net_write(struct Channel *file, uintptr_t va, size_t nbytes)
+net_write(struct Connection *file, uintptr_t va, size_t nbytes)
 {
   return net_sendto(file, va, nbytes, 0, NULL, 0);
 }
 
 int
-net_setsockopt(struct Channel *file, int level, int option_name, const void *option_value,
+net_setsockopt(struct Connection *file, int level, int option_name, const void *option_value,
                socklen_t option_len)
 {
   ssize_t r;
 
-  struct SocketEndpoint *endpoint = net_get_channel_endpoint(file);
+  struct SocketEndpoint *endpoint = net_get_connection_endpoint(file);
 
   if ((r = lwip_setsockopt(endpoint->socket, level, option_name, option_value,
                            option_len)) < 0)
@@ -425,12 +425,12 @@ net_setsockopt(struct Channel *file, int level, int option_name, const void *opt
 }
 
 int
-net_select(struct Channel *file, struct timeval *timeout)
+net_select(struct Connection *file, struct timeval *timeout)
 {
   int r;
   fd_set dset;
 
-  struct SocketEndpoint *endpoint = net_get_channel_endpoint(file);
+  struct SocketEndpoint *endpoint = net_get_connection_endpoint(file);
 
   dset.__fds_bits[0] = (1 << endpoint->socket);
 

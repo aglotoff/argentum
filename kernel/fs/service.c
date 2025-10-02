@@ -4,7 +4,7 @@
 #include <stdio.h>
 #include <unistd.h>
 
-#include <kernel/ipc/channel.h>
+#include <kernel/ipc.h>
 #include <kernel/page.h>
 #include <kernel/fs/fs.h>
 #include <kernel/object_pool.h>
@@ -14,10 +14,10 @@
 #include <kernel/dev.h>
 #include <kernel/hash.h>
 
-static struct IpcRequest *
+static struct Request *
 ipc_request_create(void)
 {
-  struct IpcRequest *req;
+  struct Request *req;
 
   if ((req = k_malloc(sizeof *req)) == NULL)
     return NULL;
@@ -26,7 +26,7 @@ ipc_request_create(void)
   k_spinlock_init(&req->lock, "req");
   
   req->process = NULL;
-  req->channel = NULL;
+  req->connection = NULL;
   req->send_msg = 0;
   req->send_nread = 0;
   req->send_bytes = 0;
@@ -39,7 +39,7 @@ ipc_request_create(void)
 }
 
 static void
-ipc_request_destroy(struct IpcRequest *req)
+ipc_request_destroy(struct Request *req)
 {
   int count;
 
@@ -47,7 +47,7 @@ ipc_request_destroy(struct IpcRequest *req)
 
   k_spinlock_acquire(&req->lock);
 
-  req->channel = NULL;
+  req->connection = NULL;
   req->process = NULL;
 
   count = --req->ref_count;
@@ -60,7 +60,7 @@ ipc_request_destroy(struct IpcRequest *req)
 }
 
 static void
-ipc_request_dup(struct IpcRequest *req)
+ipc_request_dup(struct Request *req)
 {
   k_spinlock_acquire(&req->lock);
   req->ref_count++;
@@ -69,7 +69,7 @@ ipc_request_dup(struct IpcRequest *req)
 
 
 static void
-ipc_request_reply(struct IpcRequest *req, intptr_t r)
+ipc_request_reply(struct Request *req, intptr_t r)
 {
   req->r = r;
 
@@ -87,17 +87,17 @@ static struct {
 } file_hash;
 
 static struct File *
-get_channel_file(struct Channel *channel)
+get_connection_file(struct Connection *connection)
 {
   struct KListLink *l;
 
   k_spinlock_acquire(&file_hash.lock);
 
-  HASH_FOREACH_ENTRY(file_hash.table, l, (uintptr_t) channel) {
+  HASH_FOREACH_ENTRY(file_hash.table, l, (uintptr_t) connection) {
     struct File *file;
     
     file = KLIST_CONTAINER(l, struct File, hash_link);
-    if (file->channel == channel) {
+    if (file->connection == connection) {
       k_spinlock_release(&file_hash.lock);
       return file;
     }
@@ -108,14 +108,14 @@ get_channel_file(struct Channel *channel)
 }
 
 static void
-set_channel_file(struct File *file,
-                 struct Channel *channel)
+set_connection_file(struct File *file,
+                 struct Connection *connection)
 {
-  file->channel = channel;
+  file->connection = connection;
   k_list_null(&file->hash_link);
 
   k_spinlock_acquire(&file_hash.lock);
-  HASH_PUT(file_hash.table, &file->hash_link, (uintptr_t) channel);
+  HASH_PUT(file_hash.table, &file->hash_link, (uintptr_t) connection);
   k_spinlock_release(&file_hash.lock);
 }
 
@@ -138,7 +138,7 @@ fs_filldir(void *buf, ino_t ino, const char *name, size_t name_len)
  */
 
 void
-do_access(struct FS *fs, struct IpcRequest *req, struct IpcMessage *msg)
+do_access(struct FS *fs, struct Request *req, struct IpcMessage *msg)
 {
   struct Process *process = req->process;
   int r;
@@ -173,7 +173,7 @@ do_access(struct FS *fs, struct IpcRequest *req, struct IpcMessage *msg)
 }
 
 void
-do_chdir(struct FS *fs, struct IpcRequest *req, struct IpcMessage *msg)
+do_chdir(struct FS *fs, struct Request *req, struct IpcMessage *msg)
 {
   struct Process *process = req->process;
   ino_t ino = msg->u.chdir.ino;
@@ -225,7 +225,7 @@ do_inode_chmod(struct FS *, struct Process *process,
 }
 
 void
-do_chmod(struct FS *fs, struct IpcRequest *req, struct IpcMessage *msg)
+do_chmod(struct FS *fs, struct Request *req, struct IpcMessage *msg)
 {
   ino_t ino = msg->u.chmod.ino;
   mode_t mode = msg->u.chmod.mode;
@@ -285,7 +285,7 @@ do_inode_chown(struct FS *fs, struct Process *process,
 }
 
 void
-do_chown(struct FS *fs, struct IpcRequest *req, struct IpcMessage *msg)
+do_chown(struct FS *fs, struct Request *req, struct IpcMessage *msg)
 {
   ino_t ino = msg->u.chown.ino;
   uid_t uid = msg->u.chown.uid;
@@ -336,7 +336,7 @@ do_create_locked(struct FS *fs, struct Process *process,
 }
 
 void
-do_create(struct FS *fs, struct IpcRequest *req, struct IpcMessage *msg)
+do_create(struct FS *fs, struct Request *req, struct IpcMessage *msg)
 {
   ino_t dir_ino = msg->u.create.dir_ino;
   char *name = msg->u.create.name;
@@ -390,7 +390,7 @@ do_link_locked(struct FS *fs, struct Process *process,
 }
 
 void
-do_link(struct FS *fs, struct IpcRequest *req, struct IpcMessage *msg)
+do_link(struct FS *fs, struct Request *req, struct IpcMessage *msg)
 {
   ino_t dir_ino = msg->u.link.dir_ino;
   char *name = msg->u.link.name;
@@ -412,7 +412,7 @@ do_link(struct FS *fs, struct IpcRequest *req, struct IpcMessage *msg)
 }
 
 void
-do_lookup(struct FS *fs, struct IpcRequest *req, struct IpcMessage *msg)
+do_lookup(struct FS *fs, struct Request *req, struct IpcMessage *msg)
 {
   struct Process *process = req->process;
 
@@ -455,7 +455,7 @@ do_lookup(struct FS *fs, struct IpcRequest *req, struct IpcMessage *msg)
 }
 
 void
-do_readlink(struct FS *fs, struct IpcRequest *req, struct IpcMessage *msg)
+do_readlink(struct FS *fs, struct Request *req, struct IpcMessage *msg)
 {
   struct Process *process = req->process;
   ino_t ino = msg->u.readlink.ino;
@@ -489,7 +489,7 @@ do_readlink(struct FS *fs, struct IpcRequest *req, struct IpcMessage *msg)
 }
 
 void
-do_rmdir(struct FS *fs, struct IpcRequest *req, struct IpcMessage *msg)
+do_rmdir(struct FS *fs, struct Request *req, struct IpcMessage *msg)
 {
   struct Process *process = req->process;
   ino_t dir_ino = msg->u.rmdir.dir_ino;
@@ -537,7 +537,7 @@ do_rmdir(struct FS *fs, struct IpcRequest *req, struct IpcMessage *msg)
 }
 
 int
-do_inode_stat(struct FS *, struct IpcRequest *req,
+do_inode_stat(struct FS *, struct Request *req,
               struct Inode *inode)
 {
   struct stat buf;
@@ -573,7 +573,7 @@ do_inode_stat(struct FS *, struct IpcRequest *req,
 }
 
 void
-do_stat(struct FS *fs, struct IpcRequest *req, struct IpcMessage *msg)
+do_stat(struct FS *fs, struct Request *req, struct IpcMessage *msg)
 {
   ino_t ino = msg->u.stat.ino;
   int r;
@@ -614,7 +614,7 @@ do_symlink_locked(struct FS *fs, struct Process *process,
 }
 
 void
-do_symlink(struct FS *fs, struct IpcRequest *req, struct IpcMessage *msg)
+do_symlink(struct FS *fs, struct Request *req, struct IpcMessage *msg)
 {
   struct Process *process = req->process;
   ino_t dir_ino = msg->u.symlink.dir_ino;
@@ -643,7 +643,7 @@ do_symlink(struct FS *fs, struct IpcRequest *req, struct IpcMessage *msg)
 }
 
 void
-do_unlink(struct FS *fs, struct IpcRequest *req, struct IpcMessage *msg)
+do_unlink(struct FS *fs, struct Request *req, struct IpcMessage *msg)
 {
   struct Process *process = req->process;
   ino_t dir_ino = msg->u.unlink.dir_ino;
@@ -692,7 +692,7 @@ do_unlink(struct FS *fs, struct IpcRequest *req, struct IpcMessage *msg)
 }
 
 void
-do_utime(struct FS *fs, struct IpcRequest *req, struct IpcMessage *msg)
+do_utime(struct FS *fs, struct Request *req, struct IpcMessage *msg)
 {
   struct Process *process = req->process;
   ino_t ino = msg->u.utime.ino;
@@ -744,9 +744,9 @@ out:
  */
 
 void
-do_close(struct FS *, struct IpcRequest *req, struct IpcMessage *)
+do_close(struct FS *, struct Request *req, struct IpcMessage *)
 {
-  struct File *file = get_channel_file(req->channel);
+  struct File *file = get_connection_file(req->connection);
 
   if (file != NULL) {
     k_assert(file->inode != NULL);
@@ -764,13 +764,13 @@ do_close(struct FS *, struct IpcRequest *req, struct IpcMessage *)
 }
 
 void
-do_fchmod(struct FS *fs, struct IpcRequest *req, struct IpcMessage *msg)
+do_fchmod(struct FS *fs, struct Request *req, struct IpcMessage *msg)
 {
   struct Process *process = req->process;
   mode_t mode = msg->u.fchmod.mode;
   int r;
 
-  struct File *file = get_channel_file(req->channel);
+  struct File *file = get_connection_file(req->connection);
   k_assert(file != NULL);
 
   if (file->inode == NULL) {
@@ -783,14 +783,14 @@ do_fchmod(struct FS *fs, struct IpcRequest *req, struct IpcMessage *msg)
 }
 
 void
-do_fchown(struct FS *fs, struct IpcRequest *req, struct IpcMessage *msg)
+do_fchown(struct FS *fs, struct Request *req, struct IpcMessage *msg)
 {
   struct Process *process = req->process;
   uid_t uid = msg->u.fchown.uid;
   gid_t gid = msg->u.fchown.gid;
   int r;
 
-  struct File *file = get_channel_file(req->channel);
+  struct File *file = get_connection_file(req->connection);
   k_assert(file != NULL);
 
   if (file->inode == NULL) {
@@ -803,9 +803,9 @@ do_fchown(struct FS *fs, struct IpcRequest *req, struct IpcMessage *msg)
 }
 
 void
-do_fstat(struct FS *fs, struct IpcRequest *req, struct IpcMessage *)
+do_fstat(struct FS *fs, struct Request *req, struct IpcMessage *)
 {
-  struct File *file = get_channel_file(req->channel);
+  struct File *file = get_connection_file(req->connection);
   int r;
 
   k_assert(file != NULL);
@@ -820,9 +820,9 @@ do_fstat(struct FS *fs, struct IpcRequest *req, struct IpcMessage *)
 }
 
 void
-do_fsync(struct FS *, struct IpcRequest *req, struct IpcMessage *)
+do_fsync(struct FS *, struct Request *req, struct IpcMessage *)
 {
-  struct File *file = get_channel_file(req->channel);
+  struct File *file = get_connection_file(req->connection);
   int r;
   k_assert(file != NULL);
 
@@ -839,9 +839,9 @@ do_fsync(struct FS *, struct IpcRequest *req, struct IpcMessage *)
 }
 
 void
-do_ioctl(struct FS *, struct IpcRequest *req, struct IpcMessage *msg)
+do_ioctl(struct FS *, struct Request *req, struct IpcMessage *msg)
 {
-  struct File *file = get_channel_file(req->channel);
+  struct File *file = get_connection_file(req->connection);
   k_assert(file != NULL);
   int request = msg->u.ioctl.request;
   int arg = msg->u.ioctl.arg;
@@ -863,7 +863,7 @@ do_ioctl(struct FS *, struct IpcRequest *req, struct IpcMessage *msg)
 
 static int
 do_open_locked(struct FS *fs, struct Process *process,
-               struct Channel *channel, 
+               struct Connection *connection, 
                struct Inode *inode,
                int oflag)
 {
@@ -896,7 +896,7 @@ do_open_locked(struct FS *fs, struct Process *process,
   struct File *file = (struct File *) k_malloc(sizeof(struct File));
   k_assert(file != NULL);
 
-  set_channel_file(file, channel);
+  set_connection_file(file, connection);
 
   if (S_ISCHR(inode->mode) || S_ISBLK(inode->mode))
     file->rdev = inode->rdev;
@@ -914,10 +914,10 @@ do_open_locked(struct FS *fs, struct Process *process,
 }
 
 void
-do_open(struct FS *fs, struct IpcRequest *req, struct IpcMessage *msg)
+do_open(struct FS *fs, struct Request *req, struct IpcMessage *msg)
 {
   struct Process *process = req->process;
-  struct Channel *channel = req->channel;
+  struct Connection *connection = req->connection;
   ino_t ino = msg->u.open.ino;
   int oflag = msg->u.open.oflag;
   mode_t mode = msg->u.open.mode;
@@ -926,13 +926,13 @@ do_open(struct FS *fs, struct IpcRequest *req, struct IpcMessage *msg)
   struct Inode *inode = fs->ops->inode_get(fs, ino);
 
   fs_inode_lock(inode);
-  r = do_open_locked(fs, process, channel, inode, oflag);
+  r = do_open_locked(fs, process, connection, inode, oflag);
   fs_inode_unlock(inode);
 
   fs_inode_put(inode);
 
   if (r == 0) {
-    struct File *file = get_channel_file(req->channel);
+    struct File *file = get_connection_file(req->connection);
     k_assert(file != NULL);
 
     if (file->rdev >= 0) {
@@ -944,13 +944,13 @@ do_open(struct FS *fs, struct IpcRequest *req, struct IpcMessage *msg)
 }
 
 static ssize_t
-do_read_locked(struct FS *fs, struct IpcRequest *req,
-               struct Channel *channel,
+do_read_locked(struct FS *fs, struct Request *req,
+               struct Connection *connection,
                size_t nbyte)
 {
   ssize_t total;
 
-  struct File *file = get_channel_file(channel);
+  struct File *file = get_connection_file(connection);
   k_assert(file != NULL);
 
   if (!fs_inode_permission(req->process, file->inode, FS_PERM_READ, 0))
@@ -977,25 +977,25 @@ do_read_locked(struct FS *fs, struct IpcRequest *req,
 }
 
 void
-do_read(struct FS *fs, struct IpcRequest *req, struct IpcMessage *msg)
+do_read(struct FS *fs, struct Request *req, struct IpcMessage *msg)
 {
-  struct Channel *channel = req->channel;
+  struct Connection *connection = req->connection;
   uintptr_t va = msg->u.read.va;
   size_t nbyte = msg->u.read.nbyte;
   ssize_t r;
 
-  struct File *file = get_channel_file(req->channel);
+  struct File *file = get_connection_file(req->connection);
   k_assert(file != NULL);
 
   if (file->rdev >= 0) {
     r = dev_read(req, file->rdev, va, nbyte);
-  } else if ((channel->flags & O_ACCMODE) == O_WRONLY) {
+  } else if ((connection->flags & O_ACCMODE) == O_WRONLY) {
     r = -EBADF;
   } else if (file->inode == NULL) {
     r = -EINVAL;
   } else {
     fs_inode_lock(file->inode);
-    r = do_read_locked(fs, req, channel, nbyte);
+    r = do_read_locked(fs, req, connection, nbyte);
     fs_inode_unlock(file->inode);
   }
 
@@ -1003,8 +1003,8 @@ do_read(struct FS *fs, struct IpcRequest *req, struct IpcMessage *msg)
 }
 
 static ssize_t
-do_readdir_locked(struct FS *fs, struct IpcRequest *req,
-                  struct Channel *channel,
+do_readdir_locked(struct FS *fs, struct Request *req,
+                  struct Connection *connection,
                   uintptr_t va,
                   size_t nbyte)
 {
@@ -1015,7 +1015,7 @@ do_readdir_locked(struct FS *fs, struct IpcRequest *req,
     char buf[NAME_MAX + 1];
   } de;
 
-  struct File *file = get_channel_file(channel);
+  struct File *file = get_connection_file(connection);
   k_assert(file != NULL);
 
   if (!S_ISDIR(file->inode->mode))
@@ -1057,21 +1057,21 @@ do_readdir_locked(struct FS *fs, struct IpcRequest *req,
 }
 
 void
-do_readdir(struct FS *fs, struct IpcRequest *req, struct IpcMessage *msg)
+do_readdir(struct FS *fs, struct Request *req, struct IpcMessage *msg)
 {
-  struct Channel *channel = req->channel;
+  struct Connection *connection = req->connection;
   uintptr_t va = msg->u.readdir.va;
   size_t nbyte = msg->u.readdir.nbyte;
   ssize_t r;
 
-  struct File *file = get_channel_file(req->channel);
+  struct File *file = get_connection_file(req->connection);
   k_assert(file != NULL);
 
   if (file->inode == NULL) {
     r = -EINVAL;
   } else {
     fs_inode_lock(file->inode);
-    r = do_readdir_locked(fs, req, channel, va, nbyte);
+    r = do_readdir_locked(fs, req, connection, va, nbyte);
     fs_inode_unlock(file->inode);
   }
 
@@ -1079,14 +1079,14 @@ do_readdir(struct FS *fs, struct IpcRequest *req, struct IpcMessage *msg)
 }
 
 void
-do_seek(struct FS *, struct IpcRequest *req, struct IpcMessage *msg)
+do_seek(struct FS *, struct Request *req, struct IpcMessage *msg)
 {
   off_t offset = msg->u.seek.offset;
   int whence = msg->u.seek.whence;
   off_t new_offset;
   int r;
 
-  struct File *file = get_channel_file(req->channel);
+  struct File *file = get_connection_file(req->connection);
   k_assert(file != NULL);
 
   if (file->inode == NULL) {
@@ -1124,12 +1124,12 @@ do_seek(struct FS *, struct IpcRequest *req, struct IpcMessage *msg)
 }
 
 void
-do_select(struct FS *, struct IpcRequest *req, struct IpcMessage *msg)
+do_select(struct FS *, struct Request *req, struct IpcMessage *msg)
 {
   struct timeval *timeout = msg->u.select.timeout;
   int r;
 
-  struct File *file = get_channel_file(req->channel);
+  struct File *file = get_connection_file(req->connection);
   k_assert(file != NULL);
 
   if (file->rdev >= 0) {
@@ -1151,13 +1151,13 @@ do_select(struct FS *, struct IpcRequest *req, struct IpcMessage *msg)
 }
 
 void
-do_trunc(struct FS *fs, struct IpcRequest *req, struct IpcMessage *msg)
+do_trunc(struct FS *fs, struct Request *req, struct IpcMessage *msg)
 {
   struct Process *process = req->process;
   off_t length = msg->u.trunc.length;
   int r;
 
-  struct File *file = get_channel_file(req->channel);
+  struct File *file = get_connection_file(req->connection);
   k_assert(file != NULL);
 
   if (length < 0) {
@@ -1191,19 +1191,19 @@ do_trunc(struct FS *fs, struct IpcRequest *req, struct IpcMessage *msg)
 
 static ssize_t
 do_write_locked(struct FS *fs, struct Process *process,
-                struct Channel *channel,
+                struct Connection *connection,
                 uintptr_t va,
                 size_t nbyte)
 {
   ssize_t total;
 
-  struct File *file = get_channel_file(channel);
+  struct File *file = get_connection_file(connection);
   k_assert(file != NULL);
 
   if (!fs_inode_permission(process, file->inode, FS_PERM_WRITE, 0))
     return -EPERM;
 
-  if (channel->flags & O_APPEND)
+  if (connection->flags & O_APPEND)
     file->offset = file->inode->size;
 
   if ((off_t) (file->offset + nbyte) < file->offset)
@@ -1228,26 +1228,26 @@ do_write_locked(struct FS *fs, struct Process *process,
 }
 
 void
-do_write(struct FS *fs, struct IpcRequest *req, struct IpcMessage *msg)
+do_write(struct FS *fs, struct Request *req, struct IpcMessage *msg)
 {
   struct Process *process = req->process;
-  struct Channel *channel = req->channel;
+  struct Connection *connection = req->connection;
   uintptr_t va = msg->u.write.va;
   size_t nbyte = msg->u.write.nbyte;
   ssize_t r;
 
-  struct File *file = get_channel_file(req->channel);
+  struct File *file = get_connection_file(req->connection);
   k_assert(file != NULL);
 
   if (file->rdev >= 0) {
     r = dev_write(req, file->rdev, va, nbyte);
   } else if (file->inode == NULL) {
     r = -EINVAL;
-  } else if ((channel->flags & O_ACCMODE) == O_RDONLY) {
+  } else if ((connection->flags & O_ACCMODE) == O_RDONLY) {
     r = -EBADF;
   } else {
     fs_inode_lock(file->inode);
-    r = do_write_locked(fs, process, channel, va, nbyte);
+    r = do_write_locked(fs, process, connection, va, nbyte);
     fs_inode_unlock(file->inode);
   }
 
@@ -1258,7 +1258,7 @@ do_write(struct FS *fs, struct IpcRequest *req, struct IpcMessage *msg)
  * ----- Message Handler Dispatch Table -----
  */
 
-typedef void (*fs_handler_t)(struct FS *, struct IpcRequest *, struct IpcMessage *);
+typedef void (*fs_handler_t)(struct FS *, struct Request *, struct IpcMessage *);
 
 static fs_handler_t
 fs_dispatch_table[] = {
@@ -1296,7 +1296,7 @@ void
 fs_service_task(void *arg)
 {
   struct FS *fs = (struct FS *) arg;
-  struct IpcRequest *req;
+  struct Request *req;
 
   while (k_mailbox_receive(&fs->mbox, (void *) &req) >= 0) {
     struct IpcMessage msg;
@@ -1353,15 +1353,15 @@ fs_create_service(char *name, dev_t dev, void *extra, struct FSOps *ops)
 
 
 intptr_t
-fs_send_recv(struct Channel *channel, void *smsg, size_t sbytes, void *rmsg, size_t rbytes)
+fs_send_recv(struct Connection *connection, void *smsg, size_t sbytes, void *rmsg, size_t rbytes)
 {
-  struct IpcRequest *req;
+  struct Request *req;
   unsigned long long timeout = seconds2ticks(5);
   int r;
 
-  k_assert(channel->type == CHANNEL_TYPE_FILE);
+  k_assert(connection->type == CONNECTION_TYPE_FILE);
 
-  if (channel->fs == NULL)
+  if (connection->fs == NULL)
     return -1;
 
   if ((req = ipc_request_create()) == NULL)
@@ -1372,12 +1372,12 @@ fs_send_recv(struct Channel *channel, void *smsg, size_t sbytes, void *rmsg, siz
   req->recv_msg = (uintptr_t) rmsg;
   req->recv_bytes = rbytes;
 
-  req->channel = channel;
+  req->connection = connection;
   req->process = process_current();
 
   ipc_request_dup(req);
 
-  if (k_mailbox_timed_send(&channel->fs->mbox, &req, timeout) < 0) {
+  if (k_mailbox_timed_send(&connection->fs->mbox, &req, timeout) < 0) {
     ipc_request_destroy(req);
     ipc_request_destroy(req);
     k_warn("fail send:\n");
@@ -1397,7 +1397,7 @@ fs_send_recv(struct Channel *channel, void *smsg, size_t sbytes, void *rmsg, siz
 }
 
 ssize_t
-ipc_request_write(struct IpcRequest *req, void *msg, size_t n)
+ipc_request_write(struct Request *req, void *msg, size_t n)
 {
   size_t nwrite = MIN(req->recv_bytes - req->recv_nwrite, n);
 
@@ -1411,7 +1411,7 @@ ipc_request_write(struct IpcRequest *req, void *msg, size_t n)
 }
 
 ssize_t
-ipc_request_read(struct IpcRequest *req, void *msg, size_t n)
+ipc_request_read(struct Request *req, void *msg, size_t n)
 {
   size_t nread = MIN(req->send_bytes - req->send_nread, n);
 

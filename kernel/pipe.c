@@ -2,7 +2,7 @@
 #include <fcntl.h>
 
 #include <kernel/console.h>
-#include <kernel/ipc/channel.h>
+#include <kernel/ipc.h>
 #include <kernel/object_pool.h>
 #include <kernel/page.h>
 #include <kernel/pipe.h>
@@ -31,7 +31,7 @@ struct Pipe {
 
 struct PipeEndpoint {
   struct KListLink hash_link;
-  struct Channel  *channel;
+  struct Connection  *connection;
   struct Pipe     *pipe;
   int              flags;
 };
@@ -44,17 +44,17 @@ static struct {
 } pipe_hash;
 
 static struct PipeEndpoint *
-pipe_get_channel_endpoint(struct Channel *channel)
+pipe_get_connection_endpoint(struct Connection *connection)
 {
   struct KListLink *l;
 
   k_spinlock_acquire(&pipe_hash.lock);
 
-  HASH_FOREACH_ENTRY(pipe_hash.table, l, (uintptr_t) channel) {
+  HASH_FOREACH_ENTRY(pipe_hash.table, l, (uintptr_t) connection) {
     struct PipeEndpoint *endpoint;
     
     endpoint = KLIST_CONTAINER(l, struct PipeEndpoint, hash_link);
-    if (endpoint->channel == channel) {
+    if (endpoint->connection == connection) {
       k_spinlock_release(&pipe_hash.lock);
       return endpoint;
     }
@@ -68,21 +68,21 @@ pipe_get_channel_endpoint(struct Channel *channel)
 }
 
 static void
-pipe_set_channel_endpoint(struct PipeEndpoint *endpoint,
-                          struct Channel *channel,
+pipe_set_connection_endpoint(struct PipeEndpoint *endpoint,
+                          struct Connection *connection,
                           struct Pipe *pipe,
                           int flags)
 {
-  endpoint->channel = channel;
+  endpoint->connection = connection;
   endpoint->pipe    = pipe;
   endpoint->flags   = flags;
   k_list_null(&endpoint->hash_link);
 
-  channel->type = CHANNEL_TYPE_PIPE;
-  channel->ref_count++;
+  connection->type = CONNECTION_TYPE_PIPE;
+  connection->ref_count++;
 
   k_spinlock_acquire(&pipe_hash.lock);
-  HASH_PUT(pipe_hash.table, &endpoint->hash_link, (uintptr_t) channel);
+  HASH_PUT(pipe_hash.table, &endpoint->hash_link, (uintptr_t) connection);
   k_spinlock_release(&pipe_hash.lock);
 }
 
@@ -151,11 +151,11 @@ pipe_destroy(struct Pipe *pipe)
 }
 
 int
-pipe_open(struct Channel **read_store, struct Channel **write_store)
+pipe_open(struct Connection **read_store, struct Connection **write_store)
 {
   struct Pipe *pipe;
   struct PipeEndpoint *read_end, *write_end;
-  struct Channel *read_channel, *write_channel;
+  struct Connection *read_connection, *write_connection;
   int r;
 
   if ((pipe = pipe_alloc()) == NULL) {
@@ -163,9 +163,9 @@ pipe_open(struct Channel **read_store, struct Channel **write_store)
     goto fail1;
   }
 
-  if ((r = channel_alloc(&read_channel)) < 0)
+  if ((r = connection_alloc(&read_connection)) < 0)
     goto fail2;
-  if ((r = channel_alloc(&write_channel)) < 0)
+  if ((r = connection_alloc(&write_connection)) < 0)
     goto fail3;
 
   if ((read_end = k_malloc(sizeof *read_end)) == NULL) {
@@ -179,20 +179,20 @@ pipe_open(struct Channel **read_store, struct Channel **write_store)
 
   pipe_create(pipe);
 
-  pipe_set_channel_endpoint(read_end, read_channel, pipe, O_RDONLY);
-  pipe_set_channel_endpoint(write_end, write_channel, pipe, O_WRONLY);
+  pipe_set_connection_endpoint(read_end, read_connection, pipe, O_RDONLY);
+  pipe_set_connection_endpoint(write_end, write_connection, pipe, O_WRONLY);
 
-  *read_store = read_channel;
-  *write_store = write_channel;
+  *read_store = read_connection;
+  *write_store = write_connection;
 
   return 0;
 
 fail5:
   k_free(read_end);
 fail4:
-  channel_unref(write_channel);
+  connection_unref(write_connection);
 fail3:
-  channel_unref(read_channel);
+  connection_unref(read_connection);
 fail2:
   pipe_free(pipe);
 fail1:
@@ -200,25 +200,25 @@ fail1:
 }
 
 intptr_t
-pipe_send_recv(struct Channel *channel, void *smsg, size_t, void *rmsg, size_t rbytes)
+pipe_send_recv(struct Connection *connection, void *smsg, size_t, void *rmsg, size_t rbytes)
 {
   struct IpcMessage *msg = (struct IpcMessage *) smsg;
 
   switch (msg->type) {
   case IPC_MSG_CLOSE:
-    return pipe_close(channel);
+    return pipe_close(connection);
   case IPC_MSG_SEEK:
     return -ESPIPE;
   case IPC_MSG_FCHMOD:
     return -EBADF;
   case IPC_MSG_READ:
-    return pipe_read(channel, (uintptr_t) rmsg, rbytes);
+    return pipe_read(connection, (uintptr_t) rmsg, rbytes);
   case IPC_MSG_WRITE:
-    return pipe_write(channel, msg->u.write.va, msg->u.write.nbyte);
+    return pipe_write(connection, msg->u.write.va, msg->u.write.nbyte);
   case IPC_MSG_READDIR:
     return -ENOTDIR;
   case IPC_MSG_FSTAT:
-    return pipe_stat(channel, (uintptr_t) rmsg);
+    return pipe_stat(connection, (uintptr_t) rmsg);
   case IPC_MSG_FCHOWN:
     return -EBADF;
   case IPC_MSG_IOCTL:
@@ -235,9 +235,9 @@ pipe_send_recv(struct Channel *channel, void *smsg, size_t, void *rmsg, size_t r
 }
 
 int
-pipe_close(struct Channel *channel)
+pipe_close(struct Connection *connection)
 {
-  struct PipeEndpoint *endpoint = pipe_get_channel_endpoint(channel);
+  struct PipeEndpoint *endpoint = pipe_get_connection_endpoint(connection);
   struct Pipe *pipe = endpoint->pipe;
   int write = (endpoint->flags & O_ACCMODE) != O_RDONLY;
   int r;
@@ -275,9 +275,9 @@ pipe_close(struct Channel *channel)
 }
 
 int
-pipe_select(struct Channel *channel, struct timeval *timeout)
+pipe_select(struct Connection *connection, struct timeval *timeout)
 {
-  struct PipeEndpoint *endpoint = pipe_get_channel_endpoint(channel);
+  struct PipeEndpoint *endpoint = pipe_get_connection_endpoint(connection);
   struct Pipe *pipe = endpoint->pipe;
   int r;
 
@@ -305,10 +305,10 @@ pipe_select(struct Channel *channel, struct timeval *timeout)
 }
 
 ssize_t
-pipe_read(struct Channel *channel, uintptr_t va, size_t n)
+pipe_read(struct Connection *connection, uintptr_t va, size_t n)
 {
   size_t i;
-  struct PipeEndpoint *endpoint = pipe_get_channel_endpoint(channel);
+  struct PipeEndpoint *endpoint = pipe_get_connection_endpoint(connection);
   struct Pipe *pipe = endpoint->pipe;
   int r;
 
@@ -360,10 +360,10 @@ pipe_read(struct Channel *channel, uintptr_t va, size_t n)
 }
 
 ssize_t
-pipe_write(struct Channel *channel, uintptr_t va, size_t n)
+pipe_write(struct Connection *connection, uintptr_t va, size_t n)
 {
   size_t i;
-  struct PipeEndpoint *endpoint = pipe_get_channel_endpoint(channel);
+  struct PipeEndpoint *endpoint = pipe_get_connection_endpoint(connection);
   struct Pipe *pipe = endpoint->pipe;
   int r;
 
@@ -411,9 +411,9 @@ pipe_write(struct Channel *channel, uintptr_t va, size_t n)
 }
 
 int
-pipe_stat(struct Channel *channel, uintptr_t va)
+pipe_stat(struct Connection *connection, uintptr_t va)
 {
-  struct PipeEndpoint *endpoint = pipe_get_channel_endpoint(channel);
+  struct PipeEndpoint *endpoint = pipe_get_connection_endpoint(connection);
   struct Pipe *pipe = endpoint->pipe;
   struct stat buf;
   int r;

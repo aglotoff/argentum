@@ -19,7 +19,7 @@
 #define INODE_CACHE_SIZE  32
 
 struct stat;
-struct Channel;
+struct Connection;
 struct FS;
 
 struct Process;
@@ -65,15 +65,15 @@ struct PathNode {
   // struct Inode    *mounted;
 
   ino_t            ino;
-  struct Channel  *channel;
+  struct Connection  *connection;
 
   ino_t            mounted_ino;
-  struct Channel  *mounted_channel;
+  struct Connection  *mounted_connection;
 };
 
 typedef int (*FillDirFunc)(void *, ino_t, const char *, size_t);
 
-struct IpcRequest;
+struct Request;
 
 struct FSOps {
   char             *name;
@@ -81,11 +81,11 @@ struct FSOps {
   int             (*inode_read)(struct Process *, struct Inode *);
   int             (*inode_write)(struct Process *, struct Inode *);
   void            (*inode_delete)(struct Process *, struct Inode *);
-  ssize_t         (*read)(struct IpcRequest *, struct Inode *, size_t, off_t);
+  ssize_t         (*read)(struct Request *, struct Inode *, size_t, off_t);
   ssize_t         (*write)(struct Process *, struct Inode *, uintptr_t, size_t, off_t);
   int             (*rmdir)(struct Process *, struct Inode *, struct Inode *, const char *);
   ssize_t         (*readdir)(struct Process *, struct Inode *, void *, FillDirFunc, off_t);
-  ssize_t         (*readlink)(struct IpcRequest *, struct Inode *, size_t);
+  ssize_t         (*readlink)(struct Request *, struct Inode *, size_t);
   int             (*create)(struct Process *, struct Inode *, char *, mode_t, struct Inode **);
   int             (*symlink)(struct Process *, struct Inode *, char *, mode_t, const char *, struct Inode **);
   int             (*mkdir)(struct Process *, struct Inode *, char *, mode_t, struct Inode **);
@@ -137,7 +137,7 @@ void             fs_inode_unlock_two(struct Inode *, struct Inode *);
 int              fs_chmod(const char *, mode_t);
 int              fs_chown(const char *, uid_t, gid_t);
 int              fs_create(const char *, mode_t, dev_t, struct PathNode **);
-int              fs_open(const char *, int, mode_t, struct Channel **);
+int              fs_open(const char *, int, mode_t, struct Connection **);
 int              fs_link(char *, char *);
 int              fs_rename(char *, char *);
 int              fs_chdir(const char *);
@@ -149,10 +149,10 @@ int              fs_symlink(const char *, const char *);
 int              fs_utime(const char *, struct utimbuf *);
 
 // File operations
-int              fs_close(struct Channel *);
-int              fs_select(struct Channel *, struct timeval *);
+int              fs_close(struct Connection *);
+int              fs_select(struct Connection *, struct timeval *);
 
-struct PathNode *fs_path_node_create(const char *, ino_t, struct Channel *, struct PathNode *);
+struct PathNode *fs_path_node_create(const char *, ino_t, struct Connection *, struct PathNode *);
 struct PathNode *fs_path_node_ref(struct PathNode *);
 void             fs_path_node_remove(struct PathNode *);
 void             fs_path_node_unref(struct PathNode *);
@@ -164,17 +164,17 @@ int              fs_mount(const char *, const char *);
 int              fs_path_resolve(const char *, int, struct PathNode **);
 int              fs_path_node_resolve(const char *, char *, int, struct PathNode **, struct PathNode **);
 int              fs_path_set_cwd(struct PathNode *);
-ino_t            fs_path_ino(struct PathNode *, struct Channel **);
+ino_t            fs_path_ino(struct PathNode *, struct Connection **);
 
 struct FS *      fs_create_service(char *, dev_t, void *, struct FSOps *);
 void             fs_service_task(void *);
 
 struct IpcMessage;
-struct IpcRequest;
+struct Request;
 
 // TODO: move to more appropriate place!
-intptr_t         fs_send_recv(struct Channel *, void *, size_t, void *, size_t);
-ssize_t          ipc_request_write(struct IpcRequest *, void *, size_t);
-ssize_t          ipc_request_read(struct IpcRequest *, void *, size_t);
+intptr_t         fs_send_recv(struct Connection *, void *, size_t, void *, size_t);
+ssize_t          ipc_request_write(struct Request *, void *, size_t);
+ssize_t          ipc_request_read(struct Request *, void *, size_t);
 
 #endif  // !__KERNEL_INCLUDE_KERNEL_FS_H__

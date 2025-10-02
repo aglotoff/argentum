@@ -16,7 +16,7 @@
 #include <kernel/types.h>
 #include <kernel/core/irq.h>
 #include <kernel/signal.h>
-#include <kernel/ipc/channel.h>
+#include <kernel/ipc.h>
 #include <stdio.h>
 #include <sys/fcntl.h>
 
@@ -82,7 +82,7 @@ user_stack_put_vector(struct VMSpace *vm, uintptr_t *vec, int count,
 }
 
 struct ExecContext {
-  struct Channel    *file;
+  struct Connection    *file;
   struct VMSpace *vm;
   uintptr_t      *argv;
   int             argc;
@@ -145,13 +145,13 @@ user_stack_finalize(struct ExecContext *ctx)
 }
 
 static int
-resolve_file(struct Channel *file, char *p, struct ExecContext *ctx, char **pp)
+resolve_file(struct Connection *file, char *p, struct ExecContext *ctx, char **pp)
 {
   char buf[1024];
   struct stat stat;
   int i, r, start;
 
-  if ((r = channel_stat(file, &stat)) < 0)
+  if ((r = connection_stat(file, &stat)) < 0)
     return r;
 
   if (!S_ISREG(stat.st_mode))
@@ -162,8 +162,8 @@ resolve_file(struct Channel *file, char *p, struct ExecContext *ctx, char **pp)
   if ((stat.st_mode & (S_IXUSR | S_IXGRP | S_IXOTH)) == 0)
     return -EPERM;
 
-  channel_seek(file, 0, SEEK_SET);
-  if ((r = channel_read(file, (uintptr_t) buf, 1024)) < 0) {
+  connection_seek(file, 0, SEEK_SET);
+  if ((r = connection_read(file, (uintptr_t) buf, 1024)) < 0) {
     return r;
   }
 
@@ -211,7 +211,7 @@ resolve_file(struct Channel *file, char *p, struct ExecContext *ctx, char **pp)
 static int
 resolve(const char *path, struct ExecContext *ctx)
 {
-  struct Channel *file;
+  struct Connection *file;
   char *p = (char *) path;
 
   for (;;) {
@@ -256,9 +256,9 @@ load_elf(struct ExecContext *ctx)
   off_t off;
   uintptr_t a;
 
-  channel_seek(ctx->file, 0, SEEK_SET);
+  connection_seek(ctx->file, 0, SEEK_SET);
 
-  if ((r = channel_read(ctx->file, (uintptr_t) &elf, sizeof(elf))) != sizeof(elf)) {
+  if ((r = connection_read(ctx->file, (uintptr_t) &elf, sizeof(elf))) != sizeof(elf)) {
     return -EINVAL;
   }
 
@@ -268,9 +268,9 @@ load_elf(struct ExecContext *ctx)
 
   off = elf.phoff;
   while ((size_t) off < elf.phoff + elf.phnum * sizeof(ph)) {
-    channel_seek(ctx->file, off, SEEK_SET);
+    connection_seek(ctx->file, off, SEEK_SET);
 
-    if ((r = channel_read(ctx->file, (uintptr_t) &ph, sizeof(ph))) != sizeof(ph)) {
+    if ((r = connection_read(ctx->file, (uintptr_t) &ph, sizeof(ph))) != sizeof(ph)) {
       return r;
     }
 

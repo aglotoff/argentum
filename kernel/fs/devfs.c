@@ -85,7 +85,7 @@ devfs_inode_delete(struct Process *, struct Inode *inode)
 }
 
 ssize_t
-devfs_read(struct IpcRequest *, struct Inode *inode, size_t n, off_t offset)
+devfs_read(struct Request *, struct Inode *inode, size_t n, off_t offset)
 {
   k_assert(inode->dev == 1);
   (void) n;
@@ -130,7 +130,7 @@ devfs_readdir(struct Process *, struct Inode *inode, void *buf, FillDirFunc fill
 }
 
 ssize_t
-devfs_readlink(struct IpcRequest *, struct Inode *inode, size_t n)
+devfs_readlink(struct Request *, struct Inode *inode, size_t n)
 {
   k_assert(inode->dev == 1);
   (void) n;
@@ -239,19 +239,19 @@ struct FSOps devfs_ops = {
 };
 
 int
-special_open(struct IpcRequest *, dev_t, int, mode_t)
+special_open(struct Request *, dev_t, int, mode_t)
 {
   return 0;
 }
 
 int
-special_ioctl(struct IpcRequest *, dev_t, int, int)
+special_ioctl(struct Request *, dev_t, int, int)
 {
   return 0;
 }
 
 ssize_t
-special_read(struct IpcRequest *, dev_t dev, uintptr_t, size_t)
+special_read(struct Request *, dev_t dev, uintptr_t, size_t)
 {
   switch (dev & 0xFF) {
   case 3:
@@ -262,7 +262,7 @@ special_read(struct IpcRequest *, dev_t dev, uintptr_t, size_t)
 }
 
 ssize_t
-special_write(struct IpcRequest *, dev_t dev, uintptr_t va, size_t n)
+special_write(struct Request *, dev_t dev, uintptr_t va, size_t n)
 {
   (void) va;
 
@@ -275,7 +275,7 @@ special_write(struct IpcRequest *, dev_t dev, uintptr_t va, size_t n)
 }
 
 int
-special_select(struct IpcRequest *, dev_t, struct timeval *)
+special_select(struct Request *, dev_t, struct timeval *)
 {
   return -ENOSYS;
 }

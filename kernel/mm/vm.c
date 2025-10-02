@@ -7,7 +7,7 @@
 #include <string.h>
 #include <sys/mman.h>
 #include <kernel/fs/fs.h>
-#include <kernel/ipc/channel.h>
+#include <kernel/ipc.h>
 #include <stdio.h>
 #include <kernel/process.h>
 
@@ -572,7 +572,7 @@ vm_handle_fault(void *pgtab, uintptr_t va)
 }
 
 int
-vm_space_load_file(void *pgtab, void *va, struct Channel *file, size_t n, off_t off)
+vm_space_load_file(void *pgtab, void *va, struct Connection *file, size_t n, off_t off)
 {
   struct Page *page;
   uint8_t *dst, *kva;
@@ -581,7 +581,7 @@ vm_space_load_file(void *pgtab, void *va, struct Channel *file, size_t n, off_t 
 
   dst = (uint8_t *) va;
 
-  channel_seek(file, off, SEEK_SET);
+  connection_seek(file, off, SEEK_SET);
 
   while (n != 0) {
     k_spinlock_acquire(&vm_lock);
@@ -600,7 +600,7 @@ vm_space_load_file(void *pgtab, void *va, struct Channel *file, size_t n, off_t 
     offset = (uintptr_t) dst % PAGE_SIZE;
     ncopy  = MIN(PAGE_SIZE - offset, n);
 
-    if ((r = channel_read(file, (uintptr_t) kva + offset, ncopy)) != ncopy)
+    if ((r = connection_read(file, (uintptr_t) kva + offset, ncopy)) != ncopy)
       return r;
 
     dst += ncopy;

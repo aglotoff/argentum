@@ -21,15 +21,15 @@
 #include <kernel/trap.h>
 #include <kernel/waitqueue.h>
 
-struct Channel;
+struct Connection;
 struct KSpinLock;
 struct Inode;
 struct Process;
 struct PathNode;
 struct Signal;
 
-struct ChannelDesc {
-  struct Channel *channel;
+struct ConnectionDesc {
+  struct Connection *connection;
   int             flags;
 };
 
@@ -96,10 +96,10 @@ struct Process {
   /** Current working directory */
   struct PathNode      *cwd;
 
-  /** Open channel descriptors */
-  struct ChannelDesc    channels[OPEN_MAX];
+  /** Open connection descriptors */
+  struct ConnectionDesc    connections[OPEN_MAX];
   /** Lock protecting the file descriptors */
-  struct KSpinLock      channels_lock;
+  struct KSpinLock      connections_lock;
 
   /** Controlling terminal */
   dev_t                 ctty;

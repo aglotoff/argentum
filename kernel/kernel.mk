@@ -40,7 +40,7 @@ KERNEL_SRCFILES := \
 	kernel/fs/ext2.c \
 	kernel/fs/devfs.c \
 	kernel/fs/buf.c \
-	kernel/ipc/channel.c \
+	kernel/ipc/connection.c \
 	kernel/fs/inode.c \
 	kernel/fs/path.c \
 	kernel/fs/fs.c \
@@ -57,7 +57,6 @@ KERNEL_SRCFILES := \
 	kernel/console.c \
 	kernel/dev.c \
 	kernel/hooks.c \
-	kernel/ipc.c \
 	kernel/interrupt.c \
 	kernel/kdebug.c \
 	kernel/monitor.c \

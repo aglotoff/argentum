@@ -45,7 +45,7 @@ extern struct Tty *tty_current;
 extern struct Tty *tty_system;
 
 struct Process;
-struct IpcRequest;
+struct Request;
 
 void arch_tty_init_system(void);
 void arch_tty_init(struct Tty *, int);
@@ -56,11 +56,11 @@ void arch_tty_erase(struct Tty *);
 
 void    tty_init(void);
 void    tty_process_input(struct Tty *, char *);
-int     tty_open(struct IpcRequest *, dev_t, int, mode_t);
-ssize_t tty_read(struct IpcRequest *, dev_t, uintptr_t, size_t);
-ssize_t tty_write(struct IpcRequest *, dev_t, uintptr_t, size_t);
-int     tty_ioctl(struct IpcRequest *, dev_t, int, int);
-int     tty_select(struct IpcRequest *, dev_t, struct timeval *);
+int     tty_open(struct Request *, dev_t, int, mode_t);
+ssize_t tty_read(struct Request *, dev_t, uintptr_t, size_t);
+ssize_t tty_write(struct Request *, dev_t, uintptr_t, size_t);
+int     tty_ioctl(struct Request *, dev_t, int, int);
+int     tty_select(struct Request *, dev_t, struct timeval *);
 void    tty_switch(int);
 
 #endif  // !__KERNEL_INCLUDE_KERNEL_DRIVERS_CONSOLE_H__

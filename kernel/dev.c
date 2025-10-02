@@ -1,7 +1,7 @@
 #include <kernel/core/assert.h>
 #include <kernel/dev.h>
 #include <kernel/console.h>
-#include <kernel/ipc/channel.h>
+#include <kernel/ipc.h>
 
 #define DEV_MAJOR_MIN 0
 #define DEV_MAJOR_MAX 255
@@ -49,7 +49,7 @@ dev_register_block(int major, struct BlockDev *dev)
 }
 
 int
-dev_open(struct IpcRequest *req, dev_t rdev, int oflag, mode_t mode)
+dev_open(struct Request *req, dev_t rdev, int oflag, mode_t mode)
 {
   struct CharDev *d = dev_lookup_char(rdev);
 
@@ -60,7 +60,7 @@ dev_open(struct IpcRequest *req, dev_t rdev, int oflag, mode_t mode)
 }
 
 ssize_t
-dev_read(struct IpcRequest *req, dev_t rdev, uintptr_t va, size_t n)
+dev_read(struct Request *req, dev_t rdev, uintptr_t va, size_t n)
 {
   struct CharDev *d = dev_lookup_char(rdev);
 
@@ -71,7 +71,7 @@ dev_read(struct IpcRequest *req, dev_t rdev, uintptr_t va, size_t n)
 }
 
 ssize_t
-dev_write(struct IpcRequest *req, dev_t rdev, uintptr_t va, size_t n)
+dev_write(struct Request *req, dev_t rdev, uintptr_t va, size_t n)
 {
   struct CharDev *d = dev_lookup_char(rdev);
 
@@ -82,7 +82,7 @@ dev_write(struct IpcRequest *req, dev_t rdev, uintptr_t va, size_t n)
 }
 
 int
-dev_ioctl(struct IpcRequest *req, dev_t rdev, int request, int arg)
+dev_ioctl(struct Request *req, dev_t rdev, int request, int arg)
 {
   struct CharDev *d = dev_lookup_char(rdev);
 
@@ -93,7 +93,7 @@ dev_ioctl(struct IpcRequest *req, dev_t rdev, int request, int arg)
 }
 
 int
-dev_select(struct IpcRequest *req, dev_t rdev, struct timeval *timeout)
+dev_select(struct Request *req, dev_t rdev, struct timeval *timeout)
 {
   struct CharDev *d = dev_lookup_char(rdev);
 
