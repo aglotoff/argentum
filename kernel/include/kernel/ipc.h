@@ -2,7 +2,9 @@
 #define __KERNEL_INCLUDE_KERNEL_IPC_CONNECTION_H__
 
 #include <sys/types.h>
+
 #include <kernel/core/semaphore.h>
+#include <kernel/core/mailbox.h>
 
 struct Inode;
 struct stat;
@@ -21,6 +23,8 @@ struct File {
   dev_t            rdev;
 };
 
+struct Endpoint;
+
 struct Connection {
   int                  type;         // File type (inode, console, or pipe)
   int                  ref_count;    // The number of references to this file
@@ -28,15 +32,15 @@ struct Connection {
   int                  flags;
   struct PathNode     *node;         // Pointer to the corresponding inode
   
-  struct FS           *fs;
+  struct Endpoint     *endpoint;
 };
 
-int             connection_alloc(struct Connection **);
-void            connection_init(void);
+int                connection_alloc(struct Connection **);
+void               connection_init(void);
 struct Connection *connection_ref(struct Connection *);
-void            connection_unref(struct Connection *);
-int             connection_get_flags(struct Connection *);
-int             connection_set_flags(struct Connection *, int);
+void               connection_unref(struct Connection *);
+int                connection_get_flags(struct Connection *);
+int                connection_set_flags(struct Connection *, int);
 
 ssize_t         connection_read(struct Connection *, uintptr_t, size_t);
 ssize_t         connection_write(struct Connection *, uintptr_t, size_t);
@@ -50,6 +54,7 @@ int             connection_ioctl(struct Connection *, int, int);
 int             connection_select(struct Connection *, struct timeval *);
 int             connection_sync(struct Connection *);
 int             connection_truncate(struct Connection *, off_t);
+intptr_t         connection_send(struct Connection *, void *, size_t, void *, size_t);
 
 struct IpcMessage {
   int type;
@@ -211,5 +216,22 @@ struct Request {
 
   intptr_t r;
 };
+
+struct Request *request_create(void);
+void            request_destroy(struct Request *);
+void            request_dup(struct Request *);
+void            request_reply(struct Request *, intptr_t);
+ssize_t         request_write(struct Request *, void *, size_t);
+ssize_t         request_read(struct Request *, void *, size_t);
+
+#define ENDPOINT_MBOX_CAPACITY  20
+
+struct Endpoint {
+  struct KMailBox mbox;
+  uint8_t         mbox_buf[ENDPOINT_MBOX_CAPACITY * sizeof(void *)];
+};
+
+void endpoint_init(struct Endpoint *);
+int  endpoint_receive(struct Endpoint *, struct Request **);
 
 #endif  // !__KERNEL_INCLUDE_KERNEL_IPC_CONNECTION__

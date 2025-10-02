@@ -11,6 +11,7 @@
 #include <kernel/types.h>
 #include <kernel/time.h>
 #include <kernel/vmspace.h>
+#include <kernel/ipc.h>
 
 #include "ext2.h"
 
@@ -486,7 +487,7 @@ ext2_readlink(struct Request *req, struct Inode *inode, size_t n)
   if ((inode->size <= MAX_FAST_SYMLINK_NAMELEN) && (extra->blocks == 0)) {
     ssize_t nread = MIN((size_t) inode->size, n);
 
-    if ((r = ipc_request_write(req, extra->block, n)) < 0)
+    if ((r = request_write(req, extra->block, n)) < 0)
       return r;
 
     return nread;

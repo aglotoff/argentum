@@ -375,7 +375,7 @@ tty_read(struct Request *req, dev_t dev, uintptr_t, size_t nbytes)
       if (c == tty->termios.c_cc[VEOF])
         break;
 
-      if ((r = ipc_request_write(req, &c, 1)) < 0) {
+      if ((r = request_write(req, &c, 1)) < 0) {
         k_mutex_unlock(&tty->in.mutex);
         return r;
       }
@@ -385,7 +385,7 @@ tty_read(struct Request *req, dev_t dev, uintptr_t, size_t nbytes)
       if ((c == tty->termios.c_cc[VEOL]) || (c == '\n'))
         break;
     } else {
-      if ((r = ipc_request_write(req, &c, 1)) < 0) {
+      if ((r = request_write(req, &c, 1)) < 0) {
         k_mutex_unlock(&tty->in.mutex);
         return r;
       }
@@ -444,7 +444,7 @@ tty_ioctl(struct Request *req, dev_t dev, int request, int arg)
 
   switch (request) {
   case TIOCGETA:
-    return ipc_request_write(req, &tty->termios, sizeof(tty->termios));
+    return request_write(req, &tty->termios, sizeof(tty->termios));
 
   case TIOCSETAW:
     // TODO: drain
@@ -465,7 +465,7 @@ tty_ioctl(struct Request *req, dev_t dev, int request, int arg)
     ws.ws_row = tty_current->out.screen->rows;
     ws.ws_xpixel = tty_current->out.screen->cols * 8;  // FIXME
     ws.ws_ypixel = tty_current->out.screen->rows * 16; // FIXME
-    return ipc_request_write(req, &ws, sizeof ws);
+    return request_write(req, &ws, sizeof ws);
   case TIOCSWINSZ:
     // cprintf("set winsize\n");
     if (vm_copy_in(req->process->vm->pgtab, &ws, arg, sizeof ws) < 0)

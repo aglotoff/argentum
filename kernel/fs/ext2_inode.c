@@ -9,6 +9,7 @@
 #include <kernel/types.h>
 #include <kernel/vmspace.h>
 #include <kernel/process.h>
+#include <kernel/ipc.h>
 
 #include "ext2.h"
 
@@ -369,7 +370,7 @@ ext2_read(struct Request *req, struct Inode *inode, size_t nbyte, off_t off)
         return -EIO;
       }
 
-      if ((r = ipc_request_write(req, &buf->data[off % sb->block_size], n)) < 0) {
+      if ((r = request_write(req, &buf->data[off % sb->block_size], n)) < 0) {
         buf_release(buf);
         return r;
       }

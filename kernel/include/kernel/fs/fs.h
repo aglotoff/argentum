@@ -13,8 +13,8 @@
 #include <kernel/elf.h>
 #include <kernel/core/list.h>
 #include <kernel/core/mutex.h>
-#include <kernel/core/mailbox.h>
 #include <kernel/core/task.h>
+#include <kernel/ipc.h>
 
 #define INODE_CACHE_SIZE  32
 
@@ -96,17 +96,14 @@ struct FSOps {
   void            (*trunc)(struct Process *, struct Inode *, off_t);
 };
 
-#define FS_MBOX_CAPACITY  20
-
 struct FS {
   dev_t           dev;
   void           *extra;
   struct FSOps   *ops;
   char           *name;
   
-  struct KMailBox mbox;
-  uint8_t         mbox_buf[FS_MBOX_CAPACITY * sizeof(void *)];
-  struct KTask    tasks[FS_MBOX_CAPACITY];
+  struct Endpoint endpoint;
+  struct KTask    tasks[ENDPOINT_MBOX_CAPACITY];
 };
 
 #define FS_INODE_VALID  (1 << 0)
@@ -168,13 +165,5 @@ ino_t            fs_path_ino(struct PathNode *, struct Connection **);
 
 struct FS *      fs_create_service(char *, dev_t, void *, struct FSOps *);
 void             fs_service_task(void *);
-
-struct IpcMessage;
-struct Request;
-
-// TODO: move to more appropriate place!
-intptr_t         fs_send_recv(struct Connection *, void *, size_t, void *, size_t);
-ssize_t          ipc_request_write(struct Request *, void *, size_t);
-ssize_t          ipc_request_read(struct Request *, void *, size_t);
 
 #endif  // !__KERNEL_INCLUDE_KERNEL_FS_H__

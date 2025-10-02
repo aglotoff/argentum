@@ -41,6 +41,8 @@ KERNEL_SRCFILES := \
 	kernel/fs/devfs.c \
 	kernel/fs/buf.c \
 	kernel/ipc/connection.c \
+	kernel/ipc/endpoint.c \
+	kernel/ipc/request.c \
 	kernel/fs/inode.c \
 	kernel/fs/path.c \
 	kernel/fs/fs.c \

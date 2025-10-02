@@ -37,7 +37,7 @@ fs_access(const char *path, int amode)
   msg.u.access.ino   = ino;
   msg.u.access.amode = amode;
 
-  r = fs_send_recv(connection, &msg, sizeof(msg), NULL, 0);
+  r = connection_send(connection, &msg, sizeof(msg), NULL, 0);
 
   fs_path_node_unref(node);
 
@@ -82,7 +82,7 @@ fs_chmod(const char *path, mode_t mode)
   msg.u.chmod.ino  = ino;
   msg.u.chmod.mode = mode;
 
-  r = fs_send_recv(connection, &msg, sizeof(msg), NULL, 0);
+  r = connection_send(connection, &msg, sizeof(msg), NULL, 0);
 
   fs_path_node_unref(node);
 
@@ -110,7 +110,7 @@ fs_chown(const char *path, uid_t uid, gid_t gid)
   msg.u.chown.uid = uid;
   msg.u.chown.gid = gid;
 
-  r = fs_send_recv(connection, &msg, sizeof(msg), NULL, 0);
+  r = connection_send(connection, &msg, sizeof(msg), NULL, 0);
 
   fs_path_node_unref(node);
 
@@ -142,7 +142,7 @@ fs_create(const char *path, mode_t mode, dev_t dev, struct PathNode **istore)
   msg.u.create.dev     = dev;
   msg.u.create.istore  = &ino;
 
-  r = fs_send_recv(chan, &msg, sizeof(msg), NULL, 0);
+  r = connection_send(chan, &msg, sizeof(msg), NULL, 0);
 
   // (inode->ref_count): +1
   if (r == 0) {
@@ -202,7 +202,7 @@ fs_link(char *path1, char *path2)
   msg.u.link.name    = name;
   msg.u.link.ino     = ino;
 
-  r = fs_send_recv(parent_connection, &msg, sizeof(msg), NULL, 0);
+  r = connection_send(parent_connection, &msg, sizeof(msg), NULL, 0);
 
   // UNREF(dirp)
   fs_path_node_unref(dirp);
@@ -233,7 +233,7 @@ fs_readlink(const char *path, uintptr_t va, size_t bufsize)
   msg.u.readlink.va    = va;
   msg.u.readlink.nbyte = bufsize;
 
-  r = fs_send_recv(connection, &msg, sizeof(msg), (void *) va, bufsize);
+  r = connection_send(connection, &msg, sizeof(msg), (void *) va, bufsize);
 
   fs_path_node_unref(node);
 
@@ -283,7 +283,7 @@ fs_rename(char *old, char *new)
     msg.u.unlink.ino     = ino;
     msg.u.unlink.name    = new_name;
     
-    r = fs_send_recv(parent_connection, &msg, sizeof(msg), NULL, 0);
+    r = connection_send(parent_connection, &msg, sizeof(msg), NULL, 0);
 
     if (r == 0) {
       fs_path_node_remove(new_node);
@@ -307,7 +307,7 @@ fs_rename(char *old, char *new)
   msg.u.link.name    = new_name;
   msg.u.link.ino     = ino;
 
-  r = fs_send_recv(parent_connection, &msg, sizeof(msg), NULL, 0);
+  r = connection_send(parent_connection, &msg, sizeof(msg), NULL, 0);
 
   if (r < 0)
     goto out2;
@@ -321,7 +321,7 @@ fs_rename(char *old, char *new)
   msg.u.unlink.ino     = ino;
   msg.u.unlink.name    = old_name;
 
-  r = fs_send_recv(parent_connection, &msg, sizeof(msg), NULL, 0);
+  r = connection_send(parent_connection, &msg, sizeof(msg), NULL, 0);
 
   if (r == 0) {
     fs_path_node_remove(old_node);
@@ -374,7 +374,7 @@ fs_rmdir(const char *path)
   msg.u.rmdir.ino     = ino;
   msg.u.rmdir.name    = pp->name;
 
-  r = fs_send_recv(parent_connection, &msg, sizeof(msg), NULL, 0);
+  r = connection_send(parent_connection, &msg, sizeof(msg), NULL, 0);
 
   if (r == 0) {
     fs_path_node_remove(pp);
@@ -415,7 +415,7 @@ fs_symlink(const char *path, const char *link_path)
   msg.u.symlink.path      = path;
   msg.u.symlink.istore    = &ino;
 
-  r = fs_send_recv(chan, &msg, sizeof(msg), NULL, 0);
+  r = connection_send(chan, &msg, sizeof(msg), NULL, 0);
 
   // UNREF(dir)
   fs_path_node_unref(dir);
@@ -456,7 +456,7 @@ fs_unlink(const char *path)
   msg.u.unlink.ino     = ino;
   msg.u.unlink.name    = pp->name;
     
-  r = fs_send_recv(parent_connection, &msg, sizeof(msg), NULL, 0);
+  r = connection_send(parent_connection, &msg, sizeof(msg), NULL, 0);
 
   if (r == 0) {
     fs_path_node_remove(pp);
@@ -491,7 +491,7 @@ fs_utime(const char *path, struct utimbuf *times)
   msg.u.utime.ino   = ino;
   msg.u.utime.times = times;
 
-  r = fs_send_recv(connection, &msg, sizeof(msg), NULL, 0);
+  r = connection_send(connection, &msg, sizeof(msg), NULL, 0);
 
   fs_path_node_unref(node);
 
@@ -513,7 +513,7 @@ fs_close(struct Connection *connection)
 
     msg.type = IPC_MSG_CLOSE;
 
-    fs_send_recv(connection, &msg, sizeof(msg), NULL, 0);
+    connection_send(connection, &msg, sizeof(msg), NULL, 0);
 
     fs_path_node_unref(connection->node);
     connection->node = NULL;
@@ -549,7 +549,7 @@ fs_open(const char *path, int oflag, mode_t mode, struct Connection **file_store
   connection->flags        = oflag & ~OPEN_TIME_FLAGS;
   connection->type         = CONNECTION_TYPE_FILE;
   connection->node         = NULL;
-  connection->fs    = NULL;
+  connection->endpoint     = NULL;
   connection->ref_count    = 1;
 
   flags = FS_LOOKUP_FOLLOW_LINKS;
@@ -583,14 +583,14 @@ fs_open(const char *path, int oflag, mode_t mode, struct Connection **file_store
 
   ino = fs_path_ino(path_node, &fs_connection);
 
-  connection->fs = fs_connection->fs;
+  connection->endpoint = fs_connection->endpoint;
 
   msg.type = IPC_MSG_OPEN;
   msg.u.open.ino   = ino;
   msg.u.open.oflag = oflag;
   msg.u.open.mode  = mode;
 
-  r = fs_send_recv(connection, &msg, sizeof(msg), NULL, 0);
+  r = connection_send(connection, &msg, sizeof(msg), NULL, 0);
 
   if (r < 0)
     goto out2;
@@ -624,5 +624,5 @@ fs_select(struct Connection *connection, struct timeval *timeout)
   msg.type = IPC_MSG_SELECT;
   msg.u.select.timeout = timeout;
 
-  return fs_send_recv(connection, &msg, sizeof(msg), NULL, 0);
+  return connection_send(connection, &msg, sizeof(msg), NULL, 0);
 }

@@ -14,69 +14,6 @@
 #include <kernel/dev.h>
 #include <kernel/hash.h>
 
-static struct Request *
-ipc_request_create(void)
-{
-  struct Request *req;
-
-  if ((req = k_malloc(sizeof *req)) == NULL)
-    return NULL;
-
-  k_semaphore_create(&req->sem, 0);
-  k_spinlock_init(&req->lock, "req");
-  
-  req->process = NULL;
-  req->connection = NULL;
-  req->send_msg = 0;
-  req->send_nread = 0;
-  req->send_bytes = 0;
-  req->recv_msg = 0;
-  req->recv_bytes = 0;
-  req->recv_nwrite = 0;
-  req->ref_count = 1;
-
-  return req;
-}
-
-static void
-ipc_request_destroy(struct Request *req)
-{
-  int count;
-
-  k_assert(req->ref_count > 0);
-
-  k_spinlock_acquire(&req->lock);
-
-  req->connection = NULL;
-  req->process = NULL;
-
-  count = --req->ref_count;
-
-  k_spinlock_release(&req->lock);
-
-  if (count == 0) {
-    k_free(req);
-  }
-}
-
-static void
-ipc_request_dup(struct Request *req)
-{
-  k_spinlock_acquire(&req->lock);
-  req->ref_count++;
-  k_spinlock_release(&req->lock);
-}
-
-
-static void
-ipc_request_reply(struct Request *req, intptr_t r)
-{
-  req->r = r;
-
-  k_semaphore_put(&req->sem);
-  ipc_request_destroy(req);
-}
-
 // File data
 
 #define NBUCKET   256
@@ -153,7 +90,7 @@ do_access(struct FS *fs, struct Request *req, struct IpcMessage *msg)
 
   if (msg->u.access.amode == F_OK) {
     fs_inode_put(inode);
-    ipc_request_reply(req, r);
+    request_reply(req, r);
     return;
   }
 
@@ -169,7 +106,7 @@ do_access(struct FS *fs, struct Request *req, struct IpcMessage *msg)
   fs_inode_unlock(inode);
   fs_inode_put(inode);
 
-  ipc_request_reply(req, r);
+  request_reply(req, r);
 }
 
 void
@@ -195,7 +132,7 @@ do_chdir(struct FS *fs, struct Request *req, struct IpcMessage *msg)
   fs_inode_unlock(inode);
   fs_inode_put(inode);
 
-  ipc_request_reply(req, r);
+  request_reply(req, r);
 }
 
 #define CHMOD_MASK  (S_IRWXU | S_IRWXG | S_IRWXO | S_ISUID | S_ISGID)
@@ -238,7 +175,7 @@ do_chmod(struct FS *fs, struct Request *req, struct IpcMessage *msg)
 
   fs_inode_put(inode);
 
-  ipc_request_reply(req, r);
+  request_reply(req, r);
 }
 
 static int
@@ -299,7 +236,7 @@ do_chown(struct FS *fs, struct Request *req, struct IpcMessage *msg)
 
   fs_inode_put(inode);
 
-  ipc_request_reply(req, r);
+  request_reply(req, r);
 }
 
 static int
@@ -361,7 +298,7 @@ do_create(struct FS *fs, struct Request *req, struct IpcMessage *msg)
 
   fs_inode_put(dir);
 
-  ipc_request_reply(req, r);
+  request_reply(req, r);
 }
 
 static int
@@ -408,7 +345,7 @@ do_link(struct FS *fs, struct Request *req, struct IpcMessage *msg)
   fs_inode_put(dir);
   fs_inode_put(inode);
 
-  ipc_request_reply(req, r);
+  request_reply(req, r);
 }
 
 void
@@ -430,14 +367,14 @@ do_lookup(struct FS *fs, struct Request *req, struct IpcMessage *msg)
   if (!S_ISDIR(dir->mode)) {
     fs_inode_unlock(dir);
     fs_inode_put(dir);
-    ipc_request_reply(req, -ENOTDIR);
+    request_reply(req, -ENOTDIR);
     return;
   }
 
   if (!fs_inode_permission(process, dir, FS_PERM_READ, flags & FS_LOOKUP_REAL)) {
     fs_inode_unlock(dir);
     fs_inode_put(dir);
-    ipc_request_reply(req, -EPERM);
+    request_reply(req, -EPERM);
     return;
   }
     
@@ -451,7 +388,7 @@ do_lookup(struct FS *fs, struct Request *req, struct IpcMessage *msg)
   fs_inode_unlock(dir);
   fs_inode_put(dir);
 
-  ipc_request_reply(req, 0);
+  request_reply(req, 0);
 }
 
 void
@@ -469,14 +406,14 @@ do_readlink(struct FS *fs, struct Request *req, struct IpcMessage *msg)
   if (!fs_inode_permission(process, inode, FS_PERM_READ, 0)) {
     fs_inode_unlock(inode);
     fs_inode_put(inode);
-    ipc_request_reply(req, -EPERM);
+    request_reply(req, -EPERM);
     return;
   }
     
   if (!S_ISLNK(inode->mode)) {
     fs_inode_unlock(inode);
     fs_inode_put(inode);
-    ipc_request_reply(req, -EINVAL);
+    request_reply(req, -EINVAL);
     return;
   }
 
@@ -485,7 +422,7 @@ do_readlink(struct FS *fs, struct Request *req, struct IpcMessage *msg)
   fs_inode_unlock(inode);
   fs_inode_put(inode);
 
-  ipc_request_reply(req, r);
+  request_reply(req, r);
 }
 
 void
@@ -506,7 +443,7 @@ do_rmdir(struct FS *fs, struct Request *req, struct IpcMessage *msg)
     fs_inode_unlock_two(dir, inode);
     fs_inode_put(dir);
     fs_inode_put(inode);
-    ipc_request_reply(req, -ENOTDIR);
+    request_reply(req, -ENOTDIR);
     return;
   }
 
@@ -514,7 +451,7 @@ do_rmdir(struct FS *fs, struct Request *req, struct IpcMessage *msg)
     fs_inode_unlock_two(dir, inode);
     fs_inode_put(dir);
     fs_inode_put(inode);
-    ipc_request_reply(req, -EPERM);
+    request_reply(req, -EPERM);
     return;
   }
 
@@ -523,7 +460,7 @@ do_rmdir(struct FS *fs, struct Request *req, struct IpcMessage *msg)
     fs_inode_unlock_two(dir, inode);
     fs_inode_put(dir);
     fs_inode_put(inode);
-    ipc_request_reply(req, -EPERM);
+    request_reply(req, -EPERM);
     return;
   }
 
@@ -533,7 +470,7 @@ do_rmdir(struct FS *fs, struct Request *req, struct IpcMessage *msg)
   fs_inode_put(dir);
   fs_inode_put(inode);
 
-  ipc_request_reply(req, r);
+  request_reply(req, r);
 }
 
 int
@@ -566,7 +503,7 @@ do_inode_stat(struct FS *, struct Request *req,
 
   fs_inode_unlock(inode);
 
-  if ((r = ipc_request_write(req, &buf, sizeof(buf))) < 0)
+  if ((r = request_write(req, &buf, sizeof(buf))) < 0)
     return r;
 
   return 0;
@@ -584,7 +521,7 @@ do_stat(struct FS *fs, struct Request *req, struct IpcMessage *msg)
   
   fs_inode_put(inode);
 
-  ipc_request_reply(req, r);
+  request_reply(req, r);
 }
 
 static int
@@ -639,7 +576,7 @@ do_symlink(struct FS *fs, struct Request *req, struct IpcMessage *msg)
 
   fs_inode_put(dir);
 
-  ipc_request_reply(req, r);
+  request_reply(req, r);
 }
 
 void
@@ -661,7 +598,7 @@ do_unlink(struct FS *fs, struct Request *req, struct IpcMessage *msg)
     fs_inode_unlock_two(dir, inode);
     fs_inode_put(dir);
     fs_inode_put(inode);
-    ipc_request_reply(req, -ENOTDIR);
+    request_reply(req, -ENOTDIR);
     return;
   }
 
@@ -669,7 +606,7 @@ do_unlink(struct FS *fs, struct Request *req, struct IpcMessage *msg)
     fs_inode_unlock_two(dir, inode);
     fs_inode_put(dir);
     fs_inode_put(inode);
-    ipc_request_reply(req, -EPERM);
+    request_reply(req, -EPERM);
     return;
   }
 
@@ -678,7 +615,7 @@ do_unlink(struct FS *fs, struct Request *req, struct IpcMessage *msg)
     fs_inode_unlock_two(dir, inode);
     fs_inode_put(dir);
     fs_inode_put(inode);
-    ipc_request_reply(req, -EPERM);
+    request_reply(req, -EPERM);
     return;
   }
 
@@ -688,7 +625,7 @@ do_unlink(struct FS *fs, struct Request *req, struct IpcMessage *msg)
   fs_inode_put(dir);
   fs_inode_put(inode);
 
-  ipc_request_reply(req, r);
+  request_reply(req, r);
 }
 
 void
@@ -736,7 +673,7 @@ out:
   fs_inode_unlock(inode);
   fs_inode_put(inode);
 
-  ipc_request_reply(req, r);
+  request_reply(req, r);
 }
 
 /*
@@ -760,7 +697,7 @@ do_close(struct FS *, struct Request *req, struct IpcMessage *)
     k_free(file);
   }
 
-  ipc_request_reply(req, 0);
+  request_reply(req, 0);
 }
 
 void
@@ -779,7 +716,7 @@ do_fchmod(struct FS *fs, struct Request *req, struct IpcMessage *msg)
     r = do_inode_chmod(fs, process, file->inode, mode);
   }
 
-  ipc_request_reply(req, r);
+  request_reply(req, r);
 }
 
 void
@@ -799,7 +736,7 @@ do_fchown(struct FS *fs, struct Request *req, struct IpcMessage *msg)
     r = do_inode_chown(fs, process, file->inode, uid, gid);
   }
 
-  ipc_request_reply(req, r);
+  request_reply(req, r);
 }
 
 void
@@ -816,7 +753,7 @@ do_fstat(struct FS *fs, struct Request *req, struct IpcMessage *)
     r = do_inode_stat(fs, req, file->inode);
   }
 
-  ipc_request_reply(req, r);
+  request_reply(req, r);
 }
 
 void
@@ -835,7 +772,7 @@ do_fsync(struct FS *, struct Request *req, struct IpcMessage *)
     r = 0;
   }
 
-  ipc_request_reply(req, r);
+  request_reply(req, r);
 }
 
 void
@@ -858,7 +795,7 @@ do_ioctl(struct FS *, struct Request *req, struct IpcMessage *msg)
     r = -ENOTTY;
   }
 
-  ipc_request_reply(req, r);
+  request_reply(req, r);
 }
 
 static int
@@ -940,7 +877,7 @@ do_open(struct FS *fs, struct Request *req, struct IpcMessage *msg)
     }
   }
 
-  ipc_request_reply(req, r);
+  request_reply(req, r);
 }
 
 static ssize_t
@@ -999,7 +936,7 @@ do_read(struct FS *fs, struct Request *req, struct IpcMessage *msg)
     fs_inode_unlock(file->inode);
   }
 
-  ipc_request_reply(req, r);
+  request_reply(req, r);
 }
 
 static ssize_t
@@ -1045,7 +982,7 @@ do_readdir_locked(struct FS *fs, struct Request *req,
 
     file->offset += nread;
 
-    if ((r = ipc_request_write(req, &de, de.de.d_reclen)) < 0)
+    if ((r = request_write(req, &de, de.de.d_reclen)) < 0)
       return r;
 
     va    += de.de.d_reclen;
@@ -1075,7 +1012,7 @@ do_readdir(struct FS *fs, struct Request *req, struct IpcMessage *msg)
     fs_inode_unlock(file->inode);
   }
 
-  ipc_request_reply(req, r);
+  request_reply(req, r);
 }
 
 void
@@ -1091,7 +1028,7 @@ do_seek(struct FS *, struct Request *req, struct IpcMessage *msg)
 
   if (file->inode == NULL) {
     r = -EINVAL;
-    ipc_request_reply(req, r);
+    request_reply(req, r);
     return;
   }
 
@@ -1109,7 +1046,7 @@ do_seek(struct FS *, struct Request *req, struct IpcMessage *msg)
     break;
   default:
     r = -EINVAL;
-    ipc_request_reply(req, r);
+    request_reply(req, r);
     return;
   }
 
@@ -1120,7 +1057,7 @@ do_seek(struct FS *, struct Request *req, struct IpcMessage *msg)
     r = new_offset;
   }
 
-  ipc_request_reply(req, r);
+  request_reply(req, r);
 }
 
 void
@@ -1134,7 +1071,7 @@ do_select(struct FS *, struct Request *req, struct IpcMessage *msg)
 
   if (file->rdev >= 0) {
     r = dev_select(req, file->rdev, timeout);
-    ipc_request_reply(req, r);
+    request_reply(req, r);
     return;
   }
 
@@ -1147,7 +1084,7 @@ do_select(struct FS *, struct Request *req, struct IpcMessage *msg)
     r = 1;
   }
 
-  ipc_request_reply(req, r);
+  request_reply(req, r);
 }
 
 void
@@ -1186,7 +1123,7 @@ do_trunc(struct FS *fs, struct Request *req, struct IpcMessage *msg)
     }
   }
 
-  ipc_request_reply(req, r);
+  request_reply(req, r);
 }
 
 static ssize_t
@@ -1251,7 +1188,7 @@ do_write(struct FS *fs, struct Request *req, struct IpcMessage *msg)
     fs_inode_unlock(file->inode);
   }
 
-  ipc_request_reply(req, r);
+  request_reply(req, r);
 }
 
 /*
@@ -1298,16 +1235,16 @@ fs_service_task(void *arg)
   struct FS *fs = (struct FS *) arg;
   struct Request *req;
 
-  while (k_mailbox_receive(&fs->mbox, (void *) &req) >= 0) {
+  while (endpoint_receive(&fs->endpoint, &req) >= 0) {
     struct IpcMessage msg;
 
-    if (ipc_request_read(req, &msg, sizeof(msg)) < 0) {
-      ipc_request_reply(req, -EFAULT);
+    if (request_read(req, &msg, sizeof(msg)) < 0) {
+      request_reply(req, -EFAULT);
     } else if (msg.type >= 0 && msg.type < FS_DISPATCH_TABLE_SIZE && fs_dispatch_table[msg.type] != NULL) {
       fs_dispatch_table[msg.type](fs, req, &msg);
     } else {
       k_warn("unsupported msg type %d\n", msg.type);
-      ipc_request_reply(req, -ENOSYS);
+      request_reply(req, -ENOSYS);
     }
   }
 
@@ -1334,9 +1271,9 @@ fs_create_service(char *name, dev_t dev, void *extra, struct FSOps *ops)
   fs->extra = extra;
   fs->ops   = ops;
 
-  k_mailbox_create(&fs->mbox, sizeof(void *), fs->mbox_buf, sizeof fs->mbox_buf);
+  endpoint_init(&fs->endpoint);
 
-  for (i = 0; i < FS_MBOX_CAPACITY; i++) {
+  for (i = 0; i < ENDPOINT_MBOX_CAPACITY; i++) {
     struct Page *kstack;
 
     if ((kstack = page_alloc_one(0, 0)) == NULL)
@@ -1349,77 +1286,4 @@ fs_create_service(char *name, dev_t dev, void *extra, struct FSOps *ops)
   }
 
   return fs;
-}
-
-
-intptr_t
-fs_send_recv(struct Connection *connection, void *smsg, size_t sbytes, void *rmsg, size_t rbytes)
-{
-  struct Request *req;
-  unsigned long long timeout = seconds2ticks(5);
-  int r;
-
-  k_assert(connection->type == CONNECTION_TYPE_FILE);
-
-  if (connection->fs == NULL)
-    return -1;
-
-  if ((req = ipc_request_create()) == NULL)
-    return -ENOMEM;  
-
-  req->send_msg = (uintptr_t) smsg;
-  req->send_bytes = sbytes;
-  req->recv_msg = (uintptr_t) rmsg;
-  req->recv_bytes = rbytes;
-
-  req->connection = connection;
-  req->process = process_current();
-
-  ipc_request_dup(req);
-
-  if (k_mailbox_timed_send(&connection->fs->mbox, &req, timeout) < 0) {
-    ipc_request_destroy(req);
-    ipc_request_destroy(req);
-    k_warn("fail send:\n");
-    return -ETIMEDOUT;
-  }
-
-  if ((r = k_semaphore_timed_get(&req->sem, timeout, K_SLEEP_UNINTERUPTIBLE)) < 0) {
-    ipc_request_destroy(req);
-    ipc_request_destroy(req);
-    k_warn("fail recv:\n");
-    return -ETIMEDOUT;
-  }
-
-  ipc_request_destroy(req);
-
-  return req->r;
-}
-
-ssize_t
-ipc_request_write(struct Request *req, void *msg, size_t n)
-{
-  size_t nwrite = MIN(req->recv_bytes - req->recv_nwrite, n);
-
-  if (nwrite != 0) {
-    if (vm_space_copy_out(req->process, msg, req->recv_msg + req->recv_nwrite, nwrite) < 0)
-      k_panic("copy");
-    req->recv_nwrite += nwrite;
-  }
-
-  return nwrite;
-}
-
-ssize_t
-ipc_request_read(struct Request *req, void *msg, size_t n)
-{
-  size_t nread = MIN(req->send_bytes - req->send_nread, n);
-
-  if (nread != 0) {
-    if (vm_space_copy_in(req->process, msg, req->send_msg + req->send_nread, nread) < 0)
-      k_panic("copy");
-    req->send_nread += nread;
-  }
-
-  return nread;
 }

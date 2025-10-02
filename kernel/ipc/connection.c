@@ -14,7 +14,8 @@
 #include <kernel/core/spinlock.h>
 #include <kernel/net.h>
 #include <kernel/pipe.h>
-
+#include <kernel/process.h>
+#include <kernel/time.h>
 
 static struct KSpinLock connection_lock;
 static struct KObjectPool *connection_pool;
@@ -40,7 +41,7 @@ connection_alloc(struct Connection **fstore)
   f->ref_count = 0;
   f->flags     = 0;
   f->node      = NULL;
-  f->fs        = NULL;
+  f->endpoint  = NULL;
 
   if (fstore != NULL)
     *fstore = f;
@@ -83,13 +84,13 @@ connection_set_flags(struct Connection *connection, int flags)
 }
 
 intptr_t
-connection_send_recv(struct Connection *connection, void *smsg, size_t sbytes, void *rmsg, size_t rbytes)
+ipc_send(struct Connection *connection, void *smsg, size_t sbytes, void *rmsg, size_t rbytes)
 {
   //k_assert(connection->ref_count > 0);
 
   switch (connection->type) {
     case CONNECTION_TYPE_FILE:
-      return fs_send_recv(connection, smsg, sbytes, rmsg, rbytes);
+      return connection_send(connection, smsg, sbytes, rmsg, rbytes);
     case CONNECTION_TYPE_PIPE:
       return pipe_send_recv(connection, smsg, sbytes, rmsg, rbytes);
     case CONNECTION_TYPE_SOCKET:
@@ -121,7 +122,7 @@ connection_unref(struct Connection *connection)
 
   msg.type = IPC_MSG_CLOSE;
 
-  connection_send_recv(connection, &msg, sizeof(msg), NULL, 0);
+  ipc_send(connection, &msg, sizeof(msg), NULL, 0);
 
   if (connection->node != NULL) {
     fs_path_node_unref(connection->node);
@@ -140,7 +141,7 @@ connection_seek(struct Connection *connection, off_t offset, int whence)
   msg.u.seek.offset = offset;
   msg.u.seek.whence = whence;
 
-  return connection_send_recv(connection, &msg, sizeof(msg), NULL, 0);
+  return ipc_send(connection, &msg, sizeof(msg), NULL, 0);
 }
 
 ssize_t
@@ -152,7 +153,7 @@ connection_read(struct Connection *connection, uintptr_t va, size_t nbytes)
   msg.u.read.va    = va;
   msg.u.read.nbyte = nbytes;
 
-  return connection_send_recv(connection, &msg, sizeof(msg), (void *) va, nbytes);
+  return ipc_send(connection, &msg, sizeof(msg), (void *) va, nbytes);
 }
 
 ssize_t
@@ -164,7 +165,7 @@ connection_write(struct Connection *connection, uintptr_t va, size_t nbytes)
   msg.u.write.va    = va;
   msg.u.write.nbyte = nbytes;
 
-  return connection_send_recv(connection, &msg, sizeof(msg), NULL, 0);
+  return ipc_send(connection, &msg, sizeof(msg), NULL, 0);
 }
 
 ssize_t
@@ -179,7 +180,7 @@ connection_getdents(struct Connection *connection, uintptr_t va, size_t nbytes)
   msg.u.readdir.va    = va;
   msg.u.readdir.nbyte = nbytes;
   
-  return connection_send_recv(connection, &msg, sizeof(msg), (void *) va, nbytes);
+  return ipc_send(connection, &msg, sizeof(msg), (void *) va, nbytes);
 }
 
 int
@@ -190,7 +191,7 @@ connection_stat(struct Connection *connection, struct stat *buf)
   msg.type = IPC_MSG_FSTAT;
   msg.u.fstat.buf  = buf;
 
-  return connection_send_recv(connection, &msg, sizeof(msg), buf, sizeof(*buf));
+  return ipc_send(connection, &msg, sizeof(msg), buf, sizeof(*buf));
 }
 
 int
@@ -210,7 +211,7 @@ connection_chmod(struct Connection *connection, mode_t mode)
   msg.type = IPC_MSG_FCHMOD;
   msg.u.fchmod.mode = mode;
 
-  return connection_send_recv(connection, &msg, sizeof(msg), NULL, 0);
+  return ipc_send(connection, &msg, sizeof(msg), NULL, 0);
 }
 
 int
@@ -222,7 +223,7 @@ connection_chown(struct Connection *connection, uid_t uid, gid_t gid)
   msg.u.fchown.uid  = uid;
   msg.u.fchown.gid  = gid;
 
-  return connection_send_recv(connection, &msg, sizeof(msg), NULL, 0);
+  return ipc_send(connection, &msg, sizeof(msg), NULL, 0);
 }
 
 int
@@ -236,11 +237,11 @@ connection_ioctl(struct Connection *connection, int request, int arg)
 
   switch (request) {
   case TIOCGETA:
-    return connection_send_recv(connection, &msg, sizeof(msg), (void *) arg, sizeof(struct termios));
+    return ipc_send(connection, &msg, sizeof(msg), (void *) arg, sizeof(struct termios));
   case TIOCGWINSZ:
-    return connection_send_recv(connection, &msg, sizeof(msg), (void *) arg, sizeof(struct winsize));
+    return ipc_send(connection, &msg, sizeof(msg), (void *) arg, sizeof(struct winsize));
   default:
-    return connection_send_recv(connection, &msg, sizeof(msg), NULL, 0);
+    return ipc_send(connection, &msg, sizeof(msg), NULL, 0);
   }
 }
 
@@ -275,7 +276,7 @@ connection_truncate(struct Connection *connection, off_t length)
   msg.type = IPC_MSG_TRUNC;
   msg.u.trunc.length = length;
 
-  return connection_send_recv(connection, &msg, sizeof(msg), NULL, 0);
+  return ipc_send(connection, &msg, sizeof(msg), NULL, 0);
 }
 
 int
@@ -285,5 +286,50 @@ connection_sync(struct Connection *connection)
 
   msg.type = IPC_MSG_FSYNC;
 
-  return connection_send_recv(connection, &msg, sizeof(msg), NULL, 0);
+  return ipc_send(connection, &msg, sizeof(msg), NULL, 0);
 }
+
+intptr_t
+connection_send(struct Connection *connection, void *smsg, size_t sbytes, void *rmsg, size_t rbytes)
+{
+  struct Request *req;
+  unsigned long long timeout = seconds2ticks(5);
+  int r;
+
+  k_assert(connection->type == CONNECTION_TYPE_FILE);
+
+  if (connection->endpoint == NULL)
+    return -1;
+
+  if ((req = request_create()) == NULL)
+    return -ENOMEM;  
+
+  req->send_msg = (uintptr_t) smsg;
+  req->send_bytes = sbytes;
+  req->recv_msg = (uintptr_t) rmsg;
+  req->recv_bytes = rbytes;
+
+  req->connection = connection;
+  req->process = process_current();
+
+  request_dup(req);
+
+  if (k_mailbox_timed_send(&connection->endpoint->mbox, &req, timeout) < 0) {
+    request_destroy(req);
+    request_destroy(req);
+    k_warn("fail send:\n");
+    return -ETIMEDOUT;
+  }
+
+  if ((r = k_semaphore_timed_get(&req->sem, timeout, K_SLEEP_UNINTERUPTIBLE)) < 0) {
+    request_destroy(req);
+    request_destroy(req);
+    k_warn("fail recv:\n");
+    return -ETIMEDOUT;
+  }
+
+  request_destroy(req);
+
+  return req->r;
+}
+

@@ -208,7 +208,7 @@ fs_path_set_cwd(struct PathNode *node)
   msg.type = IPC_MSG_CHDIR;
   msg.u.chdir.ino = ino;
 
-  r = fs_send_recv(connection, &msg, sizeof(msg), NULL, 0);
+  r = connection_send(connection, &msg, sizeof(msg), NULL, 0);
 
   if (r < 0)
     return r;
@@ -241,7 +241,7 @@ fs_path_resolve_symlink(ino_t ino,
   msg.u.readlink.va    = (uintptr_t) path;
   msg.u.readlink.nbyte = PATH_MAX - 1;
 
-  r = fs_send_recv(connection, &msg, sizeof(msg), path, PATH_MAX - 1);
+  r = connection_send(connection, &msg, sizeof(msg), path, PATH_MAX - 1);
 
   if (r < 0) {
     k_free(path);
@@ -345,7 +345,7 @@ fs_path_node_resolve_at(struct PathNode *start,
     msg.u.stat.ino = ino;
     msg.u.stat.buf = &stat;
 
-    r = fs_send_recv(connection, &msg, sizeof(msg), &stat, sizeof(stat));
+    r = connection_send(connection, &msg, sizeof(msg), &stat, sizeof(stat));
 
     if (r < 0) {
       break;
@@ -467,7 +467,7 @@ fs_path_node_lookup(struct PathNode *parent,
     msg.u.lookup.flags   = flags;
     msg.u.lookup.istore  = &child_ino;
 
-    r = fs_send_recv(connection, &msg, sizeof(msg), NULL, 0);
+    r = connection_send(connection, &msg, sizeof(msg), NULL, 0);
 
     if (r == 0 && child_ino != 0) {
       // Insert new node
@@ -555,6 +555,7 @@ fs_init(void)
 { 
   ino_t root_ino;
   struct Connection *connection;
+  struct FS *fs;
 
   fs_inode_cache_init();
 
@@ -574,7 +575,9 @@ fs_init(void)
   connection->node         = NULL;
   connection->ref_count    = 1;
 
-  root_ino = ext2_mount(FS_ROOT_DEV, &connection->fs);
+  
+  root_ino = ext2_mount(FS_ROOT_DEV, &fs);
+  connection->endpoint = &fs->endpoint;
 
   if ((fs_root = fs_path_node_create("/", root_ino, connection, NULL)) == NULL)
     k_panic("cannot allocate fs root");
@@ -647,7 +650,7 @@ fs_path_mount(struct PathNode *node, ino_t ino, struct FS *fs)
   connection->flags     = 0;
   connection->type      = CONNECTION_TYPE_FILE;
   connection->node      = NULL;
-  connection->fs        = fs;
+  connection->endpoint  = &fs->endpoint;
   connection->ref_count = 1;
 
   node->mounted_ino     = ino;
