@@ -467,7 +467,15 @@ fs_path_node_lookup(struct PathNode *parent,
     msg.u.lookup.flags   = flags;
     msg.u.lookup.istore  = &child_ino;
 
+    //cprintf("lookup %d %s\n", parent_ino, name);
+
     r = connection_send(connection, &msg, sizeof(msg), NULL, 0);
+
+    // if (r != 0) {
+    //   cprintf("lookup %s = %d\n", name, r);
+    // } else {
+    //   cprintf("lookup %s ino = %d\n", name, child_ino);
+    // }
 
     if (r == 0 && child_ino != 0) {
       // Insert new node

@@ -86,7 +86,10 @@ connection_set_flags(struct Connection *connection, int flags)
 intptr_t
 ipc_send(struct Connection *connection, void *smsg, size_t sbytes, void *rmsg, size_t rbytes)
 {
-  //k_assert(connection->ref_count > 0);
+  k_assert(connection->ref_count > 0);
+
+  // if (process_current()->pid > 3)
+  //   cprintf("[k] proc #%x: %d -> %d\n", process_current()->pid, *(int *) smsg, connection->type);
 
   switch (connection->type) {
     case CONNECTION_TYPE_FILE:
@@ -111,18 +114,23 @@ connection_unref(struct Connection *connection)
   if (connection->ref_count < 1)
     k_panic("bad ref_count %d", ref_count);
 
+  if (connection->ref_count == 1) {
+    struct IpcMessage msg;
+
+    k_spinlock_release(&connection_lock);
+
+    msg.type = IPC_MSG_CLOSE;
+    ipc_send(connection, &msg, sizeof(msg), NULL, 0);
+
+    k_spinlock_acquire(&connection_lock);
+  };
+
   ref_count = --connection->ref_count;
 
   k_spinlock_release(&connection_lock);
 
   if (ref_count > 0)
     return;
-
-  struct IpcMessage msg;
-
-  msg.type = IPC_MSG_CLOSE;
-
-  ipc_send(connection, &msg, sizeof(msg), NULL, 0);
 
   if (connection->node != NULL) {
     fs_path_node_unref(connection->node);
@@ -293,7 +301,7 @@ intptr_t
 connection_send(struct Connection *connection, void *smsg, size_t sbytes, void *rmsg, size_t rbytes)
 {
   struct Request *req;
-  unsigned long long timeout = seconds2ticks(5);
+  unsigned long long timeout = seconds2ticks(15);
   intptr_t r;
 
   if (connection->endpoint == NULL)

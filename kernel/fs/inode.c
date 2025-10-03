@@ -53,6 +53,8 @@ fs_inode_get(ino_t ino, dev_t dev)
 
       k_spinlock_release(&inode_cache.lock);
 
+      // cprintf("get %d -> %p\n", ino, ip);
+
       return ip;
     }
 
@@ -68,6 +70,8 @@ fs_inode_get(ino_t ino, dev_t dev)
     empty->flags     = 0;
 
     k_spinlock_release(&inode_cache.lock);
+
+    // cprintf("get %d -> %p\n", ino, empty);
 
     return empty;
   }
@@ -135,6 +139,7 @@ fs_inode_put(struct Inode *inode)
   k_spinlock_acquire(&inode_cache.lock);
   if (--inode->ref_count == 0) {
     // cprintf("[inode drop %d]\n", inode->ino);
+    // cprintf("put %d -> %p\n", inode->ino, inode);
 
     k_list_remove(&inode->cache_link);
     k_list_add_front(&inode_cache.head, &inode->cache_link);
@@ -187,6 +192,13 @@ fs_inode_unlock(struct Inode *ip)
     // current??
     ip->fs->ops->inode_write(process_current(), ip);
     ip->flags &= ~FS_INODE_DIRTY;
+  }
+
+  if (ip->ino > 100 && ip->size) {
+    struct Ext2InodeExtra *extra = (struct Ext2InodeExtra *) ip->extra;
+    if (extra && extra->blocks == 0) {
+      k_panic("[] %d left with 0 blocks\n", ip->ino);
+    }
   }
 
   k_mutex_unlock(&ip->mutex);

@@ -4,10 +4,13 @@
 #include <kernel/core/condvar.h>
 #include <kernel/core/mutex.h>
 
+struct Request;
+struct IpcMessage;
+
 void    pipe_init_system(void);
 int     pipe_open(struct Connection **, struct Connection **);
 int     pipe_close(struct Connection *);
-ssize_t pipe_read(struct Connection *, uintptr_t, size_t);
+void pipe_read(struct Request *, struct IpcMessage *);
 ssize_t pipe_write(struct Connection *, uintptr_t, size_t);
 int     pipe_stat(struct Connection *, uintptr_t);
 int     pipe_select(struct Connection *, struct timeval *);

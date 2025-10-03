@@ -328,7 +328,9 @@ ext2_read_data(struct Process *, struct Inode *inode, void *p, size_t nbyte, off
     if (block_id == 0) {
       // Zero block in a sparse file - fill with zeros
       // TODO: could be an error
-      k_panic("zero block");
+      k_panic("zero block (ino %d, size %d, off %d, tag %p %d %d)", inode->ino, inode->size, off, 
+        ((struct Ext2InodeExtra *) inode->extra)->tag, ((struct Ext2InodeExtra *) inode->extra)->ino,
+      ((struct Ext2InodeExtra *) inode->extra)->blocks );
     } else {
       // Read the block contents
       struct Buf *buf;
@@ -361,7 +363,9 @@ ext2_read(struct Request *req, struct Inode *inode, size_t nbyte, off_t off)
     if (block_id == 0) {
       // Zero block in a sparse file - fill with zeros
       // TODO: could be an error
-      k_panic("zero block");
+      k_panic("zero block req (ino %d, size %d, off %d, tag %p %d %d)", inode->ino, inode->size, off, 
+        ((struct Ext2InodeExtra *) inode->extra)->tag, ((struct Ext2InodeExtra *) inode->extra)->ino,
+      ((struct Ext2InodeExtra *) inode->extra)->blocks);
     } else {
       // Read the block contents
       struct Buf *buf;

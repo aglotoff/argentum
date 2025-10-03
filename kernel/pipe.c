@@ -36,6 +36,41 @@ struct PipeEndpoint {
   int              flags;
 };
 
+typedef void (*pipe_handler_t)(struct Request *, struct IpcMessage *);
+
+static pipe_handler_t
+pipe_dispatch_table[] = {
+  [IPC_MSG_READ]     = pipe_read,
+};
+
+struct Endpoint pipe_endpoint;
+struct KTask    pipe_tasks[ENDPOINT_MBOX_CAPACITY];
+
+#define PIPE_DISPATCH_TABLE_SIZE (int)(sizeof(pipe_dispatch_table) / sizeof(pipe_dispatch_table[0]))
+
+void
+pipe_service_task(void *)
+{
+  struct Request *req;
+
+  while (endpoint_receive(&pipe_endpoint, &req) >= 0) {
+    struct IpcMessage msg;
+
+    if (request_read(req, &msg, sizeof(msg)) < 0) {
+      request_reply(req, -EFAULT);
+    } else if (msg.type >= 0 && msg.type < PIPE_DISPATCH_TABLE_SIZE && pipe_dispatch_table[msg.type] != NULL) {
+      pipe_dispatch_table[msg.type](req, &msg);
+    } else {
+      k_warn("unsupported msg type %d\n", msg.type);
+      request_reply(req, -ENOSYS);
+    }
+  }
+
+  k_panic("error");
+}
+
+
+
 #define NBUCKET   256
 
 static struct {
@@ -80,6 +115,7 @@ pipe_set_connection_endpoint(struct PipeEndpoint *endpoint,
 
   connection->type = CONNECTION_TYPE_PIPE;
   connection->ref_count++;
+  connection->endpoint = &pipe_endpoint;
 
   k_spinlock_acquire(&pipe_hash.lock);
   HASH_PUT(pipe_hash.table, &endpoint->hash_link, (uintptr_t) connection);
@@ -89,12 +125,28 @@ pipe_set_connection_endpoint(struct PipeEndpoint *endpoint,
 void
 pipe_init_system(void)
 {
+  int i;
+
   pipe_cache = k_object_pool_create("pipe", sizeof(struct Pipe), 0, NULL, NULL);
   if (pipe_cache == NULL)
     k_panic("cannot allocate pipe cache");
 
   HASH_INIT(pipe_hash.table);
   k_spinlock_init(&pipe_hash.lock, "pipe_hash");
+
+  endpoint_init(&pipe_endpoint);
+
+  for (i = 0; i < ENDPOINT_MBOX_CAPACITY; i++) {
+    struct Page *kstack;
+
+    if ((kstack = page_alloc_one(0, 0)) == NULL)
+      k_panic("out of memory");
+
+    kstack->ref_count++;
+
+    k_task_create(&pipe_tasks[i], NULL, pipe_service_task, NULL, page2kva(kstack), PAGE_SIZE, 0);
+    k_task_resume(&pipe_tasks[i]);
+  }
 }
 
 static struct Pipe *
@@ -200,7 +252,7 @@ fail1:
 }
 
 intptr_t
-pipe_send_recv(struct Connection *connection, void *smsg, size_t, void *rmsg, size_t rbytes)
+pipe_send_recv(struct Connection *connection, void *smsg, size_t sbytes, void *rmsg, size_t rbytes)
 {
   struct IpcMessage *msg = (struct IpcMessage *) smsg;
 
@@ -212,7 +264,7 @@ pipe_send_recv(struct Connection *connection, void *smsg, size_t, void *rmsg, si
   case IPC_MSG_FCHMOD:
     return -EBADF;
   case IPC_MSG_READ:
-    return pipe_read(connection, (uintptr_t) rmsg, rbytes);
+    return connection_send(connection, smsg, sbytes, rmsg, rbytes);
   case IPC_MSG_WRITE:
     return pipe_write(connection, msg->u.write.va, msg->u.write.nbyte);
   case IPC_MSG_READDIR:
@@ -304,16 +356,20 @@ pipe_select(struct Connection *connection, struct timeval *timeout)
   return 1;
 }
 
-ssize_t
-pipe_read(struct Connection *connection, uintptr_t va, size_t n)
+void
+pipe_read(struct Request *req, struct IpcMessage *msg)
 {
   size_t i;
+  struct Connection *connection = req->connection;
   struct PipeEndpoint *endpoint = pipe_get_connection_endpoint(connection);
   struct Pipe *pipe = endpoint->pipe;
+  size_t n = msg->u.read.nbyte;
   int r;
 
-  if ((r = k_mutex_lock(&pipe->mutex)) < 0)
-    return r;
+  if ((r = k_mutex_lock(&pipe->mutex)) < 0) {
+    request_reply(req, r);
+    return;
+  }
 
   page_assert(kva2page(pipe->buf), PIPE_BUF_ORDER, PAGE_TAG_PIPE);
 
@@ -322,7 +378,8 @@ pipe_read(struct Connection *connection, uintptr_t va, size_t n)
 
     if ((r = k_condvar_wait(&pipe->read_cond, &pipe->mutex)) < 0) {
       k_mutex_unlock(&pipe->mutex);
-      return r;
+      request_reply(req, r);
+      return;
     }
   }
   
@@ -337,12 +394,13 @@ pipe_read(struct Connection *connection, uintptr_t va, size_t n)
       // Prevent overflow
       nread = pipe->max_size - pipe->read_pos;
 
-    r = vm_space_copy_out(process_current(), &pipe->buf[pipe->read_pos], va + i, nread);
+    r = request_write(req, &pipe->buf[pipe->read_pos], nread);
     if (r < 0) {
       k_condvar_broadcast(&pipe->write_cond);
       k_mutex_unlock(&pipe->mutex);
 
-      return r;
+      request_reply(req, r);
+      return;
     }
 
     pipe->read_pos += nread;
@@ -356,7 +414,7 @@ pipe_read(struct Connection *connection, uintptr_t va, size_t n)
   k_condvar_broadcast(&pipe->write_cond);
   k_mutex_unlock(&pipe->mutex);
 
-  return i;
+  request_reply(req, i);
 }
 
 ssize_t

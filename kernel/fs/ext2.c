@@ -21,16 +21,27 @@
  * ----------------------------------------------------------------------------
  */
 
+static struct KSpinLock ext2_inode_spin = K_SPINLOCK_INITIALIZER("ext2_inode_spin");
+
 struct Inode *
 ext2_inode_get(struct FS *fs, ino_t inum)
 {
   struct Inode *inode = fs_inode_get(inum, fs->dev);
 
-  if (inode != NULL && inode->fs == NULL) {
+  k_spinlock_acquire(&ext2_inode_spin);
+
+  if (inode != NULL && (inode->fs == NULL)) {
     inode->fs = fs;
     if ((inode->extra = k_malloc(sizeof(struct Ext2InodeExtra))) == NULL)
       k_panic("TODO");
+    ((struct Ext2InodeExtra *) inode->extra)->ino = inum;
+    ((struct Ext2InodeExtra *) inode->extra)->tag = 0x123acdef;
+    // cprintf("+++ %p\n", inode);
+  } else {
+    // cprintf("--- %p\n", inode);
   }
+
+  k_spinlock_release(&ext2_inode_spin);
 
   return inode;
 }

@@ -109,6 +109,8 @@ struct Ext2Inode {
 } __attribute__((packed));
 
 struct Ext2InodeExtra {
+  int             tag;
+  int             ino;
   uint32_t        blocks;
   uint32_t        block[15];
 };
