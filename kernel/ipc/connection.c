@@ -304,6 +304,8 @@ connection_send(struct Connection *connection, void *smsg, size_t sbytes, void *
   unsigned long long timeout = seconds2ticks(15);
   intptr_t r;
 
+  //cprintf("[k] proc %x sends %d to %p\n", process_current()->pid, *(int *) smsg, connection->endpoint);
+
   if (connection->endpoint == NULL)
     return -1;
 
@@ -321,16 +323,20 @@ connection_send(struct Connection *connection, void *smsg, size_t sbytes, void *
   request_dup(req);
 
   if (k_mailbox_timed_send(&connection->endpoint->mbox, &req, timeout) < 0) {
-    request_destroy(req);
-    request_destroy(req);
     k_panic("fail send:\n");
+    request_destroy(req);
+    request_destroy(req);
     return -ETIMEDOUT;
   }
 
-  if ((r = k_semaphore_timed_get(&req->sem, timeout, 0)) < 0) {
-    request_destroy(req);
-    request_destroy(req);
+  // if (connection->type == CONNECTION_TYPE_PIPE) {
+  //   cprintf("[k] proc #%x sent to %p\n", process_current()->pid, connection->endpoint);
+  // }
+
+  if ((r = k_semaphore_timed_get(&req->sem, timeout, K_SLEEP_UNINTERUPTIBLE)) < 0) {
     k_panic("fail recv:\n");
+    request_destroy(req);
+    request_destroy(req);
     return -ETIMEDOUT;
   }
 

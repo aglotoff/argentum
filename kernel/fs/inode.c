@@ -194,13 +194,6 @@ fs_inode_unlock(struct Inode *ip)
     ip->flags &= ~FS_INODE_DIRTY;
   }
 
-  if (ip->ino > 100 && ip->size) {
-    struct Ext2InodeExtra *extra = (struct Ext2InodeExtra *) ip->extra;
-    if (extra && extra->blocks == 0) {
-      k_panic("[] %d left with 0 blocks\n", ip->ino);
-    }
-  }
-
   k_mutex_unlock(&ip->mutex);
 }
 

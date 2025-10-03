@@ -103,7 +103,7 @@ k_mailbox_try_receive_locked(struct KMailBox *mailbox, void *message)
     mailbox->read_ptr = mailbox->buf_start;
 
   if (mailbox->size-- == mailbox->capacity)
-    _k_sched_wakeup_one(&mailbox->senders, 0);
+    _k_sched_wakeup_all(&mailbox->senders, 0);
 
   return 0;
 }
@@ -167,7 +167,7 @@ k_mailbox_try_send_locked(struct KMailBox *mailbox, const void *message)
     mailbox->write_ptr = mailbox->buf_start;
 
   if (mailbox->size++ == 0)
-    _k_sched_wakeup_one(&mailbox->receivers, 0);
+    _k_sched_wakeup_all(&mailbox->receivers, 0);
 
   return 0;
 }
