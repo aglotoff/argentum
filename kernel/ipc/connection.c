@@ -294,9 +294,7 @@ connection_send(struct Connection *connection, void *smsg, size_t sbytes, void *
 {
   struct Request *req;
   unsigned long long timeout = seconds2ticks(5);
-  int r;
-
-  k_assert(connection->type == CONNECTION_TYPE_FILE);
+  intptr_t r;
 
   if (connection->endpoint == NULL)
     return -1;
@@ -317,19 +315,20 @@ connection_send(struct Connection *connection, void *smsg, size_t sbytes, void *
   if (k_mailbox_timed_send(&connection->endpoint->mbox, &req, timeout) < 0) {
     request_destroy(req);
     request_destroy(req);
-    k_warn("fail send:\n");
+    k_panic("fail send:\n");
     return -ETIMEDOUT;
   }
 
-  if ((r = k_semaphore_timed_get(&req->sem, timeout, K_SLEEP_UNINTERUPTIBLE)) < 0) {
+  if ((r = k_semaphore_timed_get(&req->sem, timeout, 0)) < 0) {
     request_destroy(req);
     request_destroy(req);
-    k_warn("fail recv:\n");
+    k_panic("fail recv:\n");
     return -ETIMEDOUT;
   }
+
+  r = req->r;
 
   request_destroy(req);
 
-  return req->r;
+  return r;
 }
-
