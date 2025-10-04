@@ -48,7 +48,7 @@ fs_inode_get(ino_t ino, dev_t dev)
   empty = NULL;
   KLIST_FOREACH(&inode_cache.head, l) {
     ip = KLIST_CONTAINER(l, struct Inode, cache_link);
-    if ((ip->ino == ino) && (ip->dev == dev) && (ip->ref_count > 0)) {
+    if ((ip->ino == ino) && (ip->dev == dev)) {
       ip->ref_count++;
 
       k_spinlock_release(&inode_cache.lock);
