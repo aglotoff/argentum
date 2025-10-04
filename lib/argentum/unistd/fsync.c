@@ -1,10 +1,14 @@
-#include <sys/syscall.h>
+#include <sys/ipc.h>
 #include <unistd.h>
 
 int 
 _fsync(int fildes)
 {
-  return __syscall1(__SYS_FSYNC, fildes);
+  struct IpcMessage msg;
+
+  msg.type = IPC_MSG_FSYNC;
+
+  return ipc_send(fildes, &msg, sizeof msg, NULL, 0);
 }
 
 int

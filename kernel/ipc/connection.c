@@ -137,41 +137,8 @@ connection_read(struct Connection *connection, uintptr_t va, size_t nbytes)
   struct IpcMessage msg;
 
   msg.type = IPC_MSG_READ;
-  msg.u.read.va    = va;
   msg.u.read.nbyte = nbytes;
 
-  return connection_send(connection, &msg, sizeof(msg), (void *) va, nbytes);
-}
-
-ssize_t
-connection_write(struct Connection *connection, uintptr_t va, size_t nbytes)
-{
-  struct IpcMessage msg;
-
-  msg.type = IPC_MSG_WRITE;
-  msg.u.write.va    = va;
-  msg.u.write.nbyte = nbytes;
-
-  struct iovec send_iov[] = {
-    { &msg, sizeof(msg) },
-    { (void *) va, nbytes },
-  };
-
-  return connection_sendv(connection, send_iov, 2, NULL, 0);
-}
-
-ssize_t
-connection_getdents(struct Connection *connection, uintptr_t va, size_t nbytes)
-{
-  struct IpcMessage msg;
-
-  if ((connection->flags & O_ACCMODE) == O_WRONLY)
-    return -EBADF;
-
-  msg.type = IPC_MSG_READDIR;
-  msg.u.readdir.va    = va;
-  msg.u.readdir.nbyte = nbytes;
-  
   return connection_send(connection, &msg, sizeof(msg), (void *) va, nbytes);
 }
 
@@ -181,7 +148,6 @@ connection_stat(struct Connection *connection, struct stat *buf)
   struct IpcMessage msg;
 
   msg.type = IPC_MSG_FSTAT;
-  msg.u.fstat.buf  = buf;
 
   return connection_send(connection, &msg, sizeof(msg), buf, sizeof(*buf));
 }
@@ -193,60 +159,6 @@ connection_chdir(struct Connection *connection)
     return -ENOTDIR;
 
   return fs_path_set_cwd(connection->node);
-}
-
-int
-connection_chmod(struct Connection *connection, mode_t mode)
-{
-  struct IpcMessage msg;
-
-  msg.type = IPC_MSG_FCHMOD;
-  msg.u.fchmod.mode = mode;
-
-  return connection_send(connection, &msg, sizeof(msg), NULL, 0);
-}
-
-int
-connection_chown(struct Connection *connection, uid_t uid, gid_t gid)
-{
-  struct IpcMessage msg;
-
-  msg.type = IPC_MSG_FCHOWN;
-  msg.u.fchown.uid  = uid;
-  msg.u.fchown.gid  = gid;
-
-  return connection_send(connection, &msg, sizeof(msg), NULL, 0);
-}
-
-int
-connection_ioctl(struct Connection *connection, int request, int arg)
-{
-  struct IpcMessage msg;
-  
-  msg.type = IPC_MSG_IOCTL;
-  msg.u.ioctl.request = request;
-  msg.u.ioctl.arg     = arg;
-
-  struct iovec send_iov[] = {
-    { &msg, sizeof(msg) },
-    { (void *) arg, 0 },
-  };
-
-  switch (request) {
-  case TIOCGETA:
-    return connection_send(connection, &msg, sizeof(msg), (void *) arg, sizeof(struct termios));
-  case TIOCGWINSZ:
-    return connection_send(connection, &msg, sizeof(msg), (void *) arg, sizeof(struct winsize));
-  case TIOCSETAW:
-  case TIOCSETA:
-    send_iov[1].iov_len = sizeof(struct termios);
-    return connection_sendv(connection, send_iov, 2, NULL, 0);
-  case TIOCSWINSZ:
-    send_iov[1].iov_len = sizeof(struct winsize);
-    return connection_sendv(connection, send_iov, 2, NULL, 0);
-  default:
-    return connection_send(connection, &msg, sizeof(msg), NULL, 0);
-  }
 }
 
 // TODO
@@ -264,23 +176,6 @@ connection_select(struct Connection *connection, struct timeval *timeout)
     k_panic("bad connection type %d", connection->type);
     return -EBADF;
   }
-}
-
-int
-connection_truncate(struct Connection *connection, off_t length)
-{
-  struct IpcMessage msg;
-
-  if ((connection->flags & O_ACCMODE) == O_RDONLY)
-    return -EBADF;
-
-  k_assert(connection->ref_count > 0);
-  k_assert(connection->type == CONNECTION_TYPE_FILE);
-
-  msg.type = IPC_MSG_TRUNC;
-  msg.u.trunc.length = length;
-
-  return connection_send(connection, &msg, sizeof(msg), NULL, 0);
 }
 
 int

@@ -11,25 +11,19 @@
 #define __SYS_ALARM         5
 #define __SYS_GETPID        6
 #define __SYS_GETPPID       7
-#define __SYS_GETDENTS      8
 #define __SYS_CHDIR         9
 #define __SYS_FCHDIR        10
 #define __SYS_OPEN          11
 #define __SYS_FCNTL         12
-#define __SYS_SEEK          13
 #define __SYS_UMASK         14
 #define __SYS_LINK          15
 #define __SYS_MKNOD         16
 #define __SYS_UNLINK        17
 #define __SYS_RMDIR         18
-#define __SYS_STAT          19
 #define __SYS_CLOSE         20
-#define __SYS_READ          21
-#define __SYS_WRITE         22
 #define __SYS_SBRK          23
 #define __SYS_UNAME         24
 #define __SYS_CHMOD         25
-#define __SYS_FCHMOD        26
 #define __SYS_CLOCK_TIME    27
 #define __SYS_SOCKET        28
 #define __SYS_BIND          29
@@ -57,16 +51,12 @@
 #define __SYS_SETPGID       51
 #define __SYS_ACCESS        52
 #define __SYS_PIPE          53
-#define __SYS_IOCTL         54
 #define __SYS_MMAP          55
 #define __SYS_MPROTECT      56
 #define __SYS_MUNMAP        57
 #define __SYS_SELECT        58
 #define __SYS_SIGSUSPEND    59
 #define __SYS_GETHOSTBYNAME 60
-#define __SYS_FSYNC         61
-#define __SYS_FTRUNCATE     62
-#define __SYS_FCHOWN        63
 #define __SYS_READLINK      64
 #define __SYS_TIMES         65
 #define __SYS_MOUNT         66
@@ -75,6 +65,8 @@
 #define __SYS_CHOWN         69
 #define __SYS_UTIME         70
 #define __SYS_SYMLINK       71
+#define __SYS_IPC_SEND      72
+#define __SYS_IPC_SENDV     73
 
 #ifndef __ASSEMBLER__
 

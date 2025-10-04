@@ -27,6 +27,7 @@ LIB_SRCFILES := \
 	lib/argentum/include/netinet/ip.h \
 	lib/argentum/include/sys/dirent.h \
 	lib/argentum/include/sys/ioctl.h \
+	lib/argentum/include/sys/ipc.h \
 	lib/argentum/include/sys/mman.h \
 	lib/argentum/include/sys/mount.h \
 	lib/argentum/include/sys/param.h \
@@ -74,6 +75,8 @@ LIB_SRCFILES := \
 	lib/argentum/stdlib/realpath.c \
 	lib/argentum/stdlib/unlockpt.c \
 	lib/argentum/sys/ioctl/ioctl.c \
+	lib/argentum/sys/ipc/ipc_send.c \
+	lib/argentum/sys/ipc/ipc_sendv.c \
 	lib/argentum/sys/mman/mmap.c \
 	lib/argentum/sys/mman/mprotect.c \
 	lib/argentum/sys/mman/munmap.c \

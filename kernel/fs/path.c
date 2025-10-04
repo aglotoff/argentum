@@ -238,7 +238,6 @@ fs_path_resolve_symlink(ino_t ino,
 
   msg.type = IPC_MSG_READLINK;
   msg.u.readlink.ino   = ino;
-  msg.u.readlink.va    = (uintptr_t) path;
   msg.u.readlink.nbyte = PATH_MAX - 1;
 
   r = connection_send(connection, &msg, sizeof(msg), path, PATH_MAX - 1);
@@ -343,7 +342,6 @@ fs_path_node_resolve_at(struct PathNode *start,
 
     msg.type = IPC_MSG_STAT;
     msg.u.stat.ino = ino;
-    msg.u.stat.buf = &stat;
 
     r = connection_send(connection, &msg, sizeof(msg), &stat, sizeof(stat));
 
@@ -465,7 +463,6 @@ fs_path_node_lookup(struct PathNode *parent,
     msg.u.lookup.dir_ino = parent_ino;
     msg.u.lookup.name    = name;
     msg.u.lookup.flags   = flags;
-    msg.u.lookup.istore  = &child_ino;
 
     //cprintf("lookup %d %s\n", parent_ino, name);
 
@@ -477,7 +474,8 @@ fs_path_node_lookup(struct PathNode *parent,
     //   cprintf("lookup %s ino = %d\n", name, child_ino);
     // }
 
-    if (r == 0 && child_ino != 0) {
+    if (r > 0) {
+      child_ino = r;
       // Insert new node
       if ((child = fs_path_node_create(name, child_ino, connection, parent)) == NULL) {
         r = -ENOMEM;

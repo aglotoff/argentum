@@ -37,21 +37,16 @@ static int32_t (*syscalls[])(void) = {
   [__SYS_EXIT]        = sys_exit,
   [__SYS_GETPID]      = sys_getpid,
   [__SYS_GETPPID]     = sys_getppid,
-  [__SYS_GETDENTS]    = sys_getdents,
   [__SYS_CHDIR]       = sys_chdir,
   [__SYS_FCHDIR]      = sys_fchdir,
   [__SYS_OPEN]        = sys_open,
   [__SYS_FCNTL]       = sys_fcntl,
-  [__SYS_SEEK]        = sys_seek,
   [__SYS_UMASK]       = sys_umask,
   [__SYS_MKNOD]       = sys_mknod,
   [__SYS_LINK]        = sys_link,
   [__SYS_UNLINK]      = sys_unlink,
   [__SYS_RMDIR]       = sys_rmdir,
-  [__SYS_STAT]        = sys_stat,
   [__SYS_CLOSE]       = sys_close,
-  [__SYS_READ]        = sys_read,
-  [__SYS_WRITE]       = sys_write,
   [__SYS_SBRK]        = sys_sbrk,
   [__SYS_UNAME]       = sys_uname,
   [__SYS_CHMOD]       = sys_chmod,
@@ -62,7 +57,6 @@ static int32_t (*syscalls[])(void) = {
   [__SYS_ACCEPT]      = sys_accept,
   [__SYS_CONNECT]     = sys_connect,
   [__SYS_TEST]        = sys_test,
-  [__SYS_FCHMOD]      = sys_fchmod,
   [__SYS_SIGACTION]   = sys_sigaction,
   [__SYS_SIGRETURN]   = sys_sigreturn,
   [__SYS_SIGPENDING]  = sys_sigpending,
@@ -79,14 +73,10 @@ static int32_t (*syscalls[])(void) = {
   [__SYS_SETPGID]     = sys_setpgid,
   [__SYS_ACCESS]      = sys_access,
   [__SYS_PIPE]        = sys_pipe,
-  [__SYS_IOCTL]       = sys_ioctl,
   [__SYS_MMAP]        = sys_mmap,
   [__SYS_SELECT]      = sys_select,
   [__SYS_SIGSUSPEND]  = sys_sigsuspend,
   [__SYS_KILL]        = sys_kill,
-  [__SYS_FSYNC]       = sys_fsync,
-  [__SYS_FTRUNCATE]   = sys_ftruncate,
-  [__SYS_FCHOWN]      = sys_fchown,
   [__SYS_READLINK]    = sys_readlink,
   [__SYS_TIMES]       = sys_times,
   [__SYS_MOUNT]       = sys_mount,
@@ -96,6 +86,8 @@ static int32_t (*syscalls[])(void) = {
   [__SYS_CHOWN]       = sys_chown,
   [__SYS_UTIME]       = sys_utime,
   [__SYS_SYMLINK]     = sys_symlink,
+  [__SYS_IPC_SEND]    = sys_ipc_send,
+  [__SYS_IPC_SENDV]   = sys_ipc_sendv,
 };
 
 int32_t
@@ -153,12 +145,12 @@ sys_arg_ushort(int n, unsigned short *ip)
   return 0;
 }
 
-static int
-sys_arg_long(int n, long *ip)
-{
-  *ip = (long) sys_arch_get_arg(n);
-  return 0;
-}
+// static int
+// sys_arg_long(int n, long *ip)
+// {
+//   *ip = (long) sys_arch_get_arg(n);
+//   return 0;
+// }
 
 static int
 sys_arg_ulong(int n, unsigned long *ip)
@@ -754,32 +746,6 @@ out1:
  */
 
 int32_t
-sys_getdents(void)
-{
-  size_t n;
-  int fd;
-  struct Connection *file;
-  uintptr_t va;
-  int r;
-
-  if ((r = sys_arg_int(0, &fd)) < 0)
-    return r;
-  if ((r = sys_arg_uint(2, &n)) < 0)
-    return r;
-  if ((r = sys_arg_va(1, &va, n, VM_WRITE, 0)) < 0)
-    return r;
-
-  if ((file = fd_lookup(process_current(), fd)) == NULL)
-    return -EBADF;
-
-  r = connection_getdents(file, va, n);
-
-  connection_unref(file);
-
-  return r;
-}
-
-int32_t
 sys_fchdir(void)
 {
   struct Connection *file;
@@ -799,32 +765,6 @@ sys_fchdir(void)
 }
 
 int32_t
-sys_stat(void)
-{
-  struct Connection *file;
-  uintptr_t buf_va;
-  int r, fd;
-
-  if ((r = sys_arg_int(0, &fd)) < 0)
-    goto out1;
-  if ((r = sys_arg_va(1, &buf_va, sizeof(struct stat), VM_WRITE, 0)) < 0)
-    goto out1;
-
-  if ((file = fd_lookup(process_current(), fd)) == NULL) {
-    r = -EBADF;
-    goto out2;
-  }
-
-  if ((r = connection_stat(file, (struct stat *) buf_va)) < 0)
-    goto out2;
-
-out2:
-  connection_unref(file);
-out1:
-  return r;
-}
-
-int32_t
 sys_close(void)
 {
   int r, fd;
@@ -835,55 +775,6 @@ sys_close(void)
   r = fd_close(process_current(), fd);
 
   //cprintf("[k] close %d -> %d\n", fd, r);
-
-  return r;
-}
-
-int32_t
-sys_read(void)
-{
-  uintptr_t va;
-  size_t n;
-  struct Connection *file;
-  int r, fd;
-
-  if ((r = sys_arg_int(0, &fd)) < 0)
-    return r;
-  if ((r = sys_arg_uint(2, &n)) < 0)
-    return r;
-  if ((r = sys_arg_va(1, &va, n, VM_READ, 0)) < 0)
-    return r;
-
-  if ((file = fd_lookup(process_current(), fd)) == NULL)
-    return -EBADF;
-
-  r = connection_read(file, va, n);
-
-  connection_unref(file);
-
-  return r;
-}
-
-int32_t
-sys_seek(void)
-{
-  struct Connection *file;
-  off_t offset;
-  int whence, r, fd;
-
-  if ((r = sys_arg_int(0, &fd)) < 0)
-    return r;
-  if ((r = sys_arg_long(1, &offset)) < 0)
-    return r;
-  if ((r = sys_arg_int(2, &whence)) < 0)
-    return r;
-
-  if ((file = fd_lookup(process_current(), fd)) == NULL)
-    return -EBADF;
-
-  r = connection_seek(file, offset, whence);
-
-  connection_unref(file);
 
   return r;
 }
@@ -952,78 +843,6 @@ sys_fcntl(void)
 }
 
 int32_t
-sys_write(void)
-{
-  uintptr_t va;
-  size_t n;
-  struct Connection *file;
-  int r, fd;
-
-  if ((r = sys_arg_int(0, &fd)) < 0)
-    return r;
-  if ((r = sys_arg_uint(2, &n)) < 0)
-    return r;
-  if ((r = sys_arg_va(1, &va, n, VM_WRITE, 0)) < 0)
-    return r;
-
-  if ((file = fd_lookup(process_current(), fd)) == NULL)
-    return -EBADF;
-
-  r = connection_write(file, va, n);
-
-  connection_unref(file);
-
-  return r;
-}
-
-int32_t
-sys_fchmod(void)
-{
-  struct Connection *file;
-  mode_t mode;
-  int r, fd;
-
-  if ((r = sys_arg_int(0, &fd)) < 0)
-    return r;
-  if ((r = sys_arg_ulong(1, &mode)) < 0)
-    return r;
-
-  if ((file = fd_lookup(process_current(), fd)) == NULL)
-    return -EBADF;
-
-  r = connection_chmod(file, mode);
-
-  connection_unref(file);
-
-  return r;
-}
-
-int32_t
-sys_fchown(void)
-{
-  struct Connection *file;
-  int r, fd;
-  uid_t uid;
-  gid_t gid;
-
-  if ((r = sys_arg_int(0, &fd)) < 0)
-    return r;
-  if ((r = sys_arg_ushort(1, &uid)) < 0)
-    return r;
-  if ((r = sys_arg_ushort(2, &gid)) < 0)
-    return r;
-
-  if ((file = fd_lookup(process_current(), fd)) == NULL)
-    return -EBADF;
-
-  r = connection_chown(file, uid, gid);
-
-  connection_unref(file);
-
-  return r;
-}
-
-int32_t
 sys_select(void)
 {
   int r, fd, nfds;
@@ -1075,72 +894,6 @@ out2:
   if (readfds != NULL)  
     k_free(readfds);
 out1:
-  return r;
-}
-
-int32_t
-sys_ioctl(void)
-{
-  struct Connection *file;
-  int r, request, fd, arg;
-
-  if ((r = sys_arg_int(0, &fd)) < 0)
-    return r;
-  if ((r = sys_arg_int(1, &request)) < 0)
-    return r;
-  if ((r = sys_arg_int(2, &arg)) < 0)
-    return r;
-
-  if ((file = fd_lookup(process_current(), fd)) == NULL)
-    return -EBADF;
-
- //cprintf("[k] ioctl %s\n", file->node->name);
-
-  r = connection_ioctl(file, request, arg);
-  
-  connection_unref(file);
-
-  return r;
-}
-
-int32_t
-sys_ftruncate(void)
-{
-  struct Connection *file;
-  int r, fd;
-  off_t length;
-
-  if ((r = sys_arg_int(0, &fd)) < 0)
-    return r;
-  if ((r = sys_arg_long(1, &length)) < 0)
-    return r;
-
-  if ((file = fd_lookup(process_current(), fd)) == NULL)
-    return -EBADF;
-
-  r = connection_truncate(file, length);
-
-  connection_unref(file);
-
-  return r;
-}
-
-int32_t
-sys_fsync(void)
-{
-  struct Connection *file;
-  int r, fd;
-
-  if ((r = sys_arg_int(0, &fd)) < 0)
-    return r;
-
-  if ((file = fd_lookup(process_current(), fd)) == NULL)
-    return -EBADF;
-
-  r = connection_sync(file);
-
-  connection_unref(file);
-
   return r;
 }
 
@@ -1753,7 +1506,6 @@ out1:
   return r;
 }
 
-
 int32_t
 sys_utime(void)
 {
@@ -1782,6 +1534,85 @@ sys_utime(void)
 
 out2:
   k_free(path);
+out1:
+  return r;
+}
+
+int32_t
+sys_ipc_send(void)
+{
+  struct Connection *file;
+  uintptr_t smsg, rmsg;
+  size_t sbytes, rbytes;
+  int r, fd;
+
+  if ((r = sys_arg_int(0, &fd)) < 0)
+    return r;
+  if ((r = sys_arg_ptr(1, &smsg, VM_READ, 1)) < 0)
+    return r;
+  if ((r = sys_arg_uint(2, &sbytes)) < 0)
+    return r;
+   if ((r = sys_arg_ptr(3, &rmsg, VM_WRITE, 1)) < 0)
+    return r;
+  if ((r = sys_arg_uint(4, &rbytes)) < 0)
+    return r;
+
+  if ((file = fd_lookup(process_current(), fd)) == NULL)
+    return -EBADF;
+
+  r = connection_send(file, (void *) smsg, sbytes, (void *) rmsg, rbytes);
+
+  connection_unref(file);
+
+  return r;
+}
+
+int32_t
+sys_ipc_sendv(void)
+{
+  struct Connection *file;
+
+  struct iovec *send_iov, *recv_iov;
+  int send_iov_cnt, recv_iov_cnt;
+
+  int r, fd;
+
+  if ((r = sys_arg_int(0, &fd)) < 0)
+    goto out1;
+  if ((r = sys_arg_int(2, &send_iov_cnt)) < 0)
+    goto out1;
+  if ((r = sys_arg_int(4, &recv_iov_cnt)) < 0)
+    goto out1;
+
+  if (send_iov_cnt > 0) {
+    if ((r = sys_arg_buf(1, (void *) &send_iov, send_iov_cnt * sizeof(struct iovec), VM_READ)) < 0)
+      goto out1;
+  } else {
+    send_iov = NULL;
+  }
+
+  if (recv_iov_cnt > 0) {
+    if ((r = sys_arg_buf(3, (void *) &recv_iov, recv_iov_cnt * sizeof(struct iovec), VM_READ)) < 0)
+      goto out2;
+  } else {
+    recv_iov = NULL;
+  }
+
+  if ((file = fd_lookup(process_current(), fd)) == NULL) {
+    r = -EBADF;
+    goto out3;
+  }
+
+  r = connection_sendv(file, send_iov, send_iov_cnt, recv_iov, recv_iov_cnt);
+
+  connection_unref(file);
+
+out3:
+  if (recv_iov != NULL)
+    k_free(recv_iov);
+out2:
+  if (send_iov != NULL)
+    k_free(send_iov);
 out1:
   return r;
 }

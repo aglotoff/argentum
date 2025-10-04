@@ -279,7 +279,6 @@ do_create(struct FS *fs, struct Request *req, struct IpcMessage *msg)
   char *name = msg->u.create.name;
   mode_t mode = msg->u.create.mode;
   dev_t dev  = msg->u.create.dev;
-  ino_t *istore  = msg->u.create.istore;
   int r;
 
   // TODO: verify existence
@@ -291,8 +290,7 @@ do_create(struct FS *fs, struct Request *req, struct IpcMessage *msg)
   fs_inode_unlock(dir);
 
   if (inode != NULL) {
-    if (istore)
-      *istore = inode->ino;
+    r = inode->ino;
     fs_inode_put(inode);
   }
 
@@ -356,7 +354,7 @@ do_lookup(struct FS *fs, struct Request *req, struct IpcMessage *msg)
   ino_t dir_ino = msg->u.lookup.dir_ino;
   const char *name = msg->u.lookup.name;
   int flags = msg->u.lookup.flags;
-  ino_t *istore = msg->u.lookup.istore;
+  int r;
 
   struct Inode *inode, *dir;
 
@@ -380,15 +378,15 @@ do_lookup(struct FS *fs, struct Request *req, struct IpcMessage *msg)
     
   inode = fs->ops->lookup(process, dir, name);
 
-  if (istore != NULL)
-    *istore = inode ? inode->ino : 0;
+  r = inode ? inode->ino : 0;
+
   if (inode != NULL)
     fs_inode_put(inode);
 
   fs_inode_unlock(dir);
   fs_inode_put(dir);
 
-  request_reply(req, 0);
+  request_reply(req, r);
 }
 
 void
@@ -558,7 +556,6 @@ do_symlink(struct FS *fs, struct Request *req, struct IpcMessage *msg)
   char *name = msg->u.symlink.name;
   mode_t mode = msg->u.symlink.mode;
   const char *link_path = msg->u.symlink.path;
-  ino_t *istore = msg->u.symlink.istore;
   int r;
 
   struct Inode *dir = fs->ops->inode_get(fs, dir_ino);
@@ -569,8 +566,6 @@ do_symlink(struct FS *fs, struct Request *req, struct IpcMessage *msg)
   fs_inode_unlock(dir);
 
   if (inode != NULL) {
-    if (istore)
-      *istore = inode->ino;
     fs_inode_put(inode);
   }
 
@@ -633,7 +628,7 @@ do_utime(struct FS *fs, struct Request *req, struct IpcMessage *msg)
 {
   struct Process *process = req->process;
   ino_t ino = msg->u.utime.ino;
-  struct utimbuf *times = msg->u.utime.times;
+  struct utimbuf *times = &msg->u.utime.times;
   int r;
 
   struct Inode *inode = fs->ops->inode_get(fs, ino);
@@ -641,33 +636,18 @@ do_utime(struct FS *fs, struct Request *req, struct IpcMessage *msg)
 
   fs_inode_lock(inode);
 
-  if (times == NULL) {
-    if ((euid != 0) &&
-        (euid != inode->uid) &&
-        !fs_inode_permission(process, inode, FS_PERM_WRITE, 1)) {
-      r = -EPERM;
-      goto out;
-    }
-
-    inode->atime = time_get_seconds();
-    inode->mtime = time_get_seconds();
-
-    inode->flags |= FS_INODE_DIRTY;
-    r = 0;
-  } else {
-    if ((euid != 0) ||
-       ((euid != inode->uid) ||
-         !fs_inode_permission(process, inode, FS_PERM_WRITE, 1))) {
-      r = -EPERM;
-      goto out;
-    }
-
-    inode->atime = times->actime;
-    inode->mtime = times->modtime;
-
-    inode->flags |= FS_INODE_DIRTY;
-    r = 0;
+  if ((euid != 0) ||
+      ((euid != inode->uid) ||
+        !fs_inode_permission(process, inode, FS_PERM_WRITE, 1))) {
+    r = -EPERM;
+    goto out;
   }
+
+  inode->atime = times->actime;
+  inode->mtime = times->modtime;
+
+  inode->flags |= FS_INODE_DIRTY;
+  r = 0;
 
 out:
   fs_inode_unlock(inode);
@@ -917,7 +897,6 @@ void
 do_read(struct FS *fs, struct Request *req, struct IpcMessage *msg)
 {
   struct Connection *connection = req->connection;
-  uintptr_t va = msg->u.read.va;
   size_t nbyte = msg->u.read.nbyte;
   ssize_t r;
 
@@ -925,7 +904,7 @@ do_read(struct FS *fs, struct Request *req, struct IpcMessage *msg)
   k_assert(file != NULL);
 
   if (file->rdev >= 0) {
-    r = dev_read(req, file->rdev, va, nbyte);
+    r = dev_read(req, file->rdev, nbyte);
   } else if ((connection->flags & O_ACCMODE) == O_WRONLY) {
     r = -EBADF;
   } else if (file->inode == NULL) {
@@ -942,7 +921,6 @@ do_read(struct FS *fs, struct Request *req, struct IpcMessage *msg)
 static ssize_t
 do_readdir_locked(struct FS *fs, struct Request *req,
                   struct Connection *connection,
-                  uintptr_t va,
                   size_t nbyte)
 {
   ssize_t total = 0;
@@ -985,7 +963,6 @@ do_readdir_locked(struct FS *fs, struct Request *req,
     if ((r = request_write(req, &de, de.de.d_reclen)) < 0)
       return r;
 
-    va    += de.de.d_reclen;
     total += de.de.d_reclen;
     nbyte -= de.de.d_reclen;
   }
@@ -997,18 +974,19 @@ void
 do_readdir(struct FS *fs, struct Request *req, struct IpcMessage *msg)
 {
   struct Connection *connection = req->connection;
-  uintptr_t va = msg->u.readdir.va;
   size_t nbyte = msg->u.readdir.nbyte;
   ssize_t r;
 
   struct File *file = get_connection_file(req->connection);
   k_assert(file != NULL);
 
-  if (file->inode == NULL) {
+  if ((connection->flags & O_ACCMODE) == O_WRONLY) {
+    r = -EBADF;
+  } else if (file->inode == NULL) {
     r = -EINVAL;
   } else {
     fs_inode_lock(file->inode);
-    r = do_readdir_locked(fs, req, connection, va, nbyte);
+    r = do_readdir_locked(fs, req, connection, nbyte);
     fs_inode_unlock(file->inode);
   }
 
@@ -1097,7 +1075,9 @@ do_trunc(struct FS *fs, struct Request *req, struct IpcMessage *msg)
   struct File *file = get_connection_file(req->connection);
   k_assert(file != NULL);
 
-  if (length < 0) {
+  if ((req->connection->flags & O_ACCMODE) == O_RDONLY) {
+    r = -EBADF;
+  } else if (length < 0) {
     r = -EINVAL;
   } else if (file->inode == NULL) {
     r = -EINVAL;
@@ -1167,7 +1147,6 @@ void
 do_write(struct FS *fs, struct Request *req, struct IpcMessage *msg)
 {
   struct Connection *connection = req->connection;
-  uintptr_t va = msg->u.write.va;
   size_t nbyte = msg->u.write.nbyte;
   ssize_t r;
 
@@ -1175,7 +1154,7 @@ do_write(struct FS *fs, struct Request *req, struct IpcMessage *msg)
   k_assert(file != NULL);
 
   if (file->rdev >= 0) {
-    r = dev_write(req, file->rdev, va, nbyte);
+    r = dev_write(req, file->rdev, nbyte);
   } else if (file->inode == NULL) {
     r = -EINVAL;
   } else if ((connection->flags & O_ACCMODE) == O_RDONLY) {

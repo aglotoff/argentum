@@ -60,25 +60,25 @@ dev_open(struct Request *req, dev_t rdev, int oflag, mode_t mode)
 }
 
 ssize_t
-dev_read(struct Request *req, dev_t rdev, uintptr_t va, size_t n)
+dev_read(struct Request *req, dev_t rdev, size_t n)
 {
   struct CharDev *d = dev_lookup_char(rdev);
 
   if (d == NULL)
     return -ENODEV;
 
-  return d->read(req, rdev, va, n);
+  return d->read(req, rdev, n);
 }
 
 ssize_t
-dev_write(struct Request *req, dev_t rdev, uintptr_t va, size_t n)
+dev_write(struct Request *req, dev_t rdev, size_t n)
 {
   struct CharDev *d = dev_lookup_char(rdev);
 
   if (d == NULL)
     return -ENODEV;
 
-  return d->write(req, rdev, va, n);
+  return d->write(req, rdev, n);
 }
 
 int

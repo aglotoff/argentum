@@ -1,10 +1,20 @@
-#include <sys/syscall.h>
+#include <sys/ipc.h>
 #include <unistd.h>
 
 _READ_WRITE_RETURN_TYPE
 _write(int fildes, const void *buf, size_t n)
 {
-  return __syscall3(__SYS_WRITE, fildes, buf, n);
+  struct IpcMessage msg;
+
+  msg.type = IPC_MSG_WRITE;
+  msg.u.write.nbyte = n;
+
+  struct iovec send_iov[] = {
+    { &msg, sizeof(msg) },
+    { (void *) buf, n },
+  };
+
+  return ipc_sendv(fildes, send_iov, 2, NULL, 0);
 }
 
 _READ_WRITE_RETURN_TYPE

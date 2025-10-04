@@ -159,41 +159,6 @@ net_init(void)
   tcpip_init(net_init_done, NULL);
 }
 
-intptr_t
-net_send_recv(struct Connection *connection, void *smsg, size_t, void *, size_t)
-{
-  struct IpcMessage *msg = (struct IpcMessage *) smsg;
-
-  switch (msg->type) {
-  case IPC_MSG_CLOSE:
-    return net_close(connection);
-  case IPC_MSG_SEEK:
-    return -ESPIPE;
-  case IPC_MSG_FCHMOD:
-    return -EBADF;
-  case IPC_MSG_READ:
-    return net_read(connection, msg->u.read.va, msg->u.read.nbyte);
-  case IPC_MSG_WRITE:
-    return net_write(connection, msg->u.write.va, msg->u.write.nbyte);
-  case IPC_MSG_READDIR:
-    return -ENOTDIR;
-  case IPC_MSG_FSTAT:
-    return -EBADF;
-  case IPC_MSG_FCHOWN:
-    return -EBADF;
-  case IPC_MSG_IOCTL:
-    return -EBADF;
-  case IPC_MSG_TRUNC:
-    return -EBADF;
-  case IPC_MSG_FSYNC:
-    return -EBADF;
-  default:
-    return -ENOSYS;
-  }
-
-  return 0;
-}
-
 int
 net_socket(int domain, int type, int protocol, struct Connection **fstore)
 {

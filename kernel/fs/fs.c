@@ -140,12 +140,14 @@ fs_create(const char *path, mode_t mode, dev_t dev, struct PathNode **istore)
   msg.u.create.name    = name;
   msg.u.create.mode    = mode;
   msg.u.create.dev     = dev;
-  msg.u.create.istore  = &ino;
 
   r = connection_send(chan, &msg, sizeof(msg), NULL, 0);
 
   // (inode->ref_count): +1
-  if (r == 0) {
+  if (r > 0) {
+    ino = r;
+    r = 0;
+
     if (istore != NULL) {
       struct PathNode *pp;
       
@@ -230,7 +232,6 @@ fs_readlink(const char *path, uintptr_t va, size_t bufsize)
 
   msg.type = IPC_MSG_READLINK;
   msg.u.readlink.ino   = ino;
-  msg.u.readlink.va    = va;
   msg.u.readlink.nbyte = bufsize;
 
   r = connection_send(connection, &msg, sizeof(msg), (void *) va, bufsize);
@@ -394,7 +395,7 @@ fs_symlink(const char *path, const char *link_path)
 {
   struct IpcMessage msg;
   struct PathNode *dir;
-  ino_t ino, dir_ino;
+  ino_t dir_ino;
   struct Connection *chan;
   char name[NAME_MAX + 1];
   mode_t mode;
@@ -413,7 +414,6 @@ fs_symlink(const char *path, const char *link_path)
   msg.u.symlink.name      = name;
   msg.u.symlink.mode      = mode;
   msg.u.symlink.path      = path;
-  msg.u.symlink.istore    = &ino;
 
   r = connection_send(chan, &msg, sizeof(msg), NULL, 0);
 
@@ -489,7 +489,13 @@ fs_utime(const char *path, struct utimbuf *times)
 
   msg.type = IPC_MSG_UTIME;
   msg.u.utime.ino   = ino;
-  msg.u.utime.times = times;
+
+  if (times) {
+    msg.u.utime.times = *times;
+  } else {
+    msg.u.utime.times.actime  = time_get_seconds();
+    msg.u.utime.times.modtime = time_get_seconds();
+  }
 
   r = connection_send(connection, &msg, sizeof(msg), NULL, 0);
 

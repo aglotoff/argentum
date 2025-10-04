@@ -250,7 +250,7 @@ special_ioctl(struct Request *, dev_t, int, int)
 }
 
 ssize_t
-special_read(struct Request *, dev_t dev, uintptr_t, size_t)
+special_read(struct Request *, dev_t dev, size_t)
 {
   switch (dev & 0xFF) {
   case 3:
@@ -261,10 +261,8 @@ special_read(struct Request *, dev_t dev, uintptr_t, size_t)
 }
 
 ssize_t
-special_write(struct Request *, dev_t dev, uintptr_t va, size_t n)
+special_write(struct Request *, dev_t dev, size_t n)
 {
-  (void) va;
-
   switch (dev & 0xFF) {
   case 3:
     return n;

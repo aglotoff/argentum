@@ -39,6 +39,8 @@ libc_a_SOURCES += \
   %D%/stdlib/realpath.c \
   %D%/stdlib/unlockpt.c \
   %D%/sys/ioctl/ioctl.c \
+  %D%/sys/ipc/ipc_send.c \
+  %D%/sys/ipc/ipc_sendv.c \
   %D%/sys/mman/mmap.c \
   %D%/sys/mman/mprotect.c \
   %D%/sys/mman/munmap.c \

@@ -343,7 +343,7 @@ tty_open(struct Request *req, dev_t dev, int oflag, mode_t)
  * @return The number of bytes read or a negative value if an error occured.
  */
 ssize_t
-tty_read(struct Request *req, dev_t dev, uintptr_t, size_t nbytes)
+tty_read(struct Request *req, dev_t dev, size_t nbytes)
 {
   struct Tty *tty = tty_from_dev(req->process, dev);
   size_t i = 0;
@@ -402,7 +402,7 @@ tty_read(struct Request *req, dev_t dev, uintptr_t, size_t nbytes)
 }
 
 ssize_t
-tty_write(struct Request *req, dev_t dev, uintptr_t, size_t nbytes)
+tty_write(struct Request *req, dev_t dev, size_t nbytes)
 {
   struct Tty *tty = tty_from_dev(req->process, dev);
   size_t i;
