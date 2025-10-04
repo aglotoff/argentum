@@ -190,7 +190,8 @@ int           ext2_rmdir(struct Process *, struct Inode *, struct Inode *,const 
 int           ext2_mknod(struct Process *, struct Inode *, char *, mode_t, dev_t, struct Inode **);
 void          ext2_trunc(struct Process *, struct Inode *, off_t);
 ssize_t       ext2_read_data(struct Process *, struct Inode *, void *, size_t, off_t);
-ssize_t       ext2_write(struct Process *, struct Inode *, uintptr_t, size_t, off_t);
+ssize_t       ext2_write(struct Request *, struct Inode *, size_t, off_t);
+ssize_t       ext2_write_data(struct Process *, struct Inode *, uintptr_t, size_t, off_t);
 ssize_t       ext2_readdir(struct Process *, struct Inode *, void *, FillDirFunc, off_t);
 uint32_t      ext2_inode_get_block(struct Inode *, uint32_t, int);
 

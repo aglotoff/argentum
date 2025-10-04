@@ -83,27 +83,6 @@ connection_set_flags(struct Connection *connection, int flags)
   return 0;
 }
 
-intptr_t
-ipc_send(struct Connection *connection, void *smsg, size_t sbytes, void *rmsg, size_t rbytes)
-{
-  k_assert(connection->ref_count > 0);
-
-  // if (process_current()->pid > 3)
-  //   cprintf("[k] proc #%x: %d -> %d\n", process_current()->pid, *(int *) smsg, connection->type);
-
-  switch (connection->type) {
-    case CONNECTION_TYPE_FILE:
-      return connection_send(connection, smsg, sbytes, rmsg, rbytes);
-    case CONNECTION_TYPE_PIPE:
-      return pipe_send_recv(connection, smsg, sbytes, rmsg, rbytes);
-    case CONNECTION_TYPE_SOCKET:
-      return net_send_recv(connection, smsg, sbytes, rmsg, rbytes);
-    default:
-      k_panic("bad connection type %d", connection->type);
-      return -ENOSYS;
-  }
-}
-
 void
 connection_unref(struct Connection *connection)
 {
@@ -120,7 +99,7 @@ connection_unref(struct Connection *connection)
     k_spinlock_release(&connection_lock);
 
     msg.type = IPC_MSG_CLOSE;
-    ipc_send(connection, &msg, sizeof(msg), NULL, 0);
+    connection_send(connection, &msg, sizeof(msg), NULL, 0);
 
     k_spinlock_acquire(&connection_lock);
   };
@@ -149,7 +128,7 @@ connection_seek(struct Connection *connection, off_t offset, int whence)
   msg.u.seek.offset = offset;
   msg.u.seek.whence = whence;
 
-  return ipc_send(connection, &msg, sizeof(msg), NULL, 0);
+  return connection_send(connection, &msg, sizeof(msg), NULL, 0);
 }
 
 ssize_t
@@ -161,7 +140,7 @@ connection_read(struct Connection *connection, uintptr_t va, size_t nbytes)
   msg.u.read.va    = va;
   msg.u.read.nbyte = nbytes;
 
-  return ipc_send(connection, &msg, sizeof(msg), (void *) va, nbytes);
+  return connection_send(connection, &msg, sizeof(msg), (void *) va, nbytes);
 }
 
 ssize_t
@@ -173,7 +152,12 @@ connection_write(struct Connection *connection, uintptr_t va, size_t nbytes)
   msg.u.write.va    = va;
   msg.u.write.nbyte = nbytes;
 
-  return ipc_send(connection, &msg, sizeof(msg), NULL, 0);
+  struct iovec send_iov[] = {
+    { &msg, sizeof(msg) },
+    { (void *) va, nbytes },
+  };
+
+  return connection_sendv(connection, send_iov, 2, NULL, 0);
 }
 
 ssize_t
@@ -188,7 +172,7 @@ connection_getdents(struct Connection *connection, uintptr_t va, size_t nbytes)
   msg.u.readdir.va    = va;
   msg.u.readdir.nbyte = nbytes;
   
-  return ipc_send(connection, &msg, sizeof(msg), (void *) va, nbytes);
+  return connection_send(connection, &msg, sizeof(msg), (void *) va, nbytes);
 }
 
 int
@@ -199,7 +183,7 @@ connection_stat(struct Connection *connection, struct stat *buf)
   msg.type = IPC_MSG_FSTAT;
   msg.u.fstat.buf  = buf;
 
-  return ipc_send(connection, &msg, sizeof(msg), buf, sizeof(*buf));
+  return connection_send(connection, &msg, sizeof(msg), buf, sizeof(*buf));
 }
 
 int
@@ -219,7 +203,7 @@ connection_chmod(struct Connection *connection, mode_t mode)
   msg.type = IPC_MSG_FCHMOD;
   msg.u.fchmod.mode = mode;
 
-  return ipc_send(connection, &msg, sizeof(msg), NULL, 0);
+  return connection_send(connection, &msg, sizeof(msg), NULL, 0);
 }
 
 int
@@ -231,7 +215,7 @@ connection_chown(struct Connection *connection, uid_t uid, gid_t gid)
   msg.u.fchown.uid  = uid;
   msg.u.fchown.gid  = gid;
 
-  return ipc_send(connection, &msg, sizeof(msg), NULL, 0);
+  return connection_send(connection, &msg, sizeof(msg), NULL, 0);
 }
 
 int
@@ -243,13 +227,25 @@ connection_ioctl(struct Connection *connection, int request, int arg)
   msg.u.ioctl.request = request;
   msg.u.ioctl.arg     = arg;
 
+  struct iovec send_iov[] = {
+    { &msg, sizeof(msg) },
+    { (void *) arg, 0 },
+  };
+
   switch (request) {
   case TIOCGETA:
-    return ipc_send(connection, &msg, sizeof(msg), (void *) arg, sizeof(struct termios));
+    return connection_send(connection, &msg, sizeof(msg), (void *) arg, sizeof(struct termios));
   case TIOCGWINSZ:
-    return ipc_send(connection, &msg, sizeof(msg), (void *) arg, sizeof(struct winsize));
+    return connection_send(connection, &msg, sizeof(msg), (void *) arg, sizeof(struct winsize));
+  case TIOCSETAW:
+  case TIOCSETA:
+    send_iov[1].iov_len = sizeof(struct termios);
+    return connection_sendv(connection, send_iov, 2, NULL, 0);
+  case TIOCSWINSZ:
+    send_iov[1].iov_len = sizeof(struct winsize);
+    return connection_sendv(connection, send_iov, 2, NULL, 0);
   default:
-    return ipc_send(connection, &msg, sizeof(msg), NULL, 0);
+    return connection_send(connection, &msg, sizeof(msg), NULL, 0);
   }
 }
 
@@ -284,7 +280,7 @@ connection_truncate(struct Connection *connection, off_t length)
   msg.type = IPC_MSG_TRUNC;
   msg.u.trunc.length = length;
 
-  return ipc_send(connection, &msg, sizeof(msg), NULL, 0);
+  return connection_send(connection, &msg, sizeof(msg), NULL, 0);
 }
 
 int
@@ -294,7 +290,7 @@ connection_sync(struct Connection *connection)
 
   msg.type = IPC_MSG_FSYNC;
 
-  return ipc_send(connection, &msg, sizeof(msg), NULL, 0);
+  return connection_send(connection, &msg, sizeof(msg), NULL, 0);
 }
 
 intptr_t
@@ -312,10 +308,23 @@ connection_send(struct Connection *connection, void *smsg, size_t sbytes, void *
   if ((req = request_create()) == NULL)
     return -ENOMEM;  
 
-  req->send_msg = (uintptr_t) smsg;
-  req->send_bytes = sbytes;
-  req->recv_msg = (uintptr_t) rmsg;
-  req->recv_bytes = rbytes;
+  if (smsg && sbytes) {
+    if ((req->send_iov = k_malloc(sizeof(struct iovec))) == NULL)
+      k_panic("out of memory");
+    
+    req->send_iov->iov_base = smsg;
+    req->send_iov->iov_len  = sbytes;
+    req->send_iov_cnt       = 1;
+  }
+
+  if (rmsg && rbytes) {
+    if ((req->recv_iov = k_malloc(sizeof(struct iovec))) == NULL)
+      k_panic("out of memory");
+
+    req->recv_iov->iov_base = rmsg;
+    req->recv_iov->iov_len  = rbytes;
+    req->recv_iov_cnt       = 1;
+  }
 
   req->connection = connection;
   req->process = process_current();
@@ -332,6 +341,64 @@ connection_send(struct Connection *connection, void *smsg, size_t sbytes, void *
   // if (connection->type == CONNECTION_TYPE_PIPE) {
   //   cprintf("[k] proc #%x sent to %p\n", process_current()->pid, connection->endpoint);
   // }
+
+  if ((r = k_semaphore_timed_get(&req->sem, timeout, K_SLEEP_UNINTERUPTIBLE)) < 0) {
+    k_panic("fail recv:\n");
+    request_destroy(req);
+    request_destroy(req);
+    return -ETIMEDOUT;
+  }
+
+  r = req->r;
+
+  request_destroy(req);
+
+  return r;
+}
+
+
+intptr_t
+connection_sendv(struct Connection *connection,
+                 struct iovec *send_iov, int send_iov_cnt,
+                 struct iovec *recv_iov, int recv_iov_cnt)
+{
+  struct Request *req;
+  unsigned long long timeout = seconds2ticks(15);
+  intptr_t r;
+
+  //cprintf("[k] proc %x sends %d to %p\n", process_current()->pid, *(int *) smsg, connection->endpoint);
+
+  if (connection->endpoint == NULL)
+    return -1;
+
+  if ((req = request_create()) == NULL)
+    return -ENOMEM;  
+
+  if (send_iov && send_iov_cnt) {
+    if ((req->send_iov = k_malloc(sizeof(struct iovec) * send_iov_cnt)) == NULL)
+      k_panic("out of memory");
+    memmove(req->send_iov, send_iov, sizeof(struct iovec) * send_iov_cnt);
+    req->send_iov_cnt = send_iov_cnt;
+  }
+
+  if (recv_iov && recv_iov_cnt) {
+    if ((req->recv_iov = k_malloc(sizeof(struct iovec) * recv_iov_cnt)) == NULL)
+      k_panic("out of memory");
+    memmove(req->recv_iov, recv_iov, sizeof(struct iovec) * recv_iov_cnt);
+    req->recv_iov_cnt = recv_iov_cnt;
+  }
+
+  req->connection = connection;
+  req->process = process_current();
+
+  request_dup(req);
+
+  if (k_mailbox_timed_send(&connection->endpoint->mbox, &req, timeout) < 0) {
+    k_panic("fail send:\n");
+    request_destroy(req);
+    request_destroy(req);
+    return -ETIMEDOUT;
+  }
 
   if ((r = k_semaphore_timed_get(&req->sem, timeout, K_SLEEP_UNINTERUPTIBLE)) < 0) {
     k_panic("fail recv:\n");

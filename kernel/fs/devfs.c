@@ -94,10 +94,9 @@ devfs_read(struct Request *, struct Inode *inode, size_t n, off_t offset)
 }
 
 ssize_t
-devfs_write(struct Process *, struct Inode *inode, uintptr_t va, size_t n, off_t offset)
+devfs_write(struct Request *, struct Inode *inode, size_t n, off_t offset)
 {
   (void) inode;
-  (void) va;
   (void) n;
   (void) offset;
   return -ENOSYS;

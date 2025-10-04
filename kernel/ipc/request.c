@@ -15,12 +15,17 @@ request_create(void)
   
   req->process = NULL;
   req->connection = NULL;
-  req->send_msg = 0;
-  req->send_nread = 0;
-  req->send_bytes = 0;
-  req->recv_msg = 0;
-  req->recv_bytes = 0;
-  req->recv_nwrite = 0;
+
+  req->send_iov = NULL;
+  req->send_iov_cnt = 0;
+  req->send_idx = 0;
+  req->send_pos = 0;
+
+  req->recv_iov = NULL;
+  req->recv_iov_cnt = 0;
+  req->recv_idx = 0;
+  req->recv_pos = 0;
+  
   req->ref_count = 1;
 
   return req;
@@ -43,6 +48,11 @@ request_destroy(struct Request *req)
   k_spinlock_release(&req->lock);
 
   if (count == 0) {
+    if (req->send_iov != NULL)
+      k_free(req->send_iov);
+    if (req->recv_iov != NULL)
+      k_free(req->recv_iov);
+
     k_free(req);
   }
 }
@@ -68,27 +78,81 @@ request_reply(struct Request *req, intptr_t r)
 ssize_t
 request_write(struct Request *req, void *msg, size_t n)
 {
-  size_t nwrite = MIN(req->recv_bytes - req->recv_nwrite, n);
+  size_t total_written = 0;
 
-  if (nwrite != 0) {
-    if (vm_space_copy_out(req->process, msg, req->recv_msg + req->recv_nwrite, nwrite) < 0)
+  if (req->recv_iov == NULL)
+    return total_written;
+
+  while ((n > 0) && (req->recv_idx < req->recv_iov_cnt)) {
+    struct iovec *iov = &req->recv_iov[req->recv_idx];
+
+    size_t iov_remaining = iov->iov_len - req->recv_pos;
+    size_t nwrite = MIN(iov_remaining, n);
+
+    if (nwrite == 0) {
+      // Move to the next iovec if the current one is full
+      req->recv_idx++;
+      req->recv_pos = 0;
+      continue;
+    }
+
+    if (vm_space_copy_out(req->process,
+                          msg,
+                          (uintptr_t)iov->iov_base + req->recv_pos,
+                          nwrite) < 0)
       k_panic("copy");
-    req->recv_nwrite += nwrite;
+
+    req->recv_pos += nwrite;
+    msg = (char *) msg + nwrite;
+    n -= nwrite;
+    total_written += nwrite;
+
+    if (req->recv_pos == iov->iov_len) {
+      req->recv_idx++;
+      req->recv_pos = 0;
+    }
   }
 
-  return nwrite;
+  return total_written;
 }
 
 ssize_t
 request_read(struct Request *req, void *msg, size_t n)
 {
-  size_t nread = MIN(req->send_bytes - req->send_nread, n);
+  size_t total_read = 0;
 
-  if (nread != 0) {
-    if (vm_space_copy_in(req->process, msg, req->send_msg + req->send_nread, nread) < 0)
+  if (req->send_iov == NULL)
+    return total_read;
+
+  while ((n > 0) && (req->send_idx < req->send_iov_cnt)) {
+    struct iovec *iov = &req->send_iov[req->send_idx];
+
+    size_t iov_remaining = iov->iov_len - req->send_pos;
+    size_t nread = MIN(iov_remaining, n);
+
+    if (nread == 0) {
+      // Move to the next iovec if the current one is full
+      req->send_idx++;
+      req->send_pos = 0;
+      continue;
+    }
+
+    if (vm_space_copy_in(req->process,
+                         msg,
+                         (uintptr_t)iov->iov_base + req->send_pos,
+                         nread) < 0)
       k_panic("copy");
-    req->send_nread += nread;
+
+    req->send_pos += nread;
+    msg = (char *) msg + nread;
+    n -= nread;
+    total_read += nread;
+
+    if (req->send_pos == iov->iov_len) {
+      req->send_idx++;
+      req->send_pos = 0;
+    }
   }
 
-  return nread;
+  return total_read;
 }

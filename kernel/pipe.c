@@ -38,9 +38,38 @@ struct PipeEndpoint {
 
 typedef void (*pipe_handler_t)(struct Request *, struct IpcMessage *);
 
+static void
+pipe_bad(struct Request *req, struct IpcMessage *)
+{
+  request_reply(req, -EBADF);
+}
+
+static void
+pipe_seek(struct Request *req, struct IpcMessage *)
+{
+  request_reply(req, -ESPIPE);
+}
+
+static void
+pipe_readdir(struct Request *req, struct IpcMessage *)
+{
+  request_reply(req, -ENOTDIR);
+}
+
 static pipe_handler_t
 pipe_dispatch_table[] = {
+  [IPC_MSG_FCHMOD]   = pipe_bad,
+  [IPC_MSG_FCHOWN]   = pipe_bad,
+  [IPC_MSG_IOCTL]    = pipe_bad,
+  [IPC_MSG_TRUNC]    = pipe_bad,
+  [IPC_MSG_FSYNC]    = pipe_bad,
+
+  [IPC_MSG_SEEK]     = pipe_seek,
+  [IPC_MSG_READDIR]  = pipe_readdir,
+  [IPC_MSG_CLOSE]    = pipe_close,
   [IPC_MSG_READ]     = pipe_read,
+  [IPC_MSG_WRITE]    = pipe_write,
+  [IPC_MSG_FSTAT]    = pipe_stat,
 };
 
 struct Endpoint pipe_endpoint;
@@ -256,54 +285,19 @@ fail1:
   return r;
 }
 
-intptr_t
-pipe_send_recv(struct Connection *connection, void *smsg, size_t sbytes, void *rmsg, size_t rbytes)
+void
+pipe_close(struct Request *req, struct IpcMessage *)
 {
-  struct IpcMessage *msg = (struct IpcMessage *) smsg;
-
-  //if (msg->type != IPC_MSG_READ)
-  //cprintf("[k] proc #%x sends %d to %p (%p)\n", process_current()->pid, msg->type, &pipe_endpoint, connection->endpoint);
-
-  switch (msg->type) {
-  case IPC_MSG_CLOSE:
-    return pipe_close(connection);
-  case IPC_MSG_SEEK:
-    return -ESPIPE;
-  case IPC_MSG_FCHMOD:
-    return -EBADF;
-  case IPC_MSG_READ:
-    return connection_send(connection, smsg, sbytes, rmsg, rbytes);
-  case IPC_MSG_WRITE:
-    return pipe_write(connection, msg->u.write.va, msg->u.write.nbyte);
-  case IPC_MSG_READDIR:
-    return -ENOTDIR;
-  case IPC_MSG_FSTAT:
-    return pipe_stat(connection, (uintptr_t) rmsg);
-  case IPC_MSG_FCHOWN:
-    return -EBADF;
-  case IPC_MSG_IOCTL:
-    return -EBADF;
-  case IPC_MSG_TRUNC:
-    return -EBADF;
-  case IPC_MSG_FSYNC:
-    return -EBADF;
-  default:
-    return -ENOSYS;
-  }
-
-  return 0;
-}
-
-int
-pipe_close(struct Connection *connection)
-{
+  struct Connection *connection = req->connection;
   struct PipeEndpoint *endpoint = pipe_get_connection_endpoint(connection);
   struct Pipe *pipe = endpoint->pipe;
   int write = (endpoint->flags & O_ACCMODE) != O_RDONLY;
   int r;
 
-  if ((r = k_mutex_lock(&pipe->mutex)) < 0)
-    return r;
+  if ((r = k_mutex_lock(&pipe->mutex)) < 0) {
+    request_reply(req, r);
+    return;
+  }
 
   if (write) {
     pipe->write_open = 0;
@@ -325,7 +319,8 @@ pipe_close(struct Connection *connection)
 
   if (pipe->read_open || pipe->write_open) {
     k_mutex_unlock(&pipe->mutex);
-    return 0;
+    request_reply(req, 0);
+    return;
   }
 
   k_mutex_unlock(&pipe->mutex);
@@ -333,7 +328,7 @@ pipe_close(struct Connection *connection)
   pipe_destroy(pipe);
   pipe_free(pipe);
 
-  return 0;
+  request_reply(req, 0);
 }
 
 int
@@ -436,16 +431,20 @@ pipe_read(struct Request *req, struct IpcMessage *msg)
   request_reply(req, i);
 }
 
-ssize_t
-pipe_write(struct Connection *connection, uintptr_t va, size_t n)
+void
+pipe_write(struct Request *req, struct IpcMessage *msg)
 {
+  struct Connection *connection = req->connection;
+  size_t n = msg->u.write.nbyte;
   size_t i;
   struct PipeEndpoint *endpoint = pipe_get_connection_endpoint(connection);
   struct Pipe *pipe = endpoint->pipe;
   int r;
 
-  if ((r = k_mutex_lock(&pipe->mutex)) < 0)
-    return r;
+  if ((r = k_mutex_lock(&pipe->mutex)) < 0) {
+    request_reply(req, r);
+    return;
+  }
 
   page_assert(kva2page(pipe->buf), PIPE_BUF_ORDER, PAGE_TAG_PIPE);
 
@@ -458,7 +457,8 @@ pipe_write(struct Connection *connection, uintptr_t va, size_t n)
       if ((r = k_condvar_wait(&pipe->write_cond, &pipe->mutex)) < 0) {
         //cprintf("[k] proc #%x wait err %p\n", process_current()->pid, &pipe->write_cond);
         k_mutex_unlock(&pipe->mutex);
-        return r;
+        request_reply(req, r);
+        return;
       }
       //cprintf("[k] proc #%x wait end %p\n", process_current()->pid, &pipe->write_cond);
     }
@@ -468,10 +468,11 @@ pipe_write(struct Connection *connection, uintptr_t va, size_t n)
       // Prevent overflow
       nwrite = pipe->max_size - pipe->write_pos;
 
-    r = vm_space_copy_in(process_current(), &pipe->buf[pipe->write_pos], va + i, nwrite);
+    r = request_read(req, &pipe->buf[pipe->write_pos], nwrite);
     if (r < 0) {
       k_mutex_unlock(&pipe->mutex);
-      return r;
+      request_reply(req, r);
+      return;
     }
 
     if (pipe->size == 0) {
@@ -489,12 +490,13 @@ pipe_write(struct Connection *connection, uintptr_t va, size_t n)
 
   k_mutex_unlock(&pipe->mutex);
 
-  return i;
+  request_reply(req, i);
 }
 
-int
-pipe_stat(struct Connection *connection, uintptr_t va)
+void
+pipe_stat(struct Request *req, struct IpcMessage *)
 {
+  struct Connection *connection = req->connection;
   struct PipeEndpoint *endpoint = pipe_get_connection_endpoint(connection);
   struct Pipe *pipe = endpoint->pipe;
   struct stat buf;
@@ -502,8 +504,10 @@ pipe_stat(struct Connection *connection, uintptr_t va)
 
   memset(&buf, 0, sizeof(buf));
 
-  if ((r = k_mutex_lock(&pipe->mutex)) < 0)
-    return r;
+  if ((r = k_mutex_lock(&pipe->mutex)) < 0) {
+    request_reply(req, r);
+    return;
+  }
 
   // TODO: use meaningful values
   buf.st_dev          = 255;
@@ -525,8 +529,10 @@ pipe_stat(struct Connection *connection, uintptr_t va)
 
   k_mutex_unlock(&pipe->mutex);
 
-  if ((r = vm_space_copy_out(process_current(), &buf, va, sizeof(buf))) < 0)
-    return r;
+  if ((r = request_write(req, &buf, sizeof(buf))) < 0) {
+    request_reply(req, r);
+    return;
+  }
 
-  return 0;
+  request_reply(req, 0);
 }

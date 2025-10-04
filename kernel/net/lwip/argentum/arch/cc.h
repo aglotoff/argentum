@@ -5,10 +5,12 @@
 #include <fcntl.h>
 #include <stdlib.h>
 #include <sys/time.h>
-
+#include <sys/uio.h>
 
 #include <kernel/core/assert.h>
 #include <kernel/console.h>
+
+#define iovec iovec
 
 // FIXME: dirty hack to force compiling on i386
 #define SSIZE_MAX 1

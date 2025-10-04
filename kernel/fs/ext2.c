@@ -188,7 +188,7 @@ ext2_dirent_write(struct Process *process, struct Inode *dir, struct Ext2DirEntr
 {
   size_t ret;
 
-  ret = ext2_write(process, dir, (uintptr_t) de, DE_NAME_OFFSET + de->name_len, off);
+  ret = ext2_write_data(process, dir, (uintptr_t) de, DE_NAME_OFFSET + de->name_len, off);
   if (ret != (DE_NAME_OFFSET + de->name_len))
     k_panic("Cannot read directory");
 
@@ -536,7 +536,7 @@ ext2_symlink(struct Process *process,
 
     ip->size = path_len;
   } else {
-    if ((r = ext2_write(process, ip, (uintptr_t) link_path, path_len, 0)) < 0) {
+    if ((r = ext2_write_data(process, ip, (uintptr_t) link_path, path_len, 0)) < 0) {
       fs_inode_unlock(ip);
       return r;
     }

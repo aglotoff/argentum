@@ -1127,9 +1127,8 @@ do_trunc(struct FS *fs, struct Request *req, struct IpcMessage *msg)
 }
 
 static ssize_t
-do_write_locked(struct FS *fs, struct Process *process,
+do_write_locked(struct FS *fs, struct Request *req,
                 struct Connection *connection,
-                uintptr_t va,
                 size_t nbyte)
 {
   ssize_t total;
@@ -1137,7 +1136,7 @@ do_write_locked(struct FS *fs, struct Process *process,
   struct File *file = get_connection_file(connection);
   k_assert(file != NULL);
 
-  if (!fs_inode_permission(process, file->inode, FS_PERM_WRITE, 0))
+  if (!fs_inode_permission(req->process, file->inode, FS_PERM_WRITE, 0))
     return -EPERM;
 
   if (connection->flags & O_APPEND)
@@ -1149,7 +1148,7 @@ do_write_locked(struct FS *fs, struct Process *process,
   if (nbyte == 0)
     return 0;
 
-  total = fs->ops->write(process, file->inode, va, nbyte, file->offset);
+  total = fs->ops->write(req, file->inode, nbyte, file->offset);
 
   if (total > 0) {
     file->offset += total;
@@ -1167,7 +1166,6 @@ do_write_locked(struct FS *fs, struct Process *process,
 void
 do_write(struct FS *fs, struct Request *req, struct IpcMessage *msg)
 {
-  struct Process *process = req->process;
   struct Connection *connection = req->connection;
   uintptr_t va = msg->u.write.va;
   size_t nbyte = msg->u.write.nbyte;
@@ -1184,7 +1182,7 @@ do_write(struct FS *fs, struct Request *req, struct IpcMessage *msg)
     r = -EBADF;
   } else {
     fs_inode_lock(file->inode);
-    r = do_write_locked(fs, process, connection, va, nbyte);
+    r = do_write_locked(fs, req, connection, nbyte);
     fs_inode_unlock(file->inode);
   }
 

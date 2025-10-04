@@ -82,7 +82,7 @@ struct FSOps {
   int             (*inode_write)(struct Process *, struct Inode *);
   void            (*inode_delete)(struct Process *, struct Inode *);
   ssize_t         (*read)(struct Request *, struct Inode *, size_t, off_t);
-  ssize_t         (*write)(struct Process *, struct Inode *, uintptr_t, size_t, off_t);
+  ssize_t         (*write)(struct Request *, struct Inode *, size_t, off_t);
   int             (*rmdir)(struct Process *, struct Inode *, struct Inode *, const char *);
   ssize_t         (*readdir)(struct Process *, struct Inode *, void *, FillDirFunc, off_t);
   ssize_t         (*readlink)(struct Request *, struct Inode *, size_t);

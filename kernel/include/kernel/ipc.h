@@ -2,6 +2,7 @@
 #define __KERNEL_INCLUDE_KERNEL_IPC_CONNECTION_H__
 
 #include <sys/types.h>
+#include <sys/uio.h>
 
 #include <kernel/core/semaphore.h>
 #include <kernel/core/mailbox.h>
@@ -54,7 +55,8 @@ int             connection_ioctl(struct Connection *, int, int);
 int             connection_select(struct Connection *, struct timeval *);
 int             connection_sync(struct Connection *);
 int             connection_truncate(struct Connection *, off_t);
-intptr_t         connection_send(struct Connection *, void *, size_t, void *, size_t);
+intptr_t        connection_send(struct Connection *, void *, size_t, void *, size_t);
+intptr_t        connection_sendv(struct Connection *, struct iovec *, int, struct iovec *, int);
 
 struct IpcMessage {
   int type;
@@ -200,13 +202,15 @@ enum {
 };
 
 struct Request {
-  uintptr_t send_msg;
-  size_t    send_bytes;
-  size_t    send_nread;
+  struct iovec *send_iov;
+  int           send_iov_cnt;
+  int           send_idx;
+  size_t        send_pos;
 
-  uintptr_t recv_msg;
-  size_t    recv_bytes;
-  size_t    recv_nwrite;
+  struct iovec *recv_iov;
+  int           recv_iov_cnt;
+  int           recv_idx;
+  size_t        recv_pos;
 
   struct KSemaphore sem;
   struct Process *process;

@@ -402,7 +402,7 @@ tty_read(struct Request *req, dev_t dev, uintptr_t, size_t nbytes)
 }
 
 ssize_t
-tty_write(struct Request *req, dev_t dev, uintptr_t buf, size_t nbytes)
+tty_write(struct Request *req, dev_t dev, uintptr_t, size_t nbytes)
 {
   struct Tty *tty = tty_from_dev(req->process, dev);
   size_t i;
@@ -417,7 +417,7 @@ tty_write(struct Request *req, dev_t dev, uintptr_t buf, size_t nbytes)
     for (i = 0; i != nbytes; i++) {
       int c, r;
 
-      if ((r = vm_space_copy_in(req->process, &c, buf + i, 1)) < 0) {
+      if ((r = request_read(req, &c, 1)) < 0) {
         k_mutex_unlock(&tty->out.mutex);
         return r;
       }
@@ -449,10 +449,9 @@ tty_ioctl(struct Request *req, dev_t dev, int request, int arg)
   case TIOCSETAW:
     // TODO: drain
   case TIOCSETA:
-    return vm_copy_in(req->process->vm->pgtab,
-                      &tty->termios,
-                      arg,
-                      sizeof(struct termios));
+    return request_read(req,
+                        &tty->termios,
+                        sizeof(struct termios));
 
   case TIOCGPGRP:
     return tty_current->pgrp;
@@ -468,7 +467,7 @@ tty_ioctl(struct Request *req, dev_t dev, int request, int arg)
     return request_write(req, &ws, sizeof ws);
   case TIOCSWINSZ:
     // cprintf("set winsize\n");
-    if (vm_copy_in(req->process->vm->pgtab, &ws, arg, sizeof ws) < 0)
+    if (request_read(req, &ws, sizeof ws) < 0)
       return -EFAULT;
     // cprintf("ws_col = %d\n", ws.ws_col);
     // cprintf("ws_row = %d\n", ws.ws_row);
