@@ -152,7 +152,7 @@ sd_irq_task(int irq, void *arg)
   link = sd->queue.next;
   k_list_remove(link);
 
-  req = KLIST_CONTAINER(link, struct BufRequest, queue_link);
+  req = K_LIST_CONTAINER(link, struct BufRequest, queue_link);
 
   k_assert(req->buf->block_size % SD_BLOCKLEN == 0);
 
@@ -173,7 +173,7 @@ sd_irq_task(int irq, void *arg)
 
   // Begin processing the next buffer in the queue.
   if (!k_list_is_empty(&sd->queue)) {
-    next_req = KLIST_CONTAINER(sd->queue.next, struct BufRequest, queue_link);
+    next_req = K_LIST_CONTAINER(sd->queue.next, struct BufRequest, queue_link);
     sd_start_transfer(sd, next_req);
   }
 

@@ -8,8 +8,6 @@
 
 #include "core_private.h"
 
-// struct KSpinLock k_giant_lock = K_SPINLOCK_INITIALIZER("giant");
-
 /**
  * Initialize a spinlock.
  * 

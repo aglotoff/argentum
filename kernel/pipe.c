@@ -122,7 +122,7 @@ pipe_get_connection_endpoint(struct Connection *connection)
   HASH_FOREACH_ENTRY(pipe_hash.table, l, (uintptr_t) connection) {
     struct PipeEndpoint *endpoint;
     
-    endpoint = KLIST_CONTAINER(l, struct PipeEndpoint, hash_link);
+    endpoint = K_LIST_CONTAINER(l, struct PipeEndpoint, hash_link);
     if (endpoint->connection == connection) {
       k_spinlock_release(&pipe_hash.lock);
       return endpoint;
@@ -303,13 +303,13 @@ pipe_close(struct Request *req, struct IpcMessage *)
     pipe->write_open = 0;
     if (pipe->read_open) {
       //cprintf("[k] proc #%x broadcast %p\n", process_current()->pid, &pipe->read_cond);
-      k_condvar_broadcast(&pipe->read_cond);
+      k_condvar_notify_all(&pipe->read_cond);
     }
   } else {
     pipe->read_open = 0;
     if (pipe->write_open) {
       //cprintf("[k] proc #%x broadcast %p\n", process_current()->pid, &pipe->write_cond);
-      k_condvar_broadcast(&pipe->write_cond);
+      k_condvar_notify_all(&pipe->write_cond);
     }
   }
 
@@ -351,7 +351,7 @@ pipe_select(struct Connection *connection, struct timeval *timeout)
     }
 
     //cprintf("[k] proc #%x wait %p\n", process_current()->pid, &pipe->read_cond);
-    if ((r = k_condvar_timed_wait(&pipe->read_cond, &pipe->mutex, t)) < 0) {
+    if ((r = k_condvar_timed_wait(&pipe->read_cond, &pipe->mutex, t, 0)) < 0) {
       k_mutex_unlock(&pipe->mutex);
       return r;
     }
@@ -386,7 +386,7 @@ pipe_read(struct Request *req, struct IpcMessage *msg)
     int r;
 
     //cprintf("[k] proc #%x wait %p\n", req->process->pid, &pipe->read_cond);
-    if ((r = k_condvar_wait(&pipe->read_cond, &pipe->mutex)) < 0) {
+    if ((r = k_condvar_wait(&pipe->read_cond, &pipe->mutex, 0)) < 0) {
       //cprintf("[k] proc #%x wait err %p\n", req->process->pid, &pipe->read_cond);
       k_mutex_unlock(&pipe->mutex);
       request_reply(req, r);
@@ -409,7 +409,7 @@ pipe_read(struct Request *req, struct IpcMessage *msg)
     r = request_write(req, &pipe->buf[pipe->read_pos], nread);
     if (r < 0) {
       //cprintf("[k] proc #%x err broadcast %p\n", req->process->pid, &pipe->write_cond);
-      k_condvar_broadcast(&pipe->write_cond);
+      k_condvar_notify_all(&pipe->write_cond);
       k_mutex_unlock(&pipe->mutex);
 
       request_reply(req, r);
@@ -425,7 +425,7 @@ pipe_read(struct Request *req, struct IpcMessage *msg)
   }
 
   //cprintf("[k] proc #%x broadcast %p\n", req->process->pid, &pipe->write_cond);
-  k_condvar_broadcast(&pipe->write_cond);
+  k_condvar_notify_all(&pipe->write_cond);
   k_mutex_unlock(&pipe->mutex);
 
   request_reply(req, i);
@@ -454,7 +454,7 @@ pipe_write(struct Request *req, struct IpcMessage *msg)
 
     while (pipe->read_open && (pipe->size == pipe->max_size)) {
       //cprintf("[k] proc #%x wait %p\n", process_current()->pid, &pipe->write_cond);
-      if ((r = k_condvar_wait(&pipe->write_cond, &pipe->mutex)) < 0) {
+      if ((r = k_condvar_wait(&pipe->write_cond, &pipe->mutex, 0)) < 0) {
         //cprintf("[k] proc #%x wait err %p\n", process_current()->pid, &pipe->write_cond);
         k_mutex_unlock(&pipe->mutex);
         request_reply(req, r);
@@ -477,7 +477,7 @@ pipe_write(struct Request *req, struct IpcMessage *msg)
 
     if (pipe->size == 0) {
       //cprintf("[k] proc #%x broadcast %p\n", process_current()->pid, &pipe->read_cond);
-      k_condvar_broadcast(&pipe->read_cond);
+      k_condvar_notify_all(&pipe->read_cond);
     }
 
     i += nwrite;

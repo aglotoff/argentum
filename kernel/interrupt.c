@@ -110,7 +110,7 @@ interrupt_task_entry(void *arg)
   struct InterruptTask *isr = (struct InterruptTask *) arg;
 
   for (;;) {
-    if (k_semaphore_get(&isr->semaphore, K_SLEEP_UNINTERUPTIBLE) < 0)
+    if (k_semaphore_get(&isr->semaphore, K_SLEEP_UNWAKEABLE) < 0)
       k_panic("k_semaphore_get");
 
     isr->handler(isr->irq, isr->handler_arg);

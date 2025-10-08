@@ -5,6 +5,7 @@
 #include <kernel/core/mailbox.h>
 #include <kernel/core/semaphore.h>
 #include <kernel/core/task.h>
+#include <kernel/core/types.h>
 #include <kernel/time.h>
 #include <kernel/types.h>
 #include <lwip/sys.h>
@@ -86,7 +87,7 @@ sys_arch_sem_wait(sys_sem_t *sem, u32_t timeout_ms)
   unsigned long start_ticks, end_ticks;
 
   start_ticks = k_tick_get();
-  if (k_semaphore_timed_get(*sem, ms2ticks(timeout_ms), K_SLEEP_UNINTERUPTIBLE) < 0)
+  if (k_semaphore_timed_get(*sem, ms2ticks(timeout_ms), K_SLEEP_UNWAKEABLE) < 0)
     return SYS_ARCH_TIMEOUT; 
   end_ticks = k_tick_get();
   

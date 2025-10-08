@@ -1,14 +1,14 @@
 #include "core_private.h"
 
 void
-_k_timeout_init(struct KTimeout *timeout)
+_k_timeout_create(struct KTimeout *timeout)
 {
   k_list_null(&timeout->link);
   timeout->remain = 0;
 }
 
 void
-_k_timeout_fini(struct KTimeout *timeout)
+_k_timeout_destroy(struct KTimeout *timeout)
 {
   k_list_remove(&timeout->link);
 }
@@ -16,17 +16,16 @@ _k_timeout_fini(struct KTimeout *timeout)
 void
 _k_timeout_enqueue(struct KListLink *queue,
                    struct KTimeout *timeout,
-                   unsigned long delay)
+                   k_tick_t delay)
 {
   struct KListLink *next_link;
 
-  if (delay == 0)
-    k_panic("delay must be greater than 0");
+  k_assert(delay > 0);
 
   timeout->remain = delay;
 
-  KLIST_FOREACH(queue, next_link) {
-    struct KTimeout *next = KLIST_CONTAINER(next_link, struct KTimeout, link);
+  K_LIST_FOREACH(queue, next_link) {
+    struct KTimeout *next = K_LIST_CONTAINER(next_link, struct KTimeout, link);
 
     if (next->remain > timeout->remain) {
       next->remain -= timeout->remain;
@@ -49,7 +48,7 @@ _k_timeout_dequeue(struct KListLink *queue, struct KTimeout *timeout)
   k_list_remove(&timeout->link);
 
   if (next_link != queue) {
-    struct KTimeout *next = KLIST_CONTAINER(next_link, struct KTimeout, link);
+    struct KTimeout *next = K_LIST_CONTAINER(next_link, struct KTimeout, link);
     next->remain += timeout->remain;
   }
 }
@@ -65,7 +64,7 @@ _k_timeout_process_queue(struct KListLink *queue,
     return;
 
   link = queue->next;
-  timeout = KLIST_CONTAINER(link, struct KTimeout, link);
+  timeout = K_LIST_CONTAINER(link, struct KTimeout, link);
 
   k_assert(timeout->remain != 0);
 
@@ -80,6 +79,6 @@ _k_timeout_process_queue(struct KListLink *queue,
       break;
 
     link = queue->next;
-    timeout = KLIST_CONTAINER(link, struct KTimeout, link);
+    timeout = K_LIST_CONTAINER(link, struct KTimeout, link);
   }
 }

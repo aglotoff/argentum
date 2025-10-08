@@ -41,13 +41,13 @@ enum {
 static inline int
 buf_request_wait(struct BufRequest *req, struct KMutex *mutex)
 {
-  return k_condvar_wait(&req->_wait_cond, mutex);
+  return k_condvar_wait(&req->_wait_cond, mutex, 0);
 }
 
 static inline int
 buf_request_wakeup(struct BufRequest *req)
 {
-  return k_condvar_broadcast(&req->_wait_cond);
+  return k_condvar_notify_all(&req->_wait_cond);
 }
 
 #endif  // !__KERNEL_INCLUDE_KERNEL_FS_BUF_H__

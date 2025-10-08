@@ -95,7 +95,7 @@ k_mutex_try_lock(struct KMutex *mutex)
  * @param lock A pointer to the mutex to be acquired.
  */
 int
-_k_mutex_timed_lock(struct KMutex *mutex, unsigned long timeout)
+_k_mutex_timed_lock(struct KMutex *mutex, k_tick_t timeout)
 {
   struct KTask *my_task = k_task_current();
   int r;
@@ -123,7 +123,7 @@ _k_mutex_timed_lock(struct KMutex *mutex, unsigned long timeout)
  * @param lock A pointer to the mutex to be acquired.
  */
 int
-k_mutex_timed_lock(struct KMutex *mutex, unsigned long timeout)
+k_mutex_timed_lock(struct KMutex *mutex, k_tick_t timeout)
 {
   struct KTask *my_task = k_task_current();
   int r;
@@ -149,8 +149,8 @@ _k_mutex_get_highest_priority(struct KListLink *mutex_list)
   int max_priority;
 
   max_priority = K_TASK_MAX_PRIORITIES;
-  KLIST_FOREACH(mutex_list, link) {
-    struct KMutex *mutex = KLIST_CONTAINER(link, struct KMutex, link);
+  K_LIST_FOREACH(mutex_list, link) {
+    struct KMutex *mutex = K_LIST_CONTAINER(link, struct KMutex, link);
 
     if (mutex->priority < max_priority)
       max_priority = mutex->priority;
@@ -167,7 +167,7 @@ _k_mutex_recalc_priority(struct KMutex *mutex)
   } else {
     struct KTask *task;
 
-    task = KLIST_CONTAINER(mutex->queue.next, struct KTask, link);
+    task = K_LIST_CONTAINER(mutex->queue.next, struct KTask, link);
     mutex->priority = task->priority;
   }
 }

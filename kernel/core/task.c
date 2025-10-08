@@ -72,11 +72,11 @@ k_task_run(void)
 }
 
 void
-k_task_interrupt(struct KTask *task)
+k_task_wake(struct KTask *task)
 {
   _k_sched_lock();
 
-  if (!task->sleep_on_mutex && task->state != K_TASK_STATE_SLEEP_UNINTERRUPTIBLE) {
+  if (!task->sleep_on_mutex && task->state != K_TASK_STATE_SLEEP_UNWAKEABLE) {
     // TODO: if task is running, send an SGI
     _k_sched_resume(task, -EINTR);
   }
@@ -119,7 +119,7 @@ k_task_create(struct KTask *task,
   task->kstack         = stack;
   task->kstack_size    = stack_size;
 
-  _k_timeout_init(&task->timer);
+  _k_timeout_create(&task->timer);
 
   arch_task_init_stack(task, k_task_run);
 
@@ -137,7 +137,7 @@ k_task_exit(void)
   if (task == NULL)
     k_panic("no current task");
 
-  _k_timeout_fini(&task->timer);
+  _k_timeout_destroy(&task->timer);
 
   _k_sched_lock();
 

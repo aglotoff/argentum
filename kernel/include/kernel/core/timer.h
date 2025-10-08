@@ -5,11 +5,11 @@
 
 struct KTimer {
   struct KTimeout entry;
-  int                state;
-  void             (*callback)(void *);
-  void              *callback_arg;
-  unsigned long      delay;
-  unsigned long      period;
+  int state;
+  void (*callback)(void *);
+  void *callback_arg;
+  k_tick_t delay;
+  k_tick_t period;
 };
 
 enum {
@@ -19,11 +19,10 @@ enum {
   K_TIMER_STATE_RUNNING  = 3,
 };
 
-int  k_timer_create(struct KTimer *, void (*)(void *), void *, unsigned long,
-                    unsigned long, int);
-int  k_timer_destroy(struct KTimer *);
-int  k_timer_start(struct KTimer *);
-int  k_timer_stop(struct KTimer *);
+int k_timer_create(struct KTimer *, void (*)(void *), void *, k_tick_t, k_tick_t, int);
+int k_timer_destroy(struct KTimer *);
+int k_timer_start(struct KTimer *);
+int k_timer_stop(struct KTimer *);
 
 void k_timer_tick(void);
 

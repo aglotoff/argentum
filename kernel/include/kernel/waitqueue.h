@@ -21,7 +21,7 @@ struct KWaitQueue {
 /**
  * Initialize a static wait connection.
  */
-#define k_waitqueue_initIALIZER { .head = KLIST_INITIALIZER }
+#define k_waitqueue_initIALIZER { .head = K_LIST_INITIALIZER }
 
 void k_waitqueue_init(struct KWaitQueue *);
 int  k_waitqueue_sleep(struct KWaitQueue *, struct KSpinLock *);

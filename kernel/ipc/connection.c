@@ -237,7 +237,7 @@ connection_send(struct Connection *connection, void *smsg, size_t sbytes, void *
   //   cprintf("[k] proc #%x sent to %p\n", process_current()->pid, connection->endpoint);
   // }
 
-  if ((r = k_semaphore_timed_get(&req->sem, timeout, K_SLEEP_UNINTERUPTIBLE)) < 0) {
+  if ((r = k_semaphore_timed_get(&req->sem, timeout, K_SLEEP_UNWAKEABLE)) < 0) {
     k_panic("fail recv:\n");
     request_destroy(req);
     request_destroy(req);
@@ -295,7 +295,7 @@ connection_sendv(struct Connection *connection,
     return -ETIMEDOUT;
   }
 
-  if ((r = k_semaphore_timed_get(&req->sem, timeout, K_SLEEP_UNINTERUPTIBLE)) < 0) {
+  if ((r = k_semaphore_timed_get(&req->sem, timeout, K_SLEEP_UNWAKEABLE)) < 0) {
     k_panic("fail recv:\n");
     request_destroy(req);
     request_destroy(req);

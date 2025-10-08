@@ -181,7 +181,7 @@ page_alloc_block(unsigned order, int flags, int debug_tag)
     return NULL;
   }
 
-  page = KLIST_CONTAINER(page_free_list[o].link.next, struct Page, link);
+  page = K_LIST_CONTAINER(page_free_list[o].link.next, struct Page, link);
 
   page_k_list_remove(page, o);
   page_free_count -= 1U << order;

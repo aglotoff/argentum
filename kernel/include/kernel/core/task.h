@@ -10,16 +10,11 @@
 #include <arch/context.h>
 
 enum {
-  K_SLEEP_INTERRUPTIBLE  = (0 << 0),
-  K_SLEEP_UNINTERUPTIBLE = (1 << 0),
-};
-
-enum {
   K_TASK_STATE_NONE = 0,
   K_TASK_STATE_READY,
   K_TASK_STATE_RUNNING,
   K_TASK_STATE_SLEEP,
-  K_TASK_STATE_SLEEP_UNINTERRUPTIBLE,
+  K_TASK_STATE_SLEEP_UNWAKEABLE,
   K_TASK_STATE_SUSPENDED,
   K_TASK_STATE_DESTROYED,
 };
@@ -84,7 +79,7 @@ void          k_task_exit(void);
 int           k_task_resume(struct KTask *);
 void          k_task_suspend(void);
 void          k_task_yield(void);
-void          k_task_interrupt(struct KTask *);
+void          k_task_wake(struct KTask *);
 
 void          k_sched_init(void);
 void          k_sched_start(void);

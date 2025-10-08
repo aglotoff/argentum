@@ -33,7 +33,7 @@ get_connection_file(struct Connection *connection)
   HASH_FOREACH_ENTRY(file_hash.table, l, (uintptr_t) connection) {
     struct File *file;
     
-    file = KLIST_CONTAINER(l, struct File, hash_link);
+    file = K_LIST_CONTAINER(l, struct File, hash_link);
     if (file->connection == connection) {
       k_spinlock_release(&file_hash.lock);
       return file;

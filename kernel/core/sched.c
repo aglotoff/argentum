@@ -12,7 +12,7 @@
 
 void k_arch_switch(struct Context **, struct Context *);
 
-KLIST_DECLARE(_k_sched_timeouts);
+K_LIST_DECLARE(_k_sched_timeouts);
 
 static struct KListLink sched_queue[K_TASK_MAX_PRIORITIES];
 struct KSpinLock _k_sched_spinlock = K_SPINLOCK_INITIALIZER("sched");
@@ -57,7 +57,7 @@ k_sched_dequeue(void)
       link = sched_queue[i].next;
       k_list_remove(link);
 
-      return KLIST_CONTAINER(link, struct KTask, link);
+      return K_LIST_CONTAINER(link, struct KTask, link);
     }
   }
 
@@ -72,16 +72,16 @@ k_sched_switch(struct KTask *task)
   task->cpu = my_cpu;
   my_cpu->task = task;
 
-#ifdef K_ON_TASK_BEFORE_SWITCH
-  K_ON_TASK_BEFORE_SWITCH(task);
+#ifdef K_ON_SCHED_BEFORE_SWITCH
+  K_ON_SCHED_BEFORE_SWITCH(task);
 #endif
 
   task->state = K_TASK_STATE_RUNNING;
 
   k_arch_switch(&my_cpu->sched_context, task->context);
 
-#ifdef K_ON_TASK_AFTER_SWITCH
-  K_ON_TASK_AFTER_SWITCH(task);
+#ifdef K_ON_SCHED_AFTER_SWITCH
+  K_ON_SCHED_AFTER_SWITCH(task);
 #endif
 
   my_cpu->task = NULL;
@@ -95,8 +95,8 @@ k_sched_idle(void)
 
   k_irq_enable();
 
-#ifdef K_ON_TASK_IDLE
-  K_ON_TASK_IDLE();
+#ifdef K_ON_SCHED_IDLE
+  K_ON_SCHED_IDLE();
 #endif
 
   arch_task_idle();
@@ -145,7 +145,7 @@ _k_sched_add(struct KListLink *queue, struct KTask *task)
   struct KTask *other_task;
 
   for (l = queue->next; l != queue; l = l->next) {
-    other_task = KLIST_CONTAINER(l, struct KTask, link);
+    other_task = K_LIST_CONTAINER(l, struct KTask, link);
     if (_k_sched_priority_cmp(task, other_task) > 0)
       break;
   }
@@ -161,7 +161,7 @@ _k_sched_add(struct KListLink *queue, struct KTask *task)
  * @param lock  An optional spinlock to release while going to sleep.
  */
 int
-_k_sched_sleep(struct KListLink *queue, int state, unsigned long timeout,
+_k_sched_sleep(struct KListLink *queue, int state, k_tick_t timeout,
                struct KSpinLock *lock)
 {
   struct KCpu *my_cpu;
@@ -226,7 +226,7 @@ _k_sched_raise_priority(struct KTask *task, int priority)
     _k_sched_enqueue(task);
     break;
   case K_TASK_STATE_SLEEP:
-  case K_TASK_STATE_SLEEP_UNINTERRUPTIBLE:
+  case K_TASK_STATE_SLEEP_UNWAKEABLE:
     if (task->sleep_on_mutex != NULL) {
       // Re-insert to update priority
       k_list_remove(&task->link);
@@ -249,7 +249,7 @@ _k_sched_resume(struct KTask *task, int result)
 
   switch (task->state) {
   case K_TASK_STATE_SLEEP:
-  case K_TASK_STATE_SLEEP_UNINTERRUPTIBLE:
+  case K_TASK_STATE_SLEEP_UNWAKEABLE:
     // FIXME: this may lead to decreasing mutex priority
     k_list_remove(&task->link);
     break;
@@ -276,7 +276,7 @@ _k_sched_wakeup_all_locked(struct KListLink *queue, int result)
 
   while (!k_list_is_empty(queue)) {
     struct KListLink *link = queue->next;
-    struct KTask *task = KLIST_CONTAINER(link, struct KTask, link);
+    struct KTask *task = K_LIST_CONTAINER(link, struct KTask, link);
 
     _k_sched_resume(task, result);
   }
@@ -295,7 +295,7 @@ _k_sched_wakeup_one_locked(struct KListLink *queue, int result)
   if (k_list_is_empty(queue))
     return NULL;
 
-  task = KLIST_CONTAINER(queue->next, struct KTask, link);
+  task = K_LIST_CONTAINER(queue->next, struct KTask, link);
 
   _k_sched_resume(task, result);
 
@@ -331,7 +331,7 @@ _k_sched_may_yield(struct KTask *task)
 void
 k_task_timeout_callback(struct KTimeout *entry)
 {
-  struct KTask *task = KLIST_CONTAINER(entry, struct KTask, timer);
+  struct KTask *task = K_LIST_CONTAINER(entry, struct KTask, timer);
 
   switch (task->state) {
   case K_TASK_STATE_SLEEP:

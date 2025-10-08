@@ -2,7 +2,7 @@
 #define __KERNEL_INCLUDE_KERNEL_MUTEX_H__
 
 #include <kernel/core/config.h>
-
+#include <kernel/core/types.h>
 #include <kernel/core/list.h>
 #include <kernel/core/spinlock.h>
 
@@ -35,7 +35,7 @@ struct KMutex {
 void           k_mutex_init(struct KMutex *, const char *);
 void           k_mutex_fini(struct KMutex *);
 int            k_mutex_try_lock(struct KMutex *);
-int            k_mutex_timed_lock(struct KMutex *, unsigned long);
+int            k_mutex_timed_lock(struct KMutex *, k_tick_t);
 int            k_mutex_unlock(struct KMutex *);
 int            k_mutex_holding(struct KMutex *);
 

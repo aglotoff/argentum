@@ -6,25 +6,27 @@
 
 #include "core_private.h"
 
-static void k_timer_enqueue(struct KTimer *, unsigned long);
+#define K_TIMER_TYPE  0x54494D52  // {'T','I','M','R'}
+
+static void k_timer_enqueue(struct KTimer *, k_tick_t);
 static void k_timer_dequeue(struct KTimer *);
 
-static KLIST_DECLARE(k_timer_queue);
+static K_LIST_DECLARE(k_timer_queue);
 static struct KSpinLock k_timer_lock = K_SPINLOCK_INITIALIZER("k_timer");
 static struct KTimer *k_timer_current;
 
 int
 k_timer_create(struct KTimer *timer,
-             void (*callback)(void *),
-             void *callback_arg,
-             unsigned long delay,
-             unsigned long period,
-             int autostart)
+               void (*callback)(void *),
+               void *callback_arg,
+               k_tick_t delay,
+               k_tick_t period,
+               int autostart)
 {
   if (timer == NULL)
     k_panic("timer is NULL");
 
-  _k_timeout_init(&timer->entry);
+  _k_timeout_create(&timer->entry);
   
   timer->callback = callback;
   timer->callback_arg = callback_arg;
@@ -43,7 +45,7 @@ k_timer_create(struct KTimer *timer,
 }
 
 void
-_k_timer_start(struct KTimer *timer, unsigned long remain)
+_k_timer_start(struct KTimer *timer, k_tick_t remain)
 {
   k_spinlock_acquire(&k_timer_lock);
   k_timer_enqueue(timer, remain);
@@ -132,7 +134,7 @@ _k_timer_tick(void)
 }
 
 static void
-k_timer_enqueue(struct KTimer *timer, unsigned long delay)
+k_timer_enqueue(struct KTimer *timer, k_tick_t delay)
 {
   k_assert(k_spinlock_holding(&k_timer_lock));
   _k_timeout_enqueue(&k_timer_queue, &timer->entry, delay);

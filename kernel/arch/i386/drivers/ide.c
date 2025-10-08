@@ -293,7 +293,7 @@ ide_irq_task(int irq, void *arg)
   link = ide_queue.next;
   
 
-  req = KLIST_CONTAINER(link, struct BufRequest, queue_link);
+  req = K_LIST_CONTAINER(link, struct BufRequest, queue_link);
 
   k_assert(req->buf->block_size % IDE_BLOCK_LEN == 0);
 
@@ -318,7 +318,7 @@ ide_irq_task(int irq, void *arg)
   arch_interrupt_unmask(irq);
 
   if (!k_list_is_empty(&ide_queue)) {
-    next_req = KLIST_CONTAINER(ide_queue.next, struct BufRequest, queue_link);
+    next_req = K_LIST_CONTAINER(ide_queue.next, struct BufRequest, queue_link);
     ide_start_transfer(next_req);
   }
 

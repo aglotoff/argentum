@@ -13,7 +13,7 @@ void arch_on_thread_before_switch(struct Thread *);
 void arch_on_thread_after_switch(struct Thread *);
 
 void
-on_task_before_switch(struct KTask *task)
+on_sched_before_switch(struct KTask *task)
 {
   if (task->ext != NULL) {
     struct Thread *thread = (struct Thread *) task->ext;
@@ -27,7 +27,7 @@ on_task_before_switch(struct KTask *task)
 }
 
 void
-on_task_after_switch(struct KTask *task)
+on_sched_after_switch(struct KTask *task)
 {
   if (task->ext != NULL) {
     arch_on_thread_after_switch((struct Thread *) task->ext);
@@ -35,7 +35,7 @@ on_task_after_switch(struct KTask *task)
 }
 
 void
-on_task_idle(void)
+on_sched_idle(void)
 {
   thread_idle();
 }

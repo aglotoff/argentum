@@ -14,7 +14,7 @@
   for (lp = hash; lp < &hash[ARRAY_SIZE(hash)]; lp++)
 
 #define HASH_FOREACH_ENTRY(hash, lp, key) \
-  KLIST_FOREACH(&hash[key % ARRAY_SIZE(hash)], lp)
+  K_LIST_FOREACH(&hash[key % ARRAY_SIZE(hash)], lp)
 
 #define HASH_INIT(hash)     \
   do {                      \

@@ -286,7 +286,7 @@ tty_process_input(struct Tty *tty, char *buf)
   }
 
   if ((status & (IN_EOF | IN_EOL)) || !(tty->termios.c_lflag & ICANON))
-    k_condvar_broadcast(&tty->in.cond);
+    k_condvar_notify_all(&tty->in.cond);
 
   k_mutex_unlock(&tty->in.mutex);
 }
@@ -359,7 +359,7 @@ tty_read(struct Request *req, dev_t dev, size_t nbytes)
 
     // Wait for input
     while (tty->in.size == 0) {
-      if ((r = k_condvar_wait(&tty->in.cond, &tty->in.mutex)) < 0) {
+      if ((r = k_condvar_wait(&tty->in.cond, &tty->in.mutex, 0)) < 0) {
         k_mutex_unlock(&tty->in.mutex);
         return r;
       }
@@ -515,7 +515,7 @@ tty_select(struct Request *req, dev_t dev, struct timeval *timeout)
     }
 
     // FIXME: use timer to wakeup process
-    if ((r = k_condvar_timed_wait(&tty->in.cond, &tty->in.mutex, t)) < 0) {
+    if ((r = k_condvar_timed_wait(&tty->in.cond, &tty->in.mutex, t, 0)) < 0) {
       k_mutex_unlock(&tty->in.mutex);
       return r;
     }
