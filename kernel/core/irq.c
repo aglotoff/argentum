@@ -6,19 +6,30 @@
 #include "core_private.h"
 
 /**
- * Save the current CPU interrupt state and disable interrupts.
+ * @brief Save and disable the current interrupt state.
+ *
+ * This function captures the CPU's current interrupt enable state and, if this
+ * is the first nested call, disables interrupts globally. Nested calls simply
+ * increment a per-CPU reference counter, allowing multiple critical sections
+ * to coexist safely.
+ *
+ * @note Must be paired with a corresponding call to `k_irq_state_restore()`.
  */
 void
 k_irq_state_save(void)
 {
-  int status = k_arch_irq_state_save();
+  int flags = k_arch_irq_state_save();
 
   if (_k_cpu()->irq_save_count++ == 0)
-    _k_cpu()->irq_flags = status;
+    _k_cpu()->irq_flags = flags;
 }
 
 /**
- * Restore the interrupt state saved by a preceding k_irq_state_save() call.
+ * @brief Restore the CPU interrupt state after a critical section.
+ *
+ * Decrements the per-CPU interrupt disable nesting counter. When the counter
+ * reaches zero, the saved interrupt state is restored, potentially re-enabling
+ * interrupts if they were previously active.
  */
 void
 k_irq_state_restore(void)
@@ -38,7 +49,12 @@ k_irq_state_restore(void)
 }
 
 /**
- * Notify the kernel that an IRQ handler has started.
+ * @brief Mark the beginning of an interrupt handler.
+ *
+ * This function is called at the entry point of an interrupt service routine
+ * (ISR). Increments the per-CPU internal lock counter. This ensures that
+ * nested interrupts and re-entrant handler logic remain consistent with the
+ * kernel’s locking model.
  */
 void
 k_irq_handler_begin(void)
@@ -49,7 +65,13 @@ k_irq_handler_begin(void)
 }
 
 /**
- * Notify the kernel that an IRQ handler has finished.
+ * @brief Mark the end of an interrupt handler.
+ *
+ * Called just before exiting an ISR. This function decrements the CPU’s
+ * internal lock counter and checks if a reschedule is requested.
+ *
+ * @note Must be called once for every `k_irq_handler_begin()` invocation.
+ * @warning This function may trigger a context switch before returning.
  */
 void
 k_irq_handler_end(void)
@@ -65,14 +87,11 @@ k_irq_handler_end(void)
   k_assert(count >= 0);
 
   if (count == 0) {
-    struct KTask *task = cpu->task;
+    struct KTask *current = cpu->task;
 
-    // Before resuming the current task, check whether it must give up the CPU
-    // or exit.
-    if ((task != NULL) && (task->flags & K_TASK_FLAG_RESCHEDULE)) {
-      task->flags &= ~K_TASK_FLAG_RESCHEDULE;
-
-      _k_sched_enqueue(task);
+    if ((current != K_NULL) && (current->flags & K_TASK_FLAG_RESCHEDULE)) {
+      current->flags &= ~K_TASK_FLAG_RESCHEDULE;
+      _k_sched_enqueue(current);
       _k_sched_yield_locked();
     }
   }

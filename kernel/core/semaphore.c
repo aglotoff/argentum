@@ -46,7 +46,7 @@ k_semaphore_create(struct KSemaphore *sem, int initial_count)
 void
 k_semaphore_destroy(struct KSemaphore *sem)
 {
-  k_assert(sem != NULL);
+  k_assert(sem != K_NULL);
   k_assert(sem->type == K_SEMAPHORE_TYPE);
 
   k_spinlock_acquire(&sem->lock);
@@ -54,6 +54,8 @@ k_semaphore_destroy(struct KSemaphore *sem)
   k_spinlock_release(&sem->lock);
 
   sem->type = 0;
+
+  // TODO: check reschedule
 }
 
 /**
@@ -72,7 +74,7 @@ k_semaphore_try_get(struct KSemaphore *sem)
 {
   int r;
 
-  k_assert(sem != NULL);
+  k_assert(sem != K_NULL);
   k_assert(sem->type == K_SEMAPHORE_TYPE);
 
   k_spinlock_acquire(&sem->lock);
@@ -108,7 +110,7 @@ k_semaphore_timed_get(struct KSemaphore *sem,
 {
   int r;
 
-  k_assert(sem != NULL);
+  k_assert(sem != K_NULL);
   k_assert(sem->type == K_SEMAPHORE_TYPE);
 
   k_spinlock_acquire(&sem->lock);
@@ -158,7 +160,7 @@ k_semaphore_try_get_locked(struct KSemaphore *sem)
 int
 k_semaphore_put(struct KSemaphore *sem)
 {
-  k_assert(sem != NULL);
+  k_assert(sem != K_NULL);
   k_assert(sem->type == K_SEMAPHORE_TYPE);
   
   k_spinlock_acquire(&sem->lock);
@@ -169,6 +171,8 @@ k_semaphore_put(struct KSemaphore *sem)
   _k_sched_wakeup_one(&sem->queue, 0);
 
   k_spinlock_release(&sem->lock);
+
+  // TODO: check reschedule
 
   return 0;
 }

@@ -84,7 +84,7 @@ signal_reset(struct Process *process)
   }
 
   while (!k_list_is_empty(&process->thread->signal_queue)) {
-    struct Signal *signal = K_LIST_CONTAINER(process->thread->signal_queue.next, struct Signal, link);
+    struct Signal *signal = K_CONTAINER_OF(process->thread->signal_queue.next, struct Signal, link);
 
     k_list_remove(&signal->link);
     signal_free(signal);
@@ -358,7 +358,7 @@ signal_generate(pid_t pid, int signo, int code)
   process_lock();
 
   K_LIST_FOREACH(&__process_list, l) {
-    struct Process *process = K_LIST_CONTAINER(l, struct Process, link);
+    struct Process *process = K_CONTAINER_OF(l, struct Process, link);
 
     if (!process_match_pid(process, pid))
       continue;
@@ -478,7 +478,7 @@ signal_dequeue(struct Process *process)
   struct KListLink *link;
 
   K_LIST_FOREACH(&process->thread->signal_queue, link) {
-    struct Signal *signal = K_LIST_CONTAINER(link, struct Signal, link);
+    struct Signal *signal = K_CONTAINER_OF(link, struct Signal, link);
     int signo = signal->info.si_signo;
 
     // Blocked signals remain pending until either unblocked or accepted

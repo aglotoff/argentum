@@ -1,11 +1,3 @@
-/**
- * @file config.h
- * @brief Core kernel configuration parameters and system hooks.
- *
- * This header defines global configuration constants for system-level
- * customization.
- */
-
 #ifndef __INCLUDE_KERNEL_CORE_CONFIG_H__
 #define __INCLUDE_KERNEL_CORE_CONFIG_H__
 
@@ -17,6 +9,31 @@
 #include <string.h>         // memmove
 
 #include <kernel/console.h> // _panic, _warn
+
+/* -------------------------------------------------------------------------- */
+/*                          Core Type and Constant Aliases                    */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * @brief Kernel null pointer constant.
+ *
+ * Alias for the standard C `NULL` macro to maintain naming consistency
+ * with other kernel-specific symbols.
+ */
+#define K_NULL      NULL
+
+/**
+ * @brief Kernel type alias for object sizes.
+ */
+#define k_size_t    size_t
+
+/**
+ * @brief Kernel wrapper for the standard `offsetof()` macro.
+ *
+ * Used to compute the byte offset of a structure member from the
+ * beginning of its containing type.
+ */
+#define k_offsetof  offsetof
 
 /**
  * @brief Maximum number of logical CPUs supported by the kernel.
@@ -30,6 +47,20 @@
  * @brief Maximum number of distinct task priority levels.
  */
 #define K_TASK_MAX_PRIORITIES  (2 * NZERO)
+
+#ifdef NDEBUG
+  /**
+   * @brief Kernel alias for the standard `NDEBUG` macro.
+   *
+   * This macro mirrors the value of the C standard library’s `NDEBUG` symbol,
+   * which controls whether assertions are enabled or disabled.
+   *
+   * When defined, kernel assertions such as `k_assert()` will expand
+   * to no-ops. When undefined, assertions remain active and runtime checks are
+   * performed.
+   */
+  #define K_NDEBUG
+#endif
 
 /* -------------------------------------------------------------------------- */
 /*                      Kernel-level error code aliases                       */

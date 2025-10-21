@@ -1,6 +1,8 @@
 #ifndef __INCLUDE_KERNEL_CORE_TYPES_H__
 #define __INCLUDE_KERNEL_CORE_TYPES_H__
 
+#include <kernel/core/list.h>
+
 /**
  * @brief Kernel tick type.
  *
@@ -31,5 +33,24 @@ enum {
    */
   K_SLEEP_UNWAKEABLE = (1 << 0),
 };
+
+struct KTimeoutEntry {
+  struct KListLink link;
+  k_tick_t remain;
+};
+
+/**
+ * @brief Obtain a pointer to the containing structure from a pointer.
+ *
+ * Converts a field pointer back to the parent structure that contains it.
+ *
+ * @param p Pointer to the structure member.
+ * @param type Type of the parent structure.
+ * @param member Name of the structure field within the structure.
+ *
+ * @return Pointer to the parent structure.
+ */
+#define K_CONTAINER_OF(p, type, member) \
+  ((type *) ((k_size_t) (p) - k_offsetof(type, member)))
 
 #endif  // !__INCLUDE_KERNEL_CORE_TYPES_H__

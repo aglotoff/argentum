@@ -16,7 +16,7 @@ k_mutex_init(struct KMutex *mutex, const char *name)
   k_list_init(&mutex->queue);
   k_list_null(&mutex->link);
   mutex->type = K_MUTEX_TYPE;
-  mutex->owner = NULL;
+  mutex->owner = K_NULL;
   mutex->name = name;
   mutex->priority = K_TASK_MAX_PRIORITIES;
   mutex->flags = 0;
@@ -25,12 +25,12 @@ k_mutex_init(struct KMutex *mutex, const char *name)
 void
 k_mutex_fini(struct KMutex *mutex)
 {
-  k_assert(mutex != NULL);
+  k_assert(mutex != K_NULL);
   k_assert(mutex->type == K_MUTEX_TYPE);
 
   _k_sched_lock();
 
-  k_assert(mutex->owner == NULL);
+  k_assert(mutex->owner == K_NULL);
 
   _k_sched_wakeup_all_locked(&mutex->queue, K_ERR_INVAL);
 
@@ -40,7 +40,7 @@ k_mutex_fini(struct KMutex *mutex)
 void
 _k_mutex_may_raise_priority(struct KMutex *mutex, int priority)
 {
-  k_assert(mutex->owner != NULL);
+  k_assert(mutex->owner != K_NULL);
 
   if (mutex->priority > priority) {
     mutex->priority = priority;
@@ -60,7 +60,7 @@ k_mutex_try_lock_locked(struct KMutex *mutex)
 
   // TODO: assert holding sched
 
-  if (mutex->owner != NULL)
+  if (mutex->owner != K_NULL)
     return (mutex->owner == current) ? K_ERR_DEADLK : K_ERR_AGAIN;
   
   // The highest-priority task always locks the mutex first
@@ -77,10 +77,10 @@ k_mutex_try_lock(struct KMutex *mutex)
 {
   int r;
 
-  k_assert(mutex != NULL);
+  k_assert(mutex != K_NULL);
   k_assert(mutex->type == K_MUTEX_TYPE);
 
-  k_assert(k_task_current() != NULL);
+  k_assert(k_task_current() != K_NULL);
 
   _k_sched_lock();
   r = k_mutex_try_lock_locked(mutex);
@@ -107,8 +107,8 @@ _k_mutex_timed_lock(struct KMutex *mutex, k_tick_t timeout)
     _k_mutex_may_raise_priority(mutex, my_task->priority);
 
     my_task->sleep_on_mutex = mutex;
-    r = _k_sched_sleep(&mutex->queue, K_TASK_STATE_SLEEP, timeout, NULL);
-    my_task->sleep_on_mutex = NULL;
+    r = _k_sched_sleep(&mutex->queue, K_TASK_STATE_SLEEP, timeout, K_NULL);
+    my_task->sleep_on_mutex = K_NULL;
 
     if (r < 0)
       break;
@@ -128,9 +128,9 @@ k_mutex_timed_lock(struct KMutex *mutex, k_tick_t timeout)
   struct KTask *my_task = k_task_current();
   int r;
 
-  k_assert(my_task != NULL);
+  k_assert(my_task != K_NULL);
 
-  k_assert(mutex != NULL);
+  k_assert(mutex != K_NULL);
   k_assert(mutex->type == K_MUTEX_TYPE);
 
   _k_sched_lock();
@@ -150,7 +150,7 @@ _k_mutex_get_highest_priority(struct KListLink *mutex_list)
 
   max_priority = K_TASK_MAX_PRIORITIES;
   K_LIST_FOREACH(mutex_list, link) {
-    struct KMutex *mutex = K_LIST_CONTAINER(link, struct KMutex, link);
+    struct KMutex *mutex = K_CONTAINER_OF(link, struct KMutex, link);
 
     if (mutex->priority < max_priority)
       max_priority = mutex->priority;
@@ -167,7 +167,7 @@ _k_mutex_recalc_priority(struct KMutex *mutex)
   } else {
     struct KTask *task;
 
-    task = K_LIST_CONTAINER(mutex->queue.next, struct KTask, link);
+    task = K_CONTAINER_OF(mutex->queue.next, struct KTask, link);
     mutex->priority = task->priority;
   }
 }
@@ -176,7 +176,7 @@ void
 _k_mutex_unlock(struct KMutex *mutex)
 {
   k_list_remove(&mutex->link);
-  mutex->owner = NULL;
+  mutex->owner = K_NULL;
   
   _k_sched_wakeup_one_locked(&mutex->queue, 0);
 
@@ -214,12 +214,12 @@ k_mutex_holding(struct KMutex *mutex)
 {
   struct KTask *owner;
 
-  k_assert(mutex != NULL);
+  k_assert(mutex != K_NULL);
   k_assert(mutex->type == K_MUTEX_TYPE);
 
   _k_sched_lock();
   owner = mutex->owner;
   _k_sched_unlock();
 
-  return (owner != NULL) && (owner == k_task_current());
+  return (owner != K_NULL) && (owner == k_task_current());
 }

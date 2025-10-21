@@ -510,7 +510,7 @@ fs_path_node_lookup_cached(struct PathNode *parent, const char *name)
   k_spinlock_acquire(&fs_path_lock);
 
   K_LIST_FOREACH(&parent->children, l) {
-    struct PathNode *p = K_LIST_CONTAINER(l, struct PathNode, siblings);
+    struct PathNode *p = K_CONTAINER_OF(l, struct PathNode, siblings);
     
     if (strcmp(p->name, name) == 0) {
       p->ref_count++;

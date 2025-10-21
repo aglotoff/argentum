@@ -51,7 +51,7 @@ struct KTask {
 
   /** Bottom of the kernel-mode stack */
   void              *kstack;
-  size_t             kstack_size;
+  k_size_t           kstack_size;
   /** Saved kernel context */
   struct Context    *context;
 
@@ -61,7 +61,7 @@ struct KTask {
   void             *arg;
 
   /** Timer for timeouts */
-  struct KTimeout timer;
+  struct KTimeoutEntry timer;
   /** Value that indicated sleep result */
   int               sleep_result;
   int               err;
@@ -74,7 +74,7 @@ void          arch_task_init_stack(struct KTask *, void (*)(void));
 void          arch_task_idle(void);
 
 struct KTask *k_task_current(void);
-int           k_task_create(struct KTask *, void *, void (*)(void *), void *, void *, size_t, int);
+int           k_task_create(struct KTask *, void *, void (*)(void *), void *, void *, k_size_t, int);
 void          k_task_exit(void);
 int           k_task_resume(struct KTask *);
 void          k_task_suspend(void);

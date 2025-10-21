@@ -160,9 +160,9 @@ process_alloc(void)
   process->times.tms_cutime = 0;
   process->times.tms_cstime = 0;
 
-  k_timer_create(&process->itimers[ITIMER_PROF].timer, process_itimer, (void *) process->pid, 0, 0, 0);
-  k_timer_create(&process->itimers[ITIMER_REAL].timer, process_itimer, (void *) process->pid, 0, 0, 0);
-  k_timer_create(&process->itimers[ITIMER_VIRTUAL].timer, process_itimer, (void *) process->pid, 0, 0, 0);
+  k_timer_create(&process->itimers[ITIMER_PROF].timer, process_itimer, (void *) process->pid, 0, 0);
+  k_timer_create(&process->itimers[ITIMER_REAL].timer, process_itimer, (void *) process->pid, 0, 0);
+  k_timer_create(&process->itimers[ITIMER_VIRTUAL].timer, process_itimer, (void *) process->pid, 0, 0);
 
   k_spinlock_acquire(&pid_hash.lock);
 
@@ -299,7 +299,7 @@ pid_lookup(pid_t pid)
   k_spinlock_acquire(&pid_hash.lock);
 
   HASH_FOREACH_ENTRY(pid_hash.table, l, pid) {
-    proc = K_LIST_CONTAINER(l, struct Process, pid_link);
+    proc = K_CONTAINER_OF(l, struct Process, pid_link);
     if (proc->pid == pid) {
       k_spinlock_release(&pid_hash.lock);
       return proc;
@@ -353,7 +353,7 @@ process_destroy(int status)
     l = current->children.next;
     k_list_remove(l);
 
-    child = K_LIST_CONTAINER(l, struct Process, sibling_link);
+    child = K_CONTAINER_OF(l, struct Process, sibling_link);
     child->parent = init_process;
     k_list_add_back(&init_process->children, l);
 
@@ -471,7 +471,7 @@ process_wait(pid_t pid, int *stat_loc, int options)
     K_LIST_FOREACH(&current->children, l) {
       struct Process *process;
 
-      process = K_LIST_CONTAINER(l, struct Process, sibling_link);
+      process = K_CONTAINER_OF(l, struct Process, sibling_link);
 
       if (!process_match_pid(process, pid))
         continue;
@@ -686,8 +686,8 @@ process_set_itimer(int which, struct itimerval *value, struct itimerval *ovalue)
   if (value->it_value.tv_sec != 0 || value->it_value.tv_usec != 0) {
     k_timer_create(&process->itimers[which].timer,
       process_itimer, (void *) process->pid,
-      timeval2ticks(&value->it_value), timeval2ticks(&value->it_interval),
-      1);
+      timeval2ticks(&value->it_value), timeval2ticks(&value->it_interval));
+    k_timer_start(&process->itimers[which].timer);
   }
 
   if (ovalue != NULL)
@@ -733,7 +733,7 @@ thread_idle(void)
   while (!k_list_is_empty(&thread_destroy_list)) {
     struct KTask *task;
 
-    task = K_LIST_CONTAINER(thread_destroy_list.next, struct KTask, link);
+    task = K_CONTAINER_OF(thread_destroy_list.next, struct KTask, link);
 
     k_list_remove(&task->link);
 

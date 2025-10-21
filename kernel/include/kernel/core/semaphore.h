@@ -1,5 +1,5 @@
-#ifndef __KERNEL_INCLUDE_KERNEL_SEMAPHORE_H__
-#define __KERNEL_INCLUDE_KERNEL_SEMAPHORE_H__
+#ifndef __INCLUDE_KERNEL_CORE_SEMAPHORE_H__
+#define __INCLUDE_KERNEL_CORE_SEMAPHORE_H__
 
 #include <kernel/core/config.h>
 #include <kernel/core/list.h>
@@ -50,4 +50,4 @@ k_semaphore_get(struct KSemaphore *semaphore, int options)
   return k_semaphore_timed_get(semaphore, 0, options);
 }
 
-#endif  // !__KERNEL_INCLUDE_KERNEL_SEMAPHORE_H__
+#endif  // !__INCLUDE_KERNEL_CORE_SEMAPHORE_H__

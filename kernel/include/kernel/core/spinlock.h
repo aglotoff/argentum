@@ -35,7 +35,7 @@ struct KSpinLock {
  */
 #define K_SPINLOCK_INITIALIZER(spin_name) { \
   .locked = 0,                              \
-  .cpu    = NULL,                           \
+  .cpu    = K_NULL,                         \
   .name   = (spin_name),                    \
   .pcs    = { 0 }                           \
 }

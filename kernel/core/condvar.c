@@ -41,7 +41,7 @@ k_condvar_create(struct KCondVar *cond)
 void
 k_condvar_destroy(struct KCondVar *cond)
 {
-  k_assert(cond != NULL);
+  k_assert(cond != K_NULL);
   k_assert(cond->type == K_CONDVAR_TYPE);
 
   _k_sched_lock();
@@ -49,6 +49,8 @@ k_condvar_destroy(struct KCondVar *cond)
   _k_sched_unlock();
 
   cond->type = 0;
+
+  // TODO: check reschedule
 }
 
 /**
@@ -83,7 +85,7 @@ k_condvar_timed_wait(struct KCondVar *cond,
 {
   int r;
 
-  k_assert(cond != NULL);
+  k_assert(cond != K_NULL);
   k_assert(cond->type == K_CONDVAR_TYPE);
 
   k_assert(k_mutex_holding(mutex));
@@ -97,7 +99,7 @@ k_condvar_timed_wait(struct KCondVar *cond,
                       ? K_TASK_STATE_SLEEP_UNWAKEABLE
                       : K_TASK_STATE_SLEEP,
                      timeout,
-                     NULL);
+                     K_NULL);
 
   _k_mutex_timed_lock(mutex, 0);
 
@@ -121,12 +123,14 @@ k_condvar_timed_wait(struct KCondVar *cond,
 int
 k_condvar_notify_one(struct KCondVar *cond)
 {
-  k_assert(cond != NULL);
+  k_assert(cond != K_NULL);
   k_assert(cond->type == K_CONDVAR_TYPE);
 
   _k_sched_lock();
   _k_sched_wakeup_one_locked(&cond->queue, 0);
   _k_sched_unlock();
+
+  // TODO: check reschedule
 
   return 0;
 }
@@ -147,12 +151,14 @@ k_condvar_notify_one(struct KCondVar *cond)
 int
 k_condvar_notify_all(struct KCondVar *cond)
 {
-  k_assert(cond != NULL);
+  k_assert(cond != K_NULL);
   k_assert(cond->type == K_CONDVAR_TYPE);
 
   _k_sched_lock();
   _k_sched_wakeup_all_locked(&cond->queue, 0);
   _k_sched_unlock();
+
+  // TODO: check reschedule
 
   return 0;
 }

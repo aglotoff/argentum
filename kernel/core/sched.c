@@ -57,11 +57,11 @@ k_sched_dequeue(void)
       link = sched_queue[i].next;
       k_list_remove(link);
 
-      return K_LIST_CONTAINER(link, struct KTask, link);
+      return K_CONTAINER_OF(link, struct KTask, link);
     }
   }
 
-  return NULL;
+  return K_NULL;
 }
 
 static void
@@ -84,8 +84,8 @@ k_sched_switch(struct KTask *task)
   K_ON_SCHED_AFTER_SWITCH(task);
 #endif
 
-  my_cpu->task = NULL;
-  task->cpu = NULL;
+  my_cpu->task = K_NULL;
+  task->cpu = K_NULL;
 }
 
 static void
@@ -115,7 +115,7 @@ k_sched_start(void)
   for (;;) {
     struct KTask *next = k_sched_dequeue();
 
-    if (next != NULL) {
+    if (next != K_NULL) {
       k_assert(next->state == K_TASK_STATE_READY);
       k_sched_switch(next);
     } else {
@@ -145,7 +145,7 @@ _k_sched_add(struct KListLink *queue, struct KTask *task)
   struct KTask *other_task;
 
   for (l = queue->next; l != queue; l = l->next) {
-    other_task = K_LIST_CONTAINER(l, struct KTask, link);
+    other_task = K_CONTAINER_OF(l, struct KTask, link);
     if (_k_sched_priority_cmp(task, other_task) > 0)
       break;
   }
@@ -167,7 +167,7 @@ _k_sched_sleep(struct KListLink *queue, int state, k_tick_t timeout,
   struct KCpu *my_cpu;
   struct KTask *my_task;
 
-  if (lock != NULL) {
+  if (lock != K_NULL) {
     _k_sched_lock();
     k_spinlock_release(lock);
   }
@@ -180,7 +180,7 @@ _k_sched_sleep(struct KListLink *queue, int state, k_tick_t timeout,
 
   if (my_cpu->lock_count > 0)
     k_panic("called from an IRQ context");
-  if (my_cpu->task == NULL)
+  if (my_cpu->task == K_NULL)
     k_panic("called not by a task");
 
   if (timeout != 0) {
@@ -189,19 +189,19 @@ _k_sched_sleep(struct KListLink *queue, int state, k_tick_t timeout,
 
   my_task->state = state;
 
-  if (queue != NULL)
+  if (queue != K_NULL)
     _k_sched_add(queue, my_task);
 
   _k_sched_yield_locked();
 
   if (timeout != 0) {
-    if (my_task->timer.link.next != NULL) {
+    if (my_task->timer.link.next != K_NULL) {
       _k_timeout_dequeue(&_k_sched_timeouts, &my_task->timer);
     }
   }
 
   // someone may call this function while holding _k_sched_spinlock?
-  if (lock != NULL) {
+  if (lock != K_NULL) {
     _k_sched_unlock();
     k_spinlock_acquire(lock);
   }
@@ -227,7 +227,7 @@ _k_sched_raise_priority(struct KTask *task, int priority)
     break;
   case K_TASK_STATE_SLEEP:
   case K_TASK_STATE_SLEEP_UNWAKEABLE:
-    if (task->sleep_on_mutex != NULL) {
+    if (task->sleep_on_mutex != K_NULL) {
       // Re-insert to update priority
       k_list_remove(&task->link);
       _k_sched_add(&task->sleep_on_mutex->queue, task);
@@ -276,7 +276,7 @@ _k_sched_wakeup_all_locked(struct KListLink *queue, int result)
 
   while (!k_list_is_empty(queue)) {
     struct KListLink *link = queue->next;
-    struct KTask *task = K_LIST_CONTAINER(link, struct KTask, link);
+    struct KTask *task = K_CONTAINER_OF(link, struct KTask, link);
 
     _k_sched_resume(task, result);
   }
@@ -293,9 +293,9 @@ _k_sched_wakeup_one_locked(struct KListLink *queue, int result)
     k_panic("sched not locked");
 
   if (k_list_is_empty(queue))
-    return NULL;
+    return K_NULL;
 
-  task = K_LIST_CONTAINER(queue->next, struct KTask, link);
+  task = K_CONTAINER_OF(queue->next, struct KTask, link);
 
   _k_sched_resume(task, result);
 
@@ -316,7 +316,7 @@ _k_sched_may_yield(struct KTask *task)
   my_cpu = _k_cpu();
   my_task = my_cpu->task;
 
-  if ((my_task != NULL) && (_k_sched_priority_cmp(task, my_task) > 0)) {
+  if ((my_task != K_NULL) && (_k_sched_priority_cmp(task, my_task) > 0)) {
     if (my_cpu->lock_count > 0) {
       // Cannot yield right now, delay until the last call to k_irq_handler_end()
       // or task_unlock().
@@ -329,9 +329,9 @@ _k_sched_may_yield(struct KTask *task)
 }
 
 void
-k_task_timeout_callback(struct KTimeout *entry)
+k_task_timeout_callback(struct KTimeoutEntry *entry)
 {
-  struct KTask *task = K_LIST_CONTAINER(entry, struct KTask, timer);
+  struct KTask *task = K_CONTAINER_OF(entry, struct KTask, timer);
 
   switch (task->state) {
   case K_TASK_STATE_SLEEP:
@@ -347,7 +347,7 @@ k_sched_tick(void)
 
   // Tell the scheduler that the current task has used up its time slice
   // TODO: add support for other sheduling policies
-  if (current_task != NULL) {
+  if (current_task != K_NULL) {
     _k_sched_lock();
     current_task->flags |= K_TASK_FLAG_RESCHEDULE;
     _k_sched_unlock();
@@ -357,11 +357,9 @@ k_sched_tick(void)
 void
 _k_sched_timer_tick(void)
 {
-  if (k_cpu_id() == 0) {
-    _k_sched_lock();
-    _k_timeout_process_queue(&_k_sched_timeouts, k_task_timeout_callback);
-    _k_sched_unlock();
-  }
+  _k_sched_lock();
+  _k_timeout_process_queue(&_k_sched_timeouts, k_task_timeout_callback);
+  _k_sched_unlock();
 }
 
 void

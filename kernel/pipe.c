@@ -122,7 +122,7 @@ pipe_get_connection_endpoint(struct Connection *connection)
   HASH_FOREACH_ENTRY(pipe_hash.table, l, (uintptr_t) connection) {
     struct PipeEndpoint *endpoint;
     
-    endpoint = K_LIST_CONTAINER(l, struct PipeEndpoint, hash_link);
+    endpoint = K_CONTAINER_OF(l, struct PipeEndpoint, hash_link);
     if (endpoint->connection == connection) {
       k_spinlock_release(&pipe_hash.lock);
       return endpoint;

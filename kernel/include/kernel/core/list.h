@@ -60,7 +60,7 @@ k_list_init(struct KListLink *head)
 /**
  * @brief Mark a list link as unlinked.
  *
- * Clears a link’s pointers by setting them to `NULL`.
+ * Clears a link’s pointers by setting them to `K_NULL`.
  * This marks the link as not currently part of any list.
  *
  * @param link Pointer to the link to nullify.
@@ -70,7 +70,7 @@ k_list_init(struct KListLink *head)
 static inline void
 k_list_null(struct KListLink *link)
 {
-  link->prev = link->next = NULL;
+  link->prev = link->next = K_NULL;
 }
 
 /**
@@ -98,7 +98,7 @@ k_list_is_empty(struct KListLink *head)
 static inline int
 k_list_is_null(struct KListLink *link)
 {
-  return (link->next == NULL) && (link->prev == NULL);
+  return (link->next == K_NULL) && (link->prev == K_NULL);
 }
 
 /**
@@ -147,34 +147,20 @@ k_list_add_back(struct KListLink *head, struct KListLink *link)
  * @brief Remove a link from a list.
  *
  * Unlinks `link` from whatever list it belongs to and sets its pointers to
- * `NULL`. It is safe to call this even if `link` is already unlinked.
+ * `K_NULL`. It is safe to call this even if `link` is already unlinked.
  *
  * @param link Pointer to the link to remove.
  */
 static inline void
 k_list_remove(struct KListLink *link)
 {
-  if (link->prev != NULL)
+  if (link->prev != K_NULL)
     link->prev->next = link->next;
-  if (link->next != NULL)
+  if (link->next != K_NULL)
     link->next->prev = link->prev;
 
-  link->prev = link->next = NULL;
+  link->prev = link->next = K_NULL;
 }
-
-/**
- * @brief Obtain a pointer to the containing structure from a link.
- *
- * Converts a `KListLink` pointer back to the parent structure that contains it.
- *
- * @param link Pointer to the `KListLink` member.
- * @param type Type of the parent structure.
- * @param member Name of the `KListLink` field within the structure.
- *
- * @return Pointer to the parent structure.
- */
-#define K_LIST_CONTAINER(link, type, member) \
-  ((type *) ((size_t) (link) - offsetof(type, member)))
 
 /**
  * @brief Iterate over a list.

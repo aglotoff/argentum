@@ -3,6 +3,8 @@
 #include <string.h>
 
 #include <kernel/core/assert.h>
+#include <kernel/core/types.h>
+
 #include <kernel/console.h>
 #include <kernel/object_pool.h>
 #include <kernel/page.h>
@@ -126,7 +128,7 @@ k_object_pool_destroy(struct KObjectPool *pool)
   while (!k_list_is_empty(&pool->slabs_full)) {
     struct KObjectSlab *slab;
 
-    slab = K_LIST_CONTAINER(pool->slabs_full.next, struct KObjectSlab, link);
+    slab = K_CONTAINER_OF(pool->slabs_full.next, struct KObjectSlab, link);
     k_list_remove(&slab->link);
 
     k_object_pool_slab_destroy(slab);
@@ -159,11 +161,11 @@ k_object_pool_get(struct KObjectPool *pool)
 
   // First, try to use partially full slabs
   if (!k_list_is_empty(&pool->slabs_partial)) {
-    slab = K_LIST_CONTAINER(pool->slabs_partial.next, struct KObjectSlab, link);
+    slab = K_CONTAINER_OF(pool->slabs_partial.next, struct KObjectSlab, link);
   } else {
     // Then full slabs
     if (!k_list_is_empty(&pool->slabs_full)) {
-      slab = K_LIST_CONTAINER(pool->slabs_full.next, struct KObjectSlab, link);
+      slab = K_CONTAINER_OF(pool->slabs_full.next, struct KObjectSlab, link);
     // Then try to allocate a new slab
     } else if ((slab = k_object_pool_slab_create(pool)) == NULL) {
       k_spinlock_release(&pool->lock);

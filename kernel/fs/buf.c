@@ -158,7 +158,7 @@ buf_cache_lookup(unsigned block_no, size_t block_size, dev_t dev, struct Buf **u
 
   // TODO: use a hash table for faster lookups
   K_LIST_FOREACH(&buf_cache.head, l) {
-    b = K_LIST_CONTAINER(l, struct Buf, _cache_link);
+    b = K_CONTAINER_OF(l, struct Buf, _cache_link);
 
     if ((b->block_no == block_no) &&
         (b->dev == dev) &&

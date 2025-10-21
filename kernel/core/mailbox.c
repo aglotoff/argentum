@@ -9,9 +9,9 @@ static int  k_mailbox_try_send_locked(struct KMailBox *, const void *);
 
 int
 k_mailbox_create(struct KMailBox *mailbox,
-                 size_t msg_size,
+                 k_size_t msg_size,
                  void *buf,
-                 size_t buf_size)
+                 k_size_t buf_size)
 {
   k_spinlock_init(&mailbox->lock, "k_mailbox");
   k_list_init(&mailbox->receivers);
@@ -31,7 +31,7 @@ k_mailbox_create(struct KMailBox *mailbox,
 int
 k_mailbox_destroy(struct KMailBox *mailbox)
 {
-  k_assert(mailbox != NULL);
+  k_assert(mailbox != K_NULL);
   k_assert(mailbox->type == K_MAILBOX_TYPE);
 
   k_spinlock_acquire(&mailbox->lock);
@@ -49,7 +49,7 @@ k_mailbox_try_receive(struct KMailBox *mailbox, void *message)
 {
   int r;
 
-  k_assert(mailbox != NULL);
+  k_assert(mailbox != K_NULL);
   k_assert(mailbox->type == K_MAILBOX_TYPE);
 
   k_spinlock_acquire(&mailbox->lock);
@@ -66,7 +66,7 @@ k_mailbox_timed_receive(struct KMailBox *mailbox,
 {
   int r;
 
-  k_assert(mailbox != NULL);
+  k_assert(mailbox != K_NULL);
   k_assert(mailbox->type == K_MAILBOX_TYPE);
 
   k_spinlock_acquire(&mailbox->lock);
@@ -113,7 +113,7 @@ k_mailbox_try_send(struct KMailBox *mailbox, const void *message)
 {
   int r;
 
-  k_assert(mailbox != NULL);
+  k_assert(mailbox != K_NULL);
   k_assert(mailbox->type == K_MAILBOX_TYPE);
 
   k_spinlock_acquire(&mailbox->lock);
@@ -130,7 +130,7 @@ k_mailbox_timed_send(struct KMailBox *mailbox,
 {
   int r;
 
-  k_assert(mailbox != NULL);
+  k_assert(mailbox != K_NULL);
   k_assert(mailbox->type == K_MAILBOX_TYPE);
 
   k_spinlock_acquire(&mailbox->lock);

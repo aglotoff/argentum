@@ -4,11 +4,6 @@
 #include <kernel/core/types.h>
 #include <kernel/core/list.h>
 
-struct KTimeout {
-  struct KListLink link;
-  k_tick_t remain;
-};
-
 k_tick_t k_tick_get(void);
 void k_tick_set(k_tick_t);
 void k_sched_tick(void);

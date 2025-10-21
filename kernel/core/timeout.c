@@ -1,21 +1,21 @@
 #include "core_private.h"
 
 void
-_k_timeout_create(struct KTimeout *timeout)
+_k_timeout_create(struct KTimeoutEntry *timeout)
 {
   k_list_null(&timeout->link);
   timeout->remain = 0;
 }
 
 void
-_k_timeout_destroy(struct KTimeout *timeout)
+_k_timeout_destroy(struct KTimeoutEntry *timeout)
 {
   k_list_remove(&timeout->link);
 }
 
 void
 _k_timeout_enqueue(struct KListLink *queue,
-                   struct KTimeout *timeout,
+                   struct KTimeoutEntry *timeout,
                    k_tick_t delay)
 {
   struct KListLink *next_link;
@@ -25,7 +25,9 @@ _k_timeout_enqueue(struct KListLink *queue,
   timeout->remain = delay;
 
   K_LIST_FOREACH(queue, next_link) {
-    struct KTimeout *next = K_LIST_CONTAINER(next_link, struct KTimeout, link);
+    struct KTimeoutEntry *next;
+    
+    next = K_CONTAINER_OF(next_link, struct KTimeoutEntry, link);
 
     if (next->remain > timeout->remain) {
       next->remain -= timeout->remain;
@@ -39,32 +41,34 @@ _k_timeout_enqueue(struct KListLink *queue,
 }
 
 void
-_k_timeout_dequeue(struct KListLink *queue, struct KTimeout *timeout)
+_k_timeout_dequeue(struct KListLink *queue, struct KTimeoutEntry *timeout)
 {
   struct KListLink *next_link = timeout->link.next;
 
-  k_assert(next_link != NULL);
+  k_assert(next_link != K_NULL);
 
   k_list_remove(&timeout->link);
 
   if (next_link != queue) {
-    struct KTimeout *next = K_LIST_CONTAINER(next_link, struct KTimeout, link);
+    struct KTimeoutEntry *next;
+
+    next = K_CONTAINER_OF(next_link, struct KTimeoutEntry, link);
     next->remain += timeout->remain;
   }
 }
 
 void
 _k_timeout_process_queue(struct KListLink *queue,
-                         void (*callback)(struct KTimeout *))
+                         void (*callback)(struct KTimeoutEntry *))
 {
   struct KListLink *link;
-  struct KTimeout *timeout;
+  struct KTimeoutEntry *timeout;
 
   if (k_list_is_empty(queue))
     return;
 
   link = queue->next;
-  timeout = K_LIST_CONTAINER(link, struct KTimeout, link);
+  timeout = K_CONTAINER_OF(link, struct KTimeoutEntry, link);
 
   k_assert(timeout->remain != 0);
 
@@ -79,6 +83,6 @@ _k_timeout_process_queue(struct KListLink *queue,
       break;
 
     link = queue->next;
-    timeout = K_LIST_CONTAINER(link, struct KTimeout, link);
+    timeout = K_CONTAINER_OF(link, struct KTimeoutEntry, link);
   }
 }

@@ -14,16 +14,16 @@ struct KMailBox {
   uint8_t          *buf_end;
   uint8_t          *read_ptr;
   uint8_t          *write_ptr;
-  size_t            size;
-  size_t            capacity;
-  size_t            msg_size;
+  k_size_t          size;
+  k_size_t          capacity;
+  k_size_t          msg_size;
   struct KListLink  receivers;
   struct KListLink  senders;
 };
 
 #define K_MAILBOX_TYPE    0x4D424F58  // {'M','B','O','X'}
 
-int              k_mailbox_create(struct KMailBox *, size_t, void *, size_t);
+int              k_mailbox_create(struct KMailBox *, k_size_t, void *, k_size_t);
 int              k_mailbox_destroy(struct KMailBox *);
 int              k_mailbox_try_receive(struct KMailBox *, void *);
 int              k_mailbox_timed_receive(struct KMailBox *, void *, unsigned long);

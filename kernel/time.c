@@ -53,7 +53,6 @@ time_tick(void)
 
     if (current_ticks < expected_ticks) {
       k_tick_set(expected_ticks);
-     // cprintf("[k] new time %p\n", k_tick_get());
     } else if (current_ticks > expected_ticks) {
       ticks_to_skip = current_ticks - expected_ticks;
     }

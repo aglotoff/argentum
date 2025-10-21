@@ -119,7 +119,7 @@ net_get_connection_endpoint(struct Connection *connection)
   HASH_FOREACH_ENTRY(socket_hash.table, l, (uintptr_t) connection) {
     struct SocketEndpoint *endpoint;
     
-    endpoint = K_LIST_CONTAINER(l, struct SocketEndpoint, hash_link);
+    endpoint = K_CONTAINER_OF(l, struct SocketEndpoint, hash_link);
     if (endpoint->connection == connection) {
       k_spinlock_release(&socket_hash.lock);
       return endpoint;

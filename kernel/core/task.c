@@ -44,7 +44,7 @@ k_task_yield(void)
 {
   struct KTask *current = k_task_current();
   
-  if (current == NULL)
+  if (current == K_NULL)
     k_panic("no current task");
 
   _k_sched_lock();
@@ -101,12 +101,12 @@ int
 k_task_create(struct KTask *task,
               void *ext,
               void (*entry)(void *), void *arg,
-              void *stack, size_t stack_size,
+              void *stack, k_size_t stack_size,
               int priority)
 {
   k_list_init(&task->owned_mutexes);
   k_list_null(&task->link);
-  task->sleep_on_mutex     = NULL;
+  task->sleep_on_mutex     = K_NULL;
 
   task->flags          = 0;
   task->saved_priority = priority;
@@ -134,7 +134,7 @@ k_task_exit(void)
 {
   struct KTask *task = k_task_current();
 
-  if (task == NULL)
+  if (task == K_NULL)
     k_panic("no current task");
 
   _k_timeout_destroy(&task->timer);
@@ -170,7 +170,7 @@ k_task_suspend(void)
 /**
  * Get the currently executing task.
  * 
- * @return A pointer to the currently executing task or NULL
+ * @return A pointer to the currently executing task or K_NULL
  */
 struct KTask *
 k_task_current(void)
