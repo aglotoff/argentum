@@ -184,7 +184,7 @@ _k_sched_sleep(struct KListLink *queue, int state, k_tick_t timeout,
     k_panic("called not by a task");
 
   if (timeout != 0) {
-    _k_timeout_enqueue(&_k_sched_timeouts, &my_task->timer, timeout);
+    _k_timeout_queue_add(&_k_sched_timeouts, &my_task->timer, timeout);
   }
 
   my_task->state = state;
@@ -196,7 +196,7 @@ _k_sched_sleep(struct KListLink *queue, int state, k_tick_t timeout,
 
   if (timeout != 0) {
     if (my_task->timer.link.next != K_NULL) {
-      _k_timeout_dequeue(&_k_sched_timeouts, &my_task->timer);
+      _k_timeout_queue_remove(&_k_sched_timeouts, &my_task->timer);
     }
   }
 
@@ -341,7 +341,7 @@ k_task_timeout_callback(struct KTimeoutEntry *entry)
 }
 
 void
-k_sched_tick(void)
+_k_sched_check_quantum(void)
 {
   struct KTask *current_task = k_task_current();
 
@@ -355,10 +355,10 @@ k_sched_tick(void)
 }
 
 void
-_k_sched_timer_tick(void)
+_k_sched_adjust_timeouts(k_tick_t delta_tick)
 {
   _k_sched_lock();
-  _k_timeout_process_queue(&_k_sched_timeouts, k_task_timeout_callback);
+  _k_timeout_queue_adjust(&_k_sched_timeouts, k_task_timeout_callback, delta_tick);
   _k_sched_unlock();
 }
 

@@ -4,12 +4,12 @@
 #include <kernel/core/assert.h>
 #include <kernel/core/semaphore.h>
 #include <kernel/core/tick.h>
+#include <kernel/core/timer.h>
 #include <kernel/process.h>
 #include <kernel/console.h>
 #include <kernel/time.h>
 
-static unsigned ticks_to_sync = 0;
-static unsigned ticks_to_skip = 0;
+static k_tick_t ticks_to_sync = 0;
 
 #define TICKS_SYNC_PERIOD   TICKS_PER_SECOND
 
@@ -20,6 +20,7 @@ time_init(void)
 
   if (k_cpu_id() == 0) {
     k_tick_set(seconds2ticks(arch_get_time_seconds()));
+    k_tick();
     ticks_to_sync = TICKS_SYNC_PERIOD;
   }
 }
@@ -33,29 +34,16 @@ time_get_seconds(void)
 void
 time_tick(void)
 {
-  k_sched_tick();
-
-  if (k_cpu_id() != 0)
-    return;
-
-  if (ticks_to_skip > 0) {
-    ticks_to_skip--;
-    return;
-  }
-
-  k_timer_tick();
+  k_tick();
 
   ticks_to_sync--;
 
   if (ticks_to_sync == 0) {
-    unsigned long long expected_ticks = seconds2ticks(arch_get_time_seconds());
-    unsigned long long current_ticks = k_tick_get();
+    k_tick_t expected_ticks = seconds2ticks(arch_get_time_seconds());
+    k_tick_t current_ticks = k_tick_get();
 
-    if (current_ticks < expected_ticks) {
+    if (current_ticks != expected_ticks)
       k_tick_set(expected_ticks);
-    } else if (current_ticks > expected_ticks) {
-      ticks_to_skip = current_ticks - expected_ticks;
-    }
 
     ticks_to_sync = TICKS_SYNC_PERIOD;
   }
@@ -78,7 +66,7 @@ time_get(clockid_t clock_id, struct timespec *tp)
 int
 time_nanosleep(struct timespec *rqtp, struct timespec *rmtp)
 {
-  unsigned long long req_ticks, elapsed_ticks;
+  k_tick_t req_ticks, elapsed_ticks;
   int r;
 
   if ((rqtp->tv_nsec < 0) || (rqtp->tv_nsec >= 1000000000L))
@@ -90,7 +78,7 @@ time_nanosleep(struct timespec *rqtp, struct timespec *rmtp)
     elapsed_ticks = 0;
     r = 0;
   } else {
-    unsigned long start_ticks = k_tick_get();
+    k_tick_t start_ticks = k_tick_get();
     struct KSemaphore sem;
 
     k_semaphore_create(&sem, 0);

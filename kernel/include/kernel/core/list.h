@@ -8,20 +8,7 @@
  */
 
 #include <kernel/core/assert.h>
-#include <kernel/core/config.h>
-
-/**
- * @brief Node structure for intrusive doubly linked lists.
- *
- * Each element in an intrusive list embeds one of these links to allow it
- * to participate in a list without additional allocation.
- */
-struct KListLink {
-  /** Pointer to the next node in the list. */
-  struct KListLink *next;
-  /** Pointer to the previous node in the list. */
-  struct KListLink *prev;
-};
+#include <kernel/core/types.h>
 
 /**
  * @brief Declare and initialize a list head at definition time.

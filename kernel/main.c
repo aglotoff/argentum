@@ -57,6 +57,12 @@ test_task(void *arg)
   }
 }
 
+void
+test_timer(void *arg)
+{
+  cprintf("Timer time! %p\n", arg);
+}
+
 /**
  * Main kernel function.
  *
@@ -93,6 +99,11 @@ main(void)
   // t2 = k_task_create(NULL, test_task, "BBBB", 1);
  // k_task_resume(t1);
  // k_task_resume(t2);
+
+//  struct KTimer timer;
+
+//   k_timer_create(&timer, test_timer, (void *) 0x34, 100, 200);
+//   k_timer_start(&timer);
 
   mp_main();
 }

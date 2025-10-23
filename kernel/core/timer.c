@@ -81,14 +81,6 @@ k_timer_destroy(struct KTimer *timer)
   return 0;
 }
 
-void
-_k_timer_start(struct KTimer *timer, k_tick_t remain)
-{
-  k_spinlock_acquire(&k_timer_lock);
-  k_timer_enqueue(timer, remain);
-  k_spinlock_release(&k_timer_lock);
-}
-
 /**
  * @brief Start a timer.
  *
@@ -108,7 +100,7 @@ k_timer_start(struct KTimer *timer)
 
   k_spinlock_acquire(&k_timer_lock);
 
-  if (!k_list_is_null(timer->queue_entry.link.next)) {
+  if (!k_list_is_null(&timer->queue_entry.link)) {
     k_spinlock_release(&k_timer_lock);
     return K_ERR_INVAL;
   }
@@ -152,7 +144,7 @@ k_timer_stop(struct KTimer *timer)
 void
 _k_timer_timeout(struct KTimeoutEntry *entry)
 {
-  struct KTimer *timer = (struct KTimer *) entry;
+  struct KTimer *timer = K_CONTAINER_OF(entry, struct KTimer, queue_entry);
 
   k_assert(k_spinlock_holding(&k_timer_lock));
 
@@ -178,10 +170,10 @@ _k_timer_timeout(struct KTimeoutEntry *entry)
 }
 
 void
-_k_timer_tick(void)
+_k_timer_adjust_timeouts(k_tick_t ticks)
 {
   k_spinlock_acquire(&k_timer_lock);
-  _k_timeout_process_queue(&k_timer_queue, _k_timer_timeout);
+  _k_timeout_queue_adjust(&k_timer_queue, _k_timer_timeout, ticks);
   k_spinlock_release(&k_timer_lock);
 }
 
@@ -189,12 +181,12 @@ static void
 k_timer_enqueue(struct KTimer *timer, k_tick_t delay)
 {
   k_assert(k_spinlock_holding(&k_timer_lock));
-  _k_timeout_enqueue(&k_timer_queue, &timer->queue_entry, delay);
+  _k_timeout_queue_add(&k_timer_queue, &timer->queue_entry, delay);
 }
 
 static void
 k_timer_dequeue(struct KTimer *timer)
 {
   k_assert(k_spinlock_holding(&k_timer_lock));
-  _k_timeout_dequeue(&k_timer_queue, &timer->queue_entry);
+  _k_timeout_queue_remove(&k_timer_queue, &timer->queue_entry);
 }

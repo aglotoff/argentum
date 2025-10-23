@@ -21,21 +21,24 @@ struct KTask *_k_sched_wakeup_one_locked(struct KListLink *, int);
 int             _k_sched_sleep(struct KListLink *, int, k_tick_t, struct KSpinLock *);
 void            _k_sched_raise_priority(struct KTask *, int);
 void            _k_sched_recalc_priority(struct KTask *);
-void            _k_sched_timer_tick(void);
+void            _k_sched_adjust_timeouts(k_tick_t);
 void            _k_sched_update_effective_priority(void);
+void            _k_sched_check_quantum(void);
 
 int             _k_mutex_timed_lock(struct KMutex *, k_tick_t);
 void            _k_mutex_unlock(struct KMutex *);
 int             _k_mutex_get_highest_priority(struct KListLink *);
 void            _k_mutex_may_raise_priority(struct KMutex *, int);
 
-void            _k_timer_start(struct KTimer *, k_tick_t);
-void            _k_timer_tick(void);
+void            _k_timer_adjust_timeouts(k_tick_t);
 
-void            _k_timeout_process_queue(struct KListLink *, void (*)(struct KTimeoutEntry *));
+void            _k_timeout_queue_check(struct KListLink *, void (*)(struct KTimeoutEntry *));
+void            _k_timeout_queue_adjust(struct KListLink *,
+                        void (*callback)(struct KTimeoutEntry *),
+                        k_tick_t);
 void            _k_timeout_create(struct KTimeoutEntry *);
-void            _k_timeout_enqueue(struct KListLink *, struct KTimeoutEntry *, k_tick_t);
-void            _k_timeout_dequeue(struct KListLink *, struct KTimeoutEntry *);
+void            _k_timeout_queue_add(struct KListLink *, struct KTimeoutEntry *, k_tick_t);
+void            _k_timeout_queue_remove(struct KListLink *, struct KTimeoutEntry *);
 void            _k_timeout_destroy(struct KTimeoutEntry *);
 
 extern struct KSpinLock _k_sched_spinlock;

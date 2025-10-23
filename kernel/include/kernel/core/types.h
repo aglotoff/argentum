@@ -1,14 +1,27 @@
 #ifndef __INCLUDE_KERNEL_CORE_TYPES_H__
 #define __INCLUDE_KERNEL_CORE_TYPES_H__
 
-#include <kernel/core/list.h>
+#include <kernel/core/config.h>
+
+/**
+ * @brief Node structure for intrusive doubly linked lists.
+ *
+ * Each element in an intrusive list embeds one of these links to allow it
+ * to participate in a list without additional allocation.
+ */
+struct KListLink {
+  /** Pointer to the next node in the list. */
+  struct KListLink *next;
+  /** Pointer to the previous node in the list. */
+  struct KListLink *prev;
+};
 
 /**
  * @brief Kernel tick type.
  *
  * Represents the system tick counter or duration in kernel time units.
  */
-typedef unsigned long long k_tick_t;
+typedef long long k_tick_t;
 
 enum {
   /**
@@ -34,6 +47,13 @@ enum {
   K_SLEEP_UNWAKEABLE = (1 << 0),
 };
 
+/**
+ * @brief Represents a single timeout entry managed by the kernel.
+ *
+ * The `KTimeoutEntry` structure defines a node in the kernel’s timeout queue.
+ * Each entry corresponds to a pending timeout — for example, a task delay,
+ * semaphore wait timeout, or timer expiration.
+ */
 struct KTimeoutEntry {
   struct KListLink link;
   k_tick_t remain;
