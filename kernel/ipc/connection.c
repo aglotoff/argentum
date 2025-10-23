@@ -226,7 +226,7 @@ connection_send(struct Connection *connection, void *smsg, size_t sbytes, void *
 
   request_dup(req);
 
-  if (k_mailbox_timed_send(&connection->endpoint->mbox, &req, timeout) < 0) {
+  if (k_mailbox_timed_send(&connection->endpoint->mbox, &req, timeout, K_SLEEP_UNWAKEABLE) < 0) {
     k_panic("fail send:\n");
     request_destroy(req);
     request_destroy(req);
@@ -288,7 +288,7 @@ connection_sendv(struct Connection *connection,
 
   request_dup(req);
 
-  if (k_mailbox_timed_send(&connection->endpoint->mbox, &req, timeout) < 0) {
+  if (k_mailbox_timed_send(&connection->endpoint->mbox, &req, timeout, K_SLEEP_UNWAKEABLE) < 0) {
     k_panic("fail send:\n");
     request_destroy(req);
     request_destroy(req);

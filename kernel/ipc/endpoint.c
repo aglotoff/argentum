@@ -12,5 +12,5 @@ endpoint_init(struct Endpoint *endpoint)
 int
 endpoint_receive(struct Endpoint *endpoint, struct Request **req_store)
 {
-  return k_mailbox_receive(&endpoint->mbox, (void *) req_store);
+  return k_mailbox_receive(&endpoint->mbox, req_store, K_SLEEP_UNWAKEABLE);
 }

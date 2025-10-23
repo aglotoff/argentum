@@ -23,6 +23,8 @@ struct KListLink {
  */
 typedef long long k_tick_t;
 
+typedef unsigned char k_uint8_t;
+
 enum {
   /**
    * @brief Wakeable sleep mode.

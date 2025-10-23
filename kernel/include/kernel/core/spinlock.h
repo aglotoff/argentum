@@ -6,7 +6,7 @@
 struct KCpu;
 
 /** The maximum depth of call stack that could be recorded by a spinlock */
-#define SPIN_MAX_PCS  10
+#define K_SPINLOCK_MAX_PCS  10
 
 /**
  * Spinlocks provide mutual exclusion, ensuring only one CPU at a time can hold
@@ -25,7 +25,7 @@ struct KSpinLock {
   /** Spinlock name (for debugging purposes) */
   const char   *name;
   /** Saved call stack (an array of program counters) that locked the lock */
-  uintptr_t     pcs[SPIN_MAX_PCS];
+  uintptr_t     pcs[K_SPINLOCK_MAX_PCS];
 };
 
 /**

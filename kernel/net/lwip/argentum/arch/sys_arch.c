@@ -140,7 +140,7 @@ sys_mbox_new(sys_mbox_t *mbox, int size)
 void
 sys_mbox_post(sys_mbox_t *mbox, void *msg)
 {
-  k_mailbox_timed_send(*mbox, &msg, 0);
+  k_mailbox_timed_send(*mbox, &msg, 0, K_SLEEP_UNWAKEABLE);
 }
 
 err_t
@@ -161,7 +161,7 @@ sys_arch_mbox_fetch(sys_mbox_t *mbox, void **msg, u32_t timeout_ms)
   unsigned long start_ticks, end_ticks;
 
   start_ticks = k_tick_get();
-  if (k_mailbox_timed_receive(*mbox, msg, ms2ticks(timeout_ms)) < 0)
+  if (k_mailbox_timed_receive(*mbox, msg, ms2ticks(timeout_ms), K_SLEEP_UNWAKEABLE) < 0)
     return SYS_ARCH_TIMEOUT;
   end_ticks = k_tick_get();
 

@@ -51,12 +51,12 @@ k_arch_spinlock_save_callstack(struct KSpinLock *spin)
 
   fp = (uint32_t *) r11_get();
 
-  for (i = 0; (fp != NULL) && (i < SPIN_MAX_PCS); i++) {
+  for (i = 0; (fp != NULL) && (i < K_SPINLOCK_MAX_PCS); i++) {
     spin->pcs[i] = fp[APCS_FRAME_LINK];
     fp = (uint32_t *) fp[APCS_FRAME_FP];
   }
 
-  for ( ; i < SPIN_MAX_PCS; i++)
+  for ( ; i < K_SPINLOCK_MAX_PCS; i++)
     spin->pcs[i] = 0;
 }
 
@@ -77,7 +77,7 @@ k_arch_spinlock_print_callstack(struct KSpinLock *spin)
 {
   int i;
 
-  for (i = 0; i < SPIN_MAX_PCS && spin->pcs[i]; i++) {
+  for (i = 0; i < K_SPINLOCK_MAX_PCS && spin->pcs[i]; i++) {
     print_info(spin->pcs[i]);
   }
 }
