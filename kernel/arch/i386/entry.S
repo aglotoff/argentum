@@ -28,15 +28,17 @@ _start:
   orl     $(CR0_PG|CR0_WP), %eax
   movl    %eax, %cr0
 
-	mov $kstack_top, %esp
+	mov     $kstack_top, %esp
 
-	mov $higher_half, %eax
-	jmp *%eax
+	movl    $higher_half, %eax
+	jmp     *%eax
 
 .text
 
 higher_half:
-	call arch_init
+  xorl    %ebp, %ebp
+
+	call    arch_init
 
 	cli
 

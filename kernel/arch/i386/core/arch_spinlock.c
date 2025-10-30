@@ -3,6 +3,8 @@
 #include <kernel/core/spinlock.h>
 #include <kernel/types.h>
 
+#include <arch/i386/regs.h>
+
 static inline int
 xchg(volatile int *p, int new_value)
 {
@@ -32,25 +34,16 @@ k_arch_spinlock_release(volatile int *locked)
 void
 k_arch_spinlock_save_callstack(struct KSpinLock *spin)
 {
-  // FIXME: SMP
-  (void) spin;
-}
+  k_uintptr_t *ebp;
+  int i;
 
-// static void
-// print_info(uintptr_t pc)
-// {
-//   struct PcDebugInfo info;
+  ebp = (k_uintptr_t *) ebp_get();
 
-//   debug_info_pc(pc, &info);
-//   cprintf("  [%p] %s (%s at line %d)\n",
-//           pc,
-//           info.fn_name, info.file, info.line);
-// }
+  for (i = 0; (ebp != NULL) && (i < K_SPINLOCK_MAX_PCS); i++) {
+    spin->pcs[i] = ebp[1];
+    ebp = (k_uintptr_t *) ebp[0];
+  }
 
-// Display the recorded call stack along with debugging information
-void
-k_arch_spinlock_print_callstack(struct KSpinLock *spin)
-{
-  // FIXME: SMP
-  (void) spin;
+  for ( ; i < K_SPINLOCK_MAX_PCS; i++)
+    spin->pcs[i] = 0;
 }

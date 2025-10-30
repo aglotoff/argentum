@@ -1,5 +1,4 @@
-#include <string.h>
-
+#include <kernel/core/config.h>
 #include <kernel/core/task.h>
 
 void
@@ -10,7 +9,7 @@ arch_task_init_stack(struct KTask *task, void (*entry)(void))
   // Initialize the kernel-mode task context
   sp -= sizeof(struct Context);
   task->context = (struct Context *) sp;
-  memset(task->context, 0, sizeof(struct Context));
+  k_memset(task->context, 0, sizeof(struct Context));
   task->context->eip = (uint32_t) entry;
 }
 

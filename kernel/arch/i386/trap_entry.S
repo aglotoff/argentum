@@ -31,18 +31,20 @@ trap_common:
 	movw    %ax, %ds
 	movw    %ax, %es
 
-	pushl %esp
-  call 	trap
-	addl  $4, %esp
+	xorl    %ebp, %ebp
+
+	pushl   %esp
+  call 	  trap
+	addl    $4, %esp
 
 	popa
 
-	popl  %gs
-	popl  %fs
-	popl  %es
-	popl  %ds
+	popl    %gs
+	popl    %fs
+	popl    %es
+	popl    %ds
 
-	addl  $8, %esp
+	addl    $8, %esp
 
 	iret
 

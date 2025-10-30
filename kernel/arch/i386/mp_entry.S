@@ -51,6 +51,8 @@ start32:
   # Switch to the stack allocated by startothers()
   movl    mp_stack, %esp
 
+  xorl    %ebp, %ebp
+
   # Call mpenter()
   movl    $arch_mp_entry, %eax
   call	  *%eax

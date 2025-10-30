@@ -1,5 +1,3 @@
-#include <kernel/console.h>
-#include <kernel/kdebug.h>
 #include <kernel/core/spinlock.h>
 #include <kernel/types.h>
 
@@ -46,38 +44,16 @@ k_arch_spinlock_release(volatile int *locked)
 void
 k_arch_spinlock_save_callstack(struct KSpinLock *spin)
 {
-  uint32_t *fp;
+  k_uintptr_t *fp;
   int i;
 
-  fp = (uint32_t *) r11_get();
+  fp = (k_uintptr_t *) r11_get();
 
   for (i = 0; (fp != NULL) && (i < K_SPINLOCK_MAX_PCS); i++) {
     spin->pcs[i] = fp[APCS_FRAME_LINK];
-    fp = (uint32_t *) fp[APCS_FRAME_FP];
+    fp = (k_uintptr_t *) fp[APCS_FRAME_FP];
   }
 
   for ( ; i < K_SPINLOCK_MAX_PCS; i++)
     spin->pcs[i] = 0;
-}
-
-static void
-print_info(uintptr_t pc)
-{
-  struct PcDebugInfo info;
-
-  debug_info_pc(pc, &info);
-  cprintf("  [%p] %s (%s at line %d)\n",
-          pc,
-          info.fn_name, info.file, info.line);
-}
-
-// Display the recorded call stack along with debugging information
-void
-k_arch_spinlock_print_callstack(struct KSpinLock *spin)
-{
-  int i;
-
-  for (i = 0; i < K_SPINLOCK_MAX_PCS && spin->pcs[i]; i++) {
-    print_info(spin->pcs[i]);
-  }
 }

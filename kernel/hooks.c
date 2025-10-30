@@ -1,4 +1,7 @@
 #include <kernel/core/task.h>
+
+#include <kernel/console.h>
+#include <kernel/kdebug.h>
 #include <kernel/process.h>
 #include <kernel/vmspace.h>
 
@@ -38,4 +41,15 @@ void
 on_sched_idle(void)
 {
   thread_idle();
+}
+
+void
+on_spinlock_debug_pc(k_uintptr_t pc)
+{
+  struct PcDebugInfo info;
+
+  debug_info_pc(pc, &info);
+  cprintf("  [%p] %s (%s at line %d)\n",
+          pc,
+          info.fn_name, info.file, info.line);
 }

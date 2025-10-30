@@ -25,7 +25,7 @@
 /**
  * @brief Kernel type alias for object sizes.
  */
-#define k_size_t    size_t
+typedef size_t      k_size_t;
 
 /**
  * @brief Kernel wrapper for the standard `offsetof()` macro.
@@ -34,6 +34,16 @@
  * beginning of its containing type.
  */
 #define k_offsetof  offsetof
+
+/**
+ * @brief Unsigned 8-bit integer type.
+ */
+typedef uint8_t     k_uint8_t;
+
+/**
+ * @brief Unsigned integer type capable of storing a pointer.
+ */
+typedef uintptr_t   k_uintptr_t;
 
 /**
  * @brief Maximum number of logical CPUs supported by the kernel.
@@ -110,6 +120,11 @@
 #define k_memmove     memmove
 
 /**
+ * @brief Wrapper around standard memory set function.
+ */
+#define k_memset      memset
+
+/**
  * @brief Kernel panic macro.
  *
  * Prints a fatal error message and halts the system.
@@ -124,7 +139,7 @@
 #define k_warn(...)   _warn(__FILE__, __LINE__, __VA_ARGS__)
 
 /* -------------------------------------------------------------------------- */
-/*                               Task Hooks                                   */
+/*                                  Hooks                                     */
 /* -------------------------------------------------------------------------- */
 
 struct KTask;
@@ -133,6 +148,7 @@ void on_task_destroy(struct KTask *);
 void on_sched_before_switch(struct KTask *);
 void on_sched_after_switch(struct KTask *);
 void on_sched_idle(void);
+void on_spinlock_debug_pc(k_uintptr_t);
 
 /**
  * @brief Called when a task is destroyed.
@@ -168,5 +184,15 @@ void on_sched_idle(void);
  * @brief Called when the scheduler enters the idle state.
  */
 #define K_ON_SCHED_IDLE            on_sched_idle
+
+/**
+ * @brief Optional hook for spinlock debugging.
+ *
+ * When defined, this macro enables reporting of program counter (PC) values
+ * associated with spinlock acquisition. It is primarily used to trace where a
+ * spinlock was last acquired in order to diagnose deadlocks, recursive locking,
+ * or incorrect release operations.
+ */
+#define K_ON_SPINLOCK_DEBUG_PC     on_spinlock_debug_pc
 
 #endif  // !__INCLUDE_KERNEL_CORE_CONFIG_H__
