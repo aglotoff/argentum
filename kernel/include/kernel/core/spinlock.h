@@ -6,15 +6,6 @@
 struct KCpu;
 
 /**
- * @brief Maximum number of program counter (PC) entries stored for debug tracing.
- *
- * When spinlock debugging is enabled, the kernel records up to this many
- * program counter values for each acquired spinlock. These values are later
- * used by diagnostic tools or printed to identify where the spinlock was obtained.
- */
-#define K_SPINLOCK_MAX_PCS  10
-
-/**
  * @brief Represents a kernel spinlock object.
  *
  * A spinlock ensures mutual exclusion between CPUs. It can be used to protect
@@ -76,18 +67,5 @@ void k_arch_spinlock_acquire(volatile int *);
  * @param lock Pointer to the architecture-specific lock variable.
  */
 void k_arch_spinlock_release(volatile int *);
-
-/**
- * @brief Record callstack information for a spinlock.
- *
- * Saves the current program counter values into the spinlock’s `pcs` array.
- * This is used for debugging and diagnostics when spinlock debugging is
- * enabled.
- *
- * @param spin Pointer to the spinlock to record callstack data for.
- *
- * @note Has no effect if spinlock callstack tracking is disabled.
- */
-void k_arch_spinlock_save_callstack(struct KSpinLock *);
 
 #endif  // !__KERNEL_INCLUDE_CORE_SPINLOCK_H__

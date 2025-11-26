@@ -1,7 +1,7 @@
 #include <kernel/console.h>
 #include <kernel/interrupt.h>
 #include <kernel/trap.h>
-#include <kernel/core/cpu.h>
+#include <kernel/core/config.h>
 #include <kernel/core/irq.h>
 #include <kernel/core/task.h>
 #include <kernel/object_pool.h>

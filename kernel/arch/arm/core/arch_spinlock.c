@@ -1,7 +1,5 @@
+#include <kernel/core/config.h>
 #include <kernel/core/spinlock.h>
-#include <kernel/types.h>
-
-#include <arch/arm/regs.h>
 
 // ARMv7-specific code to acquire a spinlock
 void
@@ -36,24 +34,4 @@ k_arch_spinlock_release(volatile int *locked)
     :
     : "cc", "memory"
   );
-}
-
-// Record the current call stack by following the frame pointer chain.
-// To properly generate stack backtrace structures, the code must be compiled
-// with the -mapcs-frame and -fno-omit-frame-pointer flags
-void
-k_arch_spinlock_save_callstack(struct KSpinLock *spin)
-{
-  k_uintptr_t *fp;
-  int i;
-
-  fp = (k_uintptr_t *) r11_get();
-
-  for (i = 0; (fp != NULL) && (i < K_SPINLOCK_MAX_PCS); i++) {
-    spin->pcs[i] = fp[APCS_FRAME_LINK];
-    fp = (k_uintptr_t *) fp[APCS_FRAME_FP];
-  }
-
-  for ( ; i < K_SPINLOCK_MAX_PCS; i++)
-    spin->pcs[i] = 0;
 }

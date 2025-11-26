@@ -2,7 +2,6 @@
 #include <kernel/core/config.h>
 
 #include <kernel/core/assert.h>
-#include <kernel/core/cpu.h>
 #include <kernel/core/irq.h>
 #include <kernel/core/task.h>
 #include <kernel/core/mutex.h>
@@ -10,17 +9,33 @@
 
 #include "core_private.h"
 
-void k_arch_switch(struct Context **, struct Context *);
+/**
+ * @brief Architecture-specific context switch routine.
+ *
+ * This function switches CPU context from the current running task to a new task.
+ * It must be implemented in architecture-specific code.
+ *
+ * @param from Location to store pointer to the scheduler context.
+ * @param to   Pointer to the next task’s context.
+ */
+void k_arch_switch(void *, void *);
 
+// Global list of task timeout events.
 K_LIST_DECLARE(_k_sched_timeouts);
 
-static struct KListLink sched_queue[K_TASK_MAX_PRIORITIES];
-struct KSpinLock _k_sched_spinlock = K_SPINLOCK_INITIALIZER("sched");
+// Array of ready queues for each task priority.
+// Each queue holds tasks ready to run at the corresponding priority level.
+static struct KListLink k_sched_queue[K_TASK_MAX_PRIORITIES];
+
+// Global spinlock protecting the scheduler data structures.
+struct KSpinLock _k_sched_spinlock = K_SPINLOCK_INITIALIZER("k_sched");
 
 /**
- * Initialize the scheduler data structures.
- * 
- * This function must be called prior to creating any kernel tasks.
+ * @brief Initialize the scheduler subsystem.
+ *
+ * This function sets up all ready queues to an empty state. It must be called
+ * exactly once during system startup, and only by the master CPU in an SMP
+ * system.
  */
 void
 k_sched_init(void)
@@ -28,33 +43,64 @@ k_sched_init(void)
   int i;
 
   for (i = 0; i < K_TASK_MAX_PRIORITIES; i++)
-    k_list_init(&sched_queue[i]);
+    k_list_init(&k_sched_queue[i]);
 }
 
-// Add the specified task to the run queue with the corresponding priority
+// Marks the given task as ready and adds it to the appropriate ready queue
+// based on its priority.
+// The scheduler spinlock (`_k_sched_spinlock`) must be held.
 void
-_k_sched_enqueue(struct KTask *th)
+_k_sched_enqueue(struct KTask *task)
 {
-  if (!k_spinlock_holding(&_k_sched_spinlock))
-    k_panic("scheduler not locked");
+  k_assert(k_spinlock_holding(&_k_sched_spinlock));
 
-  th->state = K_TASK_STATE_READY;
-  k_list_add_back(&sched_queue[th->priority], &th->link);
+  task->state = K_TASK_STATE_READY;
+  k_list_add_back(&k_sched_queue[task->priority], &task->link);
 }
 
-// Retrieve the highest-priority task from the run queue
+static struct KTask *k_sched_dequeue(void);
+static void k_sched_switch(struct KTask *);
+static void k_sched_idle(void);
+
+/**
+ * @brief Start the scheduler main loop on the current CPU.
+ *
+ * This function never returns. It continuously selects the next ready task
+ * and performs context switches. If no task is ready, the CPU enters the idle
+ * state until a task becomes runnable.
+ *
+ * On SMP systems, each CPU must call this function after local initialization
+ * to join the scheduler. The master CPU typically calls it after invoking
+ * `k_sched_init()`, while other CPUs call it during secondary startup.
+ */
+void
+k_sched_start(void)
+{
+  _k_sched_lock();
+
+  for (;;) {
+    struct KTask *next_task = k_sched_dequeue();
+
+    if (next_task != K_NULL) {
+      k_assert(next_task->state == K_TASK_STATE_READY);
+      k_sched_switch(next_task);
+    } else {
+      k_sched_idle();
+    }
+  }
+}
+
+// Dequeue the highest-priority ready task.
 static struct KTask *
 k_sched_dequeue(void)
 {
-  struct KListLink *link;
   int i;
-  
-  if (!k_spinlock_holding(&_k_sched_spinlock))
-    k_panic("scheduler not locked");
+
+  k_assert(k_spinlock_holding(&_k_sched_spinlock));
 
   for (i = 0; i < K_TASK_MAX_PRIORITIES; i++) {
-    if (!k_list_is_empty(&sched_queue[i])) {
-      link = sched_queue[i].next;
+    if (!k_list_is_empty(&k_sched_queue[i])) {
+      struct KListLink *link = k_sched_queue[i].next;
       k_list_remove(link);
 
       return K_CONTAINER_OF(link, struct KTask, link);
@@ -64,6 +110,7 @@ k_sched_dequeue(void)
   return K_NULL;
 }
 
+// Perform a context switch to the specified task.
 static void
 k_sched_switch(struct KTask *task)
 {
@@ -77,7 +124,6 @@ k_sched_switch(struct KTask *task)
 #endif
 
   task->state = K_TASK_STATE_RUNNING;
-
   k_arch_switch(&my_cpu->sched_context, task->context);
 
 #ifdef K_ON_SCHED_AFTER_SWITCH
@@ -88,6 +134,7 @@ k_sched_switch(struct KTask *task)
   task->cpu = K_NULL;
 }
 
+// Enter the idle state when no task is ready.
 static void
 k_sched_idle(void)
 {
@@ -99,67 +146,36 @@ k_sched_idle(void)
   K_ON_SCHED_IDLE();
 #endif
 
-  arch_task_idle();
+  k_arch_task_idle();
 
   _k_sched_lock();
 }
 
-/**
- * Start the scheduler main loop. This function never returns.
- */
-void
-k_sched_start(void)
-{
-  _k_sched_lock();
-
-  for (;;) {
-    struct KTask *next = k_sched_dequeue();
-
-    if (next != K_NULL) {
-      k_assert(next->state == K_TASK_STATE_READY);
-      k_sched_switch(next);
-    } else {
-      k_sched_idle();
-    }
-  }
-}
-
-// Switch back from the current task context back to the scheduler loop
+// Yield the CPU to another ready task while holding the scheduler lock.
+// The interrupt flags are preserved across the context switch to maintain
+// consistent CPU interrupt state.
 void
 _k_sched_yield_locked(void)
 {
   int irq_flags;
 
-  if (!k_spinlock_holding(&_k_sched_spinlock))
-    k_panic("scheduler not locked");
+  k_assert(k_spinlock_holding(&_k_sched_spinlock));
 
   irq_flags = _k_cpu()->irq_flags;
   k_arch_switch(&k_task_current()->context, _k_cpu()->sched_context);
   _k_cpu()->irq_flags = irq_flags;
 }
 
-void
-_k_sched_add(struct KListLink *queue, struct KTask *task)
-{
-  struct KListLink *l;
-  struct KTask *other_task;
+static void _k_sched_sleep_queue_add(struct KListLink *, struct KTask *);
 
-  for (l = queue->next; l != queue; l = l->next) {
-    other_task = K_CONTAINER_OF(l, struct KTask, link);
-    if (_k_sched_priority_cmp(task, other_task) > 0)
-      break;
-  }
-
-  k_list_add_back(l, &task->link);
-}
-
-/**
- * Put the current task into sleep.
- *
- * @param queue An optional queue to insert the task into.
- * @param state The state indicating a kind of sleep.
- * @param lock  An optional spinlock to release while going to sleep.
- */
+// This function blocks the current task, optionally adding it to a
+// synchronization or wait queue, and switches context to allow another
+// task to execute.
+// If a timeout is provided, the task is also added to the global timeout
+// queue and will automatically wake after the timeout expires unless woken
+// earlier.
+// Optional spinlock protecting the resource being waited on can be provided.
+// It will be released before sleeping and reacquired after wake-up.
 int
 _k_sched_sleep(struct KListLink *queue, int state, k_tick_t timeout,
                struct KSpinLock *lock)
@@ -172,41 +188,97 @@ _k_sched_sleep(struct KListLink *queue, int state, k_tick_t timeout,
     k_spinlock_release(lock);
   }
 
-  if (!k_spinlock_holding(&_k_sched_spinlock))
-    k_panic("scheduler not locked");
+  k_assert(k_spinlock_holding(&_k_sched_spinlock));
 
   my_cpu = _k_cpu();
   my_task = my_cpu->task;
 
-  if (my_cpu->lock_count > 0)
-    k_panic("called from an IRQ context");
-  if (my_cpu->task == K_NULL)
-    k_panic("called not by a task");
+  k_assert(my_cpu->lock_count == 0);
+  k_assert(my_cpu->task != K_NULL);
 
-  if (timeout != 0) {
+  if (timeout != 0)
     _k_timeout_queue_add(&_k_sched_timeouts, &my_task->timer, timeout);
-  }
 
   my_task->state = state;
 
   if (queue != K_NULL)
-    _k_sched_add(queue, my_task);
+    _k_sched_sleep_queue_add(queue, my_task);
 
   _k_sched_yield_locked();
 
-  if (timeout != 0) {
-    if (my_task->timer.link.next != K_NULL) {
-      _k_timeout_queue_remove(&_k_sched_timeouts, &my_task->timer);
-    }
-  }
+  if ((timeout != 0) && (my_task->timer.link.next != K_NULL))
+    _k_timeout_queue_remove(&_k_sched_timeouts, &my_task->timer);
 
-  // someone may call this function while holding _k_sched_spinlock?
   if (lock != K_NULL) {
     _k_sched_unlock();
     k_spinlock_acquire(lock);
   }
 
   return my_task->sleep_result;
+}
+
+// Add a task to a sleep or wait queue.
+// Inserts the given task into a wait queue in priority order.
+// Higher-priority tasks are placed ahead of lower-priority ones,
+// ensuring that wake-ups occur in priority order.
+static void
+_k_sched_sleep_queue_add(struct KListLink *queue, struct KTask *task)
+{
+  struct KListLink *l;
+
+  for (l = queue->next; l != queue; l = l->next) {
+    struct KTask *other_task = K_CONTAINER_OF(l, struct KTask, link);
+    if (_k_sched_priority_cmp(task, other_task) > 0)
+      break;
+  }
+
+  k_list_add_back(l, &task->link);
+}
+
+void
+_k_sched_wakeup_all_locked(struct KListLink *queue, int result)
+{
+  k_assert(k_spinlock_holding(&_k_sched_spinlock));
+
+  while (!k_list_is_empty(queue)) {
+    struct KListLink *link = queue->next;
+    struct KTask *task = K_CONTAINER_OF(link, struct KTask, link);
+
+    _k_sched_resume(task, result);
+  }
+}
+
+struct KTask *
+_k_sched_wakeup_one_locked(struct KListLink *queue, int result)
+{
+  struct KTask *task;
+
+  k_assert(k_spinlock_holding(&_k_sched_spinlock));
+
+  if (k_list_is_empty(queue))
+    return K_NULL;
+
+  task = K_CONTAINER_OF(queue->next, struct KTask, link);
+
+  _k_sched_resume(task, result);
+
+  return task;
+}
+
+void
+_k_sched_resume(struct KTask *task, int result)
+{
+  k_assert(k_spinlock_holding(&_k_sched_spinlock));
+
+  if ((task->state != K_TASK_STATE_SLEEP) &&
+      (task->state != K_TASK_STATE_SLEEP_UNWAKEABLE))
+    return;
+
+  // FIXME: mutex priority
+  
+  k_list_remove(&task->link);
+  task->sleep_result = result;
+  _k_sched_enqueue(task);
 }
 
 void
@@ -230,8 +302,7 @@ _k_sched_raise_priority(struct KTask *task, int priority)
     if (task->sleep_on_mutex != K_NULL) {
       // Re-insert to update priority
       k_list_remove(&task->link);
-      _k_sched_add(&task->sleep_on_mutex->queue, task);
-  
+      _k_sched_sleep_queue_add(&task->sleep_on_mutex->queue, task);
       _k_mutex_may_raise_priority(task->sleep_on_mutex, task->priority);
     }
     
@@ -242,76 +313,12 @@ _k_sched_raise_priority(struct KTask *task, int priority)
 }
 
 void
-_k_sched_resume(struct KTask *task, int result)
-{
-  if (!k_spinlock_holding(&_k_sched_spinlock))
-    k_panic("sched not locked");
-
-  switch (task->state) {
-  case K_TASK_STATE_SLEEP:
-  case K_TASK_STATE_SLEEP_UNWAKEABLE:
-    // FIXME: this may lead to decreasing mutex priority
-    k_list_remove(&task->link);
-    break;
-
-  default:
-    return;
-  }
-
-  k_list_remove(&task->link);
-
-  task->sleep_result = result;
-
-  _k_sched_enqueue(task);
-  //_k_sched_may_yield(task);
-}
-
-// Resume all tasks waiting on the given queue
-// The caller must be holding the scheduler lock
-void
-_k_sched_wakeup_all_locked(struct KListLink *queue, int result)
-{
-  if (!k_spinlock_holding(&_k_sched_spinlock))
-    k_panic("sched not locked");
-
-  while (!k_list_is_empty(queue)) {
-    struct KListLink *link = queue->next;
-    struct KTask *task = K_CONTAINER_OF(link, struct KTask, link);
-
-    _k_sched_resume(task, result);
-  }
-}
-
-// Resume and return the highest priority task waiting on the given queue
-// The caller must be holding the scheduler lock
-struct KTask *
-_k_sched_wakeup_one_locked(struct KListLink *queue, int result)
-{
-  struct KTask *task;
-
-  if (!k_spinlock_holding(&_k_sched_spinlock))
-    k_panic("sched not locked");
-
-  if (k_list_is_empty(queue))
-    return K_NULL;
-
-  task = K_CONTAINER_OF(queue->next, struct KTask, link);
-
-  _k_sched_resume(task, result);
-
-  return task;
-}
-
-// Check whether a reschedule is required (taking into account the priority
-// of a task most recently added to the run queue)
-void
 _k_sched_may_yield(struct KTask *task)
 {
   struct KCpu *my_cpu;
   struct KTask *my_task;
 
-  if (!k_spinlock_holding(&_k_sched_spinlock))
-    k_panic("scheduler not locked");
+  k_assert(k_spinlock_holding(&_k_sched_spinlock));
 
   my_cpu = _k_cpu();
   my_task = my_cpu->task;

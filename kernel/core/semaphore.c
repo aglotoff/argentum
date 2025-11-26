@@ -1,7 +1,6 @@
 #include <kernel/core/config.h>
 
 #include <kernel/core/assert.h>
-#include <kernel/core/cpu.h>
 #include <kernel/core/semaphore.h>
 #include <kernel/core/task.h>
 

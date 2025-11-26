@@ -41,6 +41,11 @@ typedef size_t      k_size_t;
 typedef uint8_t     k_uint8_t;
 
 /**
+ * @brief Unsigned 32-bit integer type.
+ */
+typedef uint32_t    k_uint32_t;
+
+/**
  * @brief Unsigned integer type capable of storing a pointer.
  */
 typedef uintptr_t   k_uintptr_t;
@@ -57,6 +62,26 @@ typedef uintptr_t   k_uintptr_t;
  * @brief Maximum number of distinct task priority levels.
  */
 #define K_TASK_MAX_PRIORITIES  (2 * NZERO)
+
+/**
+ * @brief Identifier of the master CPU for system-level services.
+ *
+ * This macro defines the zero-based ID of the CPU that is responsible for
+ * handling global kernel tasks such as processing timeouts, timers,
+ * and other centralized services in an SMP system.
+ */
+#define K_CPU_ID_MASTER   0
+
+/**
+ * @brief Maximum number of program counter (PC) entries stored for debug
+ *        tracing.
+ *
+ * When spinlock debugging is enabled, the kernel records up to this many
+ * program counter values for each acquired spinlock. These values are later
+ * used by diagnostic tools or printed to identify where the spinlock was
+ * obtained.
+ */
+#define K_SPINLOCK_MAX_PCS  10
 
 #ifdef NDEBUG
   /**
@@ -142,6 +167,7 @@ typedef uintptr_t   k_uintptr_t;
 /*                                  Hooks                                     */
 /* -------------------------------------------------------------------------- */
 
+struct KSpinLock;
 struct KTask;
 
 void on_task_destroy(struct KTask *);
@@ -149,6 +175,31 @@ void on_sched_before_switch(struct KTask *);
 void on_sched_after_switch(struct KTask *);
 void on_sched_idle(void);
 void on_spinlock_debug_pc(k_uintptr_t);
+void on_spinlock_trace_record(struct KSpinLock *);
+void on_spinlock_trace_print(struct KSpinLock *);
+
+/**
+ * @brief Record callstack information for a spinlock.
+ *
+ * Saves the current program counter values into the spinlock’s `pcs` array.
+ * This is used for debugging and diagnostics when spinlock debugging is
+ * enabled.
+ *
+ * @param spin Pointer to the spinlock to record callstack data for.
+ */
+#define K_ON_SPINOCK_TRACE_RECORD on_spinlock_trace_record
+
+/**
+ * @brief Print recorded callstack information for a spinlock.
+ *
+ * Displays the previously recorded program counter values stored in the
+ * spinlock’s `pcs`. This assists in analyzing spinlock contention, usage paths,
+ * and potential deadlock conditions when spinlock debugging is enabled.
+ *
+ * @param spin Pointer to the spinlock whose recorded callstack
+ *             information should be printed.
+ */
+#define K_ON_SPINOCK_TRACE_PRINT  on_spinlock_trace_print
 
 /**
  * @brief Called when a task is destroyed.
@@ -186,13 +237,15 @@ void on_spinlock_debug_pc(k_uintptr_t);
 #define K_ON_SCHED_IDLE            on_sched_idle
 
 /**
- * @brief Optional hook for spinlock debugging.
+ * @brief Get the current CPU ID.
  *
- * When defined, this macro enables reporting of program counter (PC) values
- * associated with spinlock acquisition. It is primarily used to trace where a
- * spinlock was last acquired in order to diagnose deadlocks, recursive locking,
- * or incorrect release operations.
+ * Returns the identifier of the CPU currently executing this code.
+ *
+ * @return The zero-based logical CPU ID.
+ *
+ * @note This function is safe to call in any context, including interrupt
+ *       handlers, as it typically reads from a CPU-local register or memory.
  */
-#define K_ON_SPINLOCK_DEBUG_PC     on_spinlock_debug_pc
+unsigned k_cpu_id(void);
 
 #endif  // !__INCLUDE_KERNEL_CORE_CONFIG_H__

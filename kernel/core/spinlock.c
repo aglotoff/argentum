@@ -1,23 +1,10 @@
+#include <kernel/core/config.h>
+
 #include <kernel/core/assert.h>
-#include <kernel/core/cpu.h>
 #include <kernel/core/irq.h>
 #include <kernel/core/spinlock.h>
 
 #include "core_private.h"
-
-static void
-k_spinlock_print_callstack(struct KSpinLock *spin)
-{
-#ifdef K_ON_SPINLOCK_DEBUG_PC
-  int i;
-
-  for (i = 0; i < K_SPINLOCK_MAX_PCS && spin->pcs[i]; i++) {
-    K_ON_SPINLOCK_DEBUG_PC(spin->pcs[i]);
-  }
-#else
-  (void) spin;
-#endif
-}
 
 /**
  * @brief Initialize a spinlock.
@@ -48,19 +35,22 @@ k_spinlock_init(struct KSpinLock *spin, const char *name)
 void
 k_spinlock_acquire(struct KSpinLock *spin)
 {
-#ifndef K_NDEBUG
   if (k_spinlock_holding(spin)) {
-    k_spinlock_print_callstack(spin);
+#ifdef K_ON_SPINOCK_TRACE_PRINT
+    K_ON_SPINOCK_TRACE_PRINT(spin);
+#endif
     k_panic("CPU %x is already holding %s", k_cpu_id(), spin->name);
   }
-#endif
 
   k_irq_state_save();
 
   k_arch_spinlock_acquire(&spin->locked);
 
   spin->cpu = _k_cpu();
-  k_arch_spinlock_save_callstack(spin);
+
+#ifdef K_ON_SPINOCK_TRACE_RECORD
+  K_ON_SPINOCK_TRACE_RECORD(spin);
+#endif
 }
 
 /**
@@ -77,13 +67,13 @@ k_spinlock_acquire(struct KSpinLock *spin)
 void
 k_spinlock_release(struct KSpinLock *spin)
 {
-#ifndef K_NDEBUG
   if (!k_spinlock_holding(spin)) {
-    k_spinlock_print_callstack(spin);
+#ifdef K_ON_SPINOCK_TRACE_PRINT
+    K_ON_SPINOCK_TRACE_PRINT(spin);
+#endif
     k_panic("CPU %d cannot release %s: held by %d\n",
             k_cpu_id(), spin->name, spin->cpu);
   }
-#endif
 
   spin->cpu = K_NULL;
   spin->pcs[0] = 0;

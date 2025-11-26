@@ -1,5 +1,6 @@
+#include <kernel/core/config.h>
+
 #include <kernel/core/assert.h>
-#include <kernel/core/cpu.h>
 #include <kernel/core/condvar.h>
 #include <kernel/core/mutex.h>
 #include <kernel/core/task.h>

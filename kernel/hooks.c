@@ -44,12 +44,16 @@ on_sched_idle(void)
 }
 
 void
-on_spinlock_debug_pc(k_uintptr_t pc)
+on_spinlock_trace_print(struct KSpinLock *spin)
 {
-  struct PcDebugInfo info;
+  int i;
 
-  debug_info_pc(pc, &info);
-  cprintf("  [%p] %s (%s at line %d)\n",
-          pc,
-          info.fn_name, info.file, info.line);
+  for (i = 0; i < K_SPINLOCK_MAX_PCS && spin->pcs[i]; i++) {
+    struct PcDebugInfo info;
+
+    debug_info_pc(spin->pcs[i], &info);
+    cprintf("  [%p] %s (%s at line %d)\n",
+            spin->pcs[i],
+            info.fn_name, info.file, info.line);
+  }
 }

@@ -1,3 +1,5 @@
+#include <kernel/core/config.h>
+
 #include "core_private.h"
 
 void

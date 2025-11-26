@@ -1,5 +1,6 @@
+#include <kernel/core/config.h>
+
 #include <kernel/core/irq.h>
-#include <kernel/core/cpu.h>
 #include <kernel/core/timer.h>
 #include <kernel/core/tick.h>
 #include <kernel/core/spinlock.h>

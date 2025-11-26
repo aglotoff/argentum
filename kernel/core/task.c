@@ -1,7 +1,6 @@
-#include <kernel/core/assert.h>
-
 #include <kernel/core/config.h>
-#include <kernel/core/cpu.h>
+
+#include <kernel/core/assert.h>
 #include <kernel/core/irq.h>
 #include <kernel/core/task.h>
 #include <kernel/core/spinlock.h>
@@ -121,7 +120,7 @@ k_task_create(struct KTask *task,
 
   _k_timeout_create(&task->timer);
 
-  arch_task_init_stack(task, k_task_run);
+  k_arch_task_init_stack(task, k_task_run);
 
   return 0;
 }

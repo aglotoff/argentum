@@ -7,7 +7,6 @@
 
 #include <kernel/core/list.h>
 #include <kernel/core/tick.h>
-#include <arch/context.h>
 
 enum {
   K_TASK_STATE_NONE = 0,
@@ -53,7 +52,7 @@ struct KTask {
   void              *kstack;
   k_size_t           kstack_size;
   /** Saved kernel context */
-  struct Context    *context;
+  void              *context;
 
   /** Entry point function */
   void            (*entry)(void *);
@@ -70,8 +69,8 @@ struct KTask {
   void             *ext;
 };
 
-void          arch_task_init_stack(struct KTask *, void (*)(void));
-void          arch_task_idle(void);
+void          k_arch_task_init_stack(struct KTask *, void (*)(void));
+void          k_arch_task_idle(void);
 
 struct KTask *k_task_current(void);
 int           k_task_create(struct KTask *, void *, void (*)(void *), void *, void *, k_size_t, int);

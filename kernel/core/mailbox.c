@@ -1,4 +1,5 @@
-#include <kernel/core/cpu.h>
+#include <kernel/core/config.h>
+
 #include <kernel/core/mailbox.h>
 #include <kernel/core/task.h>
 

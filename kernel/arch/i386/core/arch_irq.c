@@ -1,5 +1,16 @@
+#include <kernel/core/config.h>
 #include <kernel/core/irq.h>
-#include <arch/i386/regs.h>
+
+static inline k_uint32_t
+eflags_get(void)
+{
+  k_uint32_t eflags;
+
+  asm volatile("pushfl; popl %0" : "=r" (eflags));
+  return eflags;
+}
+
+#define EFLAGS_IF         (1 << 9)    // Interrupt enable
 
 int
 k_arch_irq_is_enabled(void)

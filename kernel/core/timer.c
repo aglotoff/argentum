@@ -1,3 +1,5 @@
+#include <kernel/core/config.h>
+
 #include <kernel/core/assert.h>
 #include <kernel/core/timer.h>
 #include <kernel/core/spinlock.h>

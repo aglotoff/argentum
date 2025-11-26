@@ -1,5 +1,6 @@
+#include <kernel/core/config.h>
+
 #include <kernel/core/assert.h>
-#include <kernel/core/cpu.h>
 #include <kernel/core/irq.h>
 
 #include "core_private.h"

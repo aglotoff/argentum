@@ -4,10 +4,7 @@
 #include <kernel/core/spinlock.h>
 #include <kernel/core/task.h>
 #include <kernel/core/types.h>
-#include <kernel/console.h>
-#include <kernel/core/cpu.h>
 
-struct Context;
 struct KListLink;
 struct KMutex;
 struct KTimer;
@@ -88,7 +85,7 @@ _k_sched_wakeup_one(struct KListLink *queue, int result)
  * records the per-CPU information.
  */
 struct KCpu {
-  struct Context *sched_context;  ///< Saved scheduler context
+  void           *sched_context;  ///< Saved scheduler context
   struct KTask   *task;         ///< The currently running kernel task
   int             lock_count;     ///< Sheculer lock nesting level
   int             irq_save_count; ///< Nesting level of k_irq_state_save() calls

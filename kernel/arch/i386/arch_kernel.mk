@@ -1,5 +1,4 @@
 KERNEL_SRCFILES += \
-	kernel/arch/${ARCH}/core/arch_cpu.c \
 	kernel/arch/${ARCH}/core/arch_irq.c \
 	kernel/arch/${ARCH}/core/arch_spinlock.c \
 	kernel/arch/${ARCH}/core/arch_switch.c \

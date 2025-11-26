@@ -1,5 +1,8 @@
+#include <kernel/core/config.h>
+
 #include <kernel/core/task.h>
 #include <kernel/core/spinlock.h>
+
 #include <kernel/waitqueue.h>
 
 #include "core_private.h"

@@ -6,7 +6,7 @@
 #include <sys/stat.h>
 #include <sys/wait.h>
 
-#include <kernel/core/cpu.h>
+#include <kernel/core/config.h>
 #include <kernel/console.h>
 #include <kernel/elf.h>
 #include <kernel/fd.h>

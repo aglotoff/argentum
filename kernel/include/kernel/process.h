@@ -12,7 +12,7 @@
 #include <sys/types.h>
 #include <time.h>
 
-#include <kernel/core/cpu.h>
+#include <kernel/core/config.h>
 #include <kernel/core/spinlock.h>
 #include <kernel/core/list.h>
 #include <kernel/core/timer.h>

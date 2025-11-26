@@ -4,7 +4,7 @@
 #include <sys/utsname.h>
 
 #include <kernel/console.h>
-#include <kernel/core/cpu.h>
+#include <kernel/core/config.h>
 #include <kernel/core/condvar.h>
 #include <kernel/tty.h>
 #include <kernel/fs/buf.h>
