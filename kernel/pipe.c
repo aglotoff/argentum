@@ -179,7 +179,7 @@ pipe_init_system(void)
     kstack->ref_count++;
 
     k_task_create(&pipe_tasks[i], NULL, pipe_service_task, (void *) i, page2kva(kstack), PAGE_SIZE, 0);
-    k_task_resume(&pipe_tasks[i]);
+    k_task_start(&pipe_tasks[i]);
   }
 }
 

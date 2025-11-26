@@ -135,6 +135,16 @@ typedef uintptr_t   k_uintptr_t;
  */
 #define K_ERR_TIMEDOUT  (-ETIMEDOUT)
 
+/**
+ * @brief Operation interrupted before completion.
+ *
+ * Indicates that a blocking or long-running operation was interrupted by
+ * a signal, cancellation request, or other asynchronous event before it
+ * could complete. The caller may retry the operation if appropriate for
+ * the context.
+ */
+#define K_ERR_INTR      (-EINTR)
+
 /* -------------------------------------------------------------------------- */
 /*                                 Utilities                                  */
 /* -------------------------------------------------------------------------- */

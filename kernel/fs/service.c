@@ -1259,7 +1259,7 @@ fs_create_service(char *name, dev_t dev, void *extra, struct FSOps *ops)
     kstack->ref_count++;
 
     k_task_create(&fs->tasks[i], NULL, fs_service_task, fs, page2kva(kstack), PAGE_SIZE, 0);
-    k_task_resume(&fs->tasks[i]);
+    k_task_start(&fs->tasks[i]);
   }
 
   return fs;

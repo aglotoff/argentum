@@ -79,14 +79,8 @@ time_nanosleep(struct timespec *rqtp, struct timespec *rmtp)
     r = 0;
   } else {
     k_tick_t start_ticks = k_tick_get();
-    struct KSemaphore sem;
-
-    k_semaphore_create(&sem, 0);
-    r = k_semaphore_timed_get(&sem, req_ticks, 0);
-
+    r = k_task_sleep(req_ticks);
     elapsed_ticks = MIN(k_tick_get() - start_ticks, req_ticks);
-
-    k_semaphore_destroy(&sem);
   }
 
   if (rmtp != NULL)

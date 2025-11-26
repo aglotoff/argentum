@@ -7,22 +7,91 @@
 
 #include "core_private.h"
 
+// Used by the kernel to verify that the object is a valid task
+#define K_TASK_TYPE    0x5441534B  // {'T','A','S','K'}
+
 static void k_task_run(void);
 
 /**
- * Resume execution of a previously suspended task (or begin execution of a
- * newly created one).
- * 
- * @param task The kernel task to resume execution
+ * @brief Initialize a task control block and prepare it for execution.
+ *
+ * Sets up the task’s initial context, stack, priority, and state, and
+ * configures its timeout object and bookkeeping fields. The task is created
+ * in the suspended state; it will not run until `k_task_start()` is called.
+ *
+ * @param task        Pointer to a `KTask` structure to initialize.
+ * @param ext         User-defined extension pointer stored in the task
+ *                    control block.
+ * @param entry       Function that will serve as the task’s entry point.
+ * @param arg         Argument passed to the entry function upon startup.
+ * @param stack       Pointer to the stack region allocated for the task.
+ * @param stack_size  Size of the provided stack region in bytes.
+ * @param priority    Initial scheduling priority for the task.
+ *
+ * @return 0 on success; always succeeds unless invalid parameters are passed,
+ *         in which case assertions may trigger in debug builds.
+ *
+ * @note This function does not enqueue the task for execution.
+ *       Call `k_task_start()` to make the task runnable.
  */
 int
-k_task_resume(struct KTask *task)
+k_task_create(struct KTask *task,
+              void *ext,
+              void (*entry)(void *), void *arg,
+              void *stack, k_size_t stack_size,
+              int priority)
 {
+  k_list_init(&task->owned_mutexes);
+  k_list_null(&task->link);
+  task->type = K_TASK_TYPE;
+  task->sleep_on_mutex = K_NULL;
+  task->flags = 0;
+  task->saved_priority = priority;
+  task->priority = priority;
+  task->state = K_TASK_STATE_INIT;
+  task->entry = entry;
+  task->arg = arg;
+  task->ext = ext;
+  task->kstack = stack;
+  task->kstack_size = stack_size;
+  task->err = 0;
+
+  _k_timeout_create(&task->timer);
+
+  k_arch_task_init_stack(task, k_task_run);
+
+  return 0;
+}
+
+/**
+ * @brief Transition a newly created task into the ready state.
+ *
+ * Schedules a task for execution for the first time. The task must be in
+ * the `K_TASK_STATE_INIT` state, indicating that it has been created but
+ * has never run. If the state is invalid, the operation fails.
+ *
+ * Upon success, the task is enqueued in the scheduler’s ready queue and
+ * may begin execution immediately depending on system state and priority.
+ *
+ * @param task Pointer to a valid, initialized task control block.
+ *
+ * @return 0 on success; `K_ERR_INVAL` if the task is not in the
+ *         initialization state.
+ *
+ * @note The task must have been fully initialized by `k_task_create()` and
+ *       must not have been started previously.
+ */
+int
+k_task_start(struct KTask *task)
+{
+  k_assert(task != K_NULL);
+  k_assert(task->type == K_TASK_TYPE);
+
   _k_sched_lock();
 
-  if (task->state != K_TASK_STATE_SUSPENDED) {
+  if (task->state != K_TASK_STATE_INIT) {
     _k_sched_unlock();
-    return -EINVAL;
+    return K_ERR_INVAL;
   }
 
   k_assert(k_list_is_null(&task->link));
@@ -36,15 +105,19 @@ k_task_resume(struct KTask *task)
 }
 
 /**
- * Relinguish the CPU allowing another task to run.
+ * @brief Voluntarily yield the processor to another runnable task.
+ *
+ * The calling task is reinserted into the ready queue, allowing the
+ * scheduler to select a different task to run. This is a cooperative
+ * scheduling hint and does not change the calling task’s state.
  */
 void
 k_task_yield(void)
 {
   struct KTask *current = k_task_current();
   
-  if (current == K_NULL)
-    k_panic("no current task");
+  k_assert(current != K_NULL);
+  k_assert(current->type == K_TASK_TYPE);
 
   _k_sched_lock();
 
@@ -58,127 +131,130 @@ k_task_yield(void)
 static void
 k_task_run(void)
 {
-  struct KTask *my_task = k_task_current();
+  struct KTask *current = k_task_current();
 
-  // Still holding the scheduler lock (acquired in k_sched_start)
+  k_assert(current != K_NULL);
+  k_assert(current->type == K_TASK_TYPE);
+
+  // Release the lock acquired in k_sched_start
   _k_sched_unlock();
 
   k_irq_enable();
 
-  my_task->entry(my_task->arg);
+  current->entry(current->arg);
 
   k_task_exit();
 }
 
+/**
+ * @brief Wake a sleeping task.
+ *
+ * If the task is sleeping on a condition other than an unwakeable sleep
+ * state, it is transitioned back to the ready state and given an error code
+ * of `K_ERR_INTR` to indicate that its wait was interrupted.
+ *
+ * @param task Pointer to the task control block to wake.
+ *
+ * @note Tasks in the `K_TASK_STATE_SLEEP_UNWAKEABLE` state are not awakened.
+ */
 void
 k_task_wake(struct KTask *task)
 {
+  k_assert(task != K_NULL);
+  k_assert(task->type == K_TASK_TYPE);
+
   _k_sched_lock();
 
-  if (!task->sleep_on_mutex && task->state != K_TASK_STATE_SLEEP_UNWAKEABLE) {
-    // TODO: if task is running, send an SGI
-    _k_sched_resume(task, -EINTR);
+  if (task->state != K_TASK_STATE_SLEEP_UNWAKEABLE) {
+    // TODO: if the task is running, send an SGI
+    _k_sched_resume(task, K_ERR_INTR);
   }
 
   _k_sched_unlock();
 }
 
 /**
- * Initialize the kernel task. After successful initialization, the task
- * is placed into suspended state and must be explicitly made runnable by a call
- * to k_task_resume().
- * 
- * @param process  Pointer to a process the task belongs to.
- * @param task   Pointer to the kernel task to be initialized.
- * @param entry    task entry point function.
- * @param priority task priority value.
- * @param stack    Top of the task stack.
- * 
- * @return 0 on success.
- */
-int
-k_task_create(struct KTask *task,
-              void *ext,
-              void (*entry)(void *), void *arg,
-              void *stack, k_size_t stack_size,
-              int priority)
-{
-  k_list_init(&task->owned_mutexes);
-  k_list_null(&task->link);
-  task->sleep_on_mutex     = K_NULL;
-
-  task->flags          = 0;
-  task->saved_priority = priority;
-  task->priority       = priority;
-  task->state          = K_TASK_STATE_SUSPENDED;
-  task->entry          = entry;
-  task->arg            = arg;
-  task->err            = 0;
-  task->ext            = ext;
-  task->kstack         = stack;
-  task->kstack_size    = stack_size;
-
-  _k_timeout_create(&task->timer);
-
-  k_arch_task_init_stack(task, k_task_run);
-
-  return 0;
-}
-
-/**
- * Destroy the specified task
+ * @brief Terminate the calling task and remove it from scheduling.
+ *
+ * Marks the task as destroyed and yields permanently. The task never returns
+ * from this function.
+ *
+ * @note This function must be invoked only by the task that intends to exit.
+ *       Task memory and stack are not freed here; upper layers are responsible
+ *       for cleanup if supported by the system design.
  */
 void
 k_task_exit(void)
 {
-  struct KTask *task = k_task_current();
+  struct KTask *current = k_task_current();
 
-  if (task == K_NULL)
-    k_panic("no current task");
+  k_assert(current != K_NULL);
+  k_assert(current->type == K_TASK_TYPE);
 
-  _k_timeout_destroy(&task->timer);
+  _k_timeout_destroy(&current->timer);
 
   _k_sched_lock();
 
-  task->state = K_TASK_STATE_DESTROYED;
+  current->state = K_TASK_STATE_DESTROYED;
 
 #ifdef K_ON_TASK_DESTROY
-  K_ON_TASK_DESTROY(task);
+  K_ON_TASK_DESTROY(current);
 #endif
 
   _k_sched_yield_locked();
+
+  current->type = 0;
 
   _k_sched_unlock();
 
   k_panic("should not return");
 }
 
-void
-k_task_suspend(void)
+/**
+ * @brief Put the calling task to sleep for a specified timeout period.
+ *
+ * Transitions the current task into the sleeping state and yields control to
+ * the scheduler. The task remains asleep until either:
+ *   - the specified timeout expires, or
+ *   - it is explicitly woken by `k_task_wake()` or another wake mechanism.
+ *
+ * The return value indicates the reason the task resumed execution.
+ *
+ * @param timeout Number of ticks to sleep. A value of zero causes an
+ *                immediate yield without blocking. A value of 0 suspends the
+ *                task indefinitely.
+ *
+ * @return 0 on normal timeout expiration; or an error code such as
+ *         `K_ERR_INTR` if the sleep was interrupted.
+ */
+int
+k_task_sleep(k_tick_t timeout)
 {
-  struct KTask *task = k_task_current();
+  struct KTask *current = k_task_current();
 
-  _k_sched_lock();
-  
-  task->state = K_TASK_STATE_SUSPENDED;
-  _k_sched_yield_locked();
+  k_assert(current != K_NULL);
+  k_assert(current->type == K_TASK_TYPE);
 
-  _k_sched_unlock();
+  return _k_sched_sleep(K_NULL,
+                        K_TASK_STATE_SLEEP,
+                        timeout,
+                        K_NULL);
 }
 
 /**
- * Get the currently executing task.
- * 
- * @return A pointer to the currently executing task or K_NULL
+ * @brief Retrieve the task control block of the currently executing task.
+ *
+ * @return Pointer to the current `KTask` structure, or NULL if no task is
+ *         running (e.g., before scheduler start-up).
  */
 struct KTask *
 k_task_current(void)
 {
-  struct KTask *task;
+  struct KTask *current;
 
   k_irq_state_save();
-  task = _k_cpu()->task;
+  current = _k_cpu()->task;
   k_irq_state_restore();
 
-  return task;
+  return current;
 }

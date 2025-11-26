@@ -97,8 +97,8 @@ main(void)
 
   // t1 = k_task_create(NULL, test_task, "AAAA", 1);
   // t2 = k_task_create(NULL, test_task, "BBBB", 1);
- // k_task_resume(t1);
- // k_task_resume(t2);
+ // k_task_start(t1);
+ // k_task_start(t2);
 
 //  struct KTimer timer;
 

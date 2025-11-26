@@ -254,7 +254,7 @@ process_create(const void *binary, struct Process **pstore)
   k_list_add_back(&__process_list, &proc->link);
   process_unlock();
 
-  k_task_resume(&proc->thread->task);
+  k_task_start(&proc->thread->task);
 
   if (pstore != NULL)
     *pstore = proc;
@@ -424,7 +424,7 @@ process_copy(int share_vm)
   // cprintf("[k] process #%x created\n", child->pid);
 
   k_assert(child->thread != NULL);
-  k_task_resume(&child->thread->task);
+  k_task_start(&child->thread->task);
 
   return child->pid;
 }

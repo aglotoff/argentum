@@ -74,7 +74,7 @@ trap(struct TrapFrame *tf)
     signal_deliver_pending();
 
     while (my_process->state != PROCESS_STATE_ACTIVE) {
-      k_task_suspend();
+      k_task_sleep(0);
       signal_deliver_pending();
     }
   }

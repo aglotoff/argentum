@@ -69,7 +69,7 @@ interrupt_attach_task(int irq, void (*handler)(int, void *), void *handler_arg)
 
   interrupt_attach(irq, interrupt_task_notify, isr);
 
-  k_task_resume(&isr->task);
+  k_task_start(&isr->task);
 }
 
 void
