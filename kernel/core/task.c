@@ -231,14 +231,21 @@ int
 k_task_sleep(k_tick_t timeout)
 {
   struct KTask *current = k_task_current();
+  int r;
 
   k_assert(current != K_NULL);
   k_assert(current->type == K_TASK_TYPE);
 
-  return _k_sched_sleep(K_NULL,
+  _k_sched_lock();
+
+  r = _k_sched_sleep(K_NULL,
                         K_TASK_STATE_SLEEP,
                         timeout,
                         K_NULL);
+
+  _k_sched_unlock();
+
+  return r;
 }
 
 /**
