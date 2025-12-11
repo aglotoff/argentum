@@ -7,7 +7,7 @@
 #include "core_private.h"
 
 // Used by the kernel to verify that the object is a valid timer
-#define K_TIMER_TYPE  0x54494D52  // {'T','I','M','R'}
+#define K_TIMER_TAG   0x54494D52  // {'T','I','M','R'}
 
 enum {
   K_TIMER_STATE_NONE     = 0,
@@ -50,13 +50,13 @@ k_timer_create(struct KTimer *timer,
 {
   k_assert(timer != K_NULL);
 
-  _k_timeout_create(&timer->queue_entry);
+  _k_timeout_entry_create(&timer->queue_entry);
   
   timer->callback = callback;
   timer->callback_arg = callback_arg;
   timer->delay = delay;
   timer->period = period;
-  timer->type = K_TIMER_TYPE;
+  timer->object_tag = K_TIMER_TAG;
 
   return 0;
 }
@@ -79,7 +79,7 @@ int
 k_timer_destroy(struct KTimer *timer)
 {
   k_timer_stop(timer);
-  timer->type = 0;
+  timer->object_tag = 0;
   return 0;
 }
 
@@ -98,7 +98,7 @@ int
 k_timer_start(struct KTimer *timer)
 {
   k_assert(timer != K_NULL);
-  k_assert(timer->type == K_TIMER_TYPE);
+  k_assert(timer->object_tag == K_TIMER_TAG);
 
   k_spinlock_acquire(&k_timer_lock);
 
@@ -128,7 +128,7 @@ int
 k_timer_stop(struct KTimer *timer)
 {
   k_assert(timer != K_NULL);
-  k_assert(timer->type == K_TIMER_TYPE);
+  k_assert(timer->object_tag == K_TIMER_TAG);
 
   k_spinlock_acquire(&k_timer_lock);
 

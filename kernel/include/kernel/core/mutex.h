@@ -16,7 +16,7 @@ struct KTask;
  * while holding the lock.
  */
 struct KMutex {
-  int               type;
+  int               object_tag;
   int               flags;
   /** The task currently holding the mutex. */
   struct KTask   *owner;
@@ -29,8 +29,6 @@ struct KMutex {
   /** Mutex name (for debugging purposes). */
   const char       *name;
 };
-
-#define K_MUTEX_TYPE    0x4D555458  // {'M','U','T','X'}
 
 void           k_mutex_init(struct KMutex *, const char *);
 void           k_mutex_fini(struct KMutex *);

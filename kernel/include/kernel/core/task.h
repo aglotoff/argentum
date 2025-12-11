@@ -29,7 +29,7 @@ struct KMutex;
  * defined extension data.
  */
 struct KTask {
-  int type;
+  int object_tag;
 
   struct KListLink link;
   int state;

@@ -6,6 +6,8 @@
 
 #include "core_private.h"
 
+#define K_MUTEX_TAG     0x4D555458  // {'M','U','T','X'}
+
 /**
  * Initialize a statically allocated mutex.
  * 
@@ -17,7 +19,7 @@ k_mutex_init(struct KMutex *mutex, const char *name)
 {
   k_list_init(&mutex->queue);
   k_list_null(&mutex->link);
-  mutex->type = K_MUTEX_TYPE;
+  mutex->object_tag = K_MUTEX_TAG;
   mutex->owner = K_NULL;
   mutex->name = name;
   mutex->priority = K_TASK_MAX_PRIORITIES;
@@ -28,7 +30,7 @@ void
 k_mutex_fini(struct KMutex *mutex)
 {
   k_assert(mutex != K_NULL);
-  k_assert(mutex->type == K_MUTEX_TYPE);
+  k_assert(mutex->object_tag == K_MUTEX_TAG);
 
   _k_sched_lock();
 
@@ -80,7 +82,7 @@ k_mutex_try_lock(struct KMutex *mutex)
   int r;
 
   k_assert(mutex != K_NULL);
-  k_assert(mutex->type == K_MUTEX_TYPE);
+  k_assert(mutex->object_tag == K_MUTEX_TAG);
 
   k_assert(k_task_current() != K_NULL);
 
@@ -133,7 +135,7 @@ k_mutex_timed_lock(struct KMutex *mutex, k_tick_t timeout)
   k_assert(my_task != K_NULL);
 
   k_assert(mutex != K_NULL);
-  k_assert(mutex->type == K_MUTEX_TYPE);
+  k_assert(mutex->object_tag == K_MUTEX_TAG);
 
   _k_sched_lock();
 
@@ -217,7 +219,7 @@ k_mutex_holding(struct KMutex *mutex)
   struct KTask *owner;
 
   k_assert(mutex != K_NULL);
-  k_assert(mutex->type == K_MUTEX_TYPE);
+  k_assert(mutex->object_tag == K_MUTEX_TAG);
 
   _k_sched_lock();
   owner = mutex->owner;

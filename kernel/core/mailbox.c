@@ -9,7 +9,7 @@ static int k_mailbox_try_receive_locked(struct KMailBox *, void *);
 static int k_mailbox_try_send_locked(struct KMailBox *, const void *);
 
 // Used by the kernel to verify that the object is a valid mailbox
-#define K_MAILBOX_TYPE    0x4D424F58  // {'M','B','O','X'}
+#define K_MAILBOX_TAG     0x4D424F58  // {'M','B','O','X'}
 
 /**
  * @brief Initialize a mailbox.
@@ -38,7 +38,7 @@ k_mailbox_create(struct KMailBox *mailbox,
   k_list_init(&mailbox->receivers);
   k_list_init(&mailbox->senders);
 
-  mailbox->type = K_MAILBOX_TYPE;
+  mailbox->object_tag = K_MAILBOX_TAG;
   mailbox->buf_start = (k_uint8_t *) buf;
   mailbox->buf_end = mailbox->buf_start + buf_size - (buf_size % msg_size);
   mailbox->read_ptr = mailbox->buf_start;
@@ -67,7 +67,7 @@ void
 k_mailbox_destroy(struct KMailBox *mailbox)
 {
   k_assert(mailbox != K_NULL);
-  k_assert(mailbox->type == K_MAILBOX_TYPE);
+  k_assert(mailbox->object_tag == K_MAILBOX_TAG);
 
   k_spinlock_acquire(&mailbox->lock);
 
@@ -76,7 +76,7 @@ k_mailbox_destroy(struct KMailBox *mailbox)
 
   k_spinlock_release(&mailbox->lock);
 
-  mailbox->type = 0;
+  mailbox->object_tag = 0;
 
   // TODO: check reschedule
 }
@@ -100,7 +100,7 @@ k_mailbox_try_receive(struct KMailBox *mailbox, void *message)
   int r;
 
   k_assert(mailbox != K_NULL);
-  k_assert(mailbox->type == K_MAILBOX_TYPE);
+  k_assert(mailbox->object_tag == K_MAILBOX_TAG);
 
   k_spinlock_acquire(&mailbox->lock);
   r = k_mailbox_try_receive_locked(mailbox, message);
@@ -134,7 +134,7 @@ k_mailbox_timed_receive(struct KMailBox *mailbox,
   int r;
 
   k_assert(mailbox != K_NULL);
-  k_assert(mailbox->type == K_MAILBOX_TYPE);
+  k_assert(mailbox->object_tag == K_MAILBOX_TAG);
 
   k_spinlock_acquire(&mailbox->lock);
 
@@ -198,7 +198,7 @@ k_mailbox_try_send(struct KMailBox *mailbox, const void *message)
   int r;
 
   k_assert(mailbox != K_NULL);
-  k_assert(mailbox->type == K_MAILBOX_TYPE);
+  k_assert(mailbox->object_tag == K_MAILBOX_TAG);
 
   k_spinlock_acquire(&mailbox->lock);
   r = k_mailbox_try_send_locked(mailbox, message);
@@ -232,7 +232,7 @@ k_mailbox_timed_send(struct KMailBox *mailbox,
   int r;
 
   k_assert(mailbox != K_NULL);
-  k_assert(mailbox->type == K_MAILBOX_TYPE);
+  k_assert(mailbox->object_tag == K_MAILBOX_TAG);
 
   k_spinlock_acquire(&mailbox->lock);
 

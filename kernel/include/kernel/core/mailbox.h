@@ -5,13 +5,13 @@
 #include <kernel/core/spinlock.h>
 
 /**
- * @brief Represents a kernel mailbox object.
+ * @brief Kernel mailbox object.
  *
  * A mailbox provides synchronized message-passing between tasks using a
  * circular buffer. It supports multiple concurrent senders and receivers.
  */
 struct KMailBox {
-  int type;
+  int object_tag;
   int flags;
   struct KSpinLock lock;
   k_uint8_t *buf_start;

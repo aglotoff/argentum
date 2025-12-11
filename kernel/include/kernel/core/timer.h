@@ -4,13 +4,13 @@
 #include <kernel/core/types.h>
 
 /**
- * @brief Kernel software timer descriptor.
+ * @brief Kernel software timer object.
  *
  * Represents a timer managed by the kernel scheduler or timeout subsystem.
  * Each timer can be configured for one-shot or periodic operation.
  */
 struct KTimer {
-  int type;
+  int object_tag;
   struct KTimeoutEntry queue_entry;
   int state;
   void (*callback)(void *);

@@ -8,7 +8,7 @@
 #include "core_private.h"
 
 // Used by the kernel to verify that the object is a valid conditional variable
-#define K_CONDVAR_TYPE    0x434F4E44  // {'C','O','N','D'}
+#define K_CONDVAR_TAG     0x434F4E44  // {'C','O','N','D'}
 
 /**
  * @brief Initialize a condition variable.
@@ -21,35 +21,32 @@
 void
 k_condvar_create(struct KCondVar *cond)
 {
-  k_list_init(&cond->queue);
-  cond->type = K_CONDVAR_TYPE;
+  k_list_init(&cond->sleep_queue);
+  cond->object_tag = K_CONDVAR_TAG;
 }
 
 /**
  * @brief Destroy a condition variable and wake up all waiting tasks.
  *
  * This function invalidates the condition variable and wakes all tasks
- * currently waiting on it.
+ * currently waiting on it with `K_ERR_INVAL` code.
  *
- * @param cond Pointer to a condition variable previously initialized with
- *             `k_condvar_create()`.
+ * @param cond Pointer to the condition variable to be destroyed.
  *
  * @note Must not be called while any task holds the associated mutex or
  *       still references the condition variable.
- * @note Any task currently waiting on the semaphore will be woken with
- *       `K_ERR_INVAL`.
  */
 void
 k_condvar_destroy(struct KCondVar *cond)
 {
   k_assert(cond != K_NULL);
-  k_assert(cond->type == K_CONDVAR_TYPE);
+  k_assert(cond->object_tag == K_CONDVAR_TAG);
 
   _k_sched_lock();
-  _k_sched_wakeup_all_locked(&cond->queue, -K_ERR_INVAL);
+  _k_sched_wakeup_all_locked(&cond->sleep_queue, K_ERR_INVAL);
   _k_sched_unlock();
 
-  cond->type = 0;
+  cond->object_tag = 0;
 
   // TODO: check reschedule
 }
@@ -58,17 +55,15 @@ k_condvar_destroy(struct KCondVar *cond)
  * @brief Wait on a condition variable with an optional timeout.
  *
  * Atomically unlocks the provided mutex and suspends the calling task on the
- * condition variable until it is signaled or the timeout expires.
- *
- * When the function returns (regardless of reason), the mutex is reacquired
- * before returning to the caller.
+ * condition variable until it is signaled or the timeout expires. When the
+ * function returns (regardless of reason), the mutex is reacquired.
  *
  * @param cond    Pointer to the condition variable to wait on.
  * @param mutex   Pointer to a mutex currently held by the calling task.
  * @param timeout Timeout duration in system ticks.
- * @param options Wait behavior flags:
- *                - `0`: Normal, interruptible sleep.
- *                - `K_SLEEP_UNWAKEABLE`: Task cannot be interrupted;
+ * @param options Waiting behavior flags:
+ *                - `K_SLEEP_WAKEABLE`: Normal, interruptible sleep.
+ *                - `K_SLEEP_UNWAKEABLE`: Task sleep cannot be interrupted;
  *                  it only wakes on a signal/broadcast or timeout.
  *
  * @retval `0` on successful wakeup (signal or broadcast).
@@ -76,7 +71,6 @@ k_condvar_destroy(struct KCondVar *cond)
  * @retval `K_ERR_INVAL` if the condition variable was destroyed while waiting.
  *
  * @note The calling task must hold `mutex` before invoking this function.
- * @note Upon return, the mutex is always re-acquired.
  */
 int
 k_condvar_timed_wait(struct KCondVar *cond,
@@ -87,7 +81,7 @@ k_condvar_timed_wait(struct KCondVar *cond,
   int r;
 
   k_assert(cond != K_NULL);
-  k_assert(cond->type == K_CONDVAR_TYPE);
+  k_assert(cond->object_tag == K_CONDVAR_TAG);
 
   k_assert(k_mutex_holding(mutex));
 
@@ -95,7 +89,7 @@ k_condvar_timed_wait(struct KCondVar *cond,
 
   _k_mutex_unlock(mutex);
 
-  r = _k_sched_sleep(&cond->queue,
+  r = _k_sched_sleep(&cond->sleep_queue,
                      options & K_SLEEP_UNWAKEABLE
                       ? K_TASK_STATE_SLEEP_UNWAKEABLE
                       : K_TASK_STATE_SLEEP,
@@ -117,7 +111,7 @@ k_condvar_timed_wait(struct KCondVar *cond,
  *
  * @param cond Pointer to the condition variable to signal.
  *
- * @return 0 on success.
+ * @return `0` on success.
  *
  * @note Typically used when a single waiting task can make progress.
  */
@@ -125,10 +119,10 @@ int
 k_condvar_notify_one(struct KCondVar *cond)
 {
   k_assert(cond != K_NULL);
-  k_assert(cond->type == K_CONDVAR_TYPE);
+  k_assert(cond->object_tag == K_CONDVAR_TAG);
 
   _k_sched_lock();
-  _k_sched_wakeup_one_locked(&cond->queue, 0);
+  _k_sched_wakeup_one_locked(&cond->sleep_queue, 0);
   _k_sched_unlock();
 
   // TODO: check reschedule
@@ -144,7 +138,7 @@ k_condvar_notify_one(struct KCondVar *cond)
  *
  * @param cond Pointer to the condition variable to broadcast.
  *
- * @return 0 on success.
+ * @return `0` on success.
  *
  * @note Typically used when a change in shared state may allow multiple tasks
  *       to proceed.
@@ -153,10 +147,10 @@ int
 k_condvar_notify_all(struct KCondVar *cond)
 {
   k_assert(cond != K_NULL);
-  k_assert(cond->type == K_CONDVAR_TYPE);
+  k_assert(cond->object_tag == K_CONDVAR_TAG);
 
   _k_sched_lock();
-  _k_sched_wakeup_all_locked(&cond->queue, 0);
+  _k_sched_wakeup_all_locked(&cond->sleep_queue, 0);
   _k_sched_unlock();
 
   // TODO: check reschedule

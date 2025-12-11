@@ -8,7 +8,7 @@
 #include "core_private.h"
 
 // Used by the kernel to verify that the object is a valid task
-#define K_TASK_TYPE    0x5441534B  // {'T','A','S','K'}
+#define K_TASK_TAG     0x5441534B  // {'T','A','S','K'}
 
 static void k_task_run(void);
 
@@ -43,7 +43,7 @@ k_task_create(struct KTask *task,
 {
   k_list_init(&task->owned_mutexes);
   k_list_null(&task->link);
-  task->type = K_TASK_TYPE;
+  task->object_tag = K_TASK_TAG;
   task->sleep_on_mutex = K_NULL;
   task->flags = 0;
   task->saved_priority = priority;
@@ -56,7 +56,7 @@ k_task_create(struct KTask *task,
   task->kstack_size = stack_size;
   task->err = 0;
 
-  _k_timeout_create(&task->timer);
+  _k_timeout_entry_create(&task->timer);
 
   k_arch_task_init_stack(task, k_task_run);
 
@@ -85,7 +85,7 @@ int
 k_task_start(struct KTask *task)
 {
   k_assert(task != K_NULL);
-  k_assert(task->type == K_TASK_TYPE);
+  k_assert(task->object_tag == K_TASK_TAG);
 
   _k_sched_lock();
 
@@ -117,7 +117,7 @@ k_task_yield(void)
   struct KTask *current = k_task_current();
   
   k_assert(current != K_NULL);
-  k_assert(current->type == K_TASK_TYPE);
+  k_assert(current->object_tag == K_TASK_TAG);
 
   _k_sched_lock();
 
@@ -134,7 +134,7 @@ k_task_run(void)
   struct KTask *current = k_task_current();
 
   k_assert(current != K_NULL);
-  k_assert(current->type == K_TASK_TYPE);
+  k_assert(current->object_tag == K_TASK_TAG);
 
   // Release the lock acquired in k_sched_start
   _k_sched_unlock();
@@ -161,7 +161,7 @@ void
 k_task_wake(struct KTask *task)
 {
   k_assert(task != K_NULL);
-  k_assert(task->type == K_TASK_TYPE);
+  k_assert(task->object_tag == K_TASK_TAG);
 
   _k_sched_lock();
 
@@ -189,9 +189,9 @@ k_task_exit(void)
   struct KTask *current = k_task_current();
 
   k_assert(current != K_NULL);
-  k_assert(current->type == K_TASK_TYPE);
+  k_assert(current->object_tag == K_TASK_TAG);
 
-  _k_timeout_destroy(&current->timer);
+  _k_timeout_entry_destroy(&current->timer);
 
   _k_sched_lock();
 
@@ -203,7 +203,7 @@ k_task_exit(void)
 
   _k_sched_yield_locked();
 
-  current->type = 0;
+  current->object_tag = 0;
 
   _k_sched_unlock();
 
@@ -234,14 +234,14 @@ k_task_sleep(k_tick_t timeout)
   int r;
 
   k_assert(current != K_NULL);
-  k_assert(current->type == K_TASK_TYPE);
+  k_assert(current->object_tag == K_TASK_TAG);
 
   _k_sched_lock();
 
   r = _k_sched_sleep(K_NULL,
-                        K_TASK_STATE_SLEEP,
-                        timeout,
-                        K_NULL);
+                     K_TASK_STATE_SLEEP,
+                     timeout,
+                     K_NULL);
 
   _k_sched_unlock();
 

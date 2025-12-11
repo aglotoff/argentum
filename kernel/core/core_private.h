@@ -33,10 +33,10 @@ void            _k_timeout_queue_check(struct KListLink *, void (*)(struct KTime
 void            _k_timeout_queue_adjust(struct KListLink *,
                         void (*callback)(struct KTimeoutEntry *),
                         k_tick_t);
-void            _k_timeout_create(struct KTimeoutEntry *);
+void            _k_timeout_entry_create(struct KTimeoutEntry *);
 void            _k_timeout_queue_add(struct KListLink *, struct KTimeoutEntry *, k_tick_t);
 void            _k_timeout_queue_remove(struct KListLink *, struct KTimeoutEntry *);
-void            _k_timeout_destroy(struct KTimeoutEntry *);
+void            _k_timeout_entry_destroy(struct KTimeoutEntry *);
 
 extern struct KSpinLock _k_sched_spinlock;
 

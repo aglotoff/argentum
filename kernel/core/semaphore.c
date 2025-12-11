@@ -7,7 +7,7 @@
 #include "core_private.h"
 
 // Used by the kernel to verify that the object is a valid semaphore
-#define K_SEMAPHORE_TYPE    0x53454D41  // {'S','E','M','A'}
+#define K_SEMAPHORE_TAG     0x53454D41  // {'S','E','M','A'}
 
 static int k_semaphore_try_get_locked(struct KSemaphore *);
 
@@ -23,8 +23,8 @@ void
 k_semaphore_create(struct KSemaphore *sem, int initial_count)
 {
   k_spinlock_init(&sem->lock, "k_semaphore");
-  k_list_init(&sem->queue);
-  sem->type = K_SEMAPHORE_TYPE;
+  k_list_init(&sem->sleep_queue);
+  sem->object_tag = K_SEMAPHORE_TAG;
   sem->count = initial_count;
 }
 
@@ -46,13 +46,13 @@ void
 k_semaphore_destroy(struct KSemaphore *sem)
 {
   k_assert(sem != K_NULL);
-  k_assert(sem->type == K_SEMAPHORE_TYPE);
+  k_assert(sem->object_tag == K_SEMAPHORE_TAG);
 
   k_spinlock_acquire(&sem->lock);
-  _k_sched_wakeup_all(&sem->queue, K_ERR_INVAL);
+  _k_sched_wakeup_all(&sem->sleep_queue, K_ERR_INVAL);
   k_spinlock_release(&sem->lock);
 
-  sem->type = 0;
+  sem->object_tag = 0;
 
   // TODO: check reschedule
 }
@@ -74,7 +74,7 @@ k_semaphore_try_get(struct KSemaphore *sem)
   int r;
 
   k_assert(sem != K_NULL);
-  k_assert(sem->type == K_SEMAPHORE_TYPE);
+  k_assert(sem->object_tag == K_SEMAPHORE_TAG);
 
   k_spinlock_acquire(&sem->lock);
   r = k_semaphore_try_get_locked(sem);
@@ -110,7 +110,7 @@ k_semaphore_timed_get(struct KSemaphore *sem,
   int r;
 
   k_assert(sem != K_NULL);
-  k_assert(sem->type == K_SEMAPHORE_TYPE);
+  k_assert(sem->object_tag == K_SEMAPHORE_TAG);
 
   k_spinlock_acquire(&sem->lock);
 
@@ -118,7 +118,7 @@ k_semaphore_timed_get(struct KSemaphore *sem,
     if (r != K_ERR_AGAIN)
       break;
 
-    r = _k_sched_sleep(&sem->queue,
+    r = _k_sched_sleep(&sem->sleep_queue,
                        options & K_SLEEP_UNWAKEABLE
                         ? K_TASK_STATE_SLEEP_UNWAKEABLE
                         : K_TASK_STATE_SLEEP,
@@ -160,14 +160,14 @@ int
 k_semaphore_put(struct KSemaphore *sem)
 {
   k_assert(sem != K_NULL);
-  k_assert(sem->type == K_SEMAPHORE_TYPE);
+  k_assert(sem->object_tag == K_SEMAPHORE_TAG);
   
   k_spinlock_acquire(&sem->lock);
   
   k_assert(sem->count >= 0);
   sem->count++;
 
-  _k_sched_wakeup_one(&sem->queue, 0);
+  _k_sched_wakeup_one(&sem->sleep_queue, 0);
 
   k_spinlock_release(&sem->lock);
 

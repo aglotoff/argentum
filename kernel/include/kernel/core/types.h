@@ -25,7 +25,7 @@ typedef long long k_tick_t;
 
 enum {
   /**
-   * @brief Wakeable sleep mode.
+   * @brief Wakeable sleep mode (default).
    *
    * The task may be woken up before its wait condition or timeout is satisfied
    * by an explicit call to `k_task_wake()`.
@@ -48,9 +48,8 @@ enum {
 };
 
 /**
- * @brief Represents a single timeout entry managed by the kernel.
+ * @brief Represents a single entry in timeout queue managed by the kernel.
  *
- * The `KTimeoutEntry` structure defines a node in the kernel’s timeout queue.
  * Each entry corresponds to a pending timeout — for example, a task delay,
  * semaphore wait timeout, or timer expiration.
  */

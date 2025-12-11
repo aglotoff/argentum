@@ -16,10 +16,10 @@
  * it.
  */
 struct KSemaphore {
-  int type;
+  int object_tag;
   struct KSpinLock lock;
   unsigned long count;
-  struct KListLink queue;
+  struct KListLink sleep_queue;
 };
 
 void k_semaphore_create(struct KSemaphore *, int);
