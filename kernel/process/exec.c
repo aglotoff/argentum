@@ -34,7 +34,7 @@ user_stack_put(struct VMSpace *vm, const void *buf, size_t n, uintptr_t *va_p)
   if (va < STACK_BOTTOM)
     return -E2BIG;
 
-  if ((r = vm_copy_out(vm->pgtab, buf, va, n)) < 0)
+  if ((r = vm_user_copy_out(vm->pgtab, buf, va, n)) < 0)
     return r;
 
   *va_p = va;
@@ -248,6 +248,20 @@ resolve(const char *path, struct ExecContext *ctx)
 }
 
 static int
+vm_space_load_chunk(void *arg, void *kva, size_t n)
+{
+  struct Connection *connection = (struct Connection *) arg;
+  return connection_read(connection, (uintptr_t) kva, n);
+}
+
+static int
+vm_space_load_file(void *pgtab, void *va, struct Connection *file, size_t n, off_t off)
+{
+  connection_seek(file, off, SEEK_SET);
+  return vm_write(pgtab, (uintptr_t) va, n, vm_space_load_chunk, file);
+}
+
+static int
 load_elf(struct ExecContext *ctx)
 {
   Elf32_Ehdr elf;
@@ -341,7 +355,7 @@ copy_in_args(uintptr_t va, char ***store)
     uintptr_t str_va;
     size_t str_len;
 
-    if ((r = vm_copy_in(pgtab, &str_va, va + (sizeof(char *)*i),
+    if ((r = vm_user_copy_in(pgtab, &str_va, va + (sizeof(char *)*i),
                         sizeof str_va)) < 0) {
       sys_free_args(args);
       return r;
@@ -364,7 +378,7 @@ copy_in_args(uintptr_t va, char ***store)
       return -ENOMEM;
     }
 
-    if ((vm_copy_in(pgtab, args[i], str_va, str_len + 1) != 0) ||
+    if ((vm_user_copy_in(pgtab, args[i], str_va, str_len + 1) != 0) ||
          (args[i][str_len] != '\0')) {
       sys_free_args(args);
       return -EFAULT;

@@ -40,17 +40,15 @@ void         arch_vm_switch(struct Process *);
 void         arch_vm_map_fixed(uintptr_t, uint32_t, size_t, int);
 void         arch_vm_unmap_fixed(uintptr_t, size_t);
 
-struct Page *vm_page_lookup(void *, uintptr_t, int *);
-int          vm_page_insert(void *, struct Page *, uintptr_t, int);
-int          vm_page_remove(void *, uintptr_t);
+int vm_read(void *, uintptr_t, size_t, int (*)(void *, const void *, size_t), void *);
+int vm_write(void *, uintptr_t, size_t, int (*)(void *, void *, size_t), void *);
 
 int          vm_user_alloc(void *, uintptr_t, size_t, int);
 void         vm_user_free(void *, uintptr_t, size_t);
 int          vm_user_clone(void *, void *, uintptr_t, size_t, int);
 
-int          vm_copy_out(void *, const void *, uintptr_t, size_t);
-int          vm_copy_in(void *, void *, uintptr_t, size_t);
-int          vm_clear(void *, uintptr_t, size_t);
+int          vm_user_copy_out(void *, const void *, uintptr_t, size_t);
+int          vm_user_copy_in(void *, void *, uintptr_t, size_t);
 
 int          vm_user_check_str(void *, uintptr_t, size_t *, int);
 int          vm_user_check_ptr(void *, uintptr_t, int);

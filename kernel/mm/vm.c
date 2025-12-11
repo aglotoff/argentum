@@ -1,29 +1,68 @@
 #include <errno.h>
+#include <stdio.h>
+#include <string.h>
+#include <sys/mman.h>
+
+#include <kernel/core/spinlock.h>
 #include <kernel/console.h>
 #include <kernel/page.h>
 #include <kernel/vm.h>
 #include <kernel/types.h>
-#include <kernel/core/spinlock.h>
-#include <string.h>
-#include <sys/mman.h>
 #include <kernel/fs/fs.h>
 #include <kernel/ipc.h>
-#include <stdio.h>
 #include <kernel/process.h>
+
+static struct Page *vm_page_lookup(void *, uintptr_t, int *);
+static int vm_page_lookup_copy_on_write(void *, uintptr_t, struct Page **, int *);
+static struct Page *vm_page_copy_on_write(void *, uintptr_t, struct Page *, int);
+static int vm_page_insert(void *, struct Page *, uintptr_t, int);
+static int vm_page_remove(void *, uintptr_t);
 
 struct KSpinLock vm_lock = K_SPINLOCK_INITIALIZER("vm_lock");
 
-/**
- * Find a physical page mapped at the given virtual address.
- * 
- * @param pgtab       Pointer to the page table to search
- * @param va          The virtual address to search for
- * @param flags_store Pointer to the memory location to store the mapping flags
- *
- * @return Pointer to the page or NULL if there is no page mapped at the given
- *         address
- */
-struct Page *
+int
+vm_read(void *pgtab, uintptr_t va, size_t n, int (*cb)(void *, const void *, size_t), void *arg)
+{
+  struct Page *page;
+  uint8_t *dst, *kva;
+  int ncopy, offset;
+  int r;
+
+  dst = (uint8_t *) va;
+
+  while (n != 0) {
+    k_spinlock_acquire(&vm_lock);
+
+    page = vm_page_lookup(pgtab, (uintptr_t) dst, NULL);
+    if (page == NULL) {
+      k_spinlock_release(&vm_lock);
+      return -EFAULT;
+    }
+
+    k_spinlock_release(&vm_lock);
+
+    page = page_inc_ref(page);
+
+    kva = (uint8_t *) page2kva(page);
+
+    offset = (uintptr_t) dst % PAGE_SIZE;
+    ncopy  = MIN(PAGE_SIZE - offset, n);
+
+    r = cb(arg, kva + offset, ncopy);
+
+    page_dec_ref(page, 0);
+
+    if (r != ncopy)
+      return r;
+
+    dst += ncopy;
+    n   -= ncopy;
+  }
+
+  return 0;
+}
+
+static struct Page *
 vm_page_lookup(void *pgtab, uintptr_t va, int *flags_store)
 {
   struct Page *page;
@@ -37,87 +76,81 @@ vm_page_lookup(void *pgtab, uintptr_t va, int *flags_store)
   if (!arch_vm_pte_valid(pte) || !(arch_vm_pte_flags(pte) & VM_PAGE))
     return NULL;
 
-  if (flags_store) {
+  if (flags_store)
     *flags_store = arch_vm_pte_flags(pte);
-  }
 
   page = pa2page(arch_vm_pte_addr(pte));
   page_assert(page, 0, PAGE_TAG_ANON);
   return page;
 }
 
-/**
- * Map a physical page at the given virtual address. If there is already a page
- * mapped at this address, remove it.
- * 
- * @param pgtab Pointer to the page table
- * @param page  Pointer to the page to be mapped
- * @param va    The virtual address
- * @param flags The mapping flags
- *
- * @retval 0       Success
- * @retval -ENOMEM Out of memory
- */
 int
-vm_page_insert(void *pgtab, struct Page *page, uintptr_t va, int flags)
+vm_write(void *pgtab, uintptr_t va, size_t n, int (*cb)(void *, void *, size_t), void *arg)
 {
-  void *pte;
+  struct Page *page;
+  uint8_t *dst, *kva;
+  int ncopy, offset;
+  int r;
 
-  k_assert(k_spinlock_holding(&vm_lock));
+  dst = (uint8_t *) va;
 
-  if ((pte = arch_vm_lookup(pgtab, va, 1)) == NULL)
-    return -ENOMEM;
+  while (n != 0) {
+    k_spinlock_acquire(&vm_lock);
 
-  // Incrementing the reference counter before calling vm_page_remove() allows
-  // us to elegantly handle the situation when the same page is re-inserted at
-  // the same virtual address, but with different permissions
-  page->ref_count++;
+    r = vm_page_lookup_copy_on_write(pgtab, (uintptr_t) dst, &page, NULL);
+    if (r != 0) {
+      k_spinlock_release(&vm_lock);
+      return -EFAULT;
+    }
 
-  // If present, remove the previous mapping
-  vm_page_remove(pgtab, (uintptr_t) va);
+    k_spinlock_release(&vm_lock);
 
-  arch_vm_pte_set(pte, page2pa(page), flags | VM_PAGE);
+    page = page_inc_ref(page);
+
+    kva = (uint8_t *) page2kva(page);
+
+    offset = (uintptr_t) dst % PAGE_SIZE;
+    ncopy  = MIN(PAGE_SIZE - offset, n);
+
+    r = cb(arg, kva + offset, ncopy);
+
+    page_dec_ref(page, 0);
+
+    if (r != ncopy)
+      return r;
+
+    dst += ncopy;
+    n   -= ncopy;
+  }
 
   return 0;
 }
 
-/**
- * Unmap the physical page at the given virtual address. If there is no page
- * mapped at this address, do nothing.
- * 
- * @param pgtab The page table
- * @param va    The virtual address
- *
- * @return 0 on success
- */
-int
-vm_page_remove(void *pgtab, uintptr_t va)
+static int
+vm_page_lookup_copy_on_write(void *pgtab, uintptr_t va, struct Page **page_store,
+                   int *flags_store)
 {
   struct Page *page;
-  void *pte;
+  int flags;
 
-  k_assert(k_spinlock_holding(&vm_lock));
-
-  if ((pte = arch_vm_lookup(pgtab, va, 0)) == NULL)
-    return 0;
-
-  if (!arch_vm_pte_valid(pte) || !(arch_vm_pte_flags(pte) & VM_PAGE))
-    return 0;
-
-  page = pa2page(arch_vm_pte_addr(pte));
-  page_assert(page, 0, PAGE_TAG_ANON);
-
-  if (--page->ref_count == 0)
-    page_free_one(page);
-
-  arch_vm_pte_clear(pte);
-  arch_vm_invalidate(va);
+  if ((page = vm_page_lookup(pgtab, va, &flags)) == NULL)
+    return -EFAULT;
+  
+  if (flags & VM_COW) {
+    if ((page = vm_page_copy_on_write(pgtab, va, page, flags)) == NULL)
+      return -ENOMEM;
+  }
+  
+  if (page_store != NULL)
+    *page_store = page;
+  if (flags_store != NULL)
+    *flags_store = flags;
 
   return 0;
 }
 
 static struct Page *
-vm_page_cow(void *pgtab, uintptr_t va, struct Page *page, int flags)
+vm_page_copy_on_write(void *pgtab, uintptr_t va, struct Page *page, int flags)
 {
   struct Page *page_copy;
 
@@ -148,25 +181,51 @@ vm_page_cow(void *pgtab, uintptr_t va, struct Page *page, int flags)
   return page_copy;
 }
 
-int
-vm_page_lookup_cow(void *pgtab, uintptr_t va, struct Page **page_store,
-                   int *flags_store)
+static int
+vm_page_insert(void *pgtab, struct Page *page, uintptr_t va, int flags)
+{
+  void *pte;
+
+  k_assert(k_spinlock_holding(&vm_lock));
+
+  if ((pte = arch_vm_lookup(pgtab, va, 1)) == NULL)
+    return -ENOMEM;
+
+  // Incrementing the reference counter before calling vm_page_remove() allows
+  // us to elegantly handle the situation when the same page is re-inserted at
+  // the same virtual address, but with different permissions
+  page->ref_count++;
+
+  // If present, remove the previous mapping
+  vm_page_remove(pgtab, va);
+
+  arch_vm_pte_set(pte, page2pa(page), flags | VM_PAGE);
+
+  return 0;
+}
+
+static int
+vm_page_remove(void *pgtab, uintptr_t va)
 {
   struct Page *page;
-  int flags;
+  void *pte;
 
-  if ((page = vm_page_lookup(pgtab, va, &flags)) == NULL)
-    return -EFAULT;
-  
-  if (flags & VM_COW) {
-    if ((page = vm_page_cow(pgtab, va, page, flags)) == NULL)
-      return -ENOMEM;
-  }
-  
-  if (page_store != NULL)
-    *page_store = page;
-  if (flags_store != NULL)
-    *flags_store = flags;
+  k_assert(k_spinlock_holding(&vm_lock));
+
+  if ((pte = arch_vm_lookup(pgtab, va, 0)) == NULL)
+    return 0;
+
+  if (!arch_vm_pte_valid(pte) || !(arch_vm_pte_flags(pte) & VM_PAGE))
+    return 0;
+
+  page = pa2page(arch_vm_pte_addr(pte));
+  page_assert(page, 0, PAGE_TAG_ANON);
+
+  if (--page->ref_count == 0)
+    page_free_one(page);
+
+  arch_vm_pte_clear(pte);
+  arch_vm_invalidate(va);
 
   return 0;
 }
@@ -187,108 +246,40 @@ vm_user_assert_pages(uintptr_t start_va, uintptr_t end_va)
     k_panic("invalid va range: [%p,%p)", start_va, end_va);
 }
 
-int
-vm_clear(void *pgtab, uintptr_t dst_va, size_t n)
+static int
+vm_user_copy_out_callback(void *arg, void *kva, size_t n)
 {
-  vm_user_assert(dst_va, dst_va + n);
-
-  while (n != 0) {
-    struct Page *page;
-    uint8_t *kva;
-    size_t offset, ncopy;
-    int r;
-
-    offset = dst_va % PAGE_SIZE;
-    ncopy = MIN(PAGE_SIZE - offset, n);
-
-    k_spinlock_acquire(&vm_lock);
-
-    if ((r = vm_page_lookup_cow(pgtab, dst_va, &page, NULL)) < 0) {
-      k_spinlock_release(&vm_lock);
-      return r;
-    }
-
-    kva = (uint8_t *) page2kva(page);
-    memset(kva + offset, 0, ncopy);
-
-    k_spinlock_release(&vm_lock);
-
-    dst_va += ncopy;
-    n      -= ncopy;
-  }
-
-  return 0;
+  uint8_t **src = (uint8_t **) arg;
+  memmove(kva, *src, n);
+  *src += n;
+  return n;
 }
 
 int
-vm_copy_out(void *pgtab, const void *src, uintptr_t dst_va, size_t n)
+vm_user_copy_out(void *pgtab, const void *src, uintptr_t dst_va, size_t n)
 {
   uint8_t *p = (uint8_t *) src;
 
   vm_user_assert(dst_va, dst_va + n);
+  return vm_write(pgtab, dst_va, n, vm_user_copy_out_callback, &p);
+}
 
-  while (n != 0) {
-    struct Page *page;
-    uint8_t *kva;
-    size_t offset, ncopy;
-    int r;
-
-    offset = dst_va % PAGE_SIZE;
-    ncopy = MIN(PAGE_SIZE - offset, n);
-
-    k_spinlock_acquire(&vm_lock);
-
-    if ((r = vm_page_lookup_cow(pgtab, dst_va, &page, NULL)) < 0) {
-      k_spinlock_release(&vm_lock);
-      return r;
-    }
-
-    kva = (uint8_t *) page2kva(page);
-    memmove(kva + offset, p, ncopy);
-
-    k_spinlock_release(&vm_lock);
-
-    p      += ncopy;
-    dst_va += ncopy;
-    n      -= ncopy;
-  }
-
-  return 0;
+static int
+vm_user_copy_in_callback(void *arg, const void *kva, size_t n)
+{
+  uint8_t **dst = (uint8_t **) arg;
+  memmove(*dst, kva, n);
+  *dst += n;
+  return n;
 }
 
 int
-vm_copy_in(void *vm, void *dst, uintptr_t src_va, size_t n)
+vm_user_copy_in(void *pgtab, void *dst, uintptr_t src_va, size_t n)
 {
   uint8_t *p = (uint8_t *) dst;
 
   vm_user_assert(src_va, src_va + n);
-
-  while (n != 0) {
-    struct Page *page;
-    uint8_t *kva;
-    size_t offset, ncopy;
-
-    offset = src_va % PAGE_SIZE;
-    ncopy  = MIN(PAGE_SIZE - offset, n);
-
-    k_spinlock_acquire(&vm_lock);
-
-    if ((page = vm_page_lookup(vm, src_va, NULL)) == NULL) {
-      k_spinlock_release(&vm_lock);
-      return -EFAULT;
-    }
-
-    kva = (uint8_t *) page2kva(page);
-    memmove(p, kva + offset, ncopy);
-
-    k_spinlock_release(&vm_lock);
-
-    src_va += ncopy;
-    p      += ncopy;
-    n      -= ncopy;
-  }
-
-  return 0;
+  return vm_read(pgtab, src_va, n, vm_user_copy_in_callback, &p);
 }
 
 int
@@ -358,7 +349,7 @@ vm_user_clone(void *src, void *dst, uintptr_t start_va, size_t n, int share)
 
     if (share) {
       // When creating a shared region, remove the copy-on-write bit
-      if ((r = vm_page_lookup_cow(src, va, &page, &flags)) < 0) {
+      if ((r = vm_page_lookup_copy_on_write(src, va, &page, &flags)) < 0) {
         k_spinlock_release(&vm_lock);
         return r;
       }
@@ -527,7 +518,7 @@ vm_user_check_buf(void *pgtab, uintptr_t start_va, size_t n, int flags)
     k_spinlock_acquire(&vm_lock);
 
     // TODO: do not do copy-on-write before actual memory access!
-    if ((r = vm_page_lookup_cow(pgtab, va, &page, &curr_flags)) < 0) {
+    if ((r = vm_page_lookup_copy_on_write(pgtab, va, &page, &curr_flags)) < 0) {
       k_spinlock_release(&vm_lock);
       return r;
     }
@@ -546,7 +537,7 @@ vm_user_check_buf(void *pgtab, uintptr_t start_va, size_t n, int flags)
 int
 vm_handle_fault(void *pgtab, uintptr_t va)
 {
-  struct Page *fault_page;
+  struct Page *page;
   int flags;
 
   if ((va < PAGE_SIZE) || (va >= VIRT_KERNEL_BASE))
@@ -554,58 +545,19 @@ vm_handle_fault(void *pgtab, uintptr_t va)
 
   k_spinlock_acquire(&vm_lock);
 
-  fault_page = vm_page_lookup(pgtab, va, &flags);
+  page = vm_page_lookup(pgtab, va, &flags);
 
-  if ((fault_page == NULL) || !(flags & VM_COW)) {
+  if ((page == NULL) || !(flags & VM_COW)) {
     k_spinlock_release(&vm_lock);
     return -EFAULT;
   }
 
-  if (vm_page_cow(pgtab, va, fault_page, flags) == NULL) {
+  if (vm_page_copy_on_write(pgtab, va, page, flags) == NULL) {
     k_spinlock_release(&vm_lock);
     return -ENOMEM;
   }
 
   k_spinlock_release(&vm_lock);
   
-  return 0;
-}
-
-int
-vm_space_load_file(void *pgtab, void *va, struct Connection *file, size_t n, off_t off)
-{
-  struct Page *page;
-  uint8_t *dst, *kva;
-  int ncopy, offset;
-  int r;
-
-  dst = (uint8_t *) va;
-
-  connection_seek(file, off, SEEK_SET);
-
-  while (n != 0) {
-    k_spinlock_acquire(&vm_lock);
-
-    page = vm_page_lookup(pgtab, (uintptr_t) dst, NULL);
-    if (page == NULL) {
-      return -EFAULT;
-    }
-
-    // TODO: unsafe?
-
-    k_spinlock_release(&vm_lock);
-
-    kva = (uint8_t *) page2kva(page);
-
-    offset = (uintptr_t) dst % PAGE_SIZE;
-    ncopy  = MIN(PAGE_SIZE - offset, n);
-
-    if ((r = connection_read(file, (uintptr_t) kva + offset, ncopy)) != ncopy)
-      return r;
-
-    dst += ncopy;
-    n   -= ncopy;
-  }
-
   return 0;
 }

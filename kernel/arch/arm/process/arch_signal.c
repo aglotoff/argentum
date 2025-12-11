@@ -20,7 +20,7 @@ arch_signal_prepare(struct Process *process, struct SignalFrame *frame)
   frame->ucontext.uc_mcontext.pc  = process->thread->tf->pc;
   frame->ucontext.uc_mcontext.psr = process->thread->tf->psr;
 
-  if (vm_copy_out(process->vm->pgtab, frame, ctx_va, sizeof *frame) != 0)
+  if (vm_user_copy_out(process->vm->pgtab, frame, ctx_va, sizeof *frame) != 0)
     return SIGKILL;
 
   process->thread->tf->r0 = ctx_va;
@@ -37,7 +37,7 @@ arch_signal_return(struct Process *process, struct SignalFrame *ctx, int *ret)
 
   k_assert(process->thread != NULL);
 
-  if ((r = vm_copy_in(process->vm->pgtab, ctx, process->thread->tf->sp, sizeof *ctx) < 0))
+  if ((r = vm_user_copy_in(process->vm->pgtab, ctx, process->thread->tf->sp, sizeof *ctx) < 0))
     return r;
 
   // Prevent malicious users from executing in kernel mode

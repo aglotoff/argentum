@@ -213,7 +213,7 @@ process_load_binary(struct Process *proc, const void *binary)
     if (addr != ph->vaddr)
       return (int) addr;
 
-    if ((r = vm_copy_out(proc->vm->pgtab, (uint8_t *) elf + ph->offset,
+    if ((r = vm_user_copy_out(proc->vm->pgtab, (uint8_t *) elf + ph->offset,
                          ph->vaddr, ph->filesz)) < 0)
       return r;
 

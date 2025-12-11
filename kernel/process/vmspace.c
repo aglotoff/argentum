@@ -214,7 +214,7 @@ vm_space_copy_out(struct Process *process, const void *src, uintptr_t dst_va, si
 
   k_assert(process != NULL);
 
-  return vm_copy_out(process->vm->pgtab, src, dst_va, n);
+  return vm_user_copy_out(process->vm->pgtab, src, dst_va, n);
 }
 
 int
@@ -231,19 +231,5 @@ vm_space_copy_in(struct Process *process, void *dst, uintptr_t src_va, size_t n)
 
   k_assert(process != NULL);
 
-  return vm_copy_in(process->vm->pgtab, dst, src_va, n);
-}
-
-int
-vm_space_clear(uintptr_t va, size_t n)
-{
-  if ((va + n) < va)
-    return -EFAULT;
-
-  if (va > VIRT_KERNEL_BASE) {
-    memset((void *) va, 0, n);
-    return 0;
-  }
-
-  return vm_clear(process_current()->vm->pgtab, va, n);
+  return vm_user_copy_in(process->vm->pgtab, dst, src_va, n);
 }

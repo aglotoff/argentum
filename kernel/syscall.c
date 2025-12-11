@@ -234,7 +234,7 @@ sys_arg_buf(int n, void **store, size_t len, int perm)
   if ((p = k_malloc(len)) == NULL)
     return -ENOMEM;
 
-  if ((r = vm_copy_in(pgtab, p, va, len)) < 0) {
+  if ((r = vm_user_copy_in(pgtab, p, va, len)) < 0) {
     k_free(p);
     return r;
   }
@@ -269,7 +269,7 @@ sys_arg_str(int n, size_t max, int perm, char **strp)
   if ((s = k_malloc(len + 1)) == NULL)
     return -ENOMEM;
 
-  if ((vm_copy_in(pgtab, s, va, len + 1) != 0) || (s[len] != '\0')) {
+  if ((vm_user_copy_in(pgtab, s, va, len + 1) != 0) || (s[len] != '\0')) {
     k_free(s);
     return -EFAULT;
   }
@@ -282,7 +282,7 @@ sys_arg_str(int n, size_t max, int perm, char **strp)
 static int
 sys_copy_out(const void *src, uintptr_t va, size_t n)
 {
-  return vm_copy_out(process_current()->vm->pgtab, src, va, n);
+  return vm_user_copy_out(process_current()->vm->pgtab, src, va, n);
 }
 
 /*

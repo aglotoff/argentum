@@ -145,11 +145,11 @@ arch_trap_frame_init(struct Process *process, uintptr_t entry, uintptr_t arg1,
   k_assert(process->thread != NULL);
 
   sp -= 4;
-  vm_copy_out(process->vm->pgtab, &arg3, sp, sizeof arg3);
+  vm_user_copy_out(process->vm->pgtab, &arg3, sp, sizeof arg3);
   sp -= 4;
-  vm_copy_out(process->vm->pgtab, &arg2, sp, sizeof arg2);
+  vm_user_copy_out(process->vm->pgtab, &arg2, sp, sizeof arg2);
   sp -= 4;
-  vm_copy_out(process->vm->pgtab, &arg1, sp, sizeof arg1);
+  vm_user_copy_out(process->vm->pgtab, &arg1, sp, sizeof arg1);
   sp -= 4;
 
   process->thread->tf->cs = SEG_USER_CODE;
