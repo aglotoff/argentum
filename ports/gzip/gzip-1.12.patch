@@ -1,6 +1,19 @@
-diff -ruN orig/build-aux/config.sub new/build-aux/config.sub
---- orig/build-aux/config.sub	2022-04-07 05:15:05.000000000 +0300
-+++ new/build-aux/config.sub	2023-05-20 11:25:35.793296907 +0300
+diff -ruN old/build-aux/config.guess new/build-aux/config.guess
+--- old/build-aux/config.guess	2022-04-07 05:15:05.000000000 +0300
++++ new/build-aux/config.guess	2025-12-12 10:37:10.874794488 +0300
+@@ -1528,6 +1528,9 @@
+     i*86:Fiwix:*:*)
+ 	GUESS=$UNAME_MACHINE-pc-fiwix
+ 	;;
++    i*86:Argentum:*:*)
++	GUESS=$UNAME_MACHINE-pc-argentum
++	;;
+     *:AROS:*:*)
+ 	GUESS=$UNAME_MACHINE-unknown-aros
+ 	;;
+diff -ruN old/build-aux/config.sub new/build-aux/config.sub
+--- old/build-aux/config.sub	2022-04-07 05:15:05.000000000 +0300
++++ new/build-aux/config.sub	2025-12-12 10:36:21.218797228 +0300
 @@ -1754,7 +1754,7 @@
  	     | onefs* | tirtos* | phoenix* | fuchsia* | redox* | bme* \
  	     | midnightbsd* | amdhsa* | unleashed* | emscripten* | wasi* \
