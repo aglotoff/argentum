@@ -27,18 +27,15 @@ struct IpcMessage {
     } chown;
     struct {
       ino_t dir_ino;
-      char *name;
       mode_t mode;
       dev_t dev;
     } create;
     struct {
       ino_t dir_ino;
-      char *name;
       ino_t ino;
     } link;
     struct {
       ino_t dir_ino;
-      const char *name;
       int flags;
     } lookup;
     struct {
@@ -48,21 +45,19 @@ struct IpcMessage {
     struct {
       ino_t dir_ino;
       ino_t ino;
-      const char *name;
     } rmdir;
     struct {
       ino_t ino;
     } stat;
     struct {
       ino_t dir_ino;
-      char *name;
       mode_t mode;
-      const char *path;
+      size_t name_len;
+      size_t path_len;
     } symlink;
     struct {
       ino_t dir_ino;
       ino_t ino;
-      const char *name;
     } unlink;
     struct {
       ino_t ino;

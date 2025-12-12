@@ -276,10 +276,18 @@ void
 do_create(struct FS *fs, struct Request *req, struct IpcMessage *msg)
 {
   ino_t dir_ino = msg->u.create.dir_ino;
-  char *name = msg->u.create.name;
   mode_t mode = msg->u.create.mode;
   dev_t dev  = msg->u.create.dev;
-  int r;
+  ssize_t r;
+
+  char name[NAME_MAX + 1];
+
+  if ((r = request_read(req, name, NAME_MAX)) < 0) {
+    request_reply(req, r);
+    return;
+  }
+
+  name[r] = '\0';
 
   // TODO: verify existence
   struct Inode *dir = fs->ops->inode_get(fs, dir_ino);
@@ -328,9 +336,17 @@ void
 do_link(struct FS *fs, struct Request *req, struct IpcMessage *msg)
 {
   ino_t dir_ino = msg->u.link.dir_ino;
-  char *name = msg->u.link.name;
   ino_t ino = msg->u.link.ino;
   int r;
+
+  char name[NAME_MAX + 1];
+
+  if ((r = request_read(req, name, NAME_MAX)) < 0) {
+    request_reply(req, r);
+    return;
+  }
+
+  name[r] = '\0';
 
   // TODO: verify existence
   struct Inode *dir = fs->ops->inode_get(fs, dir_ino);
@@ -352,11 +368,19 @@ do_lookup(struct FS *fs, struct Request *req, struct IpcMessage *msg)
   struct Process *process = req->process;
 
   ino_t dir_ino = msg->u.lookup.dir_ino;
-  const char *name = msg->u.lookup.name;
   int flags = msg->u.lookup.flags;
   int r;
 
   struct Inode *inode, *dir;
+
+  char name[NAME_MAX + 1];
+
+  if ((r = request_read(req, name, NAME_MAX)) < 0) {
+    request_reply(req, r);
+    return;
+  }
+
+  name[r] = '\0';
 
   dir = fs->ops->inode_get(fs, dir_ino);
 
@@ -429,8 +453,16 @@ do_rmdir(struct FS *fs, struct Request *req, struct IpcMessage *msg)
   struct Process *process = req->process;
   ino_t dir_ino = msg->u.rmdir.dir_ino;
   ino_t ino = msg->u.rmdir.ino;
-  const char *name = msg->u.rmdir.name;
   int r;
+
+  char name[NAME_MAX + 1];
+
+  if ((r = request_read(req, name, NAME_MAX)) < 0) {
+    request_reply(req, r);
+    return;
+  }
+
+  name[r] = '\0';
 
   struct Inode *dir = fs->ops->inode_get(fs, dir_ino);
   struct Inode *inode = fs->ops->inode_get(fs, ino);
@@ -523,11 +555,11 @@ do_stat(struct FS *fs, struct Request *req, struct IpcMessage *msg)
 }
 
 static int
-do_symlink_locked(struct FS *fs, struct Process *process,
+do_symlink_locked(struct FS *fs, struct Request *req,
                   struct Inode *dir,
                   char *name,
                   mode_t mode,
-                  const char *path,
+                  size_t path_len,
                   struct Inode **istore)
 {
   struct Inode *inode;
@@ -535,34 +567,40 @@ do_symlink_locked(struct FS *fs, struct Process *process,
   if (!S_ISDIR(dir->mode))
     return -ENOTDIR;
 
-  if (!fs_inode_permission(process, dir, FS_PERM_WRITE, 0))
+  if (!fs_inode_permission(req->process, dir, FS_PERM_WRITE, 0))
     return -EPERM;
 
-  inode = fs->ops->lookup(process, dir, name);
+  inode = fs->ops->lookup(req->process, dir, name);
 
   if (inode != NULL) {
     fs_inode_put(inode);
     return -EEXIST;
   }
 
-  return fs->ops->symlink(process, dir, name, S_IFLNK | mode, path, istore);
+  return fs->ops->symlink(req, dir, name, S_IFLNK | mode, path_len, istore);
 }
 
 void
 do_symlink(struct FS *fs, struct Request *req, struct IpcMessage *msg)
 {
-  struct Process *process = req->process;
   ino_t dir_ino = msg->u.symlink.dir_ino;
-  char *name = msg->u.symlink.name;
   mode_t mode = msg->u.symlink.mode;
-  const char *link_path = msg->u.symlink.path;
   int r;
+
+  char name[NAME_MAX + 1];
+
+  if ((r = request_read(req, name, msg->u.symlink.name_len)) < 0) {
+    request_reply(req, r);
+    return;
+  }
+
+  name[r] = '\0';
 
   struct Inode *dir = fs->ops->inode_get(fs, dir_ino);
   struct Inode *inode = NULL;
 
   fs_inode_lock(dir);
-  r = do_symlink_locked(fs, process, dir, name, mode, link_path, &inode);
+  r = do_symlink_locked(fs, req, dir, name, mode, msg->u.symlink.path_len, &inode);
   fs_inode_unlock(dir);
 
   if (inode != NULL) {
@@ -580,12 +618,21 @@ do_unlink(struct FS *fs, struct Request *req, struct IpcMessage *msg)
   struct Process *process = req->process;
   ino_t dir_ino = msg->u.unlink.dir_ino;
   ino_t ino = msg->u.unlink.ino;
-  const char *name = msg->u.unlink.name;
+  int r;
+  
+  char name[NAME_MAX + 1];
+
+  if ((r = request_read(req, name, NAME_MAX)) < 0) {
+    request_reply(req, r);
+    return;
+  }
+
+  name[r] = '\0';
 
   struct Inode *dir = fs->ops->inode_get(fs, dir_ino);
   struct Inode *inode = fs->ops->inode_get(fs, ino);
 
-  int r;
+  
 
   fs_inode_lock_two(dir, inode);
 

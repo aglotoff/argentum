@@ -508,20 +508,17 @@ ext2_readlink(struct Request *req, struct Inode *inode, size_t n)
 }
 
 int
-ext2_symlink(struct Process *process,
+ext2_symlink(struct Request *req,
              struct Inode *dir,
              char *name,
              mode_t mode,
-             const char *link_path,
+             size_t path_len,
              struct Inode **istore)
 {
   struct Inode *ip;
   int r;
-  size_t path_len;
 
-  path_len = strlen(link_path);
-
-  if ((r = ext2_inode_create(process, dir, name, mode, 0, &ip)) != 0)
+  if ((r = ext2_inode_create(req->process, dir, name, mode, 0, &ip)) != 0)
     return r;
 
   ip->nlink = 1;
@@ -529,14 +526,14 @@ ext2_symlink(struct Process *process,
   if (path_len <= MAX_FAST_SYMLINK_NAMELEN) {
     struct Ext2InodeExtra *extra = (struct Ext2InodeExtra *) ip->extra;
 
-    if ((r = vm_space_copy_in(process, extra->block, (uintptr_t) link_path, path_len)) < 0) {
+    if ((r = request_read(req, extra->block, path_len)) < 0) {
       fs_inode_unlock(ip);
       return r;
     }
 
     ip->size = path_len;
   } else {
-    if ((r = ext2_write_data(process, ip, (uintptr_t) link_path, path_len, 0)) < 0) {
+    if ((r = ext2_write(req, ip, path_len, 0)) < 0) {
       fs_inode_unlock(ip);
       return r;
     }

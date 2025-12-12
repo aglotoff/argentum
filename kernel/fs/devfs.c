@@ -207,11 +207,11 @@ devfs_trunc(struct Process *, struct Inode *inode, off_t size)
 }
 
 int
-devfs_symlink(struct Process *,
+devfs_symlink(struct Request *,
               struct Inode *,
               char *,
               mode_t,
-              const char *,
+              size_t,
               struct Inode **)
 {
   return -ENOSYS;

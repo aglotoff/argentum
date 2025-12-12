@@ -456,17 +456,22 @@ fs_path_node_lookup(struct PathNode *parent,
   if (child == NULL) {
     ino_t parent_ino, child_ino;
     struct Connection *connection;
+    struct iovec iov[2];
 
     parent_ino = fs_path_ino(parent, &connection);
 
     msg.type = IPC_MSG_LOOKUP;
     msg.u.lookup.dir_ino = parent_ino;
-    msg.u.lookup.name    = name;
     msg.u.lookup.flags   = flags;
+
+    iov[0].iov_base = &msg;
+    iov[0].iov_len  = sizeof(msg);
+    iov[1].iov_base = (void *) name;
+    iov[1].iov_len  = strlen(name);
 
     //cprintf("lookup %d %s\n", parent_ino, name);
 
-    r = connection_send(connection, &msg, sizeof(msg), NULL, 0);
+    r = connection_sendv(connection, iov, 2, NULL, 0);
 
     // if (r != 0) {
     //   cprintf("lookup %s = %d\n", name, r);

@@ -121,6 +121,7 @@ int
 fs_create(const char *path, mode_t mode, dev_t dev, struct PathNode **istore)
 {
   struct IpcMessage msg;
+  struct iovec iov[2];
   struct PathNode *dir;
   ino_t ino, dir_ino;
   struct Connection *chan;
@@ -137,11 +138,15 @@ fs_create(const char *path, mode_t mode, dev_t dev, struct PathNode **istore)
 
   msg.type = IPC_MSG_CREATE;
   msg.u.create.dir_ino = dir_ino;
-  msg.u.create.name    = name;
   msg.u.create.mode    = mode;
   msg.u.create.dev     = dev;
 
-  r = connection_send(chan, &msg, sizeof(msg), NULL, 0);
+  iov[0].iov_base = &msg;
+  iov[0].iov_len  = sizeof(msg);
+  iov[1].iov_base = (void *) name;
+  iov[1].iov_len  = strlen(name);
+
+  r = connection_sendv(chan, iov, 2, NULL, 0);
 
   // (inode->ref_count): +1
   if (r > 0) {
@@ -179,6 +184,7 @@ fs_link(char *path1, char *path2)
   ino_t ino, parent_ino;
   struct Connection *connection, *parent_connection;
   char name[NAME_MAX + 1];
+  struct iovec iov[2];
   int r;
 
   // REF(pp)
@@ -201,10 +207,14 @@ fs_link(char *path1, char *path2)
 
   msg.type = IPC_MSG_LINK;
   msg.u.link.dir_ino = parent_ino;
-  msg.u.link.name    = name;
   msg.u.link.ino     = ino;
 
-  r = connection_send(parent_connection, &msg, sizeof(msg), NULL, 0);
+  iov[0].iov_base = &msg;
+  iov[0].iov_len  = sizeof(msg);
+  iov[1].iov_base = (void *) name;
+  iov[1].iov_len  = strlen(name);
+
+  r = connection_sendv(parent_connection, iov, 2, NULL, 0);
 
   // UNREF(dirp)
   fs_path_node_unref(dirp);
@@ -250,6 +260,7 @@ fs_rename(char *old, char *new)
   struct IpcMessage msg;
   char old_name[NAME_MAX + 1];
   char new_name[NAME_MAX + 1];
+  struct iovec iov[2];
   int r;
 
   // REF(old_node), REF(old_dir)
@@ -282,9 +293,13 @@ fs_rename(char *old, char *new)
     msg.type = IPC_MSG_UNLINK;
     msg.u.unlink.dir_ino = parent_ino;
     msg.u.unlink.ino     = ino;
-    msg.u.unlink.name    = new_name;
     
-    r = connection_send(parent_connection, &msg, sizeof(msg), NULL, 0);
+    iov[0].iov_base = &msg;
+    iov[0].iov_len  = sizeof(msg);
+    iov[1].iov_base = (void *) new_name;
+    iov[1].iov_len  = strlen(new_name);
+
+    r = connection_sendv(parent_connection, iov, 2, NULL, 0);
 
     if (r == 0) {
       fs_path_node_remove(new_node);
@@ -305,10 +320,14 @@ fs_rename(char *old, char *new)
 
   msg.type = IPC_MSG_LINK;
   msg.u.link.dir_ino = parent_ino;
-  msg.u.link.name    = new_name;
   msg.u.link.ino     = ino;
 
-  r = connection_send(parent_connection, &msg, sizeof(msg), NULL, 0);
+  iov[0].iov_base = &msg;
+  iov[0].iov_len  = sizeof(msg);
+  iov[1].iov_base = (void *) new_name;
+  iov[1].iov_len  = strlen(new_name);
+
+  r = connection_sendv(parent_connection, iov, 2, NULL, 0);
 
   if (r < 0)
     goto out2;
@@ -320,9 +339,13 @@ fs_rename(char *old, char *new)
   msg.type = IPC_MSG_UNLINK;
   msg.u.unlink.dir_ino = parent_ino;
   msg.u.unlink.ino     = ino;
-  msg.u.unlink.name    = old_name;
+  
+  iov[0].iov_base = &msg;
+  iov[0].iov_len  = sizeof(msg);
+  iov[1].iov_base = (void *) old_name;
+  iov[1].iov_len  = strlen(old_name);
 
-  r = connection_send(parent_connection, &msg, sizeof(msg), NULL, 0);
+  r = connection_sendv(parent_connection, iov, 2, NULL, 0);
 
   if (r == 0) {
     fs_path_node_remove(old_node);
@@ -350,6 +373,7 @@ fs_rmdir(const char *path)
   ino_t ino, parent_ino;
   struct Connection *connection, *parent_connection;
   char name[NAME_MAX + 1];
+  struct iovec iov[2];
   int r;
 
   // REF(pp), REF(dir)
@@ -373,9 +397,13 @@ fs_rmdir(const char *path)
   msg.type = IPC_MSG_RMDIR;
   msg.u.rmdir.dir_ino = parent_ino;
   msg.u.rmdir.ino     = ino;
-  msg.u.rmdir.name    = pp->name;
 
-  r = connection_send(parent_connection, &msg, sizeof(msg), NULL, 0);
+  iov[0].iov_base = &msg;
+  iov[0].iov_len  = sizeof(msg);
+  iov[1].iov_base = (void *) name;
+  iov[1].iov_len  = strlen(name);
+
+  r = connection_sendv(parent_connection, iov, 2, NULL, 0);
 
   if (r == 0) {
     fs_path_node_remove(pp);
@@ -398,6 +426,7 @@ fs_symlink(const char *path, const char *link_path)
   ino_t dir_ino;
   struct Connection *chan;
   char name[NAME_MAX + 1];
+  struct iovec iov[3];
   mode_t mode;
   int r;
 
@@ -411,11 +440,18 @@ fs_symlink(const char *path, const char *link_path)
 
   msg.type = IPC_MSG_SYMLINK;
   msg.u.symlink.dir_ino   = dir_ino;
-  msg.u.symlink.name      = name;
   msg.u.symlink.mode      = mode;
-  msg.u.symlink.path      = path;
+  msg.u.symlink.name_len  = strlen(name);
+  msg.u.symlink.path_len  = strlen(path);
 
-  r = connection_send(chan, &msg, sizeof(msg), NULL, 0);
+  iov[0].iov_base = &msg;
+  iov[0].iov_len  = sizeof(msg);
+  iov[1].iov_base = (void *) name;
+  iov[1].iov_len  = strlen(name);
+  iov[2].iov_base = (void *) path;
+  iov[2].iov_len  = strlen(path);
+
+  r = connection_sendv(chan, iov, 3, NULL, 0);
 
   // UNREF(dir)
   fs_path_node_unref(dir);
@@ -432,6 +468,7 @@ fs_unlink(const char *path)
   ino_t ino, parent_ino;
   struct Connection *connection, *parent_connection;
   char name[NAME_MAX + 1];
+  struct iovec iov[2];
   int r;
 
   // REF(pp), REF(dir)
@@ -454,9 +491,13 @@ fs_unlink(const char *path)
   msg.type = IPC_MSG_UNLINK;
   msg.u.unlink.dir_ino = parent_ino;
   msg.u.unlink.ino     = ino;
-  msg.u.unlink.name    = pp->name;
+
+  iov[0].iov_base = &msg;
+  iov[0].iov_len  = sizeof(msg);
+  iov[1].iov_base = (void *) pp->name;
+  iov[1].iov_len  = strlen(pp->name);
     
-  r = connection_send(parent_connection, &msg, sizeof(msg), NULL, 0);
+  r = connection_sendv(parent_connection, iov, 2, NULL, 0);
 
   if (r == 0) {
     fs_path_node_remove(pp);

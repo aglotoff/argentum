@@ -387,7 +387,7 @@ ext2_read(struct Request *req, struct Inode *inode, size_t nbyte, off_t off)
 }
 
 ssize_t
-ext2_write_data(struct Process *process, struct Inode *inode, uintptr_t va, size_t nbyte, off_t off)
+ext2_write_data(struct Process *, struct Inode *inode, uintptr_t va, size_t nbyte, off_t off)
 {
   struct Ext2SuperblockData *sb = (struct Ext2SuperblockData *) (inode->fs->extra);
   size_t total, n;
@@ -405,8 +405,8 @@ ext2_write_data(struct Process *process, struct Inode *inode, uintptr_t va, size
       return -EIO;
     }
 
-    vm_space_copy_in(process, &buf->data[off % sb->block_size], va, n);
-  
+    memcpy(&buf->data[off % sb->block_size], (void *) va, n);
+
     buf_write(buf);
   }
 
