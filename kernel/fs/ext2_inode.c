@@ -7,8 +7,6 @@
 #include <kernel/fs/buf.h>
 #include <kernel/fs/fs.h>
 #include <kernel/types.h>
-#include <kernel/vmspace.h>
-#include <kernel/process.h>
 #include <kernel/ipc.h>
 
 #include "ext2.h"
@@ -61,7 +59,7 @@ ext2_locate_inode(struct Inode *inode, uint32_t *offset)
 }
 
 int
-ext2_inode_read(struct Process *process, struct Inode *inode)
+ext2_inode_read(struct Inode *inode)
 {
   struct Buf *buf;
   struct Ext2Inode *raw;
@@ -95,7 +93,7 @@ ext2_inode_read(struct Process *process, struct Inode *inode)
   memmove(extra->block, raw->block, sizeof(extra->block));
 
   if (S_ISCHR(inode->mode) || S_ISBLK(inode->mode)) {
-    ext2_read_data(process, inode, &inode->rdev, sizeof(inode->rdev), 0);
+    ext2_read_data(inode, &inode->rdev, sizeof(inode->rdev), 0);
   }
 
   buf_release(buf);
@@ -104,7 +102,7 @@ ext2_inode_read(struct Process *process, struct Inode *inode)
 }
 
 int
-ext2_inode_write(struct Process *, struct Inode *inode)
+ext2_inode_write(struct Inode *inode)
 {
   struct Buf *buf;
   struct Ext2Inode *raw;
@@ -158,8 +156,8 @@ ext2_inode_get_block(struct Inode *inode, uint32_t n, int alloc)
     id_store = &extra->block[n];
 
     if ((id = *id_store) == 0) {
-      // TODO: why process_current?
-      if (!alloc || (ext2_block_alloc(process_current(), sb, inode->dev, &id) != 0))
+      // FIXME: why euid = 0?
+      if (!alloc || (ext2_block_alloc(0, sb, inode->dev, &id) != 0))
         return 0;
 
       *id_store = id;
@@ -195,8 +193,8 @@ ext2_inode_get_block(struct Inode *inode, uint32_t n, int alloc)
   // Get the ID of the first indirect block in the chain
   id_store = &extra->block[EXT2_MAX_DIRECT_BLOCKS + lvl];
   if ((id = *id_store) == 0) {
-    // TODO: why process_current()?
-    if (!alloc || (ext2_block_alloc(process_current(), sb, inode->dev, &id) != 0))
+    // FIXME: why euid = 0?
+    if (!alloc || (ext2_block_alloc(0, sb, inode->dev, &id) != 0))
       return 0;
 
     *id_store = id;
@@ -216,8 +214,8 @@ ext2_inode_get_block(struct Inode *inode, uint32_t n, int alloc)
     id_store += (n >> lvl_idx_shift) & lvl_idx_mask;
 
     if ((id = *id_store) == 0) {
-      // TODO: why process_current()?
-      if (!alloc || (ext2_block_alloc(process_current(), sb, inode->dev, &id) != 0)) {
+      // FIXME: why euid = 0?
+      if (!alloc || (ext2_block_alloc(0, sb, inode->dev, &id) != 0)) {
         buf_release(buf);
         return 0;
       }
@@ -270,7 +268,7 @@ ext2_trunc_indirect(struct Inode *inode, uint32_t *id_store, int lvl, size_t to)
 }
 
 void
-ext2_trunc(struct Process *, struct Inode *inode, off_t length)
+ext2_trunc(struct Request *, struct Inode *inode, off_t length)
 {
   struct Ext2SuperblockData *sb = (struct Ext2SuperblockData *) (inode->fs->extra);
   size_t blocks_inc = (1024U / 512U) << sb->log_block_size;
@@ -314,7 +312,7 @@ ext2_trunc(struct Process *, struct Inode *inode, off_t length)
 }
 
 ssize_t
-ext2_read_data(struct Process *, struct Inode *inode, void *p, size_t nbyte, off_t off)
+ext2_read_data(struct Inode *inode, void *p, size_t nbyte, off_t off)
 {
   size_t total, n;
   struct Ext2SuperblockData *sb = (struct Ext2SuperblockData *) (inode->fs->extra);
@@ -387,7 +385,7 @@ ext2_read(struct Request *req, struct Inode *inode, size_t nbyte, off_t off)
 }
 
 ssize_t
-ext2_write_data(struct Process *, struct Inode *inode, uintptr_t va, size_t nbyte, off_t off)
+ext2_write_data(struct Inode *inode, uintptr_t va, size_t nbyte, off_t off)
 {
   struct Ext2SuperblockData *sb = (struct Ext2SuperblockData *) (inode->fs->extra);
   size_t total, n;

@@ -54,6 +54,13 @@ int             connection_select(struct Connection *, struct timeval *);
 intptr_t        connection_send(struct Connection *, void *, size_t, void *, size_t);
 intptr_t        connection_sendv(struct Connection *, struct iovec *, int, struct iovec *, int);
 
+struct RequestInfo {
+  uid_t ruid;
+  uid_t euid;
+  gid_t rgid;
+  gid_t egid;
+};
+
 struct Request {
   struct iovec *send_iov;
   int           send_iov_cnt;
@@ -70,6 +77,8 @@ struct Request {
   struct Connection *connection;
   struct KSpinLock lock;
   int ref_count;
+
+  struct RequestInfo info;
 
   intptr_t r;
 };

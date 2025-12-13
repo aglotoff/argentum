@@ -22,6 +22,7 @@ struct stat;
 struct Connection;
 struct FS;
 
+struct RequestInfo;
 struct Process;
 
 struct Inode {
@@ -78,22 +79,22 @@ struct Request;
 struct FSOps {
   char             *name;
   struct Inode *  (*inode_get)(struct FS *, ino_t);
-  int             (*inode_read)(struct Process *, struct Inode *);
-  int             (*inode_write)(struct Process *, struct Inode *);
-  void            (*inode_delete)(struct Process *, struct Inode *);
+  int             (*inode_read)(struct Inode *);
+  int             (*inode_write)(struct Inode *);
+  void            (*inode_delete)(struct Inode *);
   ssize_t         (*read)(struct Request *, struct Inode *, size_t, off_t);
   ssize_t         (*write)(struct Request *, struct Inode *, size_t, off_t);
-  int             (*rmdir)(struct Process *, struct Inode *, struct Inode *, const char *);
-  ssize_t         (*readdir)(struct Process *, struct Inode *, void *, FillDirFunc, off_t);
+  int             (*rmdir)(struct Request *, struct Inode *, struct Inode *, const char *);
+  ssize_t         (*readdir)(struct Request *, struct Inode *, void *, FillDirFunc, off_t);
   ssize_t         (*readlink)(struct Request *, struct Inode *, size_t);
-  int             (*create)(struct Process *, struct Inode *, char *, mode_t, struct Inode **);
+  int             (*create)(struct Request *, struct Inode *, char *, mode_t, struct Inode **);
   int             (*symlink)(struct Request *, struct Inode *, char *, mode_t, size_t, struct Inode **);
-  int             (*mkdir)(struct Process *, struct Inode *, char *, mode_t, struct Inode **);
-  int             (*mknod)(struct Process *, struct Inode *, char *, mode_t, dev_t, struct Inode **);
-  int             (*link)(struct Process *, struct Inode *, char *, struct Inode *);
-  int             (*unlink)(struct Process *, struct Inode *, struct Inode *, const char *);
-  struct Inode *  (*lookup)(struct Process *, struct Inode *, const char *);
-  void            (*trunc)(struct Process *, struct Inode *, off_t);
+  int             (*mkdir)(struct Request *, struct Inode *, char *, mode_t, struct Inode **);
+  int             (*mknod)(struct Request *, struct Inode *, char *, mode_t, dev_t, struct Inode **);
+  int             (*link)(struct Request *, struct Inode *, char *, struct Inode *);
+  int             (*unlink)(struct Request *, struct Inode *, struct Inode *, const char *);
+  struct Inode *  (*lookup)(struct Request *, struct Inode *, const char *);
+  void            (*trunc)(struct Request *, struct Inode *, off_t);
 };
 
 struct FS {
@@ -126,7 +127,7 @@ struct Inode    *fs_inode_duplicate(struct Inode *);
 void             fs_inode_lock(struct Inode *);
 void             fs_inode_unlock(struct Inode *);
 void             fs_inode_cache_init(void);
-int              fs_inode_permission(struct Process *, struct Inode *, mode_t, int);
+int              fs_inode_permission(struct RequestInfo *, struct Inode *, mode_t, int);
 void             fs_inode_lock_two(struct Inode *, struct Inode *);
 void             fs_inode_unlock_two(struct Inode *, struct Inode *);
 

@@ -82,11 +82,8 @@ pipe_service_task(void *)
 {
   struct Request *req;
 
-  //cprintf("[worker %p] waits\n", arg);
   while (endpoint_receive(&pipe_endpoint, &req) >= 0) {
     struct IpcMessage msg;
-
-    //cprintf("[worker %p] msg from %#x\n", arg, req->process->pid);
 
     if (request_read(req, &msg, sizeof(msg)) < 0) {
       request_reply(req, -EFAULT);
@@ -96,8 +93,6 @@ pipe_service_task(void *)
       k_warn("unsupported msg type %d\n", msg.type);
       request_reply(req, -ENOSYS);
     }
-
-    //cprintf("[worker %p] waits\n", arg);
   }
 
   k_panic("error");
@@ -372,10 +367,7 @@ pipe_read(struct Request *req, struct IpcMessage *msg)
   size_t n = msg->u.read.nbyte;
   int r;
 
-  //cprintf("[k] proc #%x reads\n", req->process->pid);
-
   if ((r = k_mutex_lock(&pipe->mutex)) < 0) {
-    //cprintf("[k] proc #%x errs\n", req->process->pid);
     request_reply(req, r);
     return;
   }
@@ -385,14 +377,11 @@ pipe_read(struct Request *req, struct IpcMessage *msg)
   while (pipe->write_open && (pipe->size == 0)) {
     int r;
 
-    //cprintf("[k] proc #%x wait %p\n", req->process->pid, &pipe->read_cond);
     if ((r = k_condvar_wait(&pipe->read_cond, &pipe->mutex, 0)) < 0) {
-      //cprintf("[k] proc #%x wait err %p\n", req->process->pid, &pipe->read_cond);
       k_mutex_unlock(&pipe->mutex);
       request_reply(req, r);
       return;
     }
-    //cprintf("[k] proc #%x wait end %p\n", req->process->pid, &pipe->read_cond);
   }
   
   // TODO: could copy all available data in one or two steps
@@ -408,7 +397,6 @@ pipe_read(struct Request *req, struct IpcMessage *msg)
 
     r = request_write(req, &pipe->buf[pipe->read_pos], nread);
     if (r < 0) {
-      //cprintf("[k] proc #%x err broadcast %p\n", req->process->pid, &pipe->write_cond);
       k_condvar_notify_all(&pipe->write_cond);
       k_mutex_unlock(&pipe->mutex);
 
@@ -424,7 +412,6 @@ pipe_read(struct Request *req, struct IpcMessage *msg)
       pipe->read_pos = 0;
   }
 
-  //cprintf("[k] proc #%x broadcast %p\n", req->process->pid, &pipe->write_cond);
   k_condvar_notify_all(&pipe->write_cond);
   k_mutex_unlock(&pipe->mutex);
 

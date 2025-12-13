@@ -224,6 +224,11 @@ connection_send(struct Connection *connection, void *smsg, size_t sbytes, void *
   req->connection = connection;
   req->process = process_current();
 
+  req->info.ruid = req->process ? req->process->ruid : 0;
+  req->info.euid = req->process ? req->process->euid : 0;
+  req->info.rgid = req->process ? req->process->rgid : 0;
+  req->info.egid = req->process ? req->process->egid : 0;
+
   request_dup(req);
 
   if (k_mailbox_timed_send(&connection->endpoint->mbox, &req, timeout, K_SLEEP_UNWAKEABLE) < 0) {
@@ -285,6 +290,11 @@ connection_sendv(struct Connection *connection,
 
   req->connection = connection;
   req->process = process_current();
+
+  req->info.ruid = req->process ? req->process->ruid : 0;
+  req->info.euid = req->process ? req->process->euid : 0;
+  req->info.rgid = req->process ? req->process->rgid : 0;
+  req->info.egid = req->process ? req->process->egid : 0;
 
   request_dup(req);
 

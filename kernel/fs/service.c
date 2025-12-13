@@ -8,9 +8,7 @@
 #include <kernel/page.h>
 #include <kernel/fs/fs.h>
 #include <kernel/object_pool.h>
-#include <kernel/process.h>
 #include <kernel/time.h>
-#include <kernel/vmspace.h>
 #include <kernel/dev.h>
 #include <kernel/hash.h>
 
@@ -77,7 +75,6 @@ fs_filldir(void *buf, ino_t ino, const char *name, size_t name_len)
 void
 do_access(struct FS *fs, struct Request *req, struct IpcMessage *msg)
 {
-  struct Process *process = req->process;
   int r;
 
   mode_t amode = msg->u.access.amode;
@@ -96,11 +93,11 @@ do_access(struct FS *fs, struct Request *req, struct IpcMessage *msg)
 
   fs_inode_lock(inode);
 
-  if ((amode & R_OK) && !fs_inode_permission(process, inode, FS_PERM_READ, 1))
+  if ((amode & R_OK) && !fs_inode_permission(&req->info, inode, FS_PERM_READ, 1))
     r = -EPERM;
-  if ((amode & W_OK) && !fs_inode_permission(process, inode, FS_PERM_WRITE, 1))
+  if ((amode & W_OK) && !fs_inode_permission(&req->info, inode, FS_PERM_WRITE, 1))
     r = -EPERM;
-  if ((amode & X_OK) && !fs_inode_permission(process, inode, FS_PERM_EXEC, 1))
+  if ((amode & X_OK) && !fs_inode_permission(&req->info, inode, FS_PERM_EXEC, 1))
     r = -EPERM;
 
   fs_inode_unlock(inode);
@@ -112,7 +109,6 @@ do_access(struct FS *fs, struct Request *req, struct IpcMessage *msg)
 void
 do_chdir(struct FS *fs, struct Request *req, struct IpcMessage *msg)
 {
-  struct Process *process = req->process;
   ino_t ino = msg->u.chdir.ino;
   int r;
 
@@ -123,7 +119,7 @@ do_chdir(struct FS *fs, struct Request *req, struct IpcMessage *msg)
 
   if (!S_ISDIR(inode->mode)) {
     r = -ENOTDIR;
-  } else if (!fs_inode_permission(process, inode, FS_PERM_EXEC, 0)) {
+  } else if (!fs_inode_permission(&req->info, inode, FS_PERM_EXEC, 0)) {
     r = -EPERM;
   } else {
     r = 0;
@@ -138,14 +134,12 @@ do_chdir(struct FS *fs, struct Request *req, struct IpcMessage *msg)
 #define CHMOD_MASK  (S_IRWXU | S_IRWXG | S_IRWXO | S_ISUID | S_ISGID)
 
 int
-do_inode_chmod(struct FS *, struct Process *process,
+do_inode_chmod(struct FS *, struct Request *req,
                struct Inode *inode, mode_t mode)
 {
-  uid_t euid = process ? process->euid : 0;
-
   fs_inode_lock(inode);
 
-  if ((euid != 0) && (inode->uid != euid)) {
+  if ((req->info.euid != 0) && (inode->uid != req->info.euid)) {
     fs_inode_unlock(inode);
     return -EPERM;
   }
@@ -171,7 +165,7 @@ do_chmod(struct FS *fs, struct Request *req, struct IpcMessage *msg)
   // TODO: verify existence
   struct Inode *inode = fs->ops->inode_get(fs, ino);
 
-  r = do_inode_chmod(fs, req->process, inode, mode);
+  r = do_inode_chmod(fs, req, inode, mode);
 
   fs_inode_put(inode);
 
@@ -179,13 +173,13 @@ do_chmod(struct FS *fs, struct Request *req, struct IpcMessage *msg)
 }
 
 static int
-do_chown_locked(struct FS *, struct Process *process,
+do_chown_locked(struct FS *, struct Request *req,
                 struct Inode *inode,
                 uid_t uid,
                 gid_t gid)
 {
-  uid_t euid = process ? process->euid : 0;
-  uid_t egid = process ? process->egid : 0;
+  uid_t euid = req->info.euid;
+  uid_t egid = req->info.egid;
 
   if ((uid != (uid_t) -1) &&
       (euid != 0) &&
@@ -208,14 +202,14 @@ do_chown_locked(struct FS *, struct Process *process,
 }
 
 int
-do_inode_chown(struct FS *fs, struct Process *process,
+do_inode_chown(struct FS *fs, struct Request *req,
                struct Inode *inode,
                uid_t uid, gid_t gid)
 {
   int r;
 
   fs_inode_lock(inode);
-  r = do_chown_locked(fs, process, inode, uid, gid);
+  r = do_chown_locked(fs, req, inode, uid, gid);
   fs_inode_unlock(inode);
 
   return r;
@@ -232,7 +226,7 @@ do_chown(struct FS *fs, struct Request *req, struct IpcMessage *msg)
   // TODO: verify existence
   struct Inode *inode = fs->ops->inode_get(fs, ino);
 
-  r = do_inode_chown(fs, req->process, inode, uid, gid);
+  r = do_inode_chown(fs, req, inode, uid, gid);
 
   fs_inode_put(inode);
 
@@ -240,7 +234,7 @@ do_chown(struct FS *fs, struct Request *req, struct IpcMessage *msg)
 }
 
 static int
-do_create_locked(struct FS *fs, struct Process *process,
+do_create_locked(struct FS *fs, struct Request *req,
                  struct Inode *dir,
                  char *name,
                  mode_t mode,
@@ -252,10 +246,10 @@ do_create_locked(struct FS *fs, struct Process *process,
   if (!S_ISDIR(dir->mode))
     return -ENOTDIR;
 
-  if (!fs_inode_permission(process, dir, FS_PERM_WRITE, 0))
+  if (!fs_inode_permission(&req->info, dir, FS_PERM_WRITE, 0))
     return -EPERM;
 
-  inode = fs->ops->lookup(process, dir, name);
+  inode = fs->ops->lookup(req, dir, name);
 
   if (inode != NULL) {
     fs_inode_put(inode);
@@ -264,11 +258,11 @@ do_create_locked(struct FS *fs, struct Process *process,
 
   switch (mode & S_IFMT) {
     case S_IFDIR:
-      return fs->ops->mkdir(process, dir, name, mode, istore);
+      return fs->ops->mkdir(req, dir, name, mode, istore);
     case S_IFREG:
-      return fs->ops->create(process, dir, name, mode, istore);
+      return fs->ops->create(req, dir, name, mode, istore);
     default:
-      return fs->ops->mknod(process, dir, name, mode, dev, istore);
+      return fs->ops->mknod(req, dir, name, mode, dev, istore);
   }
 }
 
@@ -294,7 +288,7 @@ do_create(struct FS *fs, struct Request *req, struct IpcMessage *msg)
   struct Inode *inode = NULL;
 
   fs_inode_lock(dir);
-  r = do_create_locked(fs, req->process, dir, name, mode, dev, &inode);
+  r = do_create_locked(fs, req, dir, name, mode, dev, &inode);
   fs_inode_unlock(dir);
 
   if (inode != NULL) {
@@ -308,7 +302,7 @@ do_create(struct FS *fs, struct Request *req, struct IpcMessage *msg)
 }
 
 static int
-do_link_locked(struct FS *fs, struct Process *process,
+do_link_locked(struct FS *fs, struct Request *req,
                struct Inode *dir,
                char *name,
                struct Inode *inode)
@@ -316,7 +310,7 @@ do_link_locked(struct FS *fs, struct Process *process,
   if (!S_ISDIR(dir->mode))
     return -ENOTDIR;
 
-  if (!fs_inode_permission(process, dir, FS_PERM_WRITE, 0))
+  if (!fs_inode_permission(&req->info, dir, FS_PERM_WRITE, 0))
     return -EPERM;
 
   // TODO: Allow links to directories?
@@ -329,7 +323,7 @@ do_link_locked(struct FS *fs, struct Process *process,
   if (dir->dev != inode->dev)
     return -EXDEV;
 
-  return fs->ops->link(process, dir, name, inode);
+  return fs->ops->link(req, dir, name, inode);
 }
 
 void
@@ -353,7 +347,7 @@ do_link(struct FS *fs, struct Request *req, struct IpcMessage *msg)
   struct Inode *inode = fs->ops->inode_get(fs, ino);
 
   fs_inode_lock_two(dir, inode);
-  r = do_link_locked(fs, req->process, dir, name, inode);
+  r = do_link_locked(fs, req, dir, name, inode);
   fs_inode_unlock_two(dir, inode);
 
   fs_inode_put(dir);
@@ -365,8 +359,6 @@ do_link(struct FS *fs, struct Request *req, struct IpcMessage *msg)
 void
 do_lookup(struct FS *fs, struct Request *req, struct IpcMessage *msg)
 {
-  struct Process *process = req->process;
-
   ino_t dir_ino = msg->u.lookup.dir_ino;
   int flags = msg->u.lookup.flags;
   int r;
@@ -393,14 +385,14 @@ do_lookup(struct FS *fs, struct Request *req, struct IpcMessage *msg)
     return;
   }
 
-  if (!fs_inode_permission(process, dir, FS_PERM_READ, flags & FS_LOOKUP_REAL)) {
+  if (!fs_inode_permission(&req->info, dir, FS_PERM_READ, flags & FS_LOOKUP_REAL)) {
     fs_inode_unlock(dir);
     fs_inode_put(dir);
     request_reply(req, -EPERM);
     return;
   }
     
-  inode = fs->ops->lookup(process, dir, name);
+  inode = fs->ops->lookup(req, dir, name);
 
   r = inode ? inode->ino : 0;
 
@@ -416,7 +408,6 @@ do_lookup(struct FS *fs, struct Request *req, struct IpcMessage *msg)
 void
 do_readlink(struct FS *fs, struct Request *req, struct IpcMessage *msg)
 {
-  struct Process *process = req->process;
   ino_t ino = msg->u.readlink.ino;
   size_t nbyte = msg->u.readlink.nbyte;
   ssize_t r;
@@ -425,7 +416,7 @@ do_readlink(struct FS *fs, struct Request *req, struct IpcMessage *msg)
 
   fs_inode_lock(inode);
 
-  if (!fs_inode_permission(process, inode, FS_PERM_READ, 0)) {
+  if (!fs_inode_permission(&req->info, inode, FS_PERM_READ, 0)) {
     fs_inode_unlock(inode);
     fs_inode_put(inode);
     request_reply(req, -EPERM);
@@ -450,7 +441,6 @@ do_readlink(struct FS *fs, struct Request *req, struct IpcMessage *msg)
 void
 do_rmdir(struct FS *fs, struct Request *req, struct IpcMessage *msg)
 {
-  struct Process *process = req->process;
   ino_t dir_ino = msg->u.rmdir.dir_ino;
   ino_t ino = msg->u.rmdir.ino;
   int r;
@@ -477,7 +467,7 @@ do_rmdir(struct FS *fs, struct Request *req, struct IpcMessage *msg)
     return;
   }
 
-  if (!fs_inode_permission(process, dir, FS_PERM_WRITE, 0)) {
+  if (!fs_inode_permission(&req->info, dir, FS_PERM_WRITE, 0)) {
     fs_inode_unlock_two(dir, inode);
     fs_inode_put(dir);
     fs_inode_put(inode);
@@ -494,7 +484,7 @@ do_rmdir(struct FS *fs, struct Request *req, struct IpcMessage *msg)
     return;
   }
 
-  r = fs->ops->rmdir(process, dir, inode, name);
+  r = fs->ops->rmdir(req, dir, inode, name);
 
   fs_inode_unlock_two(dir, inode);
   fs_inode_put(dir);
@@ -567,10 +557,10 @@ do_symlink_locked(struct FS *fs, struct Request *req,
   if (!S_ISDIR(dir->mode))
     return -ENOTDIR;
 
-  if (!fs_inode_permission(req->process, dir, FS_PERM_WRITE, 0))
+  if (!fs_inode_permission(&req->info, dir, FS_PERM_WRITE, 0))
     return -EPERM;
 
-  inode = fs->ops->lookup(req->process, dir, name);
+  inode = fs->ops->lookup(req, dir, name);
 
   if (inode != NULL) {
     fs_inode_put(inode);
@@ -615,7 +605,6 @@ do_symlink(struct FS *fs, struct Request *req, struct IpcMessage *msg)
 void
 do_unlink(struct FS *fs, struct Request *req, struct IpcMessage *msg)
 {
-  struct Process *process = req->process;
   ino_t dir_ino = msg->u.unlink.dir_ino;
   ino_t ino = msg->u.unlink.ino;
   int r;
@@ -632,8 +621,6 @@ do_unlink(struct FS *fs, struct Request *req, struct IpcMessage *msg)
   struct Inode *dir = fs->ops->inode_get(fs, dir_ino);
   struct Inode *inode = fs->ops->inode_get(fs, ino);
 
-  
-
   fs_inode_lock_two(dir, inode);
 
   if (!S_ISDIR(dir->mode)) {
@@ -644,7 +631,7 @@ do_unlink(struct FS *fs, struct Request *req, struct IpcMessage *msg)
     return;
   }
 
-  if (!fs_inode_permission(process, dir, FS_PERM_WRITE, 0)) {
+  if (!fs_inode_permission(&req->info, dir, FS_PERM_WRITE, 0)) {
     fs_inode_unlock_two(dir, inode);
     fs_inode_put(dir);
     fs_inode_put(inode);
@@ -661,7 +648,7 @@ do_unlink(struct FS *fs, struct Request *req, struct IpcMessage *msg)
     return;
   }
 
-  r = fs->ops->unlink(process, dir, inode, name);
+  r = fs->ops->unlink(req, dir, inode, name);
 
   fs_inode_unlock_two(dir, inode);
   fs_inode_put(dir);
@@ -673,19 +660,17 @@ do_unlink(struct FS *fs, struct Request *req, struct IpcMessage *msg)
 void
 do_utime(struct FS *fs, struct Request *req, struct IpcMessage *msg)
 {
-  struct Process *process = req->process;
   ino_t ino = msg->u.utime.ino;
   struct utimbuf *times = &msg->u.utime.times;
   int r;
 
   struct Inode *inode = fs->ops->inode_get(fs, ino);
-  uid_t euid = process ? process->euid : 0;
 
   fs_inode_lock(inode);
 
-  if ((euid != 0) ||
-      ((euid != inode->uid) ||
-        !fs_inode_permission(process, inode, FS_PERM_WRITE, 1))) {
+  if ((req->info.euid != 0) ||
+      ((req->info.euid != inode->uid) ||
+        !fs_inode_permission(&req->info, inode, FS_PERM_WRITE, 1))) {
     r = -EPERM;
     goto out;
   }
@@ -730,7 +715,6 @@ do_close(struct FS *, struct Request *req, struct IpcMessage *)
 void
 do_fchmod(struct FS *fs, struct Request *req, struct IpcMessage *msg)
 {
-  struct Process *process = req->process;
   mode_t mode = msg->u.fchmod.mode;
   int r;
 
@@ -740,7 +724,7 @@ do_fchmod(struct FS *fs, struct Request *req, struct IpcMessage *msg)
   if (file->inode == NULL) {
     r = -EINVAL;
   } else {
-    r = do_inode_chmod(fs, process, file->inode, mode);
+    r = do_inode_chmod(fs, req, file->inode, mode);
   }
 
   request_reply(req, r);
@@ -749,7 +733,6 @@ do_fchmod(struct FS *fs, struct Request *req, struct IpcMessage *msg)
 void
 do_fchown(struct FS *fs, struct Request *req, struct IpcMessage *msg)
 {
-  struct Process *process = req->process;
   uid_t uid = msg->u.fchown.uid;
   gid_t gid = msg->u.fchown.gid;
   int r;
@@ -760,7 +743,7 @@ do_fchown(struct FS *fs, struct Request *req, struct IpcMessage *msg)
   if (file->inode == NULL) {
     r = -EINVAL;
   } else {
-    r = do_inode_chown(fs, process, file->inode, uid, gid);
+    r = do_inode_chown(fs, req, file->inode, uid, gid);
   }
 
   request_reply(req, r);
@@ -826,7 +809,7 @@ do_ioctl(struct FS *, struct Request *req, struct IpcMessage *msg)
 }
 
 static int
-do_open_locked(struct FS *fs, struct Process *process,
+do_open_locked(struct FS *fs, struct Request *req,
                struct Connection *connection, 
                struct Inode *inode,
                int oflag)
@@ -850,7 +833,7 @@ do_open_locked(struct FS *fs, struct Process *process,
   }
 
   if ((oflag & O_WRONLY) && (oflag & O_TRUNC)) {
-    fs->ops->trunc(process, inode, 0);
+    fs->ops->trunc(req, inode, 0);
 
     inode->size = 0;
     inode->ctime = inode->mtime = time_get_seconds();
@@ -880,7 +863,6 @@ do_open_locked(struct FS *fs, struct Process *process,
 void
 do_open(struct FS *fs, struct Request *req, struct IpcMessage *msg)
 {
-  struct Process *process = req->process;
   struct Connection *connection = req->connection;
   ino_t ino = msg->u.open.ino;
   int oflag = msg->u.open.oflag;
@@ -890,7 +872,7 @@ do_open(struct FS *fs, struct Request *req, struct IpcMessage *msg)
   struct Inode *inode = fs->ops->inode_get(fs, ino);
 
   fs_inode_lock(inode);
-  r = do_open_locked(fs, process, connection, inode, oflag);
+  r = do_open_locked(fs, req, connection, inode, oflag);
   fs_inode_unlock(inode);
 
   fs_inode_put(inode);
@@ -917,7 +899,7 @@ do_read_locked(struct FS *fs, struct Request *req,
   struct File *file = get_connection_file(connection);
   k_assert(file != NULL);
 
-  if (!fs_inode_permission(req->process, file->inode, FS_PERM_READ, 0))
+  if (!fs_inode_permission(&req->info, file->inode, FS_PERM_READ, 0))
     return -EPERM;
 
   if ((off_t) (file->offset + nbyte) < file->offset)
@@ -983,14 +965,14 @@ do_readdir_locked(struct FS *fs, struct Request *req,
   if (!S_ISDIR(file->inode->mode))
     return -ENOTDIR;
 
-  if (!fs_inode_permission(req->process, file->inode, FS_PERM_READ, 0))
+  if (!fs_inode_permission(&req->info, file->inode, FS_PERM_READ, 0))
     return -EPERM;
 
   while (nbyte > 0) {
     ssize_t nread;
     int r;
 
-    nread = fs->ops->readdir(req->process, file->inode, &de, fs_filldir, file->offset);
+    nread = fs->ops->readdir(req, file->inode, &de, fs_filldir, file->offset);
 
     if (nread < 0)
       return nread;
@@ -1115,7 +1097,6 @@ do_select(struct FS *, struct Request *req, struct IpcMessage *msg)
 void
 do_trunc(struct FS *fs, struct Request *req, struct IpcMessage *msg)
 {
-  struct Process *process = req->process;
   off_t length = msg->u.trunc.length;
   int r;
 
@@ -1134,11 +1115,11 @@ do_trunc(struct FS *fs, struct Request *req, struct IpcMessage *msg)
     if (length > file->inode->size) {
       fs_inode_unlock(file->inode);
       r = -EFBIG;
-    } else if (!fs_inode_permission(process, file->inode, FS_PERM_WRITE, 0)) {
+    } else if (!fs_inode_permission(&req->info, file->inode, FS_PERM_WRITE, 0)) {
       fs_inode_unlock(file->inode);
       r = -EPERM;
     } else {
-      fs->ops->trunc(process, file->inode, length);
+      fs->ops->trunc(req, file->inode, length);
 
       file->inode->size = length;
       file->inode->ctime = file->inode->mtime = time_get_seconds();
@@ -1163,7 +1144,7 @@ do_write_locked(struct FS *fs, struct Request *req,
   struct File *file = get_connection_file(connection);
   k_assert(file != NULL);
 
-  if (!fs_inode_permission(req->process, file->inode, FS_PERM_WRITE, 0))
+  if (!fs_inode_permission(&req->info, file->inode, FS_PERM_WRITE, 0))
     return -EPERM;
 
   if (connection->flags & O_APPEND)

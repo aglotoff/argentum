@@ -5,7 +5,6 @@
 #include <kernel/console.h>
 #include <kernel/fs/buf.h>
 #include <kernel/time.h>
-#include <kernel/process.h>
 
 #include "ext2.h"
 
@@ -51,8 +50,8 @@ ext2_inode_init(struct Ext2SuperblockData *sb, dev_t dev, uint32_t table, uint32
 
   if (((mode & EXT2_S_IFMASK) == EXT2_S_IFBLK) ||
       ((mode & EXT2_S_IFMASK) == EXT2_S_IFCHR)) {
-    // TODO: why process_current?
-    ext2_block_alloc(process_current(), sb, dev, &raw->block[0]);
+    // FIXME: why euid = 0?
+    ext2_block_alloc(0, sb, dev, &raw->block[0]);
     struct Buf *block_buf;
 
     block_buf = buf_read(raw->block[0], sb->block_size, dev);

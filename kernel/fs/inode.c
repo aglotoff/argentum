@@ -11,8 +11,6 @@
 #include <kernel/time.h>
 #include <kernel/fs/buf.h>
 #include <kernel/fs/fs.h>
-#include <kernel/process.h>
-#include <kernel/vmspace.h>
 #include <kernel/core/tick.h>
 
 #include "ext2.h"
@@ -127,8 +125,7 @@ fs_inode_put(struct Inode *inode)
 
     // If this is the last reference to this inode
     if (ref_count == 1) {
-      // TODO: process_current?
-      inode->fs->ops->inode_delete(process_current(), inode);
+      inode->fs->ops->inode_delete(inode);
       inode->flags &= ~FS_INODE_VALID;
     }
   }
@@ -172,7 +169,7 @@ fs_inode_lock(struct Inode *ip)
   if (ip->flags & FS_INODE_DIRTY)
     k_panic("inode dirty");
 
-  ip->fs->ops->inode_read(process_current(), ip);
+  ip->fs->ops->inode_read(ip);
 
   //msg.type = IPC_MSG_INODE_READ;
   //msg.u.inode_read.inode = ip;
@@ -190,7 +187,7 @@ fs_inode_unlock(struct Inode *ip)
 
   if (ip->flags & FS_INODE_DIRTY) {
     // current??
-    ip->fs->ops->inode_write(process_current(), ip);
+    ip->fs->ops->inode_write(ip);
     ip->flags &= ~FS_INODE_DIRTY;
   }
 
@@ -222,10 +219,10 @@ fs_inode_unlock_two(struct Inode *inode1, struct Inode *inode2)
 }
 
 int
-fs_inode_permission(struct Process *process, struct Inode *inode, mode_t mode, int real)
+fs_inode_permission(struct RequestInfo *info, struct Inode *inode, mode_t mode, int real)
 {
-  uid_t uid = process ? (real ? process->ruid : process->euid) : 0;
-  gid_t gid = process ? (real ? process->rgid : process->egid) : 0;
+  uid_t uid = real ? info->ruid : info->euid;
+  gid_t gid = real ? info->rgid : info->egid;
 
   if (uid == 0)
     return (mode & FS_PERM_EXEC)

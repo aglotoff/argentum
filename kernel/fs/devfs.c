@@ -48,7 +48,7 @@ devfs_inode_get(struct FS *fs, ino_t inum)
 }
 
 int
-devfs_inode_read(struct Process *, struct Inode *inode)
+devfs_inode_read(struct Inode *inode)
 {
   if ((inode->ino >= 2) && (inode->ino <= NDEV)) {
     struct DevfsNode *device = &devices[inode->ino - 1];
@@ -72,14 +72,14 @@ devfs_inode_read(struct Process *, struct Inode *inode)
 }
 
 int
-devfs_inode_write(struct Process *, struct Inode *inode)
+devfs_inode_write(struct Inode *inode)
 {
   k_assert(inode->dev == 1);
   return -ENOSYS;
 }
 
 void
-devfs_inode_delete(struct Process *, struct Inode *inode)
+devfs_inode_delete(struct Inode *inode)
 {
   k_assert(inode->dev == 1);
 }
@@ -103,7 +103,7 @@ devfs_write(struct Request *, struct Inode *inode, size_t n, off_t offset)
 }
 
 int
-devfs_rmdir(struct Process *, struct Inode *parent, struct Inode *inode, const char *)
+devfs_rmdir(struct Request *, struct Inode *parent, struct Inode *inode, const char *)
 {
   k_assert(inode->dev == 1);
   (void) parent;
@@ -111,7 +111,7 @@ devfs_rmdir(struct Process *, struct Inode *parent, struct Inode *inode, const c
 }
 
 ssize_t
-devfs_readdir(struct Process *, struct Inode *inode, void *buf, FillDirFunc filldir, off_t offset)
+devfs_readdir(struct Request *, struct Inode *inode, void *buf, FillDirFunc filldir, off_t offset)
 {
   struct DevfsNode *device = &devices[offset];
 
@@ -137,7 +137,7 @@ devfs_readlink(struct Request *, struct Inode *inode, size_t n)
 }
 
 int
-devfs_create(struct Process *, struct Inode *inode, char *name, mode_t mode, struct Inode **store)
+devfs_create(struct Request *, struct Inode *inode, char *name, mode_t mode, struct Inode **store)
 {
   k_assert(inode->dev == 1);
   (void) name;
@@ -147,7 +147,7 @@ devfs_create(struct Process *, struct Inode *inode, char *name, mode_t mode, str
 }
 
 int
-devfs_mkdir(struct Process *, struct Inode *inode, char *name, mode_t mode, struct Inode **store)
+devfs_mkdir(struct Request *, struct Inode *inode, char *name, mode_t mode, struct Inode **store)
 {
   k_assert(inode->dev == 1);
   (void) name;
@@ -157,7 +157,7 @@ devfs_mkdir(struct Process *, struct Inode *inode, char *name, mode_t mode, stru
 }
 
 int
-devfs_mknod(struct Process *, struct Inode *inode, char *name, mode_t mode, dev_t dev, struct Inode **store)
+devfs_mknod(struct Request *, struct Inode *inode, char *name, mode_t mode, dev_t dev, struct Inode **store)
 {
   k_assert(inode->dev == 1);
   (void) name;
@@ -168,7 +168,7 @@ devfs_mknod(struct Process *, struct Inode *inode, char *name, mode_t mode, dev_
 }
 
 int
-devfs_link(struct Process *, struct Inode *parent, char *name, struct Inode *inode)
+devfs_link(struct Request *, struct Inode *parent, char *name, struct Inode *inode)
 {
   k_assert(inode->dev == 1);
   (void) name;
@@ -177,7 +177,7 @@ devfs_link(struct Process *, struct Inode *parent, char *name, struct Inode *ino
 }
 
 int
-devfs_unlink(struct Process *, struct Inode *parent, struct Inode *inode, const char *)
+devfs_unlink(struct Request *, struct Inode *parent, struct Inode *inode, const char *)
 {
   k_assert(inode->dev == 1);
   (void) parent;
@@ -185,7 +185,7 @@ devfs_unlink(struct Process *, struct Inode *parent, struct Inode *inode, const 
 }
 
 struct Inode *
-devfs_lookup(struct Process *, struct Inode *inode, const char *name)
+devfs_lookup(struct Request *, struct Inode *inode, const char *name)
 {
   struct DevfsNode *device;
   
@@ -200,7 +200,7 @@ devfs_lookup(struct Process *, struct Inode *inode, const char *name)
 }
 
 void
-devfs_trunc(struct Process *, struct Inode *inode, off_t size)
+devfs_trunc(struct Request *, struct Inode *inode, off_t size)
 {
   (void) inode;
   (void) size;
