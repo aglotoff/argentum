@@ -428,17 +428,6 @@ vm_user_clone(void *src, void *dst, uintptr_t start_va, size_t n, int share)
   return 0;
 }
 
-static int
-vm_flags_check(int curr_flags, int flags)
-{
-  if (curr_flags & VM_COW) {
-    curr_flags &= ~VM_COW;
-    curr_flags |= VM_WRITE;
-  }
-
-  return (curr_flags & flags) == flags;
-}
-
 int
 vm_handle_fault(void *pgtab, uintptr_t va)
 {

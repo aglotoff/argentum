@@ -400,8 +400,8 @@ fs_rmdir(const char *path)
 
   iov[0].iov_base = &msg;
   iov[0].iov_len  = sizeof(msg);
-  iov[1].iov_base = (void *) name;
-  iov[1].iov_len  = strlen(name);
+  iov[1].iov_base = (void *) pp->name;
+  iov[1].iov_len  = strlen(pp->name);
 
   r = connection_sendv(parent_connection, iov, 2, NULL, 0);
 
