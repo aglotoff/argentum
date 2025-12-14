@@ -5,13 +5,10 @@
 #include <string.h>
 #include <fcntl.h>
 
-#include <kernel/mm/memlayout.h>
-#include <kernel/vm.h>
+
 #include <kernel/tty.h>
 #include <kernel/trap.h>
-#include <kernel/process.h>
 #include <kernel/core/task.h>
-#include <kernel/vmspace.h>
 #include <kernel/fs/fs.h>
 #include <kernel/console.h>
 #include <kernel/time.h>
@@ -294,7 +291,7 @@ tty_process_input(struct Tty *tty, char *buf)
 // Use the device minor number to select the virtual console corresponding to
 // this inode
 static struct Tty *
-tty_from_dev(struct Process *process, dev_t dev)
+tty_from_dev(dev_t dev)
 {
   // No need to lock since rdev cannot change once we obtain an inode ref
   // TODO: are we sure?
@@ -306,29 +303,22 @@ tty_from_dev(struct Process *process, dev_t dev)
   }
 
   if (major == 0x03) {
-    if (process == NULL)
-      return NULL;
-
-    // TODO: lock process?
-    if (((process->ctty >> 8) & 0xFF) == 0x01) {
-      int minor = dev & 0xFF;
-      return minor < NTTYS ? &ttys[minor] : NULL;
-    }
+    // TODO: controlling terminal
+    return &ttys[0];
   }
 
   return NULL;
 }
 
 int
-tty_open(struct Request *req, dev_t dev, int oflag, mode_t)
+tty_open(struct Request *, dev_t dev, int, mode_t)
 {
-  struct Tty *tty = tty_from_dev(req->process, dev);
+  struct Tty *tty = tty_from_dev(dev);
 
   if (tty == NULL)
     return -ENODEV;
 
-  if (!(oflag & O_NOCTTY) && (req->process->ctty == 0))
-    req->process->ctty = dev;
+  // TODO: check O_NOCTTY
 
   return 0;
 }
@@ -345,7 +335,7 @@ tty_open(struct Request *req, dev_t dev, int oflag, mode_t)
 ssize_t
 tty_read(struct Request *req, dev_t dev, size_t nbytes)
 {
-  struct Tty *tty = tty_from_dev(req->process, dev);
+  struct Tty *tty = tty_from_dev(dev);
   size_t i = 0;
 
   if (tty == NULL)
@@ -404,7 +394,7 @@ tty_read(struct Request *req, dev_t dev, size_t nbytes)
 ssize_t
 tty_write(struct Request *req, dev_t dev, size_t nbytes)
 {
-  struct Tty *tty = tty_from_dev(req->process, dev);
+  struct Tty *tty = tty_from_dev(dev);
   size_t i;
 
   if (tty == NULL)
@@ -436,7 +426,7 @@ tty_write(struct Request *req, dev_t dev, size_t nbytes)
 int
 tty_ioctl(struct Request *req, dev_t dev, int request, int arg)
 {
-  struct Tty *tty = tty_from_dev(req->process, dev);
+  struct Tty *tty = tty_from_dev(dev);
   struct winsize ws;
 
   if (tty == NULL)
@@ -481,7 +471,7 @@ tty_ioctl(struct Request *req, dev_t dev, int request, int arg)
 }
 
 static int
-tty_try_select(struct Process *, struct Tty *tty)
+tty_try_select(struct Tty *tty)
 {
   if (tty->in.size > 0) {
     if (!(tty->termios.c_lflag & ICANON)) {
@@ -495,9 +485,9 @@ tty_try_select(struct Process *, struct Tty *tty)
 }
 
 int
-tty_select(struct Request *req, dev_t dev, struct timeval *timeout)
+tty_select(struct Request *, dev_t dev, struct timeval *timeout)
 {
-  struct Tty *tty = tty_from_dev(req->process, dev);
+  struct Tty *tty = tty_from_dev(dev);
   int r;
 
   if (tty == NULL)
@@ -505,7 +495,7 @@ tty_select(struct Request *req, dev_t dev, struct timeval *timeout)
 
   k_mutex_lock(&tty->in.mutex);
 
-  while ((r = tty_try_select(req->process, tty)) == 0) {
+  while ((r = tty_try_select(tty)) == 0) {
     unsigned long t = 0;
 
     if (timeout != NULL) {

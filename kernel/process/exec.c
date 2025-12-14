@@ -34,7 +34,7 @@ user_stack_put(struct VMSpace *vm, const void *buf, size_t n, uintptr_t *va_p)
   if (va < STACK_BOTTOM)
     return -E2BIG;
 
-  if ((r = vm_user_copy_out(vm->pgtab, buf, va, n)) < 0)
+  if ((r = vm_user_copy_out(vm->pgtab, buf, va, n)) < 0) 
     return r;
 
   *va_p = va;
@@ -258,7 +258,7 @@ static int
 vm_space_load_file(void *pgtab, void *va, struct Connection *file, size_t n, off_t off)
 {
   connection_seek(file, off, SEEK_SET);
-  return vm_write(pgtab, (uintptr_t) va, n, vm_space_load_chunk, file);
+  return vm_user_write(pgtab, (uintptr_t) va, n, vm_space_load_chunk, file, 0);
 }
 
 static int
@@ -335,25 +335,18 @@ copy_in_args(uintptr_t va, char ***store)
 {
   void *pgtab = process_current()->vm->pgtab;
   char **args;
-  size_t len;
   size_t total_len;
   int r;
 
-  if ((vm_user_check_args(pgtab, va, &len, VM_READ | VM_USER)) < 0)
-    return r;
-  
-  total_len = (len + 1) * sizeof(char *);
-  if (total_len > ARG_MAX)
-    return -E2BIG;
-
-  if ((args = (char **) k_malloc(total_len)) == NULL)
+  if ((args = (char **) k_malloc(sizeof(char *) * 256)) == NULL)
     return -ENOMEM;
 
-  memset(args, 0, total_len);
+  for (size_t i = 0; i < 256; i++) {
+    total_len += sizeof(uintptr_t);
+    if (total_len > ARG_MAX)
+      return -E2BIG;
 
-  for (size_t i = 0; i < len; i++) {
     uintptr_t str_va;
-    size_t str_len;
 
     if ((r = vm_user_copy_in(pgtab, &str_va, va + (sizeof(char *)*i),
                         sizeof str_va)) < 0) {
@@ -361,33 +354,30 @@ copy_in_args(uintptr_t va, char ***store)
       return r;
     }
 
-    if ((r = vm_user_check_str(pgtab, str_va, &str_len,
-                               VM_READ | VM_USER)) < 0) {
-      sys_free_args(args);
-      return r;
+    if (str_va == 0) {
+      args[i] = NULL;
+      if (store) *store = args;
+      return 0;
     }
 
-    total_len += str_len + 1;
-    if (total_len > ARG_MAX) {
-      sys_free_args(args);
-      return -E2BIG;
-    }
-
-    if ((args[i] = k_malloc(str_len + 1)) == NULL) {
+    if ((args[i] = k_malloc(PATH_MAX)) == NULL) {
       sys_free_args(args);
       return -ENOMEM;
     }
 
-    if ((vm_user_copy_in(pgtab, args[i], str_va, str_len + 1) != 0) ||
-         (args[i][str_len] != '\0')) {
+    if ((r = vm_user_copy_in_string(pgtab, args[i], str_va, PATH_MAX)) < 0) {
       sys_free_args(args);
-      return -EFAULT;
+      return r;
+    }
+
+    total_len += strlen(args[i]);
+    if (total_len > ARG_MAX) {
+      sys_free_args(args);
+      return -E2BIG;
     }
   }
 
-  if (store) *store = args;
-
-  return 0;
+  return -E2BIG;
 }
 
 int

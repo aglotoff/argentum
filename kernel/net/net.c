@@ -299,10 +299,11 @@ net_recvfrom(struct Connection *file, uintptr_t va, size_t nbytes, int flags,
       break;
     }
 
-    if ((r = vm_space_copy_out(process_current(), p, va, nread)) < 0) {
-      total = -errno;
-      break;
-    }
+    // TODO: write to request
+    // if ((r = vm_space_copy_out(process_current(), p, va, nread)) < 0) {
+    //   total = -errno;
+    //   break;
+    // }
     
     if (r < nread)
       break;
@@ -339,10 +340,11 @@ net_sendto(struct Connection *file, uintptr_t va, size_t nbytes, int flags,
   while (nbytes) {
     ssize_t nwrite = MIN(nbytes, PAGE_SIZE);
     
-    if ((r = vm_space_copy_in(process_current(), p, va, nwrite)) < 0) {
-      total = -errno;
-      break;
-    }
+    // TODO: read from request
+    // if ((r = vm_space_copy_in(process_current(), p, va, nwrite)) < 0) {
+    //   total = -errno;
+    //   break;
+    // }
 
     r = lwip_sendto(endpoint->socket, p, nwrite, flags, (struct sockaddr *) dest_addr, dest_len);
 

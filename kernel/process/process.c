@@ -151,7 +151,6 @@ process_alloc(void)
   process->parent = NULL;
   process->state = PROCESS_STATE_ACTIVE;
   process->flags = 0;
-  process->ctty  = 0;
 
   memset(process->name, 0, 64);
 
@@ -414,7 +413,6 @@ process_copy(int share_vm)
   child->egid  = current->egid;
   child->cmask = current->cmask;
   child->cwd   = fs_path_node_ref(current->cwd);
-  child->ctty  = current->ctty;
 
   k_list_add_back(&__process_list, &child->link);
   k_list_add_back(&current->children, &child->sibling_link);

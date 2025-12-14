@@ -40,7 +40,4 @@ struct VMSpace   *vm_space_clone(struct VMSpace *, int);
 intptr_t          vmspace_map(struct VMSpace *, uintptr_t, size_t, int);
 void              vm_print_areas(struct VMSpace *);
 
-int               vm_space_copy_out(struct Process *, const void *, uintptr_t, size_t);
-int               vm_space_copy_in(struct Process *, void *, uintptr_t, size_t);
-
 #endif  // !__KERNEL_INCLUDE_KERNEL_VMSPACE_H__

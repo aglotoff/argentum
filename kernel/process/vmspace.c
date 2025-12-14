@@ -199,37 +199,3 @@ vm_print_areas(struct VMSpace *vm)
     cprintf("  [%x-%x)\n", area->start, area->start + area->length);
   }
 }
-
-int
-vm_space_copy_out(struct Process *process, const void *src, uintptr_t dst_va, size_t n)
-{
-  if ((dst_va + n) < dst_va)
-    return -EFAULT;
-
-  if (dst_va > VIRT_KERNEL_BASE) {
-    // TODO: check user permissions
-    memmove((void *) dst_va, src, n);
-    return 0;
-  }
-
-  k_assert(process != NULL);
-
-  return vm_user_copy_out(process->vm->pgtab, src, dst_va, n);
-}
-
-int
-vm_space_copy_in(struct Process *process, void *dst, uintptr_t src_va, size_t n)
-{
-  if ((src_va + n) < src_va)
-    return -EFAULT;
-
-  if (src_va > VIRT_KERNEL_BASE) {
-    // TODO: check user permissions
-    memmove(dst, (void *) src_va, n);
-    return 0;
-  }
-
-  k_assert(process != NULL);
-
-  return vm_user_copy_in(process->vm->pgtab, dst, src_va, n);
-}

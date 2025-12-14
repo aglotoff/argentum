@@ -159,28 +159,6 @@ sys_arg_ulong(int n, unsigned long *ip)
   return 0;
 }
 
-static int
-sys_arg_ptr(int n, uintptr_t *pp, int perm, int can_be_null)
-{
-  uintptr_t ptr = sys_arch_get_arg(n);
-  int r;
-
-  if (ptr == 0) {
-    if (can_be_null) {
-      *pp = 0;
-      return 0;
-    }
-    return -EFAULT;
-  }
-
-  if ((r = vm_user_check_ptr(process_current()->vm->pgtab, ptr, perm)) < 0)
-    return r;
-
-  *pp = ptr;
-
-  return 0;
-}
-
 /**
  * Fetch the nth system call argument as pointer to a buffer of the specified
  * length. Check that the pointer is valid and the user has right permissions.
@@ -194,10 +172,10 @@ sys_arg_ptr(int n, uintptr_t *pp, int perm, int can_be_null)
  * @retval -EFAULT if the arguments doesn't point to a valid memory region.
  */
 static int32_t
-sys_arg_va(int n, uintptr_t *pp, size_t len, int perm, int can_be_null)
+sys_arg_va(int n, uintptr_t *pp, int can_be_null)
 { 
   uintptr_t ptr = sys_arch_get_arg(n);
-  int r;
+  // int r;
 
   if (!ptr) {
     if (can_be_null) {
@@ -207,16 +185,13 @@ sys_arg_va(int n, uintptr_t *pp, size_t len, int perm, int can_be_null)
     return -EFAULT;
   }
 
-  if ((r = vm_user_check_buf(process_current()->vm->pgtab, ptr, len, perm)) < 0)
-    return r;
-
   *pp = ptr;
 
   return 0;
 }
 
 static int32_t
-sys_arg_buf(int n, void **store, size_t len, int perm)
+sys_arg_buf(int n, void **store, size_t len)
 { 
   uintptr_t va = sys_arch_get_arg(n);
   void *pgtab = process_current()->vm->pgtab;
@@ -227,9 +202,6 @@ sys_arg_buf(int n, void **store, size_t len, int perm)
     *store = NULL;
     return 0;
   }
-
-  if ((r = vm_user_check_buf(pgtab, va, len, perm | VM_USER)) < 0)
-    return r;
 
   if ((p = k_malloc(len)) == NULL)
     return -ENOMEM;
@@ -249,29 +221,19 @@ sys_arg_buf(int n, void **store, size_t len, int perm)
 // terminated. If strp is not null, allocate a temporary buffer to copy the
 // string into. Tha caller must deallocate this buffer by calling k_free().
 static int32_t
-sys_arg_str(int n, size_t max, int perm, char **strp)
+sys_arg_str(int n, size_t max, char **strp)
 {
   uintptr_t va = sys_arch_get_arg(n);
   void *pgtab = process_current()->vm->pgtab;
-  size_t len;
   char *s;
   int r;
 
-  if ((r = vm_user_check_str(pgtab, va, &len, perm)) < 0)
-    return r;
-
-  if (len >= max)
-    return -ENAMETOOLONG;
-
-  if (strp == NULL)
-    return 0;
-
-  if ((s = k_malloc(len + 1)) == NULL)
+  if ((s = k_malloc(max)) == NULL)
     return -ENOMEM;
 
-  if ((vm_user_copy_in(pgtab, s, va, len + 1) != 0) || (s[len] != '\0')) {
+  if ((r = vm_user_copy_in_string(pgtab, s, va, max)) < 0) {
     k_free(s);
-    return -EFAULT;
+    return r;
   }
 
   *strp = s;
@@ -309,11 +271,11 @@ sys_exec(void)
   uintptr_t argv, envp;
   int r;
 
-  if ((r = sys_arg_str(0, PATH_MAX, VM_READ, &path)) < 0)
+  if ((r = sys_arg_str(0, PATH_MAX, &path)) < 0)
     goto out1;
-  if ((r = sys_arg_va(1, &argv, 1, 0, 0)) < 0)
+  if ((r = sys_arg_va(1, &argv, 0)) < 0)
     goto out2;
-  if ((r = sys_arg_va(2, &envp, 1, 0, 0)) < 0)
+  if ((r = sys_arg_va(2, &envp, 0)) < 0)
     goto out2;
 
   //cprintf("Running %s\n", path);
@@ -361,7 +323,7 @@ sys_wait(void)
   
   if ((r = sys_arg_int(0, &pid)) < 0)
     return r;
-  if ((r = sys_arg_va(1, &stat_va, sizeof(int), VM_WRITE, 1)) < 0)
+  if ((r = sys_arg_va(1, &stat_va, 1)) < 0)
     return r;
   if ((r = sys_arg_int(2, &options)) < 0)
     return r;
@@ -457,7 +419,7 @@ sys_times(void)
   struct tms times;
   int r;
 
-  if ((r = sys_arg_va(0, &times_va, sizeof times, VM_WRITE, 0)) < 0)
+  if ((r = sys_arg_va(0, &times_va, 0)) < 0)
     return r;
 
   process_get_times(process_current(), &times);
@@ -472,9 +434,9 @@ sys_nanosleep(void)
   uintptr_t rmt_va;
   int r;
 
-  if ((r = sys_arg_buf(0, (void **) &rqtp, sizeof *rqtp, VM_READ)) < 0)
+  if ((r = sys_arg_buf(0, (void **) &rqtp, sizeof *rqtp)) < 0)
     goto out1;
-  if ((r = sys_arg_va(1, &rmt_va, sizeof rmt, VM_WRITE, 1)) < 0)
+  if ((r = sys_arg_va(1, &rmt_va, 1)) < 0)
     goto out2;
 
   if ((r = time_nanosleep(rqtp, &rmt)) < 0)
@@ -502,9 +464,9 @@ sys_mount(void)
   char *type, *path;
   int r;
 
-  if ((r = sys_arg_str(0, PATH_MAX, VM_READ, &type)) < 0)
+  if ((r = sys_arg_str(0, PATH_MAX, &type)) < 0)
     goto out1;
-  if ((r = sys_arg_str(1, PATH_MAX, VM_READ, &path)) < 0)
+  if ((r = sys_arg_str(1, PATH_MAX, &path)) < 0)
     goto out2;
 
   r = fs_mount(type, path);
@@ -522,7 +484,7 @@ sys_chdir(void)
   char *path;
   int r;
 
-  if ((r = sys_arg_str(0, PATH_MAX, VM_READ, &path)) < 0)
+  if ((r = sys_arg_str(0, PATH_MAX, &path)) < 0)
     return r;
 
   r = fs_chdir(path);
@@ -538,7 +500,7 @@ sys_chmod(void)
   mode_t mode;
   int r;
 
-  if ((r = sys_arg_str(0, PATH_MAX, VM_READ, &path)) < 0) {
+  if ((r = sys_arg_str(0, PATH_MAX, &path)) < 0) {
     //cprintf("%s\n", process_current()->name);
     goto out1;
   }
@@ -562,7 +524,7 @@ sys_open(void)
   int oflag, r;
   mode_t mode;
 
-  if ((r = sys_arg_str(0, PATH_MAX, VM_READ, &path)) < 0)
+  if ((r = sys_arg_str(0, PATH_MAX, &path)) < 0)
     goto out1;
   if ((r = sys_arg_int(1, &oflag)) < 0)
     goto out2;
@@ -593,9 +555,9 @@ sys_link(void)
   char *path1, *path2;
   int r;
 
-  if ((r = sys_arg_str(0, PATH_MAX, VM_READ, &path1)) < 0)
+  if ((r = sys_arg_str(0, PATH_MAX, &path1)) < 0)
     goto out1;
-  if ((r = sys_arg_str(1, PATH_MAX, VM_READ, &path2)) < 0)
+  if ((r = sys_arg_str(1, PATH_MAX, &path2)) < 0)
     goto out2;
 
   r = fs_link(path1, path2);
@@ -613,9 +575,9 @@ sys_rename(void)
   char *path1, *path2;
   int r;
 
-  if ((r = sys_arg_str(0, PATH_MAX, VM_READ, &path1)) < 0)
+  if ((r = sys_arg_str(0, PATH_MAX, &path1)) < 0)
     goto out1;
-  if ((r = sys_arg_str(1, PATH_MAX, VM_READ, &path2)) < 0)
+  if ((r = sys_arg_str(1, PATH_MAX, &path2)) < 0)
     goto out2;
 
   r = fs_rename(path1, path2);
@@ -635,7 +597,7 @@ sys_mknod(void)
   dev_t dev;
   int r;
 
-  if ((r = sys_arg_str(0, PATH_MAX, VM_READ, &path)) < 0)
+  if ((r = sys_arg_str(0, PATH_MAX, &path)) < 0)
     goto out1;
   if ((r = sys_arg_ulong(1, &mode)) < 0)
     goto out2;
@@ -656,7 +618,7 @@ sys_unlink(void)
   char *path;
   int r;
 
-  if ((r = sys_arg_str(0, PATH_MAX, VM_READ, &path)) < 0)
+  if ((r = sys_arg_str(0, PATH_MAX, &path)) < 0)
     return r;
 
   //cprintf("unlink %s\n", path);
@@ -673,7 +635,7 @@ sys_rmdir(void)
   char *path;
   int r;
 
-  if ((r = sys_arg_str(0, PATH_MAX, VM_READ, &path)) < 0)
+  if ((r = sys_arg_str(0, PATH_MAX, &path)) < 0)
     return r;
 
   r = fs_rmdir(path);
@@ -690,11 +652,11 @@ sys_readlink(void)
   int r;
   char *path, *buf;
 
-  if ((r = sys_arg_str(0, PATH_MAX, VM_READ, &path)) < 0)
+  if ((r = sys_arg_str(0, PATH_MAX, &path)) < 0)
     goto out1;
   if ((r = sys_arg_uint(2, &buf_size)) < 0)
     goto out2;
-  if ((r = sys_arg_va(1, &buf_va, buf_size, VM_WRITE, 0)) < 0)
+  if ((r = sys_arg_va(1, &buf_va, 0)) < 0)
     goto out2;
 
   if ((buf = (char *) k_malloc(NAME_MAX+1)) == NULL) {
@@ -726,7 +688,7 @@ sys_access(void)
   char *path;
   int r, amode;
 
-  if ((r = sys_arg_str(0, PATH_MAX, VM_READ, &path)) < 0)
+  if ((r = sys_arg_str(0, PATH_MAX, &path)) < 0)
     goto out1;
   if ((r = sys_arg_int(1, &amode)) < 0)
     goto out2;
@@ -853,13 +815,13 @@ sys_select(void)
 
   if ((r = sys_arg_int(0, &nfds)) < 0)
     goto out1;
-  if ((r = sys_arg_buf(1, (void *) &readfds, sizeof(*readfds), VM_READ)) < 0)
+  if ((r = sys_arg_buf(1, (void *) &readfds, sizeof(*readfds))) < 0)
     goto out1;
-  if ((r = sys_arg_buf(2, (void *) &writefds, sizeof(*writefds), VM_READ)) < 0)
+  if ((r = sys_arg_buf(2, (void *) &writefds, sizeof(*writefds))) < 0)
     goto out2;
-  if ((r = sys_arg_buf(3, (void *) &errorfds, sizeof(*errorfds), VM_READ)) < 0)
+  if ((r = sys_arg_buf(3, (void *) &errorfds, sizeof(*errorfds))) < 0)
     goto out3;
-  if ((r = sys_arg_buf(4, (void *) &timeout, sizeof(*timeout), VM_READ)) < 0)
+  if ((r = sys_arg_buf(4, (void *) &timeout, sizeof(*timeout))) < 0)
     goto out4;
 
   r = 0;
@@ -938,7 +900,7 @@ sys_bind(void)
 
   if ((r = sys_arg_int(0, &fd)) < 0)
     return r;
-  if ((r = sys_arg_va(1, (uintptr_t *) &address, sizeof(*address), VM_READ, 0)) < 0)
+  if ((r = sys_arg_va(1, (uintptr_t *) &address, 0)) < 0)
     return r;
   if ((r = sys_arg_ulong(2, &address_len)) < 0)
     return r;
@@ -963,7 +925,7 @@ sys_connect(void)
 
   if ((r = sys_arg_int(0, &fd)) < 0)
     goto out1;
-  if ((r = sys_arg_buf(1, (void *) &address, sizeof(*address), VM_READ)) < 0)
+  if ((r = sys_arg_buf(1, (void *) &address, sizeof(*address))) < 0)
     goto out1;
   if (address == NULL) {
     r = -EFAULT;
@@ -1020,9 +982,9 @@ sys_accept(void)
 
   if ((r = sys_arg_int(0, &fd)) < 0)
     goto out1;
-  if ((r = sys_arg_va(1, &address_va, sizeof(address), VM_WRITE, 1)) < 0)
+  if ((r = sys_arg_va(1, &address_va, 1)) < 0)
     goto out1;
-  if ((r = sys_arg_va(2, &address_len_va, sizeof(address_len), VM_WRITE, 1)) < 0)
+  if ((r = sys_arg_va(2, &address_len_va, 1)) < 0)
     goto out1;
 
   if ((sockf = fd_lookup(process_current(), fd)) == NULL) {
@@ -1070,13 +1032,13 @@ sys_recvfrom(void)
     return r;
   if ((r = sys_arg_uint(2, &length)) < 0)
     return r;
-  if ((r = sys_arg_va(1, &buffer_va, length, VM_WRITE, 0)) < 0)
+  if ((r = sys_arg_va(1, &buffer_va, 0)) < 0)
     return r;
   if ((r = sys_arg_int(3, &flags)) < 0)
     return r;
-  if ((r = sys_arg_va(4, &address_va, sizeof address, VM_WRITE, 1)) < 0)
+  if ((r = sys_arg_va(4, &address_va, 1)) < 0)
     return r;
-  if ((r = sys_arg_va(5, &address_len_va, sizeof address_len, VM_WRITE, 1)) < 0)
+  if ((r = sys_arg_va(5, &address_len_va, 1)) < 0)
     return r;
 
   if ((file = fd_lookup(process_current(), fd)) == NULL)
@@ -1112,13 +1074,13 @@ sys_sendto(void)
     goto out1;
   if ((r = sys_arg_uint(2, &length)) < 0)
     goto out1;
-  if ((r = sys_arg_va(1, &message_va, length, VM_READ, 0)) < 0)
+  if ((r = sys_arg_va(1, &message_va, 0)) < 0)
     goto out1;
   if ((r = sys_arg_int(3, &flags)) < 0)
     goto out1;
   if ((r = sys_arg_ulong(5, &dest_len)) < 0)
     goto out2;
-  if ((r = sys_arg_buf(4, (void **) &dest_addr, dest_len, VM_READ)) < 0)
+  if ((r = sys_arg_buf(4, (void **) &dest_addr, dest_len)) < 0)
     goto out1;
 
   if ((file = fd_lookup(process_current(), fd)) == NULL) {
@@ -1155,7 +1117,7 @@ sys_setsockopt(void)
     goto out1;
   if ((r = sys_arg_ulong(4, &option_len)) < 0)
     goto out1;
-  if ((r = sys_arg_buf(3, (void **) &option_value, option_len, VM_READ)) < 0)
+  if ((r = sys_arg_buf(3, (void **) &option_value, option_len)) < 0)
     goto out1;
 
   if ((file = fd_lookup(process_current(), fd)) == NULL) {
@@ -1182,9 +1144,9 @@ sys_gethostbyname(void)
   uintptr_t addr_va;
   int r;
 
-  if ((r = sys_arg_str(0, PATH_MAX, VM_READ, &name)) < 0)
+  if ((r = sys_arg_str(0, PATH_MAX, &name)) < 0)
     goto out1;
-  if ((r = sys_arg_va(1, &addr_va, sizeof addr, VM_WRITE, 0)) < 0)
+  if ((r = sys_arg_va(1, &addr_va, 0)) < 0)
     goto out2;
 
   if ((r = net_gethostbyname(name, &addr)) < 0)
@@ -1215,11 +1177,11 @@ sys_sigaction(void)
 
   if ((r = sys_arg_int(0, &sig)) < 0)
     goto out1;
-  if ((r = sys_arg_ptr(1, &stub, VM_READ | VM_EXEC, 1)) < 0)
+  if ((r = sys_arg_va(1, &stub, 1)) < 0)
     goto out1;
-  if ((r = sys_arg_buf(2, (void *) &act, sizeof *act, VM_READ)) < 0)
+  if ((r = sys_arg_buf(2, (void *) &act, sizeof *act)) < 0)
     goto out1;
-  if ((r = sys_arg_va(3, &oact_va, sizeof oact, VM_WRITE, 1)) < 0)
+  if ((r = sys_arg_va(3, &oact_va, 1)) < 0)
     goto out2;
 
   if ((r = signal_action_change(sig, stub, act, &oact)) < 0)
@@ -1248,7 +1210,7 @@ sys_sigpending(void)
   sigset_t set;
   int r;
 
-  if ((r = sys_arg_va(0, &set_va, sizeof set, VM_WRITE, 0)) < 0)
+  if ((r = sys_arg_va(0, &set_va, 0)) < 0)
     return r;
 
   if ((r = signal_pending(&set)) < 0)
@@ -1269,9 +1231,9 @@ sys_sigprocmask(void)
 
   if ((r = sys_arg_int(0, &how)) < 0)
     goto out1;
-  if ((r = sys_arg_buf(1, (void **) &set, sizeof *set, VM_READ)) < 0)
+  if ((r = sys_arg_buf(1, (void **) &set, sizeof *set)) < 0)
     goto out1;
-  if ((r = sys_arg_va(2, &oset_va, sizeof oset, VM_WRITE, 1)) < 0)
+  if ((r = sys_arg_va(2, &oset_va, 1)) < 0)
     goto out2;
 
   if ((r = signal_mask_change(how, set, &oset)) < 0)
@@ -1295,7 +1257,7 @@ sys_sigsuspend(void)
   sigset_t *mask;
   int r;
 
-  if ((r = sys_arg_buf(0, (void **) &mask, sizeof *mask, VM_READ)) < 0)
+  if ((r = sys_arg_buf(0, (void **) &mask, sizeof *mask)) < 0)
     return r;
   if (mask == NULL)
     return -EFAULT;
@@ -1337,7 +1299,7 @@ sys_clock_time(void)
   
   if ((r = sys_arg_ulong(0, &clock_id)) < 0)
     return r;
-  if ((r = sys_arg_va(1, &prev_va, sizeof(struct timespec), VM_WRITE, 1)) < 0)
+  if ((r = sys_arg_va(1, &prev_va, 1)) < 0)
     return r;
 
   if ((r = time_get(clock_id, &timespec)) == 0)
@@ -1361,7 +1323,7 @@ sys_uname(void)
   uintptr_t va;
   int r;
 
-  if ((r = sys_arg_va(0, &va, sizeof utsname, VM_WRITE, 0)) < 0)
+  if ((r = sys_arg_va(0, &va, 0)) < 0)
     return r;
 
   return sys_copy_out(&utsname, va, sizeof utsname);
@@ -1409,7 +1371,7 @@ sys_pipe(void)
   int fd[2];
   int r;
 
-  if ((r = sys_arg_va(0, &fd_va, sizeof fd, VM_WRITE, 0)) < 0)
+  if ((r = sys_arg_va(0, &fd_va, 0)) < 0)
     goto out1;
 
   if ((r = pipe_open(&read_file, &write_file)) < 0)
@@ -1442,9 +1404,9 @@ sys_setitimer(void)
 
   if ((r = sys_arg_int(0, &which)) < 0)
     goto out1;
-  if ((r = sys_arg_buf(1, (void **) &value, sizeof *value, VM_READ)) < 0)
+  if ((r = sys_arg_buf(1, (void **) &value, sizeof *value)) < 0)
     goto out1;
-  if ((r = sys_arg_va(2, &ovalue_va, sizeof ovalue, VM_WRITE, 1)) < 0)
+  if ((r = sys_arg_va(2, &ovalue_va, 1)) < 0)
     goto out2;
     
   if ((r = process_set_itimer(which, value, &ovalue)) < 0)
@@ -1470,7 +1432,7 @@ sys_chown(void)
   gid_t gid;
   int r;
 
-  if ((r = sys_arg_str(0, PATH_MAX, VM_READ, &path)) < 0)
+  if ((r = sys_arg_str(0, PATH_MAX, &path)) < 0)
     goto out1;
 
   if ((r = sys_arg_ushort(1, &uid)) < 0)
@@ -1492,9 +1454,9 @@ sys_symlink(void)
   char *path1, *path2;
   int r;
 
-  if ((r = sys_arg_str(0, PATH_MAX, VM_READ, &path1)) < 0)
+  if ((r = sys_arg_str(0, PATH_MAX, &path1)) < 0)
     goto out1;
-  if ((r = sys_arg_str(1, PATH_MAX, VM_READ, &path2)) < 0)
+  if ((r = sys_arg_str(1, PATH_MAX, &path2)) < 0)
     goto out2;
 
   r = fs_symlink(path1, path2);
@@ -1513,16 +1475,16 @@ sys_utime(void)
   uintptr_t times_va;
   int r;
 
-  if ((r = sys_arg_str(0, PATH_MAX, VM_READ, &path)) < 0)
+  if ((r = sys_arg_str(0, PATH_MAX, &path)) < 0)
     goto out1;
 
-  if ((r = sys_arg_va(2, &times_va, sizeof times_va, VM_WRITE, 1)) < 0)
+  if ((r = sys_arg_va(2, &times_va, 1)) < 0)
     goto out2;
 
   if (times_va) {
     struct utimbuf *times;
 
-    if ((r = sys_arg_buf(1, (void **) &times, sizeof *times, VM_READ)) < 0)
+    if ((r = sys_arg_buf(1, (void **) &times, sizeof *times)) < 0)
       goto out2;
 
     r = fs_utime(path, times);
@@ -1548,11 +1510,11 @@ sys_ipc_send(void)
 
   if ((r = sys_arg_int(0, &fd)) < 0)
     return r;
-  if ((r = sys_arg_ptr(1, &smsg, VM_READ, 1)) < 0)
+  if ((r = sys_arg_va(1, &smsg, 1)) < 0)
     return r;
   if ((r = sys_arg_uint(2, &sbytes)) < 0)
     return r;
-   if ((r = sys_arg_ptr(3, &rmsg, VM_WRITE, 1)) < 0)
+   if ((r = sys_arg_va(3, &rmsg, 1)) < 0)
     return r;
   if ((r = sys_arg_uint(4, &rbytes)) < 0)
     return r;
@@ -1585,14 +1547,14 @@ sys_ipc_sendv(void)
     goto out1;
 
   if (send_iov_cnt > 0) {
-    if ((r = sys_arg_buf(1, (void *) &send_iov, send_iov_cnt * sizeof(struct iovec), VM_READ)) < 0)
+    if ((r = sys_arg_buf(1, (void *) &send_iov, send_iov_cnt * sizeof(struct iovec))) < 0)
       goto out1;
   } else {
     send_iov = NULL;
   }
 
   if (recv_iov_cnt > 0) {
-    if ((r = sys_arg_buf(3, (void *) &recv_iov, recv_iov_cnt * sizeof(struct iovec), VM_READ)) < 0)
+    if ((r = sys_arg_buf(3, (void *) &recv_iov, recv_iov_cnt * sizeof(struct iovec))) < 0)
       goto out2;
   } else {
     recv_iov = NULL;

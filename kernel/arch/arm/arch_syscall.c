@@ -9,10 +9,9 @@ sys_arch_get_num(void)
   struct Process *current = process_current();
 
   int *pc = (int *) (current->thread->tf->pc - 4);
-  int r;
+  //int r;
 
-  if ((r = vm_user_check_buf(current->vm->pgtab, (uintptr_t) pc, sizeof(int), VM_READ)) < 0)
-    return r;
+  // FIXME: use safe copy functions
 
   return *pc & 0xFFFFFF;
 }

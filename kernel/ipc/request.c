@@ -1,4 +1,5 @@
 #include <kernel/ipc.h>
+#include <kernel/process.h>
 #include <kernel/vmspace.h>
 #include <kernel/object_pool.h>
 
@@ -75,6 +76,23 @@ request_reply(struct Request *req, intptr_t r)
   request_destroy(req);
 }
 
+int
+vm_space_copy_in(struct Process *process, void *dst, uintptr_t src_va, size_t n)
+{
+  if ((src_va + n) < src_va)
+    return -EFAULT;
+
+  if (src_va > VIRT_KERNEL_BASE) {
+    // TODO: check user permissions
+    memmove(dst, (void *) src_va, n);
+    return 0;
+  }
+
+  k_assert(process != NULL);
+
+  return vm_user_copy_in(process->vm->pgtab, dst, src_va, n);
+}
+
 ssize_t
 request_write(struct Request *req, void *msg, size_t n)
 {
@@ -96,11 +114,20 @@ request_write(struct Request *req, void *msg, size_t n)
       continue;
     }
 
-    if (vm_space_copy_out(req->process,
-                          msg,
-                          (uintptr_t)iov->iov_base + req->recv_pos,
-                          nwrite) < 0)
-      k_panic("copy");
+    uintptr_t dst_va = (uintptr_t) iov->iov_base + req->recv_pos;
+
+    if ((dst_va + n) < dst_va)
+      return -EFAULT;
+
+    if (dst_va > VIRT_KERNEL_BASE) {
+      // TODO: check user permissions
+      memmove((void *) dst_va, msg, n);
+    } else {
+      k_assert(req->process != NULL);
+
+      if (vm_user_copy_out(req->process->vm->pgtab, msg, dst_va, n) < 0)
+        k_panic("request_write");
+    }
 
     req->recv_pos += nwrite;
     msg = (char *) msg + nwrite;
@@ -137,11 +164,20 @@ request_read(struct Request *req, void *msg, size_t n)
       continue;
     }
 
-    if (vm_space_copy_in(req->process,
-                         msg,
-                         (uintptr_t)iov->iov_base + req->send_pos,
-                         nread) < 0)
-      k_panic("copy");
+    uintptr_t src_va = (uintptr_t) iov->iov_base + req->send_pos;
+
+    if ((src_va + n) < src_va)
+      return -EFAULT;
+
+    if (src_va > VIRT_KERNEL_BASE) {
+      // TODO: check user permissions
+      memmove(msg, (const void *) src_va, n);
+    } else {
+      k_assert(req->process != NULL);
+
+      if (vm_user_copy_in(req->process->vm->pgtab, msg, src_va, n) < 0)
+        k_panic("request_read");
+    }
 
     req->send_pos += nread;
     msg = (char *) msg + nread;
