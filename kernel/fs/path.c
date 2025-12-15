@@ -289,6 +289,8 @@ fs_path_node_resolve_at(struct PathNode *start,
   next = fs_path_node_ref(*p == '/' ? fs_root : start);
   prev = NULL;
 
+  //cprintf("Resolve path %s\n", path);
+
   while ((r = fs_path_next(p, name_buf, (char **) &p)) > 0) {
     struct IpcMessage msg;
     struct stat stat;
@@ -367,12 +369,16 @@ fs_path_node_resolve_at(struct PathNode *start,
 
     // Resolve the symlink
 
+    //cprintf("  resolve link '%s' (%s)\n", name_buf, p);
+
     if ((r = fs_path_resolve_symlink(ino, connection, p, &resolved_path)) < 0) {
       break;
     }
 
     k_free(p);
     p = resolved_path;
+
+    //cprintf("  resolved: '%s'\n", p);
 
     // UNREF(next)
     fs_path_node_unref(next);

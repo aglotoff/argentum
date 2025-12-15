@@ -472,7 +472,7 @@ fs_unlink(const char *path)
   int r;
 
   // REF(pp), REF(dir)
-  if ((r = fs_path_node_resolve(path, name, FS_LOOKUP_FOLLOW_LINKS, &pp, &dir)) < 0)
+  if ((r = fs_path_node_resolve(path, name, 0, &pp, &dir)) < 0)
     return r;
 
   if (pp == NULL) {

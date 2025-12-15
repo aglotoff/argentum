@@ -218,8 +218,6 @@ resolve(const char *path, struct ExecContext *ctx)
     int r;
     char *interpreter;
 
-
-
     if ((r = fs_open(p, O_RDWR, 0, &file)) < 0)
       return r;
 
@@ -338,10 +336,10 @@ copy_in_args(uintptr_t va, char ***store)
   size_t total_len;
   int r;
 
-  if ((args = (char **) k_malloc(sizeof(char *) * 256)) == NULL)
+  if ((args = (char **) k_malloc(sizeof(char *) * 512)) == NULL)
     return -ENOMEM;
 
-  for (size_t i = 0; i < 256; i++) {
+  for (size_t i = 0; i < 512; i++) {
     total_len += sizeof(uintptr_t);
     if (total_len > ARG_MAX)
       return -E2BIG;
