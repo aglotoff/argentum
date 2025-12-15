@@ -320,23 +320,19 @@ load_elf(struct ExecContext *ctx)
 static void
 sys_free_args(char **args)
 {
-  char **p;
-
-  for (p = args; *p != NULL; p++)
-    k_free(*p);
-
   k_free(args);
 }
 
 static int
-copy_in_args(uintptr_t va, char ***store)
+copy_in_args(uintptr_t va, char ***store, char *buf)
 {
   void *pgtab = process_current()->vm->pgtab;
   char **args;
+  size_t buf_space = ARG_MAX;
   size_t total_len;
   int r;
 
-  if ((args = (char **) k_malloc(sizeof(char *) * 512)) == NULL)
+  if ((args = (char **) k_malloc(sizeof(char *) * (VEC_MAX + 1))) == NULL)
     return -ENOMEM;
 
   for (size_t i = 0; i < 512; i++) {
@@ -358,17 +354,17 @@ copy_in_args(uintptr_t va, char ***store)
       return 0;
     }
 
-    if ((args[i] = k_malloc(PATH_MAX)) == NULL) {
-      sys_free_args(args);
-      return -ENOMEM;
-    }
-
-    if ((r = vm_user_copy_in_string(pgtab, args[i], str_va, PATH_MAX)) < 0) {
+    if ((r = vm_user_copy_in_string(pgtab, buf, str_va, buf_space)) < 0) {
       sys_free_args(args);
       return r;
     }
 
-    total_len += strlen(args[i]);
+    args[i] = buf;
+
+    total_len += strlen(args[i]) + 1;
+    buf += strlen(args[i]) + 1;
+    buf_space -= strlen(args[i]) + 1;
+
     if (total_len > ARG_MAX) {
       sys_free_args(args);
       return -E2BIG;
@@ -387,6 +383,12 @@ process_exec(const char *path, uintptr_t argv_va, uintptr_t envp_va)
   struct ExecContext ctx;
 
   char **argv, **envp;
+  char *argv_buf, *envp_buf;
+
+  if ((argv_buf = (char *) k_malloc(ARG_MAX)) == NULL)
+    k_panic("out of memory");
+  if ((envp_buf = (char *) k_malloc(ARG_MAX)) == NULL)
+    k_panic("out of memory");
 
   if ((ctx.argv = k_malloc((sizeof ctx.argv[0]) * VEC_MAX + 1)) == NULL)
     k_panic("out of memory");
@@ -398,10 +400,10 @@ process_exec(const char *path, uintptr_t argv_va, uintptr_t envp_va)
     goto out1;
   }
 
-  if ((r = copy_in_args(argv_va, &argv)) != 0)
+  if ((r = copy_in_args(argv_va, &argv, argv_buf)) != 0)
     goto out2;
   
-  if ((r = copy_in_args(envp_va, &envp)) != 0)
+  if ((r = copy_in_args(envp_va, &envp, envp_buf)) != 0)
     goto out3;
 
   if ((r = user_stack_init(argv, envp, &ctx)) != 0)
@@ -440,6 +442,8 @@ process_exec(const char *path, uintptr_t argv_va, uintptr_t envp_va)
 
   vm_space_destroy(old_vm);
 
+  k_free(envp_buf);
+  k_free(argv_buf);
   k_free(ctx.envp);
   k_free(ctx.argv);
 
@@ -457,6 +461,8 @@ out3:
 out2:
   vm_space_destroy(ctx.vm);
 out1:
+  k_free(envp_buf);
+  k_free(argv_buf);
   k_free(ctx.envp);
   k_free(ctx.argv);
   return r;

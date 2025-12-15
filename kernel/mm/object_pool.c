@@ -67,7 +67,7 @@ static struct {
 static struct KObjectPool pool_of_pools;
 
 // TODO: maybe there is a better sequence of sizes rather than just powers of 2
-#define ANON_POOLS_LENGTH     12
+#define ANON_POOLS_LENGTH     14
 #define ANON_POOLS_MIN_SIZE   8U
 #define ANON_POOLS_MAX_SIZE   (ANON_POOLS_MIN_SIZE << (ANON_POOLS_LENGTH - 1))
 
