@@ -59,18 +59,18 @@ vga_draw_char_at(void *ctx, unsigned i)
 }
 
 static int
-vga_erase(void *ctx, unsigned from, unsigned to)
+vga_fill(void *ctx, unsigned from, size_t n, int fg, int bg)
 {
   struct Vga *vga = (struct Vga *) ctx;
+  uint16_t attr;
   size_t i;
 
-  if (from < to) {
-    for (i = from; i != to; i++)
-      vga->buffer[i] = (vga->buffer[i] & ~0xFF) | ' ';
-  } else {
-    for (i = from; i != to; i--)
-      vga->buffer[i] = (vga->buffer[i] & ~0xFF) | ' ';
-  }
+  attr = ' ';
+  attr |= (colors[fg] << 8);
+  attr |= (colors[bg] << 12);
+
+  for (i = from; i != from + n; i++)
+    vga->buffer[i] = attr;
 
   return 0;
 }
@@ -115,7 +115,7 @@ vga_update_cursor(void *ctx, unsigned pos)
 
 struct ScreenOps vga_ops = {
   .draw_char_at = vga_draw_char_at,
-  .erase = vga_erase,
+  .fill = vga_fill,
   .scroll_down = vga_scroll_down,
   .update = vga_update,
   .update_cursor = vga_update_cursor

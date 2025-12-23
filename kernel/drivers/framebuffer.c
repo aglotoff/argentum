@@ -102,16 +102,13 @@ framebuffer_update_cursor(void *ctx, unsigned pos)
 }
 
 static int
-framebuffer_erase(void *ctx, unsigned from, unsigned to)
+framebuffer_fill(void *ctx, unsigned from, size_t n, int fg, int bg)
 {
   struct FrameBuffer *fb = (struct FrameBuffer *) ctx;
   unsigned i;
   
-  for (i = from; i <= to; i++) {
-    framebuffer_draw_char(fb,
-                          i,
-                          ' ',
-                          fb->screen->buf[i].fg, fb->screen->buf[i].bg);
+  for (i = from; i != from + n; i++) {
+    framebuffer_draw_char(fb, i, ' ', fg, bg);
 
     if (i == fb->cursor_pos)
       fb->cursor_visible = 0;
@@ -144,7 +141,7 @@ framebuffer_ops = {
   .update        = framebuffer_update,
   .draw_char_at  = framebuffer_draw_char_at,
   .update_cursor = framebuffer_update_cursor,
-  .erase         = framebuffer_erase,
+  .fill          = framebuffer_fill,
   .scroll_down   = framebuffer_scroll_down,
 };
 

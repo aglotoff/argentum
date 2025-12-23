@@ -17,32 +17,38 @@ struct Screen;
 
 struct ScreenOps {
   int (*update_cursor)(void *, unsigned);
-  int (*erase)(void *, unsigned, unsigned);
+  int (*fill)(void *, unsigned, size_t, int, int);
   int (*scroll_down)(void *, unsigned);
   int (*draw_char_at)(void *, unsigned);
   int (*update)(void *, struct Screen *);
 };
 
 struct Screen {
-  int                 fg_color;                     // Current foreground color
-  int                 bg_color;                     // Current background color
-  enum ParserState    state;          
-  unsigned            esc_params[SCREEN_ESC_MAX];  // The esc sequence parameters
-  int                 esc_cur_param;                // Index of the current esc parameter
-  int                 esc_question;
+  // TODO: allocate dynamically
   struct {
     unsigned ch : 8;
     unsigned fg : 4;
     unsigned bg : 4;
-  }                   buf[SCREEN_COLS_MAX * SCREEN_ROWS_MAX];
-  unsigned            cols;
-  unsigned            rows;
+  } buf[SCREEN_COLS_MAX * SCREEN_ROWS_MAX];
 
-  unsigned            old_pos;
-  unsigned            new_pos;
+  unsigned cols;
+  unsigned rows;
+  unsigned size;
 
-  struct ScreenOps   *ops;
-  void               *ctx;
+  unsigned old_pos;
+  unsigned new_pos;
+
+  int fg_color; // Current foreground color
+  int bg_color; // Current background color
+
+  enum ParserState state;
+
+  unsigned esc_params[SCREEN_ESC_MAX];  // The esc sequence parameters
+  int esc_cur_param;                // Index of the current esc parameter
+  int esc_question;
+
+  struct ScreenOps *ops;
+  void *ctx;
 };
 
 // ANSI color codes
