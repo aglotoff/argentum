@@ -12,29 +12,42 @@ emulator. The supported boards are:
 
 ## Building and running the OS
 
-1. Install the necessary headers
+1. Download and extract dependencies:
+   ```
+   make prerequisites
+   ```
+
+2. Uncomment the desired target architecture in `Makefile`:
+   ```
+   ifndef ARCH
+	  ARCH := arm
+	  #ARCH := i386
+   endif
+   ```
+
+3. Install the necessary headers
    ```
    make install-headers
    ```
-2. Build and install the OS-specific toolchain (you will be prompted for the
+4. Build and install the OS-specific toolchain (you will be prompted for the
    superuser password a couple times)
    ```
    make tools-binutils
    make tools-gcc
    ```
-3. Build the standard C library
+5. Build the standard C library
    ```
    make all-lib
    ```
-4. Build and install the libstdc++ library
+6. Build and install the libstdc++ library
    ```
    make tools-libstdc++-v3
    ```
-5. Build the kernel and command-line utils
+7. Build the kernel and command-line utils
    ```
    make all
    ```
-6. Build desired ported packages (optional)
+8. Build desired ported packages (optional)
    ```
    make ports-bash (requires ncurses)
    make ports-binutils
@@ -56,7 +69,7 @@ emulator. The supported boards are:
    make ports-sed
    make ports-vim (requires ncurses)
    ```
-7. Run the kernel in the emulator (you'll need `qemu-system-arm` or
+9. Run the kernel in the emulator (you'll need `qemu-system-arm` or
    `qemu-system-i386`):
    ```
    make qemu

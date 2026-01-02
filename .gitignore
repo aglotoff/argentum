@@ -13,5 +13,6 @@ tools/*/*
 !tools/*/Makefile
 
 lib/newlib-4.4.0.20231231/
+kernel/net/lwip-2.2.1/
 
 tarballs/

@@ -402,9 +402,10 @@ net_select(struct Connection *file, struct timeval *timeout)
 
   dset.__fds_bits[0] = (1 << endpoint->socket);
 
-  if ((r = lwip_select(endpoint->socket + 1, &dset, NULL, NULL, timeout)) < 0)
+  if ((r = lwip_select(endpoint->socket + 1, &dset, NULL, NULL, timeout)) < 0) {
     return -errno;
-  
+  }
+
   return r;
 }
 

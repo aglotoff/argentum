@@ -45,6 +45,9 @@ LIBGCC := $(shell $(CC) $(CFLAGS) -print-libgcc-file-name)
 
 KERNEL := $(OBJ)/kernel/kernel
 
+LWIP := kernel/net/lwip-2.2.1
+LWIP_TARBALL := tarballs/lwip-2.2.1.zip
+
 # Update $(OBJ)/.vars.X if the variable X has changed since the last run.
 # This allows us to rebuild targets that depend on the value of X by adding
 # $(OBJ)/.vars.X to the dependency list.
@@ -82,6 +85,15 @@ include config/arch/$(ARCH)/qemu.mk
 $(SYSROOT):
 	@mkdir -p $@{,/dev,/usr{,/lib,/include}}
 
+$(LWIP_TARBALL):
+	@mkdir -p $(@D)
+	$(V)wget -O $@ https://download.savannah.nongnu.org/releases/lwip/lwip-2.2.1.zip
+
+$(LWIP): $(LWIP_TARBALL)
+	$(V)unzip $^ -d $(@D)
+
+prerequisites: $(LWIP)
+
 clean:
 	rm -rf $(OBJ) $(SYSROOT)
 
@@ -90,4 +102,4 @@ clean:
 .PHONY: all all-kernel all-lib all-user \
 	clean clean-fs clean-kernel clean-user clean-lib clean-ports \
 	install-headers install-lib \
-	fs
+	fs prerequisites

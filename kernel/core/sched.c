@@ -342,6 +342,7 @@ k_task_timeout_callback(struct KTimeoutEntry *entry)
 
   switch (task->state) {
   case K_TASK_STATE_SLEEP:
+  case K_TASK_STATE_SLEEP_UNWAKEABLE:
     _k_sched_resume(task, -ETIMEDOUT);
     break;
   }

@@ -2,13 +2,14 @@
 # Makefile fragment for the kernel
 #
 
-LWIPDIR := kernel/net/lwip
-include kernel/net/lwip/Filelists.mk
+LWIPDIR := ${LWIP}/src
+
+-include ${LWIPDIR}/Filelists.mk
 
 KERNEL_CFLAGS  := $(CFLAGS) $(INIT_CFLAGS) -Ikernel/include -D__ARGENTUM_KERNEL__
 KERNEL_CFLAGS  += -O1 -fno-omit-frame-pointer -gdwarf-3
 KERNEL_CFLAGS  += -ffreestanding -nostdlib -fno-builtin 
-KERNEL_CFLAGS  += -I$(LWIPDIR)/include -Ikernel/net -Wno-type-limits
+KERNEL_CFLAGS  += -I$(LWIPDIR)/include -Ikernel/net/lwip -Wno-type-limits
 
 ifdef PROCESS_NAME
 	KERNEL_MAIN_CFLAGS := -DPROCESS_NAME=$(PROCESS_NAME)
@@ -95,8 +96,8 @@ KERNEL_SRCFILES += \
 
 KERNEL_SRCFILES += $(LWIPNOAPPSFILES)
 KERNEL_SRCFILES += \
-	kernel/net/arch/sys_arch.c \
-	kernel/net/arch/sio.c
+	kernel/net/lwip/arch/sys_arch.c \
+	kernel/net/lwip/arch/sio.c
 
 KERNEL_BINFILES :=
 
