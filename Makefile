@@ -13,8 +13,8 @@ OBJ     := obj
 SYSROOT := sysroot
 
 ifndef ARCH
-	ARCH := arm
-	#ARCH := i386
+	#ARCH := arm
+	ARCH := i386
 endif
 
 # Common compiler flags

@@ -164,3 +164,7 @@
 #ifndef OPEN_MAX
 #define OPEN_MAX            32
 #endif
+
+#ifndef SSIZE_MAX
+#define SSIZE_MAX           __LONG_MAX__
+#endif
