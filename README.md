@@ -68,6 +68,7 @@ emulator. The supported boards are:
    make ports-ncurses
    make ports-sed
    make ports-vim (requires ncurses)
+   make ports-xz
    ```
 9. Run the kernel in the emulator (you'll need `qemu-system-arm` or
    `qemu-system-i386`):
