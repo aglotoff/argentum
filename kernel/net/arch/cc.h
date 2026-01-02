@@ -13,7 +13,7 @@
 #define iovec iovec
 
 // FIXME: dirty hack to force compiling on i386
-#define SSIZE_MAX 1
+// #define SSIZE_MAX 1
 
 #define LWIP_NO_CTYPE_H         1
 

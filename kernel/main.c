@@ -85,7 +85,7 @@ main(void)
   vm_space_init();      // Virtual memory manager
   pipe_init_system();          // Pipes
   process_init();       // Process table
-  //net_init();           // Networking
+  net_init();           // Networking
 
   // ipc_init();
 

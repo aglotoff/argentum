@@ -1,3 +1,5 @@
+#include <netdb.h>
+
 #include <kernel/console.h>
 #include <kernel/ipc.h>
 #include <kernel/page.h>
@@ -7,7 +9,6 @@
 #include <kernel/vmspace.h>
 #include <kernel/process.h>
 #include <kernel/hash.h>
-#include <netdb.h>
 
 #include <lwip/api.h>
 #include <lwip/dhcp.h>
@@ -300,11 +301,11 @@ net_recvfrom(struct Connection *file, uintptr_t va, size_t nbytes, int flags,
     }
 
     // TODO: write to request
-    // if ((r = vm_space_copy_out(process_current(), p, va, nread)) < 0) {
-    //   total = -errno;
-    //   break;
-    // }
-    
+    if ((r = vm_user_copy_out(process_current()->vm->pgtab, p, va, nread)) < 0) {
+      total = r;
+      break;
+    }
+
     if (r < nread)
       break;
 
@@ -341,10 +342,10 @@ net_sendto(struct Connection *file, uintptr_t va, size_t nbytes, int flags,
     ssize_t nwrite = MIN(nbytes, PAGE_SIZE);
     
     // TODO: read from request
-    // if ((r = vm_space_copy_in(process_current(), p, va, nwrite)) < 0) {
-    //   total = -errno;
-    //   break;
-    // }
+    if ((r = vm_user_copy_in(process_current()->vm->pgtab, p, va, nwrite)) < 0) {
+      total = r;
+      break;
+    }
 
     r = lwip_sendto(endpoint->socket, p, nwrite, flags, (struct sockaddr *) dest_addr, dest_len);
 

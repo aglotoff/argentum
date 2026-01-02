@@ -1,4 +1,4 @@
-#include <kernel/core/assert.h>
+
 #include <dirent.h>
 #include <errno.h>
 #include <unistd.h>
@@ -6,6 +6,7 @@
 #include <string.h>
 #include <sys/stat.h>
 
+#include <kernel/core/assert.h>
 #include <kernel/console.h>
 #include <kernel/fs/fs.h>
 #include <kernel/object_pool.h>
@@ -102,7 +103,7 @@ fs_path_node_unref(struct PathNode *path)
 
   if ((path->ref_count == 0) && (path->parent != NULL))
     k_panic("path in bad state");
-
+ 
   // Move up the tree and remove all unused nodes. A node is considered unused
   // in one of two cases:
   // a) the reference count is 0
