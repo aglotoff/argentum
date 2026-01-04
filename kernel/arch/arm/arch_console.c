@@ -12,3 +12,9 @@ arch_console_putc(char c)
 {
   mach_current->console_putc(c);
 }
+
+void
+arch_console_boot_putc(char c)
+{
+  (void) c;
+}

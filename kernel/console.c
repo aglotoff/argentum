@@ -38,6 +38,8 @@ console_putc(char c)
 {
   if (tty_system != NULL)
     arch_console_putc(c);
+  else
+    arch_console_boot_putc(c);
 }
 
 static int

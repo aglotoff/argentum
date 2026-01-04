@@ -29,3 +29,12 @@ arch_console_putc(char c)
   screen_out_char(tty_system->out.screen, c);
   screen_flush(tty_system->out.screen);
 }
+
+static volatile uint16_t *boot_vga = (uint16_t *) (VIRT_KERNEL_BASE + 0xB8000);
+static uint16_t boot_cur = 0;
+
+void
+arch_console_boot_putc(char c)
+{
+  boot_vga[boot_cur++] = 0x0200 | c;
+}
