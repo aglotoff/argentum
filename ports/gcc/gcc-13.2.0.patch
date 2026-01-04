@@ -1,6 +1,6 @@
 diff -ruN old/config.sub new/config.sub
 --- old/config.sub	2023-07-27 11:13:03.000000000 +0300
-+++ new/config.sub	2025-01-05 12:11:40.371514477 +0300
++++ new/config.sub	2026-01-04 08:22:41.991991642 +0300
 @@ -1749,7 +1749,7 @@
  	     | onefs* | tirtos* | phoenix* | fuchsia* | redox* | bme* \
  	     | midnightbsd* | amdhsa* | unleashed* | emscripten* | wasi* \
@@ -10,9 +10,21 @@ diff -ruN old/config.sub new/config.sub
  		;;
  	# This one is extra strict with allowed versions
  	sco3.2v2 | sco3.2v[4-9]* | sco5v6*)
+diff -ruN old/contrib/download_prerequisites new/contrib/download_prerequisites
+--- old/contrib/download_prerequisites	2023-07-27 11:13:03.000000000 +0300
++++ new/contrib/download_prerequisites	2026-01-04 08:23:27.231974518 +0300
+@@ -32,7 +32,7 @@
+ mpc='mpc-1.2.1.tar.gz'
+ isl='isl-0.24.tar.bz2'
+ 
+-base_url='http://gcc.gnu.org/pub/gcc/infrastructure/'
++base_url='https://mirror.math.princeton.edu/pub/gcc/infrastructure/'
+ 
+ echo_archives() {
+     echo "${gmp}"
 diff -ruN old/fixincludes/mkfixinc.sh new/fixincludes/mkfixinc.sh
 --- old/fixincludes/mkfixinc.sh	2023-07-27 11:13:03.000000000 +0300
-+++ new/fixincludes/mkfixinc.sh	2025-01-05 12:11:40.371514477 +0300
++++ new/fixincludes/mkfixinc.sh	2026-01-04 08:22:41.991991642 +0300
 @@ -11,6 +11,8 @@
  
  # Check for special fix rules for particular targets
@@ -24,7 +36,7 @@ diff -ruN old/fixincludes/mkfixinc.sh new/fixincludes/mkfixinc.sh
      x86_64-*-mingw32* | \
 diff -ruN old/gcc/config/argentum.h new/gcc/config/argentum.h
 --- old/gcc/config/argentum.h	1970-01-01 03:00:00.000000000 +0300
-+++ new/gcc/config/argentum.h	2025-01-05 12:11:40.371514477 +0300
++++ new/gcc/config/argentum.h	2026-01-04 08:22:41.991991642 +0300
 @@ -0,0 +1,10 @@
 +#ifndef CONFIG_ARGENTUM_H
 +#define CONFIG_ARGENTUM_H
@@ -38,7 +50,7 @@ diff -ruN old/gcc/config/argentum.h new/gcc/config/argentum.h
 +#endif /* CONFIG_ARGENTUM_H */
 diff -ruN old/gcc/config.gcc new/gcc/config.gcc
 --- old/gcc/config.gcc	2023-07-27 11:13:04.000000000 +0300
-+++ new/gcc/config.gcc	2025-01-05 12:11:40.371514477 +0300
++++ new/gcc/config.gcc	2026-01-04 08:22:41.991991642 +0300
 @@ -962,6 +962,11 @@
    d_target_objs="${d_target_objs} openbsd-d.o"
    target_has_targetdm=yes
@@ -80,7 +92,7 @@ diff -ruN old/gcc/config.gcc new/gcc/config.gcc
  	extra_options="${extra_options} netbsd.opt netbsd-elf.opt"
 diff -ruN old/gcc/config.host new/gcc/config.host
 --- old/gcc/config.host	2023-07-27 11:13:04.000000000 +0300
-+++ new/gcc/config.host	2025-01-05 12:11:40.371514477 +0300
++++ new/gcc/config.host	2026-01-04 08:22:41.991991642 +0300
 @@ -108,7 +108,8 @@
  	;;
      esac
@@ -93,7 +105,7 @@ diff -ruN old/gcc/config.host new/gcc/config.host
  	host_extra_gcc_objs="driver-arm.o"
 diff -ruN old/libcpp/lex.cc new/libcpp/lex.cc
 --- old/libcpp/lex.cc	2023-07-27 11:13:07.000000000 +0300
-+++ new/libcpp/lex.cc	2025-01-05 12:12:55.361506755 +0300
++++ new/libcpp/lex.cc	2026-01-04 08:22:41.991991642 +0300
 @@ -273,7 +273,7 @@
     extensions used, so SSE4.2 executables cannot run on machines that
     don't support that extension.  */
@@ -105,7 +117,7 @@ diff -ruN old/libcpp/lex.cc new/libcpp/lex.cc
     Recall that outside of a context with vector support we can't
 diff -ruN old/libgcc/config.host new/libgcc/config.host
 --- old/libgcc/config.host	2023-07-27 11:13:07.000000000 +0300
-+++ new/libgcc/config.host	2025-01-05 12:11:40.371514477 +0300
++++ new/libgcc/config.host	2026-01-04 08:22:41.991991642 +0300
 @@ -520,6 +520,13 @@
  	unwind_header=config/arm/unwind-arm.h
  	extra_parts="$extra_parts crti.o crtn.o"
