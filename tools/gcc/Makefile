@@ -51,7 +51,7 @@ $(BUILD_DIR)/Makefile: $(SRC_DIR)
 																			--disable-libquadmath  \
 																			--disable-libssp \
 																			--disable-libstdcxx-pch \
-																			--disable-shared \
+																			--enable-shared \
 																			--disable-threads \
 																			--disable-tls \
 																			$(EXTRA_OPTIONS)

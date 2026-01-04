@@ -36,8 +36,8 @@ diff -ruN old/fixincludes/mkfixinc.sh new/fixincludes/mkfixinc.sh
      x86_64-*-mingw32* | \
 diff -ruN old/gcc/config/argentum.h new/gcc/config/argentum.h
 --- old/gcc/config/argentum.h	1970-01-01 03:00:00.000000000 +0300
-+++ new/gcc/config/argentum.h	2026-01-04 08:22:41.991991642 +0300
-@@ -0,0 +1,10 @@
++++ new/gcc/config/argentum.h	2026-01-04 10:47:39.806746142 +0300
+@@ -0,0 +1,13 @@
 +#ifndef CONFIG_ARGENTUM_H
 +#define CONFIG_ARGENTUM_H
 +
@@ -46,6 +46,9 @@ diff -ruN old/gcc/config/argentum.h new/gcc/config/argentum.h
 +  do	{						                    \
 +	  builtin_define ("__ARGENTUM__");  \
 +	}	while (0)
++
++#undef LINK_SPEC
++#define LINK_SPEC "%{shared:-shared} %{static:-static} %{!shared: %{!static: %{rdynamic:-export-dynamic}}}"
 +
 +#endif /* CONFIG_ARGENTUM_H */
 diff -ruN old/gcc/config.gcc new/gcc/config.gcc

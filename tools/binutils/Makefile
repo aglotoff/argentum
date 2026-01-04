@@ -28,7 +28,8 @@ $(BUILD_DIR)/Makefile: $(SRC_DIR)
 	                                    --target=$(HOST) \
 	                                    --with-sysroot=$(SYSROOT) \
 																		  --disable-nls \
-                                      --disable-werror
+                                      --disable-werror \
+																			--enable-shared
 
 clean:
 	rm -rf $(SRC_DIR) $(BUILD_DIR)
