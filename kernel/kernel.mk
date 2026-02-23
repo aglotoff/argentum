@@ -48,6 +48,7 @@ KERNEL_SRCFILES := \
 	kernel/fs/path.c \
 	kernel/fs/fs.c \
 	kernel/fs/service.c \
+	kernel/mm/boot_mem.c \
 	kernel/mm/object_pool.c \
 	kernel/mm/page.c \
 	kernel/mm/vm.c \

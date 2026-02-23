@@ -9,6 +9,7 @@
 #include <kernel/console.h>
 #include <kernel/tty.h>
 #include <kernel/trap.h>
+#include <kernel/boot_mem.h>
 
 #include <arch/i386/ide.h>
 #include <arch/i386/io.h>
@@ -22,9 +23,26 @@ void mp_main(void);
 void
 arch_init(void)
 {
-	page_init_low();
+  // First address after the kernel image
+  extern uint8_t _end[];
+
+  void *ext_kernel_end;
+
+  boot_mem_init(_end, PA2KVA(PHYS_ENTRY_LIMIT));
+
+  page_init(PHYS_LIMIT);  // Physical page allocator (lower memory)
+
+	ext_kernel_end = boot_mem_alloc(0);
+  boot_mem_fini();
+
+  // Place pages mapped by 'entry_pgdir' to the free list.
+  // FIXME: add low memory to region
+  page_free_region(KVA2PA(ext_kernel_end), PHYS_ENTRY_LIMIT);
+
 	arch_vm_init();
-  page_init_high();
+
+  // TODO: detect the actual amount of physical memory!
+  page_free_region(PHYS_ENTRY_LIMIT, PHYS_LIMIT);
 
 #ifndef NOSMP
   acpi_init();

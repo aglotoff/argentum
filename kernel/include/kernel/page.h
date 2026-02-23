@@ -114,8 +114,7 @@ kva2page(void *va)
 /** Fill the allocated page block with zeros. */ 
 #define PAGE_ALLOC_ZERO   (1 << 0)
 
-void         page_init_low(void);
-void         page_init_high(void);
+void         page_init(size_t);
 struct Page *page_alloc_block(unsigned, int, int);
 void         page_free_block(struct Page *, unsigned);
 void         page_free_region(physaddr_t, physaddr_t);

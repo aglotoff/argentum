@@ -18,7 +18,6 @@
 #include <kernel/core/mutex.h>
 #include <kernel/core/condvar.h>
 #include <kernel/core/spinlock.h>
-#include <kernel/waitqueue.h>
 #include <kernel/drivers/screen.h>
 
 #define TTY_INPUT_MAX     256

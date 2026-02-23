@@ -7,6 +7,8 @@
 #include <kernel/page.h>
 #include <kernel/types.h>
 
+#include <kernel/boot_mem.h>
+
 /**
  * @defgroup page Physical Page Allocator
  * 
@@ -53,17 +55,12 @@ static struct {
 } page_free_list[PAGE_ORDER_MAX + 1];
 /** The spinlock protecting the allocator structures */
 static struct KSpinLock page_lock;
-/** Whether the allocator is ready to be used */
-static int page_initialized = 0;
-// static int high = 0;
 
 #define BITS_PER_BYTE     8
 #define BITS_PER_WORD     (sizeof(unsigned long) * BITS_PER_BYTE)
 #define BITMAP_OFFSET(n)  ((n) / BITS_PER_WORD)
 #define BITMAP_SHIFT(n)   ((n) % BITS_PER_WORD)
 #define BITMAP_MASK(n)    (1U << BITMAP_SHIFT(n))
-
-static void        *boot_alloc(size_t);
 
 static struct Page *page_buddy(struct Page *, unsigned);
 static void         page_list_add(struct Page *, unsigned);
@@ -74,86 +71,25 @@ static int          page_list_contains(struct Page *, unsigned);
  * Begin the page allocator initialization.
  */
 void
-page_init_low(void)
+page_init(size_t phys_limit)
 {
-  unsigned i;
   size_t bitmap_len;
 
-  k_spinlock_init(&page_lock, "page_lock");
+  k_spinlock_init(&page_lock, "page");
 
   // TODO: detect the actual amount of physical memory!
-  page_count = PHYS_LIMIT / PAGE_SIZE;
+  page_count = phys_limit / PAGE_SIZE;
 
   // Allocate the 'pages' array.
-  pages = (struct Page *) boot_alloc(page_count * sizeof(struct Page));
+  pages = (struct Page *) boot_mem_alloc(page_count * sizeof(struct Page));
 
   // Initialize the free page list
-  for (i = 0; i <= PAGE_ORDER_MAX; i++) {
+  for (int i = 0; i <= PAGE_ORDER_MAX; i++) {
     k_list_init(&page_free_list[i].link);
 
     bitmap_len = ROUND_UP(page_count / (1U << i), BITS_PER_BYTE);
-    page_free_list[i].bitmap = (unsigned long *) boot_alloc(bitmap_len);
+    page_free_list[i].bitmap = (unsigned long *) boot_mem_alloc(bitmap_len);
   }
-
-  // Place pages mapped by 'entry_pgdir' to the free list.
-  // FIXME: add low memory to region
-  page_free_region(KVA2PA(boot_alloc(0)), PHYS_ENTRY_LIMIT);
-
-  page_initialized = 1;
-}
-
-/**
- * Finish the page allocator initialization.
- */
-void
-page_init_high(void)
-{
-  // TODO: detect the actual amount of physical memory!
-  page_free_region(PHYS_ENTRY_LIMIT, PHYS_LIMIT);
-  // high = 1;
-}
-
-/**
- * Simple boot-time memory allocator to solve the "chicken and egg" problem
- * during the page allocator initialization. The memory obtained via this
- * function is never freed.
- * 
- * @param n The number of bytes to allocate.
- * 
- * @return Pointer to the allocated block of memory.
- */
-static void *
-boot_alloc(size_t n)
-{
-  // First address after the kernel image
-  extern uint8_t _end[];
-  // Virtual address of the next byte of free memory
-  static uint8_t *next_free = NULL;
-
-  void *ret;
-
-  if (page_initialized)
-    k_panic("called after page_init_low");
-
-  // If this is the first time the allocator is invoked, initialize next_free
-  if (next_free == NULL)
-    next_free = ROUND_UP((uint8_t *) _end, sizeof(uintptr_t));
-
-  ret = next_free;
-
-  // Allocate a chunk large enough to hold 'n' bytes and initialize it to 0.
-  // Make sure next_free is kept properly aligned.
-  if (n != 0) {
-    n = ROUND_UP(n, sizeof(uintptr_t));
-    next_free += n;
-
-    if (KVA2PA(next_free) > PHYS_ENTRY_LIMIT)
-      k_panic("out of memory");
-
-    memset(ret, 0, n);
-  }
-
-  return ret;
 }
 
 /**
