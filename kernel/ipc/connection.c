@@ -192,7 +192,7 @@ intptr_t
 connection_send(struct Connection *connection, void *smsg, size_t sbytes, void *rmsg, size_t rbytes)
 {
   struct Request *req;
-  unsigned long long timeout = seconds2ticks(15);
+  unsigned long long timeout = seconds2ticks(600);
   intptr_t r;
 
   //cprintf("[k] proc %x sends %d to %p\n", process_current()->pid, *(int *) smsg, connection->endpoint);
@@ -242,8 +242,8 @@ connection_send(struct Connection *connection, void *smsg, size_t sbytes, void *
   //   cprintf("[k] proc #%x sent to %p\n", process_current()->pid, connection->endpoint);
   // }
 
-  if ((r = k_semaphore_timed_get(&req->sem, timeout, K_SLEEP_UNWAKEABLE)) < 0) {
-    k_panic("fail recv:\n");
+  if ((r = k_semaphore_get(&req->sem, K_SLEEP_UNWAKEABLE)) < 0) {
+    k_panic("fail recv:\n %d", r);
     request_destroy(req);
     request_destroy(req);
     return -ETIMEDOUT;
@@ -263,7 +263,7 @@ connection_sendv(struct Connection *connection,
                  struct iovec *recv_iov, int recv_iov_cnt)
 {
   struct Request *req;
-  unsigned long long timeout = seconds2ticks(15);
+  unsigned long long timeout = seconds2ticks(600);
   intptr_t r;
 
   //cprintf("[k] proc %x sends %d to %p\n", process_current()->pid, *(int *) smsg, connection->endpoint);
@@ -298,15 +298,15 @@ connection_sendv(struct Connection *connection,
 
   request_dup(req);
 
-  if (k_mailbox_timed_send(&connection->endpoint->mbox, &req, timeout, K_SLEEP_UNWAKEABLE) < 0) {
-    k_panic("fail send:\n");
+  if ((r = k_mailbox_timed_send(&connection->endpoint->mbox, &req, timeout, K_SLEEP_UNWAKEABLE)) < 0) {
+    k_panic("fail send: %d\n", r);
     request_destroy(req);
     request_destroy(req);
     return -ETIMEDOUT;
   }
 
-  if ((r = k_semaphore_timed_get(&req->sem, timeout, K_SLEEP_UNWAKEABLE)) < 0) {
-    k_panic("fail recv:\n");
+  if ((r = k_semaphore_get(&req->sem, K_SLEEP_UNWAKEABLE)) < 0) {
+    k_panic("fail recv: %d\n", r);
     request_destroy(req);
     request_destroy(req);
     return -ETIMEDOUT;

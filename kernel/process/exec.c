@@ -34,7 +34,7 @@ user_stack_put(struct VMSpace *vm, const void *buf, size_t n, uintptr_t *va_p)
   if (va < STACK_BOTTOM)
     return -E2BIG;
 
-  if ((r = vm_user_copy_out(vm->pgtab, buf, va, n)) < 0) 
+  if ((r = vm_space_copy_out(vm, buf, va, n)) < 0) 
     return r;
 
   *va_p = va;
@@ -100,7 +100,7 @@ user_stack_init(char *const argv[], char *const envp[], struct ExecContext *e)
   uintptr_t va;
   int r;
 
-  va = vmspace_map(e->vm, STACK_BOTTOM, USTACK_SIZE, STACK_PROT);
+  va = vm_space_map(e->vm, STACK_BOTTOM, USTACK_SIZE, STACK_PROT);
   if (va != STACK_BOTTOM)
     return (int) va;
 
@@ -256,7 +256,7 @@ static int
 vm_space_load_file(void *pgtab, void *va, struct Connection *file, size_t n, off_t off)
 {
   connection_seek(file, off, SEEK_SET);
-  return vm_user_write(pgtab, (uintptr_t) va, n, vm_space_load_chunk, file, 0);
+  return vm_user_iterate(pgtab, (uintptr_t) va, n, vm_space_load_chunk, file, 0);
 }
 
 static int
@@ -300,7 +300,7 @@ load_elf(struct ExecContext *ctx)
       return -EINVAL;
     }
 
-    a = vmspace_map(ctx->vm, ph.vaddr, ph.memsz,
+    a = vm_space_map(ctx->vm, ph.vaddr, ph.memsz,
                     PROT_READ | PROT_WRITE | PROT_EXEC | VM_USER);
     if (a != ph.vaddr) {
       return (int) a;
@@ -326,7 +326,7 @@ sys_free_args(char **args)
 static int
 copy_in_args(uintptr_t va, char ***store, char *buf)
 {
-  void *pgtab = process_current()->vm->pgtab;
+  struct VMSpace *vm = process_current()->vm;
   char **args;
   size_t buf_space = ARG_MAX;
   size_t total_len;
@@ -342,7 +342,7 @@ copy_in_args(uintptr_t va, char ***store, char *buf)
 
     uintptr_t str_va;
 
-    if ((r = vm_user_copy_in(pgtab, &str_va, va + (sizeof(char *)*i),
+    if ((r = vm_space_copy_in(vm, &str_va, va + (sizeof(char *)*i),
                         sizeof str_va)) < 0) {
       sys_free_args(args);
       return r;
@@ -354,7 +354,7 @@ copy_in_args(uintptr_t va, char ***store, char *buf)
       return 0;
     }
 
-    if ((r = vm_user_copy_in_string(pgtab, buf, str_va, buf_space)) < 0) {
+    if ((r = vm_space_copy_in_string(vm, buf, str_va, buf_space)) < 0) {
       sys_free_args(args);
       return r;
     }
@@ -436,7 +436,7 @@ process_exec(const char *path, uintptr_t argv_va, uintptr_t envp_va)
 
   signal_reset(proc);
 
-  arch_vm_load(ctx.vm->pgtab);
+  vm_load(ctx.vm->pgtab);
 
   process_unlock();
 

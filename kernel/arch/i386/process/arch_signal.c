@@ -22,7 +22,7 @@ arch_signal_prepare(struct Process *process, struct SignalFrame *frame)
   frame->ucontext.uc_mcontext.cs     = process->thread->tf->cs;
   frame->ucontext.uc_mcontext.eflags = process->thread->tf->eflags;
 
-  if (vm_user_copy_out(process->vm->pgtab, frame, ctx_va, sizeof *frame) != 0)
+  if (vm_space_copy_out(process->vm, frame, ctx_va, sizeof *frame) != 0)
     return SIGKILL;
 
   process->thread->tf->esp = ctx_va;
@@ -39,7 +39,7 @@ arch_signal_return(struct Process *process, struct SignalFrame *ctx, int *ret)
 
   k_assert(process->thread != NULL);
   
-  if ((r = vm_user_copy_in(process->vm->pgtab, ctx, process->thread->tf->esp, sizeof *ctx) < 0))
+  if ((r = vm_space_copy_in(process->vm, ctx, process->thread->tf->esp, sizeof *ctx) < 0))
     return r;
 
   if (ctx->ucontext.uc_mcontext.cs != SEG_USER_CODE)

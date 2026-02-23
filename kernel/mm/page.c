@@ -67,7 +67,7 @@ static void        *boot_alloc(size_t);
 
 static struct Page *page_buddy(struct Page *, unsigned);
 static void         page_list_add(struct Page *, unsigned);
-static void         page_k_list_remove(struct Page *, unsigned);
+static void         page_list_remove(struct Page *, unsigned);
 static int          page_list_contains(struct Page *, unsigned);
 
 /**
@@ -185,7 +185,7 @@ page_alloc_block(unsigned order, int flags, int debug_tag)
 
   page = K_CONTAINER_OF(page_free_list[o].link.next, struct Page, link);
 
-  page_k_list_remove(page, o);
+  page_list_remove(page, o);
   page_free_count -= 1U << order;
 
   // Split
@@ -242,7 +242,7 @@ page_free_block(struct Page *page, unsigned order)
       break;
 
     // Combine with buddy
-    page_k_list_remove(buddy, o);
+    page_list_remove(buddy, o);
     if (buddy < page)
       page = buddy;
   }
@@ -348,7 +348,7 @@ page_list_add(struct Page *page, unsigned order)
  * @param order The block order.
  */
 static void
-page_k_list_remove(struct Page *page, unsigned order)
+page_list_remove(struct Page *page, unsigned order)
 {
   unsigned block_idx, map_idx;
 
@@ -366,13 +366,8 @@ page_k_list_remove(struct Page *page, unsigned order)
 void
 page_assert(struct Page *page, unsigned order, int tag)
 {
-  unsigned o;
+  for (unsigned o = 0; o < (1U << order); o++)
+    k_assert(page[o].debug_tag == tag);
 
-  for (o = 0; o < (1U << order); o++) {
-    if (page[o].debug_tag != tag)
-      k_panic("expected %x, have %x", tag, page[o].debug_tag);
-  }
-
-  if (page[0].ref_count == 0)
-    k_panic("page not allocated");
+  k_assert(page[0].ref_count > 0);
 }

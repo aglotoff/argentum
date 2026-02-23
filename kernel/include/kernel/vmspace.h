@@ -37,7 +37,11 @@ struct VMSpace   *vm_space_create(void);
 void              vm_space_destroy(struct VMSpace *);
 struct VMSpace   *vm_space_clone(struct VMSpace *, int);
 
-intptr_t          vmspace_map(struct VMSpace *, uintptr_t, size_t, int);
-void              vm_print_areas(struct VMSpace *);
+int          vm_space_copy_out(struct VMSpace *, const void *, uintptr_t, size_t);
+int          vm_space_copy_in(struct VMSpace *, void *, uintptr_t, size_t);
+int          vm_space_copy_in_string(struct VMSpace *, char *, uintptr_t, size_t);
+
+intptr_t          vm_space_map(struct VMSpace *, uintptr_t, size_t, int);
+void              vm_space_dump(struct VMSpace *);
 
 #endif  // !__KERNEL_INCLUDE_KERNEL_VMSPACE_H__

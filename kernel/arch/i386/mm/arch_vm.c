@@ -46,8 +46,7 @@ static struct PseudoDesc gdtr = {
   .base  = (uintptr_t) gdt,
 };
 
-// FIXME: per-CPU
-struct TaskState tss[K_CPU_MAX];
+static struct TaskState tss[K_CPU_MAX];
 
 void
 arch_vm_switch(struct Process *process)
@@ -60,8 +59,6 @@ arch_vm_switch(struct Process *process)
 
   k_assert(process->thread != NULL);
   k_assert(process->vm != NULL);
-
-  page_assert(kva2page(process->vm->pgtab), 0, PAGE_TAG_VM);
 
   gdt[GD_TSS + cpu_id] = SEG_DESC_16(&tss[cpu_id], sizeof(struct TaskState) - 1, SEG_TYPE_TSS32A, PL_KERNEL);
   tss[cpu_id].esp0 = (uintptr_t) process->thread->task.kstack + PAGE_SIZE;
@@ -334,7 +331,7 @@ arch_vm_destroy(void *pgtab)
     page = pa2page(PDE_BASE(pgdir[i]));
     page_assert(page, 0, PAGE_TAG_PGTAB);
 
-    pte   = (pte_t *) page2kva(page);
+    pte = (pte_t *) page2kva(page);
 
     // Check that the caller has removed all mappings
     for (j = 0; j < PGTAB_NR_ENTRIES; j++)

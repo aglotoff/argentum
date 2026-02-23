@@ -194,7 +194,6 @@ static int32_t
 sys_arg_buf(int n, void **store, size_t len)
 { 
   uintptr_t va = sys_arch_get_arg(n);
-  void *pgtab = process_current()->vm->pgtab;
   void *p;
   int r;
 
@@ -206,7 +205,7 @@ sys_arg_buf(int n, void **store, size_t len)
   if ((p = k_malloc(len)) == NULL)
     return -ENOMEM;
 
-  if ((r = vm_user_copy_in(pgtab, p, va, len)) < 0) {
+  if ((r = vm_space_copy_in(process_current()->vm, p, va, len)) < 0) {
     k_free(p);
     return r;
   }
@@ -224,14 +223,13 @@ static int32_t
 sys_arg_str(int n, size_t max, char **strp)
 {
   uintptr_t va = sys_arch_get_arg(n);
-  void *pgtab = process_current()->vm->pgtab;
   char *s;
   int r;
 
   if ((s = k_malloc(max)) == NULL)
     return -ENOMEM;
 
-  if ((r = vm_user_copy_in_string(pgtab, s, va, max)) < 0) {
+  if ((r = vm_space_copy_in_string(process_current()->vm, s, va, max)) < 0) {
     k_free(s);
     return r;
   }
@@ -244,7 +242,7 @@ sys_arg_str(int n, size_t max, char **strp)
 static int
 sys_copy_out(const void *src, uintptr_t va, size_t n)
 {
-  return vm_user_copy_out(process_current()->vm->pgtab, src, va, n);
+  return vm_space_copy_out(process_current()->vm, src, va, n);
 }
 
 /*
@@ -1359,7 +1357,7 @@ sys_mmap(void)
   if ((r = sys_arg_int(2, &prot)) < 0)
     return r;
 
-  return (int32_t) vmspace_map(process_current()->vm, addr, n, prot | VM_USER);
+  return (int32_t) vm_space_map(process_current()->vm, addr, n, prot | VM_USER);
 }
 
 int32_t

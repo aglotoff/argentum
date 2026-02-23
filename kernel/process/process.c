@@ -208,18 +208,18 @@ process_load_binary(struct Process *proc, const void *binary)
     if (ph->filesz > ph->memsz)
       return -EINVAL;
 
-    addr = vmspace_map(proc->vm, ph->vaddr, ph->memsz, PROT_READ | PROT_WRITE | PROT_EXEC | VM_USER);
+    addr = vm_space_map(proc->vm, ph->vaddr, ph->memsz, PROT_READ | PROT_WRITE | PROT_EXEC | VM_USER);
     if (addr != ph->vaddr)
       return (int) addr;
 
-    if ((r = vm_user_copy_out(proc->vm->pgtab, (uint8_t *) elf + ph->offset,
+    if ((r = vm_space_copy_out(proc->vm, (uint8_t *) elf + ph->offset,
                          ph->vaddr, ph->filesz)) < 0)
       return r;
 
     // proc->vm->heap = ROUND_UP(ph->vaddr + ph->memsz, PAGE_SIZE);
   }
 
-  addr = vmspace_map(proc->vm, (VIRT_USTACK_TOP - USTACK_SIZE), USTACK_SIZE,
+  addr = vm_space_map(proc->vm, (VIRT_USTACK_TOP - USTACK_SIZE), USTACK_SIZE,
                         PROT_READ | PROT_WRITE | VM_USER);
   if (addr != (VIRT_USTACK_TOP - USTACK_SIZE))
     return (int) addr;
@@ -340,7 +340,7 @@ process_destroy(int status)
   current->vm = NULL;
 
   // Switch to the kernel page table since vm will be destroyed shortly
-  arch_vm_load_kernel();
+  vm_load_kernel();
 
   k_timer_destroy(&current->itimers[ITIMER_PROF].timer);
   k_timer_destroy(&current->itimers[ITIMER_REAL].timer);

@@ -36,7 +36,7 @@ vm_space_create(void)
   if ((vm = (struct VMSpace *) k_object_pool_get(vmcache)) == NULL)
     return NULL;
 
-  if ((vm->pgtab = arch_vm_create()) == NULL) {
+  if ((vm->pgtab = vm_create()) == NULL) {
     k_object_pool_put(vmcache, vm);
     return NULL;
   }
@@ -63,7 +63,7 @@ vm_space_destroy(struct VMSpace *vm)
     k_object_pool_put(vm_areacache, area);
   }
 
-  arch_vm_destroy(vm->pgtab);
+  vm_destroy(vm->pgtab);
 
   k_object_pool_put(vmcache, vm);
 }
@@ -110,7 +110,7 @@ vm_space_init(void)
 
 
 intptr_t
-vmspace_map(struct VMSpace *vm, uintptr_t addr, size_t n, int flags)
+vm_space_map(struct VMSpace *vm, uintptr_t addr, size_t n, int flags)
 {
   uintptr_t va;
   struct KListLink *l;
@@ -188,7 +188,7 @@ vmspace_map(struct VMSpace *vm, uintptr_t addr, size_t n, int flags)
 }
 
 void
-vm_print_areas(struct VMSpace *vm)
+vm_space_dump(struct VMSpace *vm)
 {
   struct KListLink *l;
   struct VMSpaceMapEntry *area;
@@ -198,4 +198,74 @@ vm_print_areas(struct VMSpace *vm)
     area = K_CONTAINER_OF(l, struct VMSpaceMapEntry, link);
     cprintf("  [%x-%x)\n", area->start, area->start + area->length);
   }
+}
+
+static int
+vm_space_copy_out_callback(void *arg, void *kva, size_t n)
+{
+  uint8_t **src = (uint8_t **) arg;
+  memmove(kva, *src, n);
+  *src += n;
+  return n;
+}
+
+int
+vm_space_copy_out(struct VMSpace *vm, const void *src, uintptr_t dst_va, size_t n)
+{
+  uint8_t *p = (uint8_t *) src;
+
+  return vm_user_iterate(vm->pgtab, dst_va, n, vm_space_copy_out_callback, &p, VM_WRITE);
+}
+
+static int
+vm_space_copy_in_callback(void *arg, void *kva, size_t n)
+{
+  uint8_t **dst = (uint8_t **) arg;
+  memmove(*dst, kva, n);
+  *dst += n;
+  return n;
+}
+
+int
+vm_space_copy_in(struct VMSpace *vm, void *dst, uintptr_t src_va, size_t n)
+{
+  uint8_t *p = (uint8_t *) dst;
+
+  return vm_user_iterate(vm->pgtab, src_va, n, vm_space_copy_in_callback, &p, VM_READ);
+}
+
+struct copy_in_string {
+  char *buf;
+  size_t i;
+  size_t max_len;
+};
+
+static int
+vm_space_copy_in_string_callback(void *arg, void *kva, size_t n)
+{
+  struct copy_in_string *ctx = (struct copy_in_string *) arg;
+  const char *src = (const char *) kva;
+  size_t i;
+
+  for (i = 0; i < n; i++) {
+    if ((ctx->buf[ctx->i++] = src[i]) == '\0')
+      return 0;
+    if (ctx->i >= ctx->max_len)
+      return -ENAMETOOLONG;
+  }
+
+  return n;
+}
+
+int
+vm_space_copy_in_string(struct VMSpace *vm, char *dst, uintptr_t src_va, size_t max_len)
+{
+  struct copy_in_string ctx = { dst, 0, max_len };
+  int r;
+
+  r = vm_user_iterate(vm->pgtab, src_va, max_len, vm_space_copy_in_string_callback, &ctx, VM_READ);
+  if (r < 0)
+    return r;
+
+  return ctx.i;
 }

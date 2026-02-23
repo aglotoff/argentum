@@ -14,6 +14,8 @@ arch_process_copy(struct Process *parent, struct Process *child)
   return 0;
 }
 
+void arch_vm_switch(struct Process *);  // in arch_vm.c
+
 void
 arch_on_thread_before_switch(struct Thread *thread)
 {

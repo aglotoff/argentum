@@ -1,10 +1,6 @@
 #ifndef __KERNEL_VM_H__
 #define __KERNEL_VM_H__
 
-#ifndef __ARGENTUM_KERNEL__
-#error "This is a kernel header; user programs should not #include it"
-#endif
-
 #include <stddef.h>
 #include <sys/mman.h>
 
@@ -20,9 +16,6 @@
 #define VM_COW        (1 << 5)
 #define VM_PAGE       (1 << 6)
 
-struct Page;
-struct Process;
-
 void        *arch_vm_create(void);
 void         arch_vm_destroy(void *);
 void        *arch_vm_lookup(void *, uintptr_t, int);
@@ -36,20 +29,37 @@ void         arch_vm_init(void);
 void         arch_vm_init_percpu(void);
 void         arch_vm_load_kernel(void);
 void         arch_vm_load(void *);
-void         arch_vm_switch(struct Process *);
 void         arch_vm_map_fixed(uintptr_t, uint32_t, size_t, int);
 void         arch_vm_unmap_fixed(uintptr_t, size_t);
 
-int          vm_user_read(void *, uintptr_t, size_t, int (*)(void *, const void *, size_t), void *, int);
-int          vm_user_write(void *, uintptr_t, size_t, int (*)(void *, void *, size_t), void *, int);
+static inline void
+vm_load(void *pgtab)
+{
+  arch_vm_load(pgtab);
+}
 
+static inline void
+vm_load_kernel(void)
+{
+  arch_vm_load_kernel();
+}
+
+static inline void *
+vm_create(void )
+{
+  return arch_vm_create();
+}
+
+static inline void
+vm_destroy(void *pgtab)
+{
+  arch_vm_destroy(pgtab);
+}
+
+int          vm_user_iterate(void *, uintptr_t, size_t, int (*)(void *, void *, size_t), void *, int);
 int          vm_user_alloc(void *, uintptr_t, size_t, int);
 void         vm_user_free(void *, uintptr_t, size_t);
 int          vm_user_clone(void *, void *, uintptr_t, size_t, int);
-
-int          vm_user_copy_out(void *, const void *, uintptr_t, size_t);
-int          vm_user_copy_in(void *, void *, uintptr_t, size_t);
-int          vm_user_copy_in_string(void *, char *, uintptr_t, size_t);
 
 int          vm_handle_fault(void *, uintptr_t);
 

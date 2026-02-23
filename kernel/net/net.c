@@ -301,7 +301,7 @@ net_recvfrom(struct Connection *file, uintptr_t va, size_t nbytes, int flags,
     }
 
     // TODO: write to request
-    if ((r = vm_user_copy_out(process_current()->vm->pgtab, p, va, nread)) < 0) {
+    if ((r = vm_space_copy_out(process_current()->vm, p, va, nread)) < 0) {
       total = r;
       break;
     }
@@ -342,7 +342,7 @@ net_sendto(struct Connection *file, uintptr_t va, size_t nbytes, int flags,
     ssize_t nwrite = MIN(nbytes, PAGE_SIZE);
     
     // TODO: read from request
-    if ((r = vm_user_copy_in(process_current()->vm->pgtab, p, va, nwrite)) < 0) {
+    if ((r = vm_space_copy_in(process_current()->vm, p, va, nwrite)) < 0) {
       total = r;
       break;
     }

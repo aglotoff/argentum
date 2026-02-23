@@ -36,9 +36,11 @@ trap_handle_pgfault(struct TrapFrame *tf)
   process = process_current();
   k_assert(process != NULL);
 
-  // Try to handle VM fault first (it may be caused by copy-on-write pages)
-  if (vm_handle_fault(process->vm->pgtab, address) == 0)
-    return;
+  if ((tf->error & 0x3) == 0x3) {
+    // Try to handle VM fault first (it may be caused by copy-on-write pages)
+    if (vm_handle_fault(process->vm->pgtab, address) == 0)
+      return;
+  }
 
   // If unsuccessfull, kill the process
   //print_trapframe(tf);
@@ -145,11 +147,11 @@ arch_trap_frame_init(struct Process *process, uintptr_t entry, uintptr_t arg1,
   k_assert(process->thread != NULL);
 
   sp -= 4;
-  vm_user_copy_out(process->vm->pgtab, &arg3, sp, sizeof arg3);
+  vm_space_copy_out(process->vm, &arg3, sp, sizeof arg3);
   sp -= 4;
-  vm_user_copy_out(process->vm->pgtab, &arg2, sp, sizeof arg2);
+  vm_space_copy_out(process->vm, &arg2, sp, sizeof arg2);
   sp -= 4;
-  vm_user_copy_out(process->vm->pgtab, &arg1, sp, sizeof arg1);
+  vm_space_copy_out(process->vm, &arg1, sp, sizeof arg1);
   sp -= 4;
 
   process->thread->tf->cs = SEG_USER_CODE;

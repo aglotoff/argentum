@@ -76,23 +76,6 @@ request_reply(struct Request *req, intptr_t r)
   request_destroy(req);
 }
 
-int
-vm_space_copy_in(struct Process *process, void *dst, uintptr_t src_va, size_t n)
-{
-  if ((src_va + n) < src_va)
-    return -EFAULT;
-
-  if (src_va > VIRT_KERNEL_BASE) {
-    // TODO: check user permissions
-    memmove(dst, (void *) src_va, n);
-    return 0;
-  }
-
-  k_assert(process != NULL);
-
-  return vm_user_copy_in(process->vm->pgtab, dst, src_va, n);
-}
-
 ssize_t
 request_write(struct Request *req, void *msg, size_t n)
 {
@@ -125,7 +108,7 @@ request_write(struct Request *req, void *msg, size_t n)
     } else {
       k_assert(req->process != NULL);
 
-      if (vm_user_copy_out(req->process->vm->pgtab, msg, dst_va, n) < 0)
+      if (vm_space_copy_out(req->process->vm, msg, dst_va, n) < 0)
         k_panic("request_write");
     }
 
@@ -175,7 +158,7 @@ request_read(struct Request *req, void *msg, size_t n)
     } else {
       k_assert(req->process != NULL);
 
-      if (vm_user_copy_in(req->process->vm->pgtab, msg, src_va, n) < 0)
+      if (vm_space_copy_in(req->process->vm, msg, src_va, n) < 0)
         k_panic("request_read");
     }
 
