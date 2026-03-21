@@ -3,6 +3,7 @@
 #include <string.h>
 #include <sys/mman.h>
 
+#include <kernel/core/semaphore.h>
 #include <kernel/object_pool.h>
 #include <kernel/process.h>
 #include <kernel/signal.h>
@@ -60,7 +61,8 @@ signal_init(struct Process *process)
 
   // process->signal_queue initialized in process_ctor
   process->signal_stub = 0;
-  sigemptyset(&process->thread->signal_mask);
+  sigemptyset(&process->thread->signal_current_mask);
+  sigemptyset(&process->thread->signal_saved_mask);
 
   for (i = 0; i < NSIG; i++) {
     process->signal_actions[i].sa_handler = SIG_DFL;  
@@ -76,7 +78,8 @@ signal_reset(struct Process *process)
   k_assert(process->thread != NULL);
 
   // process->signal_queue initialized in process_ctor
-  sigemptyset(&process->thread->signal_mask);
+  sigemptyset(&process->thread->signal_current_mask);
+  sigemptyset(&process->thread->signal_saved_mask);
 
   for (i = 0; i < NSIG; i++) {
     process->signal_actions[i].sa_handler = SIG_DFL;  
@@ -104,7 +107,8 @@ signal_clone(struct Process *parent, struct Process *child)
 
   // process->signal_queue initialized in process_ctor
   child->signal_stub = parent->signal_stub;
-  child->thread->signal_mask = parent->thread->signal_mask;
+  child->thread->signal_current_mask = parent->thread->signal_current_mask;
+  child->thread->signal_saved_mask = parent->thread->signal_saved_mask;
 
   for (i = 0; i < NSIG; i++) {
     child->signal_actions[i] = parent->signal_actions[i];
@@ -162,7 +166,7 @@ signal_is_blocked(struct Process *process, int signo)
 
   if (!signal_can_be_ignored(signo))
     return 0;
-  return sigismember(&process->thread->signal_mask, signo);
+  return sigismember(&process->thread->signal_current_mask, signo);
 }
 
 int
@@ -239,7 +243,7 @@ signal_mask_change(int how, const sigset_t *set, sigset_t *old_set)
   k_assert(process->thread != NULL);
 
   if (old_set != NULL)
-    *old_set = process->thread->signal_mask;
+    *old_set = process->thread->signal_current_mask;
 
   if (set == NULL)
     return r;
@@ -248,20 +252,20 @@ signal_mask_change(int how, const sigset_t *set, sigset_t *old_set)
 
   switch (how) {
   case SIG_SETMASK:
-    process->thread->signal_mask = *set;
-    sigdelset(&process->thread->signal_mask, SIGKILL);
+    process->thread->signal_current_mask = *set;
+    sigdelset(&process->thread->signal_current_mask, SIGKILL);
     break;
 
   case SIG_BLOCK:
     for (i = 1; i <= NSIG; i++)
       if ((i != SIGKILL) && sigismember(set, i))
-        sigaddset(&process->thread->signal_mask, i);
+        sigaddset(&process->thread->signal_current_mask, i);
     break;
 
   case SIG_UNBLOCK:
     for (i = 1; i <= NSIG; i++)
       if (sigismember(set, i))
-        sigdelset(&process->thread->signal_mask, i);
+        sigdelset(&process->thread->signal_current_mask, i);
     break;
 
   default:
@@ -278,8 +282,6 @@ int
 signal_suspend(const sigset_t *mask)
 {
   struct Process *process = process_current();
-  struct KWaitQueue wait_chan;
-  sigset_t saved_mask;
   int r;
 
   if (mask == NULL)
@@ -289,15 +291,18 @@ signal_suspend(const sigset_t *mask)
 
   k_assert(process->thread != NULL);
 
-  saved_mask = process->thread->signal_mask;
+  process->thread->signal_saved_mask = process->thread->signal_current_mask;
 
-  process->thread->signal_mask = *mask;
-  sigdelset(&process->thread->signal_mask, SIGKILL);
+  process->thread->signal_current_mask = *mask;
+  sigdelset(&process->thread->signal_current_mask, SIGKILL);
 
-  k_waitqueue_init(&wait_chan);
-  r = k_waitqueue_sleep(&wait_chan, &__process_lock);
+  process_unlock();
 
-  process->thread->signal_mask = saved_mask;
+  r = k_semaphore_get(&process->thread->sem, K_SLEEP_WAKEABLE);
+
+  process_lock();
+
+  process->thread->signal_current_mask = process->thread->signal_saved_mask;
 
   process_unlock();
 
@@ -341,8 +346,8 @@ signal_return(void)
   if ((r = arch_signal_return(current, &frame, &ret)) != 0)
     return r;
 
-  current->thread->signal_mask = frame.ucontext.uc_sigmask;
-  sigdelset(&current->thread->signal_mask, SIGKILL);
+  current->thread->signal_current_mask = frame.ucontext.uc_sigmask;
+  sigdelset(&current->thread->signal_current_mask, SIGKILL);
 
   process_unlock();
 
@@ -386,6 +391,10 @@ signal_generate_one(struct Process *process, int signo, int code)
   k_assert((signo > 0) && (signo <= NSIG));
   k_assert(k_spinlock_holding(&__process_lock));
 
+  // Continue stopped process even if SIGCONT is ignored or blocked
+  if (signo == SIGCONT)
+    _process_continue(process);
+
   // TODO: check for permissions
 
   // Do not queue subsequent occurences of the same signal
@@ -401,9 +410,6 @@ signal_generate_one(struct Process *process, int signo, int code)
     signal_discard(process, SIGTSTP);
     signal_discard(process, SIGTTIN);
     signal_discard(process, SIGTTOU);
-
-    // Continue stopped process even if SIGCONT is ignored or blocked
-    _process_continue(process);
   }
 
   if (signal_is_ignored(process, signo))
@@ -417,6 +423,7 @@ signal_generate_one(struct Process *process, int signo, int code)
 
   // Blocked signals remain pending
   if (!signal_is_blocked(process, signo)) {
+    k_semaphore_set(&process->thread->sem, 1);
     k_task_wake(&process->thread->task);
   }
 
@@ -438,29 +445,31 @@ signal_create(int signo, int code, uintptr_t value)
   return signal;
 }
 
-void
+int
 signal_deliver_pending(void)
 {
   struct Process *process = process_current();
   struct Signal *signal;
-  struct sigaction *sa;
+  struct sigaction *action;
+  int signo;
   int exit_code = 0;
 
   process_lock();
 
   if ((signal = signal_dequeue(process)) == NULL) {
     process_unlock();
-    return;
+    return process->state != PROCESS_STATE_ACTIVE;
   }
 
-  sa = &process->signal_actions[SIGNAL_INDEX(signal->info.si_signo)];
+  signo = signal->info.si_signo;
+  action = &process->signal_actions[SIGNAL_INDEX(signo)];
 
-  if (sa->sa_handler == SIG_DFL) {
-    exit_code = signal_action_default(process, signal, sa);
-  } else if (sa->sa_handler == SIG_IGN) {
+  if (action->sa_handler == SIG_DFL) {
+    exit_code = signal_action_default(process, signal, action);
+  } else if (action->sa_handler == SIG_IGN) {
     k_panic("ignored signals should not be delivered");
   } else {
-    exit_code = signal_action_custom(process, signal, sa);
+    exit_code = signal_action_custom(process, signal, action);
   }
 
   signal_free(signal);
@@ -470,6 +479,8 @@ signal_deliver_pending(void)
   if (exit_code != 0) {
     process_destroy(exit_code);
   }
+
+  return process->state != PROCESS_STATE_ACTIVE;
 }
 
 static struct Signal *
@@ -546,13 +557,12 @@ signal_action_default(struct Process *current,
     // be allowed to stop in response to the SIGTSTP, SIGTTIN, or SIGTTOU
     // fall through
   case SIGSTOP:
-    _process_stop(current);
+    _process_stop(current, signo);
     break;
 
   case SIGCONT:
-    // Continue
-    if (current->state == PROCESS_STATE_STOPPED)
-      k_panic("The process must be already continued");
+    // Continue (already continued)
+    k_assert(current->state != PROCESS_STATE_STOPPED);
     break;
   }
 
@@ -570,12 +580,12 @@ signal_action_custom(struct Process *process,
 
   frame.info = signal->info;
   frame.handler = (uintptr_t) sa->sa_handler;
-  frame.ucontext.uc_sigmask = process->thread->signal_mask;
+  frame.ucontext.uc_sigmask = process->thread->signal_current_mask;
 
   if (arch_signal_prepare(process, &frame) != 0)
     return SIGKILL;
     
-  process->thread->signal_mask |= sa->sa_mask;
+  process->thread->signal_current_mask |= sa->sa_mask;
 
   if (sa->sa_flags & SA_RESETHAND)
     sa->sa_handler = SIG_DFL;

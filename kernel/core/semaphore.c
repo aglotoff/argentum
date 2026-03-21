@@ -175,3 +175,23 @@ k_semaphore_put(struct KSemaphore *sem)
 
   return 0;
 }
+
+int
+k_semaphore_set(struct KSemaphore *sem, int count)
+{
+  k_assert(sem != K_NULL);
+  k_assert(sem->object_tag == K_SEMAPHORE_TAG);
+  
+  k_spinlock_acquire(&sem->lock);
+  
+  sem->count = count;
+
+  if (sem->count > 0)
+    _k_sched_wakeup_one(&sem->sleep_queue, 0);
+
+  k_spinlock_release(&sem->lock);
+
+  // TODO: check reschedule
+
+  return 0;
+}

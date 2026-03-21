@@ -26,7 +26,7 @@ void signal_init_system(void);
 void signal_init(struct Process *);
 int  signal_generate(pid_t, int, int);
 void signal_clone(struct Process *, struct Process *);
-void signal_deliver_pending(void);
+int  signal_deliver_pending(void);
 int  signal_action_change(int, uintptr_t, struct sigaction *, struct sigaction *);
 int  signal_return(void);
 int  signal_pending(sigset_t *);

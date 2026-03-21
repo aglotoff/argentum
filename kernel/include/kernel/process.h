@@ -13,6 +13,7 @@
 #include <time.h>
 
 #include <kernel/core/config.h>
+#include <kernel/core/semaphore.h>
 #include <kernel/core/spinlock.h>
 #include <kernel/core/list.h>
 #include <kernel/core/timer.h>
@@ -39,9 +40,12 @@ struct Thread {
   /** Address of the current trap frame on the stack */
   struct TrapFrame *tf;
 
+  struct KSemaphore sem;
+
   struct Signal   *signal_pending[NSIG];
   struct KListLink signal_queue;
-  sigset_t         signal_mask;
+  sigset_t signal_current_mask;
+  sigset_t signal_saved_mask;
 };
 
 /**

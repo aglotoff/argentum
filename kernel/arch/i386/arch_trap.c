@@ -73,11 +73,8 @@ trap(struct TrapFrame *tf)
   }
 
   if ((tf->cs & PL_MASK) == PL_USER) {
-    signal_deliver_pending();
-
-    while (my_process->state != PROCESS_STATE_ACTIVE) {
-      k_task_sleep(0);
-      signal_deliver_pending();
+    while (signal_deliver_pending()) {
+      k_semaphore_get(&my_process->thread->sem, K_SLEEP_WAKEABLE);
     }
   }
 }

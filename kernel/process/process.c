@@ -163,6 +163,8 @@ process_alloc(void)
   k_timer_create(&process->itimers[ITIMER_REAL].timer, process_itimer, (void *) process->pid, 0, 0);
   k_timer_create(&process->itimers[ITIMER_VIRTUAL].timer, process_itimer, (void *) process->pid, 0, 0);
 
+  k_semaphore_create(&thread->sem, 0);
+
   k_spinlock_acquire(&pid_hash.lock);
 
   if ((process->pid = ++next_pid) < 0)
@@ -334,13 +336,9 @@ process_destroy(int status)
 
   k_assert(init_process != NULL);
 
+  k_semaphore_destroy(&current->thread->sem);
+
   process_lock();
-
-  vm = current->vm;
-  current->vm = NULL;
-
-  // Switch to the kernel page table since vm will be destroyed shortly
-  vm_load_kernel();
 
   k_timer_destroy(&current->itimers[ITIMER_PROF].timer);
   k_timer_destroy(&current->itimers[ITIMER_REAL].timer);
@@ -365,14 +363,24 @@ process_destroy(int status)
   if (has_zombies)
     k_waitqueue_wakeup_all(&init_process->wait_queue);
 
+  
   current->state = PROCESS_STATE_ZOMBIE;
   current->flags |= PROCESS_STATUS_AVAILABLE;
   current->status = status;
 
+
   _signal_state_change_to_parent(current);
+
+  
 
   current->thread->process = NULL;
   current->thread = NULL;
+
+  vm = current->vm;
+  current->vm = NULL;
+
+  // Switch to the kernel page table since vm will be destroyed shortly
+  vm_load_kernel();
 
   //current->thread->task->ext = NULL;
   //k_object_pool_put(thread_cache, current->thread);
@@ -449,6 +457,24 @@ process_match_pid(struct Process *process, pid_t pid)
   return 0;
 }
 
+static int
+process_get_status(struct Process *process, int options)
+{
+  if (!(process->flags & PROCESS_STATUS_AVAILABLE))
+    return -1;
+
+  if ((process->state == PROCESS_STATE_STOPPED) && !(options & WUNTRACED))
+    return -1;
+
+  // TODO: WCONTINUED
+  if (process->state == PROCESS_STATE_ACTIVE)
+    return -1;
+
+  process->flags &= ~PROCESS_STATUS_AVAILABLE;
+
+  return process->status;
+}
+
 pid_t
 process_wait(pid_t pid, int *stat_loc, int options)
 {
@@ -468,6 +494,7 @@ process_wait(pid_t pid, int *stat_loc, int options)
 
     K_LIST_FOREACH(&current->children, l) {
       struct Process *process;
+      int status;
 
       process = K_CONTAINER_OF(l, struct Process, sibling_link);
 
@@ -477,36 +504,29 @@ process_wait(pid_t pid, int *stat_loc, int options)
       // Rememeber that we have at least one match
       match = process->pid;
 
-      if (process->flags & PROCESS_STATUS_AVAILABLE) {
-        if ((process->state == PROCESS_STATE_STOPPED) && !(options & WUNTRACED))
-          continue;
+      if ((status = process_get_status(process, options)) < 0)
+        continue;
 
-        // TODO: WCONTINUED
-        if (process->state == PROCESS_STATE_ACTIVE)
-          continue;
+      *stat_loc = status;
 
-        process->flags &= ~PROCESS_STATUS_AVAILABLE;
-        *stat_loc = process->status;
+      if (WIFEXITED(status) || WIFSIGNALED(status)) {
+        k_list_remove(&process->sibling_link);
+        k_list_remove(&process->link);
 
-        if (process->state == PROCESS_STATE_ZOMBIE) {
-          k_list_remove(&process->sibling_link);
-          k_list_remove(&process->link);
+        // Include the times of the terminated child process in the parent's
+        // times structure. Thus, only the times of children for which wait
+        // successfully returns will be included.
+        current->times.tms_cutime += process->times.tms_utime;
+        current->times.tms_cstime += process->times.tms_stime;
 
-          // Include the times of the terminated child process in the parent's
-          // times structure. Thus, only the times of children for which wait
-          // successfully returns will be included.
-          current->times.tms_cutime += process->times.tms_utime;
-          current->times.tms_cstime += process->times.tms_stime;
+        process_unlock();
 
-          process_unlock();
-
-          process_free(process);
-        } else {
-          process_unlock();
-        }
-
-        return match;
+        process_free(process);
+      } else {
+        process_unlock();
       }
+
+      return match;
     }
 
     if (!match) { // No children matched
@@ -642,25 +662,24 @@ _process_continue(struct Process *process)
 
   if (process->state == PROCESS_STATE_STOPPED) {
     process->state = PROCESS_STATE_ACTIVE;
-    k_assert(process->flags != 0);
     k_assert(process->thread != NULL);
-    k_task_wake(&process->thread->task);
+
+    k_semaphore_set(&process->thread->sem, 1);
 
     _signal_state_change_to_parent(process);
   }
 }
 
 void
-_process_stop(struct Process *process)
+_process_stop(struct Process *process, int signo)
 {
   k_assert((process != NULL) && (process->vm != NULL));
   k_assert(k_spinlock_holding(&__process_lock));
 
   if (process->state != PROCESS_STATE_STOPPED) {
+    process->flags |= PROCESS_STATUS_AVAILABLE;
     process->state = PROCESS_STATE_STOPPED;
-    process->status = 0x7f;
-
-     // process->flags |= PROCESS_STATUS_AVAILABLE;
+    process->status = 0x7f | (signo << 8);
 
     _signal_state_change_to_parent(process);
   }

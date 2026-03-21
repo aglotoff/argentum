@@ -27,6 +27,7 @@ void k_semaphore_destroy(struct KSemaphore *);
 int k_semaphore_try_get(struct KSemaphore *);
 int k_semaphore_timed_get(struct KSemaphore *, k_tick_t, int);
 int k_semaphore_put(struct KSemaphore *);
+int k_semaphore_set(struct KSemaphore *, int);
 
 /**
  * @brief Acquire a semaphore.

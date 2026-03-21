@@ -25,8 +25,6 @@ struct KWaitQueue {
 
 void k_waitqueue_init(struct KWaitQueue *);
 int  k_waitqueue_sleep(struct KWaitQueue *, struct KSpinLock *);
-int  k_waitqueue_timed_sleep(struct KWaitQueue *, struct KSpinLock *, unsigned long);
-void k_waitqueue_wakeup_one(struct KWaitQueue *);
 void k_waitqueue_wakeup_all(struct KWaitQueue *);
 
 #endif  // !__KERNEL_INCLUDE_KERNEL_WAITQUEUE_H__
