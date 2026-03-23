@@ -9,37 +9,37 @@
 #include <arch/i386/regs.h>
 
 int
-arch_signal_prepare(struct Process *process, struct SignalFrame *frame)
+arch_signal_prepare(struct Thread *thread, struct SignalFrame *frame)
 {
-  k_assert(process->thread != NULL);
-  
-  uintptr_t ctx_va = ROUND_DOWN(process->thread->tf->esp, 16) - sizeof(struct SignalFrame);
+  uintptr_t ctx_va = ROUND_DOWN(thread->tf->esp, 16) - sizeof(struct SignalFrame);
 
-  frame->ucontext.uc_mcontext.eax    = process->thread->tf->eax;
-  frame->ucontext.uc_mcontext.esp    = process->thread->tf->esp;
-  frame->ucontext.uc_mcontext.ss     = process->thread->tf->ss;
-  frame->ucontext.uc_mcontext.eip    = process->thread->tf->eip;
-  frame->ucontext.uc_mcontext.cs     = process->thread->tf->cs;
-  frame->ucontext.uc_mcontext.eflags = process->thread->tf->eflags;
+  k_assert(thread->process != NULL);
 
-  if (vm_space_copy_out(process->vm, frame, ctx_va, sizeof *frame) != 0)
+  frame->ucontext.uc_mcontext.eax    = thread->tf->eax;
+  frame->ucontext.uc_mcontext.esp    = thread->tf->esp;
+  frame->ucontext.uc_mcontext.ss     = thread->tf->ss;
+  frame->ucontext.uc_mcontext.eip    = thread->tf->eip;
+  frame->ucontext.uc_mcontext.cs     = thread->tf->cs;
+  frame->ucontext.uc_mcontext.eflags = thread->tf->eflags;
+
+  if (vm_space_copy_out(thread->process->vm, frame, ctx_va, sizeof *frame) != 0)
     return SIGKILL;
 
-  process->thread->tf->esp = ctx_va;
-  process->thread->tf->eax = ctx_va + offsetof(struct SignalFrame, ucontext) + offsetof(ucontext_t, uc_mcontext);
-  process->thread->tf->eip = process->signal_stub;
+  thread->tf->esp = ctx_va;
+  thread->tf->eax = ctx_va + offsetof(struct SignalFrame, ucontext) + offsetof(ucontext_t, uc_mcontext);
+  thread->tf->eip = thread->process->signal_stub;
 
   return 0;
 }
 
 int
-arch_signal_return(struct Process *process, struct SignalFrame *ctx, int *ret)
+arch_signal_return(struct Thread *thread, struct SignalFrame *ctx, int *ret)
 {
   int r;
 
-  k_assert(process->thread != NULL);
+  k_assert(thread->process != NULL);
   
-  if ((r = vm_space_copy_in(process->vm, ctx, process->thread->tf->esp, sizeof *ctx) < 0))
+  if ((r = vm_space_copy_in(thread->process->vm, ctx, thread->tf->esp, sizeof *ctx) < 0))
     return r;
 
   if (ctx->ucontext.uc_mcontext.cs != SEG_USER_CODE)
@@ -49,14 +49,14 @@ arch_signal_return(struct Process *process, struct SignalFrame *ctx, int *ret)
   if ((ctx->ucontext.uc_mcontext.eflags & EFLAGS_IOPL_MASK) != EFLAGS_IOPL_0)
     return -EINVAL;
 
-  process->thread->tf->eax    = ctx->ucontext.uc_mcontext.eax;
-  process->thread->tf->eip    = ctx->ucontext.uc_mcontext.eip;
-  process->thread->tf->esp    = ctx->ucontext.uc_mcontext.esp;
-  process->thread->tf->cs     = ctx->ucontext.uc_mcontext.cs;
-  process->thread->tf->ss     = ctx->ucontext.uc_mcontext.ss;
-  process->thread->tf->eflags = ctx->ucontext.uc_mcontext.eflags;
+  thread->tf->eax    = ctx->ucontext.uc_mcontext.eax;
+  thread->tf->eip    = ctx->ucontext.uc_mcontext.eip;
+  thread->tf->esp    = ctx->ucontext.uc_mcontext.esp;
+  thread->tf->cs     = ctx->ucontext.uc_mcontext.cs;
+  thread->tf->ss     = ctx->ucontext.uc_mcontext.ss;
+  thread->tf->eflags = ctx->ucontext.uc_mcontext.eflags;
 
-  *ret = process->thread->tf->eax;
+  *ret = thread->tf->eax;
 
   return 0;
 }

@@ -44,6 +44,7 @@ static struct {
 // Lock to protect the parent/child relationships between the processes
 struct KListLink __process_list;
 struct KSpinLock __process_lock;
+struct KSpinLock __process_sleep_lock;
 
 static void process_run(void *);
 
@@ -62,6 +63,7 @@ process_ctor(void *buf, size_t)
 
   k_waitqueue_init(&proc->wait_queue);
   k_list_init(&proc->children);
+  k_list_init(&proc->threads);
 }
 
 static void
@@ -70,6 +72,7 @@ thread_ctor(void *buf, size_t)
   struct Thread *thread = (struct Thread *) buf;
 
   k_list_init(&thread->signal_queue);
+  k_list_null(&thread->process_link);
 }
 
 void
@@ -90,6 +93,7 @@ process_init(void)
 
   k_list_init(&__process_list);
   k_spinlock_init(&__process_lock, "process_lock");
+  k_spinlock_init(&__process_sleep_lock, "process_sleep_lock");
 
   // Create the init process
   if (process_create(_binary_obj_user_init_start, &init_process) != 0)
@@ -125,14 +129,14 @@ process_alloc(void)
   stack = (uint8_t *) page2kva(stack_page);
   stack_page->ref_count++;
 
-  process->thread = thread;
+  k_list_add_front(&process->threads, &thread->process_link);
   thread->process = process;
 
   // Leave space for trap frame
   thread->tf = (struct TrapFrame *) (stack + PAGE_SIZE - sizeof(struct TrapFrame));
   memset(thread->tf, 0, sizeof(struct TrapFrame));
 
-  if (k_task_create(&thread->task, thread, process_run, process, stack, PAGE_SIZE - sizeof(struct TrapFrame), NZERO)) {
+  if (k_task_create(&thread->task, thread, process_run, thread, stack, PAGE_SIZE - sizeof(struct TrapFrame), NZERO)) {
     k_object_pool_put(thread_cache, thread);
     k_object_pool_put(process_cache, process);
 
@@ -195,6 +199,7 @@ process_load_binary(struct Process *proc, const void *binary)
   Elf32_Phdr *ph, *eph;
   int r;
   uintptr_t addr;
+  struct Thread *main_thread;
 
   elf = (Elf32_Ehdr *) binary;
   if (memcmp(elf->ident, "\x7f""ELF", 4) != 0)
@@ -226,13 +231,17 @@ process_load_binary(struct Process *proc, const void *binary)
   if (addr != (VIRT_USTACK_TOP - USTACK_SIZE))
     return (int) addr;
 
-  return arch_trap_frame_init(proc, elf->entry, 0, 0, 0, VIRT_USTACK_TOP);
+  k_assert(!k_list_is_empty(&proc->threads));
+  main_thread = K_CONTAINER_OF(proc->threads.next, struct Thread, process_link);
+
+  return arch_trap_frame_init(main_thread, elf->entry, 0, 0, 0, VIRT_USTACK_TOP);
 }
 
 int
 process_create(const void *binary, struct Process **pstore)
 {
   struct Process *proc;
+  struct Thread *main_thread;
   int r;
 
   if ((proc = process_alloc()) == NULL) {
@@ -255,7 +264,10 @@ process_create(const void *binary, struct Process **pstore)
   k_list_add_back(&__process_list, &proc->link);
   process_unlock();
 
-  k_task_start(&proc->thread->task);
+  k_assert(!k_list_is_empty(&proc->threads));
+  main_thread = K_CONTAINER_OF(proc->threads.next, struct Thread, process_link);
+
+  k_task_start(&main_thread->task);
 
   if (pstore != NULL)
     *pstore = proc;
@@ -287,7 +299,7 @@ process_free(struct Process *process)
   k_spinlock_release(&pid_hash.lock);
 
   // Return the process descriptor to the cache
-  k_assert(process->thread == NULL);
+  k_assert(k_list_is_empty(&process->threads));
   k_object_pool_put(process_cache, process);
 }
 
@@ -315,7 +327,8 @@ void
 process_destroy(int status)
 {
   struct KListLink *l;
-  struct Process *child, *current = process_current();
+  struct Thread *thread = thread_current();
+  struct Process *child, *current = thread->process;
   int has_zombies;
   struct VMSpace *vm;
 
@@ -336,7 +349,7 @@ process_destroy(int status)
 
   k_assert(init_process != NULL);
 
-  k_semaphore_destroy(&current->thread->sem);
+  k_semaphore_destroy(&thread->sem);
 
   process_lock();
 
@@ -368,22 +381,16 @@ process_destroy(int status)
   current->flags |= PROCESS_STATUS_AVAILABLE;
   current->status = status;
 
-
   _signal_state_change_to_parent(current);
 
-  
-
-  current->thread->process = NULL;
-  current->thread = NULL;
+  thread->process = NULL;
+  k_list_remove(&thread->process_link);
 
   vm = current->vm;
   current->vm = NULL;
 
   // Switch to the kernel page table since vm will be destroyed shortly
   vm_load_kernel();
-
-  //current->thread->task->ext = NULL;
-  //k_object_pool_put(thread_cache, current->thread);
 
   process_unlock();
 
@@ -409,7 +416,8 @@ process_copy(int share_vm)
 
   child->parent = current;
 
-  arch_process_copy(current, child);
+  arch_process_copy(K_CONTAINER_OF(current->threads.next, struct Thread, process_link),
+                    K_CONTAINER_OF(child->threads.next, struct Thread, process_link));
 
   fd_clone(current, child);
   signal_clone(current, child);
@@ -429,8 +437,8 @@ process_copy(int share_vm)
 
   // cprintf("[k] process #%x created\n", child->pid);
 
-  k_assert(child->thread != NULL);
-  k_task_start(&child->thread->task);
+  k_assert(!k_list_is_empty(&child->threads));
+  k_task_start(&K_CONTAINER_OF(child->threads.next, struct Thread, process_link)->task);
 
   return child->pid;
 }
@@ -564,9 +572,11 @@ process_run(void *arg)
 {
   static int first;
 
-  struct Process *process = (struct Process *) arg;
+  struct Thread *thread = (struct Thread *) arg;
 
   if (!first) {
+    struct Process *process = thread->process;
+
     first = 1;
 
     fs_init();
@@ -579,8 +589,8 @@ process_run(void *arg)
   k_irq_disable();
 
   // "Return" to the user space.
-  k_assert(process->thread != NULL);
-  arch_trap_frame_pop(process->thread->tf);
+  k_assert(thread != NULL);
+  arch_trap_frame_pop(thread->tf);
 }
 
 void *
@@ -646,11 +656,15 @@ process_set_gid(pid_t pid, pid_t pgid)
 }
 
 void
-process_update_times(struct Process *process, clock_t user, clock_t system)
+process_update_times(struct Thread *thread, clock_t user, clock_t system)
 {
   process_lock();
-  process->times.tms_utime += user;
-  process->times.tms_stime += system;
+
+  if (thread->process != NULL) {
+    thread->process->times.tms_utime += user;
+    thread->process->times.tms_stime += system;
+  }
+
   process_unlock();
 }
 
@@ -661,10 +675,16 @@ _process_continue(struct Process *process)
   k_assert(k_spinlock_holding(&__process_lock));
 
   if (process->state == PROCESS_STATE_STOPPED) {
+    struct KListLink *tl;
     process->state = PROCESS_STATE_ACTIVE;
-    k_assert(process->thread != NULL);
 
-    k_semaphore_set(&process->thread->sem, 1);
+    // TODO: foreach thread
+    k_assert(!k_list_is_empty(&process->threads));
+
+    K_LIST_FOREACH(&process->threads, tl) {
+      struct Thread *thread = K_CONTAINER_OF(tl, struct Thread, process_link);
+      k_semaphore_set(&thread->sem, 1);
+    }
 
     _signal_state_change_to_parent(process);
   }
@@ -674,7 +694,8 @@ void
 _process_stop(struct Process *process, int signo)
 {
   k_assert((process != NULL) && (process->vm != NULL));
-  k_assert(k_spinlock_holding(&__process_lock));
+
+  process_lock();
 
   if (process->state != PROCESS_STATE_STOPPED) {
     process->flags |= PROCESS_STATUS_AVAILABLE;
@@ -683,6 +704,8 @@ _process_stop(struct Process *process, int signo)
 
     _signal_state_change_to_parent(process);
   }
+
+  process_unlock();
 }
 
 int

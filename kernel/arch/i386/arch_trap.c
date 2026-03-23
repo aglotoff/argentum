@@ -54,7 +54,7 @@ trap_handle_pgfault(struct TrapFrame *tf)
 void
 trap(struct TrapFrame *tf)
 {
-  struct Process *my_process = process_current();
+  struct Thread *my_thread = thread_current();
 
   if ((tf->trapno >= T_IRQ0) && (tf->trapno < (T_IRQ0 + 32))) {
     interrupt_dispatch(tf);
@@ -74,7 +74,7 @@ trap(struct TrapFrame *tf)
 
   if ((tf->cs & PL_MASK) == PL_USER) {
     while (signal_deliver_pending()) {
-      k_semaphore_get(&my_process->thread->sem, K_SLEEP_WAKEABLE);
+      k_semaphore_get(&my_thread->sem, K_SLEEP_WAKEABLE);
     }
   }
 }
@@ -138,28 +138,28 @@ ipi_irq(int, void *)
 }
 
 int 
-arch_trap_frame_init(struct Process *process, uintptr_t entry, uintptr_t arg1,
+arch_trap_frame_init(struct Thread *thread, uintptr_t entry, uintptr_t arg1,
                      uintptr_t arg2, uintptr_t arg3, uintptr_t sp)
 {
-  k_assert(process->thread != NULL);
+  k_assert(thread->process != NULL);
 
   sp -= 4;
-  vm_space_copy_out(process->vm, &arg3, sp, sizeof arg3);
+  vm_space_copy_out(thread->process->vm, &arg3, sp, sizeof arg3);
   sp -= 4;
-  vm_space_copy_out(process->vm, &arg2, sp, sizeof arg2);
+  vm_space_copy_out(thread->process->vm, &arg2, sp, sizeof arg2);
   sp -= 4;
-  vm_space_copy_out(process->vm, &arg1, sp, sizeof arg1);
+  vm_space_copy_out(thread->process->vm, &arg1, sp, sizeof arg1);
   sp -= 4;
 
-  process->thread->tf->cs = SEG_USER_CODE;
-  process->thread->tf->eip = entry;
-  process->thread->tf->es = SEG_USER_DATA;
-  process->thread->tf->ds = SEG_USER_DATA;
-  process->thread->tf->ss = SEG_USER_DATA;
-  process->thread->tf->esp = sp;
-  process->thread->tf->gs = 0;
-  process->thread->tf->fs = 0;
-  process->thread->tf->eflags = EFLAGS_IF;
+  thread->tf->cs = SEG_USER_CODE;
+  thread->tf->eip = entry;
+  thread->tf->es = SEG_USER_DATA;
+  thread->tf->ds = SEG_USER_DATA;
+  thread->tf->ss = SEG_USER_DATA;
+  thread->tf->esp = sp;
+  thread->tf->gs = 0;
+  thread->tf->fs = 0;
+  thread->tf->eflags = EFLAGS_IF;
 
   return 0;
 }

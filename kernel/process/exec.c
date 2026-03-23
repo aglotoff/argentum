@@ -381,6 +381,7 @@ process_exec(const char *path, uintptr_t argv_va, uintptr_t envp_va)
   struct VMSpace *old_vm;
   int r;
   struct ExecContext ctx;
+  struct Thread *main_thread;
 
   char **argv, **envp;
   char *argv_buf, *envp_buf;
@@ -425,6 +426,9 @@ process_exec(const char *path, uintptr_t argv_va, uintptr_t envp_va)
 
   proc = process_current();
 
+  k_assert(!k_list_is_empty(&proc->threads));
+  main_thread = K_CONTAINER_OF(proc->threads.next, struct Thread, process_link);
+
   fd_close_on_exec(proc);
 
   strncpy(proc->name, path, 63);
@@ -447,7 +451,7 @@ process_exec(const char *path, uintptr_t argv_va, uintptr_t envp_va)
   k_free(ctx.envp);
   k_free(ctx.argv);
 
-  return arch_trap_frame_init(proc, ctx.entry_va, ctx.argc,
+  return arch_trap_frame_init(main_thread, ctx.entry_va, ctx.argc,
                               ctx.argv_va, 
                               ctx.env_va,
                               ctx.sp_va);

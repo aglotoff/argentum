@@ -3,9 +3,9 @@
 
 #include <arch/trap.h>
 
-struct Process;
+struct Thread;
 
-int  arch_trap_frame_init(struct Process *, uintptr_t, uintptr_t, uintptr_t, uintptr_t, uintptr_t);
+int  arch_trap_frame_init(struct Thread *, uintptr_t, uintptr_t, uintptr_t, uintptr_t, uintptr_t);
 void arch_trap_frame_pop(struct TrapFrame *);
 int  arch_trap_is_user(struct TrapFrame *);
 

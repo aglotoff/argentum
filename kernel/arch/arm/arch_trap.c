@@ -28,7 +28,7 @@ trap(struct TrapFrame *tf)
 {
   extern char *panicstr;
 
-  struct Process *my_process = process_current();
+  struct Thread *my_thread = thread_current();
 
   // Halt if some other CPU already has called k_panic().
   if (panicstr) {
@@ -54,7 +54,9 @@ trap(struct TrapFrame *tf)
   case T_UNDEF:
     if ((tf->psr & PSR_M_MASK) == PSR_M_USR) {
       // TODO: ILL_ILLOPC
-      if (signal_generate(my_process->pid, SIGILL, 0) != 0)
+      // TODO: send to current thread
+      k_assert(my_thread->process != NULL);
+      if (signal_generate(my_thread->process->pid, SIGILL, 0) != 0)
         k_panic("sending SIGILL failed");
       break;
     }
@@ -66,7 +68,7 @@ trap(struct TrapFrame *tf)
 
   if ((tf->psr & PSR_M_MASK) == PSR_M_USR) {
     while (signal_deliver_pending()) {
-      k_semaphore_get(&my_process->thread->sem, K_SLEEP_WAKEABLE);
+      k_semaphore_get(&my_thread->sem, K_SLEEP_WAKEABLE);
     }
   }
 }
@@ -170,15 +172,15 @@ ipi_irq(int, void *)
 }
 
 int 
-arch_trap_frame_init(struct Process *process, uintptr_t entry, uintptr_t arg1,
+arch_trap_frame_init(struct Thread *thread, uintptr_t entry, uintptr_t arg1,
                      uintptr_t arg2, uintptr_t arg3, uintptr_t sp)
 {
-  process->thread->tf->r0  = arg1;              // argc
-  process->thread->tf->r1  = arg2;              // argv
-  process->thread->tf->r2  = arg3;              // environ
-  process->thread->tf->sp  = sp;                // stack pointer
-  process->thread->tf->psr = PSR_M_USR | PSR_F; // user mode, interrupts enabled
-  process->thread->tf->pc  = entry;             // process entry point
+  thread->tf->r0  = arg1;              // argc
+  thread->tf->r1  = arg2;              // argv
+  thread->tf->r2  = arg3;              // environ
+  thread->tf->sp  = sp;                // stack pointer
+  thread->tf->psr = PSR_M_USR | PSR_F; // user mode, interrupts enabled
+  thread->tf->pc  = entry;             // process entry point
   return arg1;
 }
 

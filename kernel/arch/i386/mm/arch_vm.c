@@ -49,7 +49,7 @@ static struct PseudoDesc gdtr = {
 static struct TaskState tss[K_CPU_MAX];
 
 void
-arch_vm_switch(struct Process *process)
+arch_vm_switch(struct Thread *thread)
 {
   unsigned cpu_id;
   
@@ -57,11 +57,8 @@ arch_vm_switch(struct Process *process)
 
   cpu_id = k_cpu_id();
 
-  k_assert(process->thread != NULL);
-  k_assert(process->vm != NULL);
-
   gdt[GD_TSS + cpu_id] = SEG_DESC_16(&tss[cpu_id], sizeof(struct TaskState) - 1, SEG_TYPE_TSS32A, PL_KERNEL);
-  tss[cpu_id].esp0 = (uintptr_t) process->thread->task.kstack + PAGE_SIZE;
+  tss[cpu_id].esp0 = (uintptr_t) thread->task.kstack + PAGE_SIZE;
   tss[cpu_id].ss0 = SEG_KERNEL_DATA;
 
   ltr(SEG_TSS + (cpu_id << 3));

@@ -4,24 +4,22 @@
 #include <arch/i386/lapic.h>
 
 int
-arch_process_copy(struct Process *parent, struct Process *child)
+arch_process_copy(struct Thread *parent, struct Thread *child)
 {
-  k_assert(parent->thread != NULL);
-  k_assert(child->thread != NULL);
+  *child->tf = *parent->tf;
+  child->tf->eax = 0;
 
-  *child->thread->tf = *parent->thread->tf;
-  child->thread->tf->eax = 0;
   return 0;
 }
 
-void arch_vm_switch(struct Process *);  // in arch_vm.c
+void arch_vm_switch(struct Thread *);  // in arch_vm.c
 
 void
 arch_on_thread_before_switch(struct Thread *thread)
 {
   asm volatile("fxrstor (%0)" : : "r" (thread->task.kstack));
 
-  arch_vm_switch(thread->process);
+  arch_vm_switch(thread);
   arch_vm_load(thread->process->vm->pgtab);
 }
 

@@ -43,13 +43,10 @@ fpu_context_restore(void *src)
 }
 
 int
-arch_process_copy(struct Process *parent, struct Process *child)
+arch_process_copy(struct Thread *parent, struct Thread *child)
 {
-  k_assert(parent->thread != NULL);
-  k_assert(child->thread != NULL);
-
-  *child->thread->tf = *parent->thread->tf;
-  child->thread->tf->r0 = 0;
+  *child->tf = *parent->tf;
+  child->tf->r0 = 0;
 
   return 0;
 }
@@ -59,7 +56,7 @@ arch_on_thread_before_switch(struct Thread *thread)
 {
   fpu_context_save(thread->task.kstack);
 
-  arch_vm_switch(thread->process);
+  arch_vm_switch(thread);
   arch_vm_load(thread->process->vm->pgtab);
 }
 

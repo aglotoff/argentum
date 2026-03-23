@@ -36,7 +36,10 @@ struct ConnectionDesc {
 
 struct Thread {
   struct KTask     task;
+
   struct Process  *process;
+  struct KListLink process_link;
+
   /** Address of the current trap frame on the stack */
   struct TrapFrame *tf;
 
@@ -57,7 +60,7 @@ struct Process {
   struct VMSpace       *vm;
 
   /** Main process thread */
-  struct Thread        *thread;
+  struct KListLink      threads;
 
   /** Unique thread identifier */
   pid_t                 pid;
@@ -136,7 +139,7 @@ process_current(void)
   return thread != NULL ? thread->process : NULL;
 }
 
-int arch_process_copy(struct Process *, struct Process *);
+int arch_process_copy(struct Thread *, struct Thread *);
 
 void           process_init(void);
 int            process_create(const void *, struct Process **);
@@ -146,7 +149,7 @@ pid_t          process_copy(int);
 pid_t          process_wait(pid_t, int *, int);
 int            process_exec(const char *, uintptr_t, uintptr_t);
 void          *process_grow(ptrdiff_t);
-void           process_update_times(struct Process *, clock_t, clock_t);
+void           process_update_times(struct Thread *, clock_t, clock_t);
 void           process_get_times(struct Process *, struct tms *);
 pid_t          process_get_gid(pid_t);
 int            process_set_gid(pid_t, pid_t);

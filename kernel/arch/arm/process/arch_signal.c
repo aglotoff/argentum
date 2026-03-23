@@ -8,36 +8,36 @@
 #include <arch/arm/regs.h>
 
 int
-arch_signal_prepare(struct Process *process, struct SignalFrame *frame)
+arch_signal_prepare(struct Thread *thread, struct SignalFrame *frame)
 {
-  k_assert(process->thread != NULL);
+  uintptr_t ctx_va = thread->tf->sp - sizeof(struct SignalFrame);
 
-  uintptr_t ctx_va = process->thread->tf->sp - sizeof(struct SignalFrame);
+  k_assert(thread->process != NULL);
 
-  frame->ucontext.uc_mcontext.r0  = process->thread->tf->r0;
-  frame->ucontext.uc_mcontext.sp  = process->thread->tf->sp;
-  frame->ucontext.uc_mcontext.lr  = process->thread->tf->lr;
-  frame->ucontext.uc_mcontext.pc  = process->thread->tf->pc;
-  frame->ucontext.uc_mcontext.psr = process->thread->tf->psr;
+  frame->ucontext.uc_mcontext.r0  = thread->tf->r0;
+  frame->ucontext.uc_mcontext.sp  = thread->tf->sp;
+  frame->ucontext.uc_mcontext.lr  = thread->tf->lr;
+  frame->ucontext.uc_mcontext.pc  = thread->tf->pc;
+  frame->ucontext.uc_mcontext.psr = thread->tf->psr;
 
-  if (vm_space_copy_out(process->vm, frame, ctx_va, sizeof *frame) != 0)
+  if (vm_space_copy_out(thread->process->vm, frame, ctx_va, sizeof *frame) != 0)
     return SIGKILL;
 
-  process->thread->tf->r0 = ctx_va;
-  process->thread->tf->sp = ctx_va;
-  process->thread->tf->pc = process->signal_stub;
+  thread->tf->r0 = ctx_va;
+  thread->tf->sp = ctx_va;
+  thread->tf->pc = thread->process->signal_stub;
 
   return 0;
 }
 
 int
-arch_signal_return(struct Process *process, struct SignalFrame *ctx, int *ret)
+arch_signal_return(struct Thread *thread, struct SignalFrame *ctx, int *ret)
 {
   int r;
 
-  k_assert(process->thread != NULL);
+  k_assert(thread->process != NULL);
 
-  if ((r = vm_space_copy_in(process->vm, ctx, process->thread->tf->sp, sizeof *ctx) < 0))
+  if ((r = vm_space_copy_in(thread->process->vm, ctx, thread->tf->sp, sizeof *ctx) < 0))
     return r;
 
   // Prevent malicious users from executing in kernel mode
@@ -46,13 +46,13 @@ arch_signal_return(struct Process *process, struct SignalFrame *ctx, int *ret)
 
   // No need to check other regs - bad values will lead to page faults
 
-  process->thread->tf->r0  = ctx->ucontext.uc_mcontext.r0;
-  process->thread->tf->sp  = ctx->ucontext.uc_mcontext.sp;
-  process->thread->tf->lr  = ctx->ucontext.uc_mcontext.lr;
-  process->thread->tf->pc  = ctx->ucontext.uc_mcontext.pc;
-  process->thread->tf->psr = ctx->ucontext.uc_mcontext.psr;
+  thread->tf->r0  = ctx->ucontext.uc_mcontext.r0;
+  thread->tf->sp  = ctx->ucontext.uc_mcontext.sp;
+  thread->tf->lr  = ctx->ucontext.uc_mcontext.lr;
+  thread->tf->pc  = ctx->ucontext.uc_mcontext.pc;
+  thread->tf->psr = ctx->ucontext.uc_mcontext.psr;
 
-  *ret = process->thread->tf->r0;
+  *ret = thread->tf->r0;
 
   return 0;
 }

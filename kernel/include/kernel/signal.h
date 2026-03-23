@@ -19,8 +19,8 @@ struct SignalFrame {
   ucontext_t ucontext;
 };
 
-int  arch_signal_prepare(struct Process *, struct SignalFrame *);
-int  arch_signal_return(struct Process *, struct SignalFrame *, int *);
+int  arch_signal_prepare(struct Thread *, struct SignalFrame *);
+int  arch_signal_return(struct Thread *, struct SignalFrame *, int *);
 
 void signal_init_system(void);
 void signal_init(struct Process *);

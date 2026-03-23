@@ -92,15 +92,13 @@ time_nanosleep(struct timespec *rqtp, struct timespec *rmtp)
 int
 timer_irq(int, void *)
 {
-  struct Process *my_process = process_current();
+  struct Thread *my_thread = thread_current();
 
-  if (my_process != NULL) {
-    k_assert(my_process->thread != NULL);
-
-    if (arch_trap_is_user(my_process->thread->tf)) {
-      process_update_times(my_process, 1, 0);
+  if (my_thread != NULL) {
+    if (arch_trap_is_user(my_thread->tf)) {
+      process_update_times(my_thread, 1, 0);
     } else {
-      process_update_times(my_process, 0, 1);
+      process_update_times(my_thread, 0, 1);
     }
   }
 
