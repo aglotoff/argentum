@@ -85,7 +85,10 @@ vm_page_lookup(void *pgtab, uintptr_t va, struct Page **page_store, int *flags_s
 
   flags = arch_vm_pte_flags(pte);
   page = pa2page(arch_vm_pte_addr(pte));
+
+#ifndef NDEBUG
   page_assert(page, 0, PAGE_TAG_ANON);
+#endif
 
   if ((flags & VM_COW) && cow) {
     int r;
@@ -102,7 +105,7 @@ vm_page_lookup(void *pgtab, uintptr_t va, struct Page **page_store, int *flags_s
       // Otherwise, insert a copy of the entire page in its place
       struct Page *page_copy;
 
-      if ((page_copy = page_alloc_one(PAGE_ALLOC_ZERO, PAGE_TAG_ANON)) == NULL)
+      if ((page_copy = page_alloc_one(0, PAGE_TAG_ANON)) == NULL)
         return -ENOMEM;
 
       memmove(page2kva(page_copy), page2kva(page), PAGE_SIZE);
@@ -162,7 +165,10 @@ vm_page_remove(void *pgtab, uintptr_t va)
     return 0;
 
   page = pa2page(arch_vm_pte_addr(pte));
+
+#ifndef NDEBUG
   page_assert(page, 0, PAGE_TAG_ANON);
+#endif
 
   if (--page->ref_count == 0)
     page_free_one(page);

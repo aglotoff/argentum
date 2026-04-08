@@ -59,7 +59,6 @@ _k_sched_enqueue(struct KTask *task)
 }
 
 static struct KTask *k_sched_dequeue(void);
-static void k_sched_switch(struct KTask *);
 static void k_sched_idle(void);
 
 /**
@@ -76,17 +75,38 @@ static void k_sched_idle(void);
 void
 k_sched_start(void)
 {
+  struct KCpu *my_cpu;;
+  struct KTask *prev_task = NULL;
+
   _k_sched_lock();
 
-  for (;;) {
-    struct KTask *next_task = k_sched_dequeue();
+  my_cpu = _k_cpu();
 
-    if (next_task != K_NULL) {
-      k_assert(next_task->state == K_TASK_STATE_READY);
-      k_sched_switch(next_task);
+  for (;;) {
+    struct KTask *task = k_sched_dequeue();
+
+    if (prev_task != task) {
+      #ifdef K_ON_TASK_SWITCH
+        K_ON_TASK_SWITCH(prev_task, task);
+      #endif
+    }
+
+    if (task != K_NULL) {
+      k_assert(task->state == K_TASK_STATE_READY);
+
+      task->cpu = my_cpu;
+      my_cpu->task = task;
+
+      task->state = K_TASK_STATE_RUNNING;
+      k_arch_switch(&my_cpu->sched_context, task->context);
+
+      my_cpu->task = K_NULL;
+      task->cpu = K_NULL;
     } else {
       k_sched_idle();
     }
+
+    prev_task = task;
   }
 }
 
@@ -110,29 +130,7 @@ k_sched_dequeue(void)
   return K_NULL;
 }
 
-// Perform a context switch to the specified task.
-static void
-k_sched_switch(struct KTask *task)
-{
-  struct KCpu *my_cpu = _k_cpu();
 
-  task->cpu = my_cpu;
-  my_cpu->task = task;
-
-#ifdef K_ON_SCHED_BEFORE_SWITCH
-  K_ON_SCHED_BEFORE_SWITCH(task);
-#endif
-
-  task->state = K_TASK_STATE_RUNNING;
-  k_arch_switch(&my_cpu->sched_context, task->context);
-
-#ifdef K_ON_SCHED_AFTER_SWITCH
-  K_ON_SCHED_AFTER_SWITCH(task);
-#endif
-
-  my_cpu->task = K_NULL;
-  task->cpu = K_NULL;
-}
 
 // Enter the idle state when no task is ready.
 static void

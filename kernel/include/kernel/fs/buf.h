@@ -18,6 +18,7 @@ struct Buf {
   int              _flags;        // Status flags
   int              _ref_count;    // The number of references to the block
   struct KListLink _cache_link;   // Link into the buf cache
+  int              _usage_count;
 };
 
 void        buf_init(void);

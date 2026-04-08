@@ -90,8 +90,7 @@ connection_unref(struct Connection *connection)
   
   k_spinlock_acquire(&connection_lock);
 
-  if (connection->ref_count < 1)
-    k_panic("bad ref_count %d", ref_count);
+  k_assert(connection->ref_count > 0);
 
   if (connection->ref_count == 1) {
     struct IpcMessage msg;

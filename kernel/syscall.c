@@ -388,6 +388,8 @@ sys_getegid(void)
 int32_t
 sys_getppid(void)
 {
+  // TODO: lock!
+
   struct Process *current = process_current(),
                  *parent  = current->parent;
 

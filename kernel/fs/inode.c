@@ -111,8 +111,7 @@ fs_inode_put(struct Inode *inode)
   if ((r = k_mutex_lock(&inode->mutex)) < 0)
     k_panic("TODO %d", r);
 
-  if (inode->flags & FS_INODE_DIRTY)
-    k_panic("inode dirty");
+  k_assert(!(inode->flags & FS_INODE_DIRTY));
 
   // If the link count reaches zero, delete inode from the filesystem before
   // returning it to the cache
@@ -166,8 +165,7 @@ fs_inode_lock(struct Inode *ip)
   if (ip->flags & FS_INODE_VALID)
     return;
 
-  if (ip->flags & FS_INODE_DIRTY)
-    k_panic("inode dirty");
+  k_assert(!(ip->flags & FS_INODE_DIRTY));
 
   ip->fs->ops->inode_read(ip);
 
@@ -182,8 +180,7 @@ fs_inode_lock(struct Inode *ip)
 void
 fs_inode_unlock(struct Inode *ip)
 {  
-  if (!(ip->flags & FS_INODE_VALID))
-    k_panic("inode not valid");
+  k_assert(ip->flags & FS_INODE_VALID);
 
   if (ip->flags & FS_INODE_DIRTY) {
     // current??

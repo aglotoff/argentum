@@ -16,24 +16,22 @@ void arch_on_thread_before_switch(struct Thread *);
 void arch_on_thread_after_switch(struct Thread *);
 
 void
-on_sched_before_switch(struct KTask *task)
+on_task_switch(struct KTask *prev, struct KTask *next)
 {
-  if (task->ext != NULL) {
-    struct Thread *thread = (struct Thread *) task->ext;
+  struct Thread *prev_thread = prev == NULL ? NULL : (struct Thread *) prev->ext;
+  struct Thread *next_thread = next == NULL ? NULL : (struct Thread *) next->ext;
 
-    k_assert(&thread->task == task);
+  k_assert((prev_thread == NULL) || (&prev_thread->task == prev));
+  k_assert((next_thread == NULL) || (&next_thread->task == next));
 
-    if (thread->process != NULL) {
-      arch_on_thread_before_switch(thread);
-    }
-  }
-}
+  if (prev_thread != NULL)
+    arch_on_thread_after_switch(prev_thread);
 
-void
-on_sched_after_switch(struct KTask *task)
-{
-  if (task->ext != NULL) {
-    arch_on_thread_after_switch((struct Thread *) task->ext);
+  if ((next_thread == NULL) || (next_thread->process == NULL)) {
+    arch_vm_load_kernel();
+  } else {
+    arch_on_thread_before_switch(next_thread);
+    arch_vm_load(next_thread->process->vm->pgtab);
   }
 }
 

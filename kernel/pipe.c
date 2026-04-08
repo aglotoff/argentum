@@ -203,7 +203,10 @@ pipe_free(struct Pipe *pipe)
 {
   struct Page *page = kva2page(pipe->buf);
 
+#ifndef NDEBUG
   page_assert(page, PIPE_BUF_ORDER, PAGE_TAG_PIPE);
+#endif
+
   page_dec_ref(page, PIPE_BUF_ORDER);
 
   k_object_pool_put(pipe_cache, pipe);
@@ -372,7 +375,9 @@ pipe_read(struct Request *req, struct IpcMessage *msg)
     return;
   }
 
+#ifndef NDEBUG
   page_assert(kva2page(pipe->buf), PIPE_BUF_ORDER, PAGE_TAG_PIPE);
+#endif
 
   while (pipe->write_open && (pipe->size == 0)) {
     int r;
@@ -433,7 +438,9 @@ pipe_write(struct Request *req, struct IpcMessage *msg)
     return;
   }
 
+#ifndef NDEBUG
   page_assert(kva2page(pipe->buf), PIPE_BUF_ORDER, PAGE_TAG_PIPE);
+#endif
 
   for (i = 0; i < n; ) {
     size_t nwrite;

@@ -18,9 +18,7 @@ void
 arch_on_thread_before_switch(struct Thread *thread)
 {
   asm volatile("fxrstor (%0)" : : "r" (thread->task.kstack));
-
   arch_vm_switch(thread);
-  arch_vm_load(thread->process->vm->pgtab);
 }
 
 void
@@ -28,8 +26,6 @@ arch_on_thread_after_switch(struct Thread *thread)
 {
   k_assert((uint8_t *) thread->task.context >= ((uint8_t *) thread->task.kstack + 512));
   asm volatile("fxsave (%0)" : : "r" (thread->task.kstack));
-
-  arch_vm_load_kernel();
 }
 
 unsigned

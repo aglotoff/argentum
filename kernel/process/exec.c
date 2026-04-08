@@ -245,19 +245,19 @@ resolve(const char *path, struct ExecContext *ctx)
   return 0;
 }
 
-static int
-vm_space_load_chunk(void *arg, void *kva, size_t n)
-{
-  struct Connection *connection = (struct Connection *) arg;
-  return connection_read(connection, (uintptr_t) kva, n);
-}
+// static int
+// vm_space_load_chunk(void *arg, void *kva, size_t n)
+// {
+//   struct Connection *connection = (struct Connection *) arg;
+//   return connection_read(connection, (uintptr_t) kva, n);
+// }
 
-static int
-vm_space_load_file(void *pgtab, void *va, struct Connection *file, size_t n, off_t off)
-{
-  connection_seek(file, off, SEEK_SET);
-  return vm_user_iterate(pgtab, (uintptr_t) va, n, vm_space_load_chunk, file, 0);
-}
+// static int
+// vm_space_load_file(void *pgtab, void *va, struct Connection *file, size_t n, off_t off)
+// {
+//   connection_seek(file, off, SEEK_SET);
+//   return vm_user_iterate(pgtab, (uintptr_t) va, n, vm_space_load_chunk, file, 0);
+// }
 
 static int
 load_elf(struct ExecContext *ctx)
@@ -306,10 +306,18 @@ load_elf(struct ExecContext *ctx)
       return (int) a;
     }
 
-    if ((r = vm_space_load_file(ctx->vm->pgtab, (void *) ph.vaddr, ctx->file,
-                                ph.filesz, ph.offset)) < 0) {
+    vm_load(ctx->vm->pgtab);
+
+    connection_seek(ctx->file, ph.offset, SEEK_SET);
+    if ((r = connection_read(ctx->file, (uintptr_t) ph.vaddr, ph.filesz)) < 0) {
+      k_panic("aboba");
       return r;
     }
+
+    // if ((r = vm_space_load_file(ctx->vm->pgtab, (void *) ph.vaddr, ctx->file,
+    //                             ph.filesz, ph.offset)) < 0) {
+    //   return r;
+    // }
   }
 
   ctx->entry_va = elf.entry;
@@ -386,6 +394,8 @@ process_exec(const char *path, uintptr_t argv_va, uintptr_t envp_va)
   char **argv, **envp;
   char *argv_buf, *envp_buf;
 
+  k_tick_t time;
+
   if ((argv_buf = (char *) k_malloc(ARG_MAX)) == NULL)
     k_panic("out of memory");
   if ((envp_buf = (char *) k_malloc(ARG_MAX)) == NULL)
@@ -416,15 +426,28 @@ process_exec(const char *path, uintptr_t argv_va, uintptr_t envp_va)
   if ((r = user_stack_finalize(&ctx)) != 0)
     goto out5;
 
+  time = k_tick_get();
+
+  proc = process_current();
+
+  process_lock();
+
+  old_vm = proc->vm;
+  proc->vm = ctx.vm;
+
+  vm_load(ctx.vm->pgtab);
+
+  process_unlock();
+
   if ((r = load_elf(&ctx)) != 0)
     goto out5;
 
   fs_close(ctx.file);
 
+  //cprintf("\x1b[32m[k] exec %s - %d\x1b[0m\n", path, k_tick_get() - time);
+
   sys_free_args(envp);
   sys_free_args(argv);
-
-  proc = process_current();
 
   k_assert(!k_list_is_empty(&proc->threads));
   main_thread = K_CONTAINER_OF(proc->threads.next, struct Thread, process_link);
@@ -435,12 +458,7 @@ process_exec(const char *path, uintptr_t argv_va, uintptr_t envp_va)
 
   process_lock();
 
-  old_vm = proc->vm;
-  proc->vm = ctx.vm;
-
   signal_reset(proc);
-
-  vm_load(ctx.vm->pgtab);
 
   process_unlock();
 
@@ -457,6 +475,11 @@ process_exec(const char *path, uintptr_t argv_va, uintptr_t envp_va)
                               ctx.sp_va);
 
 out5:
+  process_lock();
+  proc->vm = old_vm;
+  vm_load(proc->vm->pgtab);
+  process_unlock();
+
   fs_close(ctx.file);
 out4:
   sys_free_args(envp);

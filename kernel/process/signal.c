@@ -346,17 +346,22 @@ _signal_state_change_to_parent(struct Process *process)
   struct Process *parent = process->parent;
   struct KListLink *tl;
 
-  k_assert(k_spinlock_holding(&__process_lock));
+  k_assert(!k_spinlock_holding(&__process_lock));
+  k_assert(k_mutex_holding(&__process_sleep_lock));
 
   // TODO: can parent be NULL or itself??
   if ((parent == NULL) || (parent == process))
     return;
 
+  process_lock();
+
   if (process->state != PROCESS_STATE_ZOMBIE) {
     struct sigaction *sa = &parent->signal_actions[SIGNAL_INDEX(SIGCHLD)];
 
-    if ((sa != NULL) && (sa->sa_flags & SA_NOCLDSTOP))
+    if ((sa != NULL) && (sa->sa_flags & SA_NOCLDSTOP)) {
+      process_unlock();
       return;
+    }
   }
 
   // TODO: each?
@@ -365,7 +370,9 @@ _signal_state_change_to_parent(struct Process *process)
     signal_generate_one(thread, SIGCHLD, 0);
   }
 
-  k_waitqueue_wakeup_all(&parent->wait_queue);
+  process_unlock();
+
+  k_condvar_notify_all(&parent->wait_queue);
 }
 
 int
@@ -396,7 +403,7 @@ signal_generate(pid_t pid, int signo, int code)
   struct KListLink *l;
   int r = 0;
 
-  process_lock();
+  process_sleep_lock();
 
   K_LIST_FOREACH(&__process_list, l) {
     struct Process *process = K_CONTAINER_OF(l, struct Process, link);
@@ -408,15 +415,23 @@ signal_generate(pid_t pid, int signo, int code)
     if (signo == 0)
       continue;
       
+    // Continue stopped process even if SIGCONT is ignored or blocked
+    if (signo == SIGCONT)
+      _process_continue(process);
+
+    process_lock();
+
     K_LIST_FOREACH(&process->threads, tl) {
       struct Thread *thread = K_CONTAINER_OF(tl, struct Thread, process_link);
 
       if ((r = signal_generate_one(thread, signo, code)) != 0)
         break;
     }
+
+    process_unlock();
   }
 
-  process_unlock();
+  process_sleep_unlock();
 
   return r;
 }
@@ -428,10 +443,6 @@ signal_generate_one(struct Thread *thread, int signo, int code)
 
   k_assert((signo > 0) && (signo <= NSIG));
   k_assert(k_spinlock_holding(&__process_lock));
-
-  // Continue stopped process even if SIGCONT is ignored or blocked
-  if (signo == SIGCONT)
-    _process_continue(thread->process);
 
   // TODO: check for permissions
 
@@ -460,6 +471,7 @@ signal_generate_one(struct Thread *thread, int signo, int code)
   thread->signal_pending[SIGNAL_INDEX(signo)] = signal;
 
   // Blocked signals remain pending
+  // TODO: move out of the locked code!
   if (!signal_is_blocked(thread, signo)) {
     k_semaphore_set(&thread->sem, 1);
     k_task_wake(&thread->task);
@@ -605,7 +617,9 @@ signal_action_default(struct Thread *current,
     // be allowed to stop in response to the SIGTSTP, SIGTTIN, or SIGTTOU
     // fall through
   case SIGSTOP:
+    process_sleep_lock();
     _process_stop(current->process, signo);
+    process_sleep_unlock();
     break;
 
   case SIGCONT:

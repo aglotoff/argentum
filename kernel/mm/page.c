@@ -162,8 +162,7 @@ page_free_block(struct Page *page, unsigned order)
   struct Page *buddy;
   unsigned o;
 
-  if (page->ref_count != 0)
-    k_panic("page->ref_count != 0 (%u)", page->ref_count);
+  k_assert(page->ref_count == 0);
 
   for (o = 0; o < (1U << order); o++) {
     page[o].debug_tag = 0;

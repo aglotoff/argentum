@@ -285,13 +285,11 @@ ide_irq_task(int irq, void *arg)
 
   k_mutex_lock(&ide_mutex);
 
-  if (k_list_is_empty(&ide_queue))
-    k_panic("queue is empty");
+  k_assert(!k_list_is_empty(&ide_queue));
 
   // Grab the first buffer in the queue to find out whether a read or write
   // operation is happening
   link = ide_queue.next;
-  
 
   req = K_CONTAINER_OF(link, struct BufRequest, queue_link);
 

@@ -326,7 +326,10 @@ arch_vm_destroy(void *pgtab)
       continue;
 
     page = pa2page(PDE_BASE(pgdir[i]));
+
+#ifndef NDEBUG
     page_assert(page, 0, PAGE_TAG_PGTAB);
+#endif
 
     pte = (pte_t *) page2kva(page);
 
@@ -340,7 +343,10 @@ arch_vm_destroy(void *pgtab)
   }
 
   page = kva2page(pgdir);
+
+#ifndef NDEBUG
   page_assert(page, 0, PAGE_TAG_VM);
+#endif
 
   page->ref_count--;
   page_free_one(page);

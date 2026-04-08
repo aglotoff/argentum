@@ -20,7 +20,7 @@
 #include <kernel/vm.h>
 #include <kernel/core/task.h>
 #include <kernel/trap.h>
-#include <kernel/waitqueue.h>
+#include <kernel/core/condvar.h>
 
 struct Connection;
 struct KSpinLock;
@@ -79,7 +79,7 @@ struct Process {
   char                  name[64];
 
   /** Queue to sleep waiting for children */
-  struct KWaitQueue     wait_queue;
+  struct KCondVar       wait_queue;
   /** Whether the process is a zombie */
   int                   state;
   /** Exit code */

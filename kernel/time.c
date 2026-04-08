@@ -52,8 +52,7 @@ time_tick(void)
 int
 time_get(clockid_t clock_id, struct timespec *tp)
 {
-  if (tp == NULL)
-    k_panic("tp is null");
+  k_assert(tp != NULL);
 
   if ((clock_id != CLOCK_REALTIME) && (clock_id != CLOCK_MONOTONIC))
     return -EINVAL;

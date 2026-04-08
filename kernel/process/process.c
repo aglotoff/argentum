@@ -44,7 +44,7 @@ static struct {
 // Lock to protect the parent/child relationships between the processes
 struct KListLink __process_list;
 struct KSpinLock __process_lock;
-struct KSpinLock __process_sleep_lock;
+struct KMutex __process_sleep_lock;
 
 static void process_run(void *);
 
@@ -61,7 +61,6 @@ process_ctor(void *buf, size_t)
 {
   struct Process *proc = (struct Process *) buf;
 
-  k_waitqueue_init(&proc->wait_queue);
   k_list_init(&proc->children);
   k_list_init(&proc->threads);
 }
@@ -93,7 +92,7 @@ process_init(void)
 
   k_list_init(&__process_list);
   k_spinlock_init(&__process_lock, "process_lock");
-  k_spinlock_init(&__process_sleep_lock, "process_sleep_lock");
+  k_mutex_init(&__process_sleep_lock, "process_sleep_lock");
 
   // Create the init process
   if (process_create(_binary_obj_user_init_start, &init_process) != 0)
@@ -168,6 +167,8 @@ process_alloc(void)
   k_timer_create(&process->itimers[ITIMER_VIRTUAL].timer, process_itimer, (void *) process->pid, 0, 0);
 
   k_semaphore_create(&thread->sem, 0);
+
+  k_condvar_create(&process->wait_queue);
 
   k_spinlock_acquire(&pid_hash.lock);
 
@@ -260,9 +261,9 @@ process_create(const void *binary, struct Process **pstore)
   proc->rgid = proc->egid = 0;
   proc->cmask = 0;
 
-  process_lock();
+  // process_sleep_lock();
   k_list_add_back(&__process_list, &proc->link);
-  process_unlock();
+  // process_sleep_unlock();
 
   k_assert(!k_list_is_empty(&proc->threads));
   main_thread = K_CONTAINER_OF(proc->threads.next, struct Thread, process_link);
@@ -290,9 +291,9 @@ fail1:
 void
 process_free(struct Process *process)
 {
-  process_lock();
+  process_sleep_lock();
   k_list_remove(&process->link);
-  process_unlock();
+  process_sleep_unlock();
 
   k_spinlock_acquire(&pid_hash.lock);
   k_list_remove(&process->pid_link);
@@ -351,11 +352,11 @@ process_destroy(int status)
 
   k_semaphore_destroy(&thread->sem);
 
-  process_lock();
-
   k_timer_destroy(&current->itimers[ITIMER_PROF].timer);
   k_timer_destroy(&current->itimers[ITIMER_REAL].timer);
   k_timer_destroy(&current->itimers[ITIMER_VIRTUAL].timer);
+
+  process_sleep_lock();
 
   // Move children to the init process
   has_zombies = 0;
@@ -367,21 +368,26 @@ process_destroy(int status)
     child->parent = init_process;
     k_list_add_back(&init_process->children, l);
 
+    process_lock();
+
     // Check whether there is a child available to be cleaned up
     if (child->state == PROCESS_STATE_ZOMBIE)
       has_zombies = 1;
+
+    process_unlock();
   }
 
   // Wake up the init process to cleanup zombie children
   if (has_zombies)
-    k_waitqueue_wakeup_all(&init_process->wait_queue);
+    k_condvar_notify_all(&init_process->wait_queue);
 
-  
+  k_condvar_destroy(&current->wait_queue);
+
+  process_lock();
+
   current->state = PROCESS_STATE_ZOMBIE;
   current->flags |= PROCESS_STATUS_AVAILABLE;
   current->status = status;
-
-  _signal_state_change_to_parent(current);
 
   thread->process = NULL;
   k_list_remove(&thread->process_link);
@@ -393,6 +399,10 @@ process_destroy(int status)
   vm_load_kernel();
 
   process_unlock();
+
+  _signal_state_change_to_parent(current);
+
+  process_sleep_unlock();
 
   vm_space_destroy(vm);
 
@@ -494,7 +504,7 @@ process_wait(pid_t pid, int *stat_loc, int options)
 
   // TODO: everything related to SIGCHLD
 
-  process_lock();
+  process_sleep_lock();
 
   for (;;) {
     struct KListLink *l;
@@ -512,8 +522,14 @@ process_wait(pid_t pid, int *stat_loc, int options)
       // Rememeber that we have at least one match
       match = process->pid;
 
-      if ((status = process_get_status(process, options)) < 0)
+      process_lock();
+
+      if ((status = process_get_status(process, options)) < 0) {
+        process_unlock();
         continue;
+      }
+
+      process_unlock();
 
       *stat_loc = status;
 
@@ -527,11 +543,11 @@ process_wait(pid_t pid, int *stat_loc, int options)
         current->times.tms_cutime += process->times.tms_utime;
         current->times.tms_cstime += process->times.tms_stime;
 
-        process_unlock();
+        process_sleep_unlock();
 
         process_free(process);
       } else {
-        process_unlock();
+        process_sleep_unlock();
       }
 
       return match;
@@ -547,14 +563,14 @@ process_wait(pid_t pid, int *stat_loc, int options)
       break;
     }
 
-    if ((r = k_waitqueue_sleep(&current->wait_queue, &__process_lock)) != 0) {
+    if ((r = k_condvar_wait(&current->wait_queue, &__process_sleep_lock, K_SLEEP_WAKEABLE)) != 0) {
       if ((r != -EINTR) || (options & WNOHANG)) {
         break;
       }
     }
   }
 
-  process_unlock();
+  process_sleep_unlock();
 
   return r;
 }
@@ -672,7 +688,9 @@ void
 _process_continue(struct Process *process)
 {
   k_assert((process != NULL) && (process->vm != NULL));
-  k_assert(k_spinlock_holding(&__process_lock));
+  k_assert(!k_spinlock_holding(&__process_lock));
+
+  process_lock();
 
   if (process->state == PROCESS_STATE_STOPPED) {
     struct KListLink *tl;
@@ -686,7 +704,11 @@ _process_continue(struct Process *process)
       k_semaphore_set(&thread->sem, 1);
     }
 
+    process_unlock();
+
     _signal_state_change_to_parent(process);
+  } else {
+    process_unlock();
   }
 }
 
@@ -702,10 +724,12 @@ _process_stop(struct Process *process, int signo)
     process->state = PROCESS_STATE_STOPPED;
     process->status = 0x7f | (signo << 8);
 
-    _signal_state_change_to_parent(process);
-  }
+    process_unlock();
 
-  process_unlock();
+    _signal_state_change_to_parent(process);
+  } else {
+    process_unlock();
+  }
 }
 
 int
@@ -756,7 +780,10 @@ thread_free(struct Thread *thread)
 
   // Free the task kernel stack
   kstack_page = kva2page(thread->task.kstack);
+
+#ifndef NDEBUG
   page_assert(kstack_page, 0, PAGE_TAG_KSTACK);
+#endif
 
   kstack_page->ref_count--;
   page_free_one(kstack_page);

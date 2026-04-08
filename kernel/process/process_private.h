@@ -3,12 +3,13 @@
 
 #include <kernel/core/list.h>
 #include <kernel/core/spinlock.h>
+#include <kernel/core/mutex.h>
 
 struct Process;
 
 extern struct KSpinLock __process_lock;
 extern struct KListLink __process_list;
-extern struct KSpinLock __process_sleep_lock;
+extern struct KMutex __process_sleep_lock;
 
 void _process_continue(struct Process *);
 void _process_stop(struct Process *, int);
@@ -30,13 +31,13 @@ process_unlock(void)
 static inline void
 process_sleep_lock(void)
 {
-  k_spinlock_acquire(&__process_sleep_lock);
+  k_mutex_lock(&__process_sleep_lock);
 }
 
 static inline void
 process_sleep_unlock(void)
 {
-  k_spinlock_release(&__process_sleep_lock);
+  k_mutex_unlock(&__process_sleep_lock);
 }
 
 #endif  // !__PROCESS_PRIVATE_H

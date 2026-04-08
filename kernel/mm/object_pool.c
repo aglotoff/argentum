@@ -114,8 +114,7 @@ k_object_pool_create(const char *name,
 int
 k_object_pool_destroy(struct KObjectPool *pool)
 {
-  if (pool == &pool_of_pools)
-    k_panic("trying to destroy the pool of pools");
+  k_assert(pool != &pool_of_pools);
 
   k_spinlock_acquire(&pool->lock);
 
@@ -201,7 +200,11 @@ k_object_pool_put(struct KObjectPool *pool, void *obj)
   k_spinlock_acquire(&pool->lock);
 
   page = kva2page(ROUND_DOWN(obj, PAGE_SIZE << pool->slab_page_order));
+
+#ifndef NDEBUG
   page_assert(page, pool->slab_page_order, PAGE_TAG_SLAB);
+#endif
+
   slab = page->slab;
 
   k_object_pool_slab_put(slab, obj);
@@ -273,8 +276,7 @@ k_free(void *ptr)
 
   // Determine the slab (and the pool) this pointer belongs to
   page = kva2page(ptr);
-  if (page->slab == NULL)
-    k_panic("bad pointer");
+  k_assert(page->slab != NULL);
 
   k_object_pool_put(page->slab->pool, ptr);
 }
@@ -487,11 +489,13 @@ k_object_pool_slab_destroy(struct KObjectSlab *slab)
 
   // Free the page block
   page = kva2page(slab->data);
+
+#ifndef NDEBUG
   page_assert(page, pool->slab_page_order, PAGE_TAG_SLAB);
+#endif
 
   for (i = 0; i < (1U << pool->slab_page_order); i++) {
-    if (page[i].slab != slab)
-      k_panic("trying to free a page that doesn't belong to slab");
+    k_assert(page[i].slab == slab);
     page[i].slab = NULL;
   }
 
@@ -514,7 +518,9 @@ k_object_pool_slab_get(struct KObjectSlab *slab)
   struct KObjectPool *pool = slab->pool;
   struct KObjectTag *tag;
 
+#ifndef NDEBUG
   page_assert(kva2page(slab->data), pool->slab_page_order, PAGE_TAG_SLAB);
+#endif
 
   // The slab must be on the partial list (even if it is full, the
   // object_pool_alloc function moves it to the partial list before calling this
@@ -551,7 +557,9 @@ k_object_pool_slab_put(struct KObjectSlab *slab, void *obj)
   
   k_assert(slab->used_count > 0);
 
+#ifndef NDEBUG
   page_assert(kva2page(slab->data), pool->slab_page_order, PAGE_TAG_SLAB);
+#endif
 
   // TODO: panic if the object doesn't belong to this slab
 

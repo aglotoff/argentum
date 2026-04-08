@@ -126,10 +126,9 @@ buf_alloc(unsigned block_no, size_t block_size, dev_t dev)
   buf->dev        = dev;
   buf->_flags     = 0;
   buf->block_size = block_size;
+  buf->_usage_count = 0;
   k_list_null(&buf->_cache_link);
   
-  buf_cache_insert(buf);
-
   return buf;
 }
 
@@ -156,6 +155,7 @@ buf_cache_lookup(unsigned block_no, size_t block_size, dev_t dev, struct Buf **u
   struct KListLink *l;
   struct Buf *b, *unused;
 
+  unused = NULL;
   // TODO: use a hash table for faster lookups
   K_LIST_FOREACH(&buf_cache.head, l) {
     b = K_CONTAINER_OF(l, struct Buf, _cache_link);
@@ -165,8 +165,11 @@ buf_cache_lookup(unsigned block_no, size_t block_size, dev_t dev, struct Buf **u
         (b->block_size == block_size))
       return b;
 
-    if (b->_ref_count == 0)
-      unused = b;
+    if (b->_ref_count == 0) {
+      if (!unused || b->_usage_count < unused->_usage_count) {
+        unused = b;
+      }
+    }
   }
 
   if (unused_store)
@@ -193,6 +196,7 @@ buf_reuse(struct Buf *b, unsigned block_no, size_t block_size, dev_t dev)
   b->block_no   = block_no;
   b->dev        = dev;
   b->_flags      = 0;
+  b->_usage_count = 0;
 
   return b;
 }
@@ -221,8 +225,10 @@ buf_cache_get(unsigned block_no, size_t block_size, dev_t dev)
 
   k_spinlock_acquire(&buf_cache.lock);
 
-  if ((b = buf_cache_get_locked(block_no, block_size, dev)) != NULL)
+  if ((b = buf_cache_get_locked(block_no, block_size, dev)) != NULL) {
+    b->_usage_count++;
     b->_ref_count++;
+  }
 
   k_spinlock_release(&buf_cache.lock);
 

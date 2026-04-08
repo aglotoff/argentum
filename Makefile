@@ -20,6 +20,8 @@ endif
 # Common compiler flags
 BASE_FLAGS := -Wall -Wextra -Werror
 BASE_FLAGS += -Wno-address-of-packed-member -Wno-maybe-uninitialized
+# uncomment in prod builds
+BASE_FLAGS +=  -DNDEBUG -Wno-unused
 
 CFLAGS     := $(BASE_FLAGS) --std=gnu11
 CXXFLAGS   := $(BASE_FLAGS)

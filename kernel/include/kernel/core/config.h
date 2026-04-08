@@ -181,8 +181,7 @@ struct KSpinLock;
 struct KTask;
 
 void on_task_destroy(struct KTask *);
-void on_sched_before_switch(struct KTask *);
-void on_sched_after_switch(struct KTask *);
+void on_task_switch(struct KTask *, struct KTask *);
 void on_sched_idle(void);
 void on_spinlock_debug_pc(k_uintptr_t);
 void on_spinlock_trace_record(struct KSpinLock *);
@@ -218,28 +217,8 @@ void on_spinlock_trace_print(struct KSpinLock *);
 
 /**
  * @brief Called immediately before performing a context switch.
- *
- * This hook is invoked in the **scheduler context** just before the low-level
- * architecture switch occurs. It is typically used for tracing, profiling, or
- * performing bookkeeping actions prior to leaving the task's context.
- *
- * @param task Pointer to the task that will be scheduled next.
  */
-#define K_ON_SCHED_BEFORE_SWITCH   on_sched_before_switch
-
-/**
- * @brief Called immediately after returning from a context switch.
- *
- * This hook is called in the **scheduler context** once control returns
- * following a context switch. It runs *after* the target task has executed and
- * yielded or been preempted.
- *
- * Typical uses include collecting runtime statistics or performing deferred
- * cleanup that should occur after another task has run.
- *
- * @param task Pointer to the task that was previously running.
- */
-#define K_ON_SCHED_AFTER_SWITCH    on_sched_after_switch
+#define K_ON_TASK_SWITCH          on_task_switch
 
 /**
  * @brief Called when the scheduler enters the idle state.
