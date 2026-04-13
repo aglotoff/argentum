@@ -3,31 +3,43 @@
 #include <kernel/vmspace.h>
 #include <kernel/object_pool.h>
 
+struct KObjectPool *request_pool;
+
+void request_ctor(void *p, size_t)
+{
+  struct Request *req = (struct Request *) p;
+
+  k_spinlock_init(&req->lock, "req");
+  req->process = NULL;
+  req->connection = NULL;
+}
+
+void request_dtor(void *p, size_t)
+{
+  struct Request *req = (struct Request *) p;
+
+  k_assert(req->process == NULL);
+  k_assert(req->connection == NULL);
+  k_assert(req->ref_count == 0);
+}
+
 struct Request *
 request_create(void)
 {
   struct Request *req;
 
-  if ((req = k_malloc(sizeof *req)) == NULL)
+  if ((req = (struct Request *) k_object_pool_get(request_pool)) == NULL)
     return NULL;
 
-  k_semaphore_create(&req->sem, 0);
-  k_spinlock_init(&req->lock, "req");
-  
-  req->process = NULL;
-  req->connection = NULL;
-
-  req->send_iov = NULL;
-  req->send_iov_cnt = 0;
   req->send_idx = 0;
   req->send_pos = 0;
 
-  req->recv_iov = NULL;
-  req->recv_iov_cnt = 0;
   req->recv_idx = 0;
   req->recv_pos = 0;
   
   req->ref_count = 1;
+
+  k_semaphore_create(&req->sem, 0);
 
   return req;
 }
@@ -44,40 +56,30 @@ request_destroy(struct Request *req)
   req->connection = NULL;
   req->process = NULL;
 
+  req->recv_iov = NULL;
+  req->send_iov = NULL;
+
   count = --req->ref_count;
 
   k_spinlock_release(&req->lock);
 
   if (count == 0) {
-    if (req->send_iov != NULL)
-      k_free(req->send_iov);
-    if (req->recv_iov != NULL)
-      k_free(req->recv_iov);
-
-    k_free(req);
+    k_semaphore_destroy(&req->sem);
+    k_object_pool_put(request_pool, req);
   }
 }
 
 void
-request_dup(struct Request *req)
+request_reply(struct Request *req, intptr_t status)
 {
-  k_spinlock_acquire(&req->lock);
-  req->ref_count++;
-  k_spinlock_release(&req->lock);
-}
-
-
-void
-request_reply(struct Request *req, intptr_t r)
-{
-  req->r = r;
+  req->status = status;
 
   k_semaphore_put(&req->sem);
   request_destroy(req);
 }
 
-ssize_t
-request_write(struct Request *req, void *msg, size_t n)
+static ssize_t
+request_write_locked(struct Request *req, void *msg, size_t n)
 {
   size_t total_written = 0;
 
@@ -99,23 +101,22 @@ request_write(struct Request *req, void *msg, size_t n)
 
     uintptr_t dst_va = (uintptr_t) iov->iov_base + req->recv_pos;
 
-    if ((dst_va + n) < dst_va)
-      return -EFAULT;
-
     if (dst_va > VIRT_KERNEL_BASE) {
       // TODO: check user permissions
       memmove((void *) dst_va, msg, n);
     } else {
+      // TODO: may become NULL!
       k_assert(req->process != NULL);
 
       if (vm_space_copy_out(req->process->vm, msg, dst_va, n) < 0)
         k_panic("request_write");
     }
 
-    req->recv_pos += nwrite;
     msg = (char *) msg + nwrite;
     n -= nwrite;
     total_written += nwrite;
+
+    req->recv_pos += nwrite;
 
     if (req->recv_pos == iov->iov_len) {
       req->recv_idx++;
@@ -127,7 +128,19 @@ request_write(struct Request *req, void *msg, size_t n)
 }
 
 ssize_t
-request_read(struct Request *req, void *msg, size_t n)
+request_write(struct Request *req, void *msg, size_t n)
+{
+  ssize_t r;
+
+  k_spinlock_acquire(&req->lock);
+  r = request_write_locked(req, msg, n);
+  k_spinlock_release(&req->lock);
+
+  return r;
+}
+
+static ssize_t
+request_read_locked(struct Request *req, void *msg, size_t n)
 {
   size_t total_read = 0;
 
@@ -149,23 +162,22 @@ request_read(struct Request *req, void *msg, size_t n)
 
     uintptr_t src_va = (uintptr_t) iov->iov_base + req->send_pos;
 
-    if ((src_va + n) < src_va)
-      return -EFAULT;
-
     if (src_va > VIRT_KERNEL_BASE) {
-      // TODO: check user permissions
+      // TODO: check user permissions!
       memmove(msg, (const void *) src_va, n);
     } else {
+      // TODO: may become NULL!
       k_assert(req->process != NULL);
 
       if (vm_space_copy_in(req->process->vm, msg, src_va, n) < 0)
         k_panic("request_read");
     }
 
-    req->send_pos += nread;
     msg = (char *) msg + nread;
     n -= nread;
     total_read += nread;
+
+    req->send_pos += nread;
 
     if (req->send_pos == iov->iov_len) {
       req->send_idx++;
@@ -174,4 +186,16 @@ request_read(struct Request *req, void *msg, size_t n)
   }
 
   return total_read;
+}
+
+ssize_t
+request_read(struct Request *req, void *msg, size_t n)
+{
+  ssize_t r;
+
+  k_spinlock_acquire(&req->lock);
+  r = request_read_locked(req, msg, n);
+  k_spinlock_release(&req->lock);
+
+  return r;
 }

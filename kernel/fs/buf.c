@@ -6,12 +6,15 @@
 #include <kernel/object_pool.h>
 #include <kernel/core/spinlock.h>
 #include <kernel/page.h>
+#include <kernel/hash.h>
 
 struct KObjectPool *buf_pool;
 
 static void buf_request(struct Buf *, int);
 
-#define BUF_CACHE_MAX_SIZE   1024
+#define BUF_CACHE_MAX_SIZE    256
+
+#define NBUCKET               64
 
 enum {
   BUF_FLAGS_VALID = (1 << 0),
@@ -20,15 +23,30 @@ enum {
 };
 
 static struct {
+  struct KListLink hash_table[NBUCKET];
   size_t           size;
   struct KListLink head;
   struct KSpinLock lock;
 } buf_cache;
 
+static uint32_t
+buf_hash(unsigned block_no, dev_t dev)
+{
+  uint32_t x = (uint32_t) block_no;
+  uint32_t y = (uint32_t) dev;
+
+  // Simple 32-bit mix (inspired by boost/hash_combine)
+  uint32_t h = x;
+  h ^= y + 0x9e3779b9u + (h << 6) + (h >> 2);
+
+  return h;
+}
+
 static void
 buf_ctor(void *ptr, size_t)
 {
   struct Buf *buf = (struct Buf *) ptr;
+  
   k_mutex_init(&buf->_mutex, "buf");
 }
 
@@ -47,6 +65,8 @@ buf_init(void)
 
   k_spinlock_init(&buf_cache.lock, "buf_cache");
   k_list_init(&buf_cache.head);
+
+  HASH_INIT(buf_cache.hash_table);
 }
 
 static uint8_t *
@@ -82,7 +102,10 @@ buf_free_page_data(void *data, size_t block_size)
   page_order = page_estimate_order(block_size);
 
   page = kva2page(data);
+
+#ifndef NDEBUG
   page_assert(page, page_order, PAGE_TAG_BUF);
+#endif
 
   page_dec_ref(page, page_order);
 }
@@ -102,7 +125,7 @@ buf_cache_insert(struct Buf *buf)
   if (!k_list_is_null(&buf->_cache_link))
     k_list_remove(&buf->_cache_link);
 
-  k_list_add_front(&buf_cache.head, &buf->_cache_link);
+  k_list_add_back(&buf_cache.head, &buf->_cache_link);
 }
 
 static struct Buf *
@@ -126,9 +149,9 @@ buf_alloc(unsigned block_no, size_t block_size, dev_t dev)
   buf->dev        = dev;
   buf->_flags     = 0;
   buf->block_size = block_size;
-  buf->_usage_count = 0;
   k_list_null(&buf->_cache_link);
-  
+  k_list_null(&buf->_hash_link);
+
   return buf;
 }
 
@@ -143,6 +166,8 @@ buf_cache_grow(unsigned block_no, size_t block_size, dev_t dev)
   if ((buf = buf_alloc(block_no, block_size, dev)) == NULL)
     return NULL;
 
+  HASH_PUT(buf_cache.hash_table, &buf->_hash_link, buf_hash(block_no, dev));
+
   buf_cache_insert(buf);
   buf_cache.size++;
 
@@ -150,30 +175,25 @@ buf_cache_grow(unsigned block_no, size_t block_size, dev_t dev)
 }
 
 static struct Buf *
-buf_cache_lookup(unsigned block_no, size_t block_size, dev_t dev, struct Buf **unused_store)
+buf_cache_lookup(unsigned block_no, dev_t dev, struct Buf **unused_store)
 {
   struct KListLink *l;
-  struct Buf *b, *unused;
 
-  unused = NULL;
-  // TODO: use a hash table for faster lookups
-  K_LIST_FOREACH(&buf_cache.head, l) {
-    b = K_CONTAINER_OF(l, struct Buf, _cache_link);
-
-    if ((b->block_no == block_no) &&
-        (b->dev == dev) &&
-        (b->block_size == block_size))
-      return b;
-
-    if (b->_ref_count == 0) {
-      if (!unused || b->_usage_count < unused->_usage_count) {
-        unused = b;
-      }
-    }
+  unsigned hash = buf_hash(block_no, dev);
+  HASH_FOREACH_ENTRY(buf_cache.hash_table, l, hash) {
+    struct Buf *buf;
+    
+    buf = K_CONTAINER_OF(l, struct Buf, _hash_link);
+    if ((buf->block_no == block_no) && (buf->dev == dev))
+      return buf;
   }
 
-  if (unused_store)
-    *unused_store = unused;
+  if (unused_store) {
+    if (k_list_is_empty(&buf_cache.head))
+      *unused_store = NULL;
+    else
+      *unused_store = K_CONTAINER_OF(buf_cache.head.next, struct Buf, _cache_link);
+  }
 
   return NULL;
 }
@@ -193,10 +213,13 @@ buf_reuse(struct Buf *b, unsigned block_no, size_t block_size, dev_t dev)
     b->block_size = block_size;
   }
 
+  k_list_remove(&b->_hash_link);
+
+  HASH_PUT(buf_cache.hash_table, &b->_hash_link, buf_hash(block_no, dev));
+
   b->block_no   = block_no;
   b->dev        = dev;
   b->_flags      = 0;
-  b->_usage_count = 0;
 
   return b;
 }
@@ -206,8 +229,11 @@ buf_cache_get_locked(unsigned block_no, size_t block_size, dev_t dev)
 {
   struct Buf *b, *unused = NULL;
 
-  if ((b = buf_cache_lookup(block_no, block_size, dev, &unused)) != NULL)
+  if ((b = buf_cache_lookup(block_no, dev, &unused)) != NULL) {
+    if (b->block_size != block_size)
+      return buf_reuse(b, block_no, block_size, dev);
     return b;
+  }
 
   if ((b = buf_cache_grow(block_no, block_size, dev)) != NULL)
     return b;
@@ -226,7 +252,7 @@ buf_cache_get(unsigned block_no, size_t block_size, dev_t dev)
   k_spinlock_acquire(&buf_cache.lock);
 
   if ((b = buf_cache_get_locked(block_no, block_size, dev)) != NULL) {
-    b->_usage_count++;
+    k_list_remove(&b->_cache_link);
     b->_ref_count++;
   }
 
@@ -235,6 +261,7 @@ buf_cache_get(unsigned block_no, size_t block_size, dev_t dev)
   return b;
 }
 
+#ifndef NDEBUG
 static void
 buf_assert(struct Buf *buf)
 {
@@ -249,6 +276,7 @@ buf_assert(struct Buf *buf)
 
   page_assert(page, page_order, PAGE_TAG_BUF);
 }
+#endif
 
 struct Buf *
 buf_read(unsigned block_no, size_t block_size, dev_t dev)
@@ -264,7 +292,9 @@ buf_read(unsigned block_no, size_t block_size, dev_t dev)
   r = k_mutex_lock(&buf->_mutex);
   k_assert(r == 0);
 
+#ifndef NDEBUG
   buf_assert(buf);
+#endif
 
   // If needed, read the block contents.
   if (!(buf->_flags & BUF_FLAGS_VALID))
@@ -302,7 +332,9 @@ buf_release(struct Buf *buf)
   if (buf->_flags & BUF_FLAGS_DIRTY) {
     k_assert(k_mutex_holding(&buf->_mutex));
 
+#ifndef NDEBUG
     buf_assert(buf);
+#endif
 
     buf_request(buf, BUF_REQUEST_WRITE);
 

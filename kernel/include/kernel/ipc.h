@@ -5,6 +5,7 @@
 #include <sys/uio.h>
 #include <sys/ipc.h>
 
+#include <kernel/object_pool.h>
 #include <kernel/core/semaphore.h>
 #include <kernel/core/mailbox.h>
 
@@ -80,15 +81,26 @@ struct Request {
 
   struct RequestInfo info;
 
-  intptr_t r;
+  intptr_t status;
 };
 
+extern struct KObjectPool *request_pool;
+
+void request_ctor(void *, size_t);
+void request_dtor(void *, size_t);
 struct Request *request_create(void);
 void            request_destroy(struct Request *);
-void            request_dup(struct Request *);
 void            request_reply(struct Request *, intptr_t);
 ssize_t         request_write(struct Request *, void *, size_t);
 ssize_t         request_read(struct Request *, void *, size_t);
+
+static inline void
+request_dup(struct Request *req)
+{
+  k_spinlock_acquire(&req->lock);
+  req->ref_count++;
+  k_spinlock_release(&req->lock);
+}
 
 #define ENDPOINT_MBOX_CAPACITY  20
 

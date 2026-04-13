@@ -153,15 +153,15 @@ k_sched_idle(void)
 // The interrupt flags are preserved across the context switch to maintain
 // consistent CPU interrupt state.
 void
-_k_sched_yield_locked(void)
+_k_sched_yield_locked(struct KTask *current)
 {
   int irq_flags;
 
   k_assert(k_spinlock_holding(&_k_sched_spinlock));
 
-  irq_flags = _k_cpu()->irq_flags;
-  k_arch_switch(&k_task_current()->context, _k_cpu()->sched_context);
-  _k_cpu()->irq_flags = irq_flags;
+  irq_flags = current->cpu->irq_flags;
+  k_arch_switch(&current->context, current->cpu->sched_context);
+  current->cpu->irq_flags = irq_flags;
 }
 
 static void _k_sched_sleep_queue_add(struct KListLink *, struct KTask *);
@@ -202,7 +202,7 @@ _k_sched_sleep(struct KListLink *queue, int state, k_tick_t timeout,
   if (queue != K_NULL)
     _k_sched_sleep_queue_add(queue, my_task);
 
-  _k_sched_yield_locked();
+  _k_sched_yield_locked(my_task);
 
   if ((timeout != 0) && (my_task->timer.link.next != K_NULL))
     _k_timeout_queue_remove(&_k_sched_timeouts, &my_task->timer);
@@ -328,7 +328,7 @@ _k_sched_may_yield(struct KTask *task)
       my_task->flags |= K_TASK_FLAG_RESCHEDULE;
     } else {
       _k_sched_enqueue(my_task);
-      _k_sched_yield_locked();
+      _k_sched_yield_locked(my_task);
     }
   }
 }

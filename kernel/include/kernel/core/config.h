@@ -187,6 +187,8 @@ void on_spinlock_debug_pc(k_uintptr_t);
 void on_spinlock_trace_record(struct KSpinLock *);
 void on_spinlock_trace_print(struct KSpinLock *);
 
+#ifndef NDEBUG
+
 /**
  * @brief Record callstack information for a spinlock.
  *
@@ -209,6 +211,8 @@ void on_spinlock_trace_print(struct KSpinLock *);
  *             information should be printed.
  */
 #define K_ON_SPINOCK_TRACE_PRINT  on_spinlock_trace_print
+
+#endif  // !NDEBUG
 
 /**
  * @brief Called when a task is destroyed.

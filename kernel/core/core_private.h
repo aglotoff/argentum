@@ -11,7 +11,7 @@ struct KTimer;
 
 void            _k_sched_resume(struct KTask *, int);
 void            _k_sched_may_yield(struct KTask *);
-void            _k_sched_yield_locked(void);
+void            _k_sched_yield_locked(struct KTask *);
 void            _k_sched_enqueue(struct KTask *);
 void            _k_sched_wakeup_all_locked(struct KListLink *, int);
 struct KTask *_k_sched_wakeup_one_locked(struct KListLink *, int);

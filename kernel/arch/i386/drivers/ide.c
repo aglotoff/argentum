@@ -153,8 +153,6 @@ ide_init(uint32_t bar0, uint32_t bar1, uint32_t bar2, uint32_t bar3, uint32_t ba
   return 0;
 }
 
-volatile int sss;
-
 #define IDE_BLOCK_LEN   512
 
 void
@@ -181,8 +179,6 @@ ide_request(struct BufRequest *req)
 
   k_mutex_unlock(&ide_mutex);
 }
-
-volatile uint8_t *test = (uint8_t *) VIRT_KERNEL_BASE;
 
 static void
 ide_start_transfer(struct BufRequest *req)

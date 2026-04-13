@@ -199,7 +199,7 @@ vm_user_alloc(void *vm, uintptr_t start_va, size_t n, int flags)
   for (va = start_va; va < end_va; va += PAGE_SIZE) {
     k_spinlock_acquire(&vm_lock);
 
-    if ((page = page_alloc_one(PAGE_ALLOC_ZERO, PAGE_TAG_ANON)) == NULL) {
+    if ((page = page_alloc_one(0, PAGE_TAG_ANON)) == NULL) {
       k_spinlock_release(&vm_lock);
 
       vm_user_free(vm, start_va, va - start_va);

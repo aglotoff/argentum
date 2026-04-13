@@ -93,7 +93,7 @@ k_irq_handler_end(void)
     if ((current != K_NULL) && (current->flags & K_TASK_FLAG_RESCHEDULE)) {
       current->flags &= ~K_TASK_FLAG_RESCHEDULE;
       _k_sched_enqueue(current);
-      _k_sched_yield_locked();
+      _k_sched_yield_locked(current);
     }
   }
 

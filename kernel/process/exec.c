@@ -268,33 +268,30 @@ load_elf(struct ExecContext *ctx)
   off_t off;
   uintptr_t a;
 
-  connection_seek(ctx->file, 0, SEEK_SET);
+  if ((r = connection_seek(ctx->file, 0, SEEK_SET)) < 0)
+    return r;
 
-  if ((r = connection_read(ctx->file, (uintptr_t) &elf, sizeof(elf))) != sizeof(elf)) {
+  if ((r = connection_read(ctx->file, (uintptr_t) &elf, sizeof(elf))) != sizeof(elf))
     return -EINVAL;
-  }
 
-  if (memcmp(elf.ident, "\x7f""ELF", 4) != 0) {
+  if (memcmp(elf.ident, "\x7f""ELF", 4) != 0)
     return -EINVAL;
-  }
 
   off = elf.phoff;
   while ((size_t) off < elf.phoff + elf.phnum * sizeof(ph)) {
-    connection_seek(ctx->file, off, SEEK_SET);
-
-    if ((r = connection_read(ctx->file, (uintptr_t) &ph, sizeof(ph))) != sizeof(ph)) {
+    if ((r = connection_seek(ctx->file, off, SEEK_SET)) < 0)
       return r;
-    }
+
+    if ((r = connection_read(ctx->file, (uintptr_t) &ph, sizeof(ph))) != sizeof(ph))
+      return r;
 
     off += sizeof(ph);
 
-    if (ph.type != PT_LOAD) {
+    if (ph.type != PT_LOAD)
       continue;
-    }
 
-    if (ph.filesz > ph.memsz) {
+    if (ph.filesz > ph.memsz)
       return -EINVAL;
-    }
 
     if ((ph.vaddr >= VIRT_KERNEL_BASE) || (ph.vaddr + ph.memsz > VIRT_KERNEL_BASE)) {
       return -EINVAL;
@@ -308,16 +305,15 @@ load_elf(struct ExecContext *ctx)
 
     vm_load(ctx->vm->pgtab);
 
-    connection_seek(ctx->file, ph.offset, SEEK_SET);
-    if ((r = connection_read(ctx->file, (uintptr_t) ph.vaddr, ph.filesz)) < 0) {
-      k_panic("aboba");
+    if ((r = connection_seek(ctx->file, ph.offset, SEEK_SET)) < 0)
       return r;
-    }
 
-    // if ((r = vm_space_load_file(ctx->vm->pgtab, (void *) ph.vaddr, ctx->file,
-    //                             ph.filesz, ph.offset)) < 0) {
-    //   return r;
-    // }
+    if ((r = connection_read(ctx->file, (uintptr_t) ph.vaddr, ph.filesz)) < 0)
+      return r;
+
+    if (ph.memsz > ph.filesz) {
+      memset((uint8_t *) ph.vaddr + ph.filesz, 0, ph.memsz - ph.filesz);
+    }
   }
 
   ctx->entry_va = elf.entry;

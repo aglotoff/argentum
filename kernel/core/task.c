@@ -122,7 +122,7 @@ k_task_yield(void)
   _k_sched_lock();
 
   _k_sched_enqueue(current);
-  _k_sched_yield_locked();
+  _k_sched_yield_locked(current);
 
   _k_sched_unlock();
 }
@@ -201,7 +201,7 @@ k_task_exit(void)
   K_ON_TASK_DESTROY(current);
 #endif
 
-  _k_sched_yield_locked();
+  _k_sched_yield_locked(current);
 
   current->object_tag = 0;
 

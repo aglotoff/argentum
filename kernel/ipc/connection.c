@@ -27,6 +27,9 @@ connection_init(void)
     k_panic("Cannot allocate connection pool");
 
   k_spinlock_init(&connection_lock, "connection_lock");
+
+  if (!(request_pool = k_object_pool_create("request_pool", sizeof(struct Request), 0, request_ctor, request_dtor)))
+    k_panic("Cannot allocate request pool");
 }
 
 int
@@ -190,69 +193,32 @@ connection_sync(struct Connection *connection)
 intptr_t
 connection_send(struct Connection *connection, void *smsg, size_t sbytes, void *rmsg, size_t rbytes)
 {
-  struct Request *req;
-  unsigned long long timeout = seconds2ticks(600);
-  intptr_t r;
-
-  //cprintf("[k] proc %x sends %d to %p\n", process_current()->pid, *(int *) smsg, connection->endpoint);
-
-  if (connection->endpoint == NULL)
-    return -1;
-
-  if ((req = request_create()) == NULL)
-    return -ENOMEM;  
+  struct iovec send_iov_buf;
+  struct iovec recv_iov_buf;
+  struct iovec *send_iov, *recv_iov;
+  int send_iov_cnt, recv_iov_cnt;
 
   if (smsg && sbytes) {
-    if ((req->send_iov = k_malloc(sizeof(struct iovec))) == NULL)
-      k_panic("out of memory");
-    
-    req->send_iov->iov_base = smsg;
-    req->send_iov->iov_len  = sbytes;
-    req->send_iov_cnt       = 1;
+    send_iov_buf.iov_base = smsg;
+    send_iov_buf.iov_len = sbytes;
+    send_iov = &send_iov_buf;
+    send_iov_cnt = 1;
+  } else {
+    send_iov = NULL;
+    send_iov_cnt = 0;
   }
 
   if (rmsg && rbytes) {
-    if ((req->recv_iov = k_malloc(sizeof(struct iovec))) == NULL)
-      k_panic("out of memory");
-
-    req->recv_iov->iov_base = rmsg;
-    req->recv_iov->iov_len  = rbytes;
-    req->recv_iov_cnt       = 1;
+    recv_iov_buf.iov_base = rmsg;
+    recv_iov_buf.iov_len = rbytes;
+    recv_iov = &recv_iov_buf;
+    recv_iov_cnt = 1;
+  } else {
+    recv_iov = NULL;
+    recv_iov_cnt = 0;
   }
 
-  req->connection = connection;
-  req->process = process_current();
-
-  req->info.ruid = req->process ? req->process->ruid : 0;
-  req->info.euid = req->process ? req->process->euid : 0;
-  req->info.rgid = req->process ? req->process->rgid : 0;
-  req->info.egid = req->process ? req->process->egid : 0;
-
-  request_dup(req);
-
-  if (k_mailbox_timed_send(&connection->endpoint->mbox, &req, timeout, K_SLEEP_UNWAKEABLE) < 0) {
-    k_panic("fail send:\n");
-    request_destroy(req);
-    request_destroy(req);
-    return -ETIMEDOUT;
-  }
-
-  // if (connection->type == CONNECTION_TYPE_PIPE) {
-  //   cprintf("[k] proc #%x sent to %p\n", process_current()->pid, connection->endpoint);
-  // }
-
-  if ((r = k_semaphore_get(&req->sem, K_SLEEP_UNWAKEABLE)) < 0) {
-    k_panic("fail recv:\n %d", r);
-    request_destroy(req);
-    request_destroy(req);
-    return -ETIMEDOUT;
-  }
-
-  r = req->r;
-
-  request_destroy(req);
-
-  return r;
+  return connection_sendv(connection, send_iov, send_iov_cnt, recv_iov, recv_iov_cnt);
 }
 
 
@@ -262,7 +228,7 @@ connection_sendv(struct Connection *connection,
                  struct iovec *recv_iov, int recv_iov_cnt)
 {
   struct Request *req;
-  unsigned long long timeout = seconds2ticks(600);
+  //unsigned long long timeout = seconds2ticks(600);
   intptr_t r;
 
   //cprintf("[k] proc %x sends %d to %p\n", process_current()->pid, *(int *) smsg, connection->endpoint);
@@ -273,19 +239,10 @@ connection_sendv(struct Connection *connection,
   if ((req = request_create()) == NULL)
     return -ENOMEM;  
 
-  if (send_iov && send_iov_cnt) {
-    if ((req->send_iov = k_malloc(sizeof(struct iovec) * send_iov_cnt)) == NULL)
-      k_panic("out of memory");
-    memmove(req->send_iov, send_iov, sizeof(struct iovec) * send_iov_cnt);
-    req->send_iov_cnt = send_iov_cnt;
-  }
-
-  if (recv_iov && recv_iov_cnt) {
-    if ((req->recv_iov = k_malloc(sizeof(struct iovec) * recv_iov_cnt)) == NULL)
-      k_panic("out of memory");
-    memmove(req->recv_iov, recv_iov, sizeof(struct iovec) * recv_iov_cnt);
-    req->recv_iov_cnt = recv_iov_cnt;
-  }
+  req->send_iov = send_iov;
+  req->send_iov_cnt = send_iov_cnt;
+  req->recv_iov = recv_iov;
+  req->recv_iov_cnt = recv_iov_cnt;
 
   req->connection = connection;
   req->process = process_current();
@@ -297,7 +254,7 @@ connection_sendv(struct Connection *connection,
 
   request_dup(req);
 
-  if ((r = k_mailbox_timed_send(&connection->endpoint->mbox, &req, timeout, K_SLEEP_UNWAKEABLE)) < 0) {
+  if ((r = k_mailbox_send(&connection->endpoint->mbox, &req, K_SLEEP_UNWAKEABLE)) < 0) {
     k_panic("fail send: %d\n", r);
     request_destroy(req);
     request_destroy(req);
@@ -311,7 +268,7 @@ connection_sendv(struct Connection *connection,
     return -ETIMEDOUT;
   }
 
-  r = req->r;
+  r = req->status;
 
   request_destroy(req);
 
